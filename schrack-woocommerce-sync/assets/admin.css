@@ -1,0 +1,80 @@
+.schrack-sync-admin .nav-tab-wrapper {
+	margin-bottom: 20px;
+}
+
+.schrack-panel {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	margin: 20px 0;
+	padding: 16px 20px;
+}
+
+.schrack-grid {
+	display: grid;
+	gap: 20px;
+	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.schrack-inline-actions {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.schrack-button-grid {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+	max-width: 700px;
+}
+
+.schrack-debug-output pre {
+	background: #101517;
+	color: #f2f5f6;
+	max-height: 520px;
+	overflow: auto;
+	padding: 16px;
+	white-space: pre-wrap;
+}
+
+.schrack-toolbar {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	justify-content: space-between;
+	margin: 16px 0;
+}
+
+.schrack-markups-table input[type="number"],
+.schrack-markups-table select {
+	max-width: 180px;
+	width: 100%;
+}
+
+.schrack-log-level {
+	border-radius: 3px;
+	color: #fff;
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1;
+	padding: 5px 7px;
+}
+
+.schrack-log-level-debug {
+	background: #646970;
+}
+
+.schrack-log-level-info {
+	background: #2271b1;
+}
+
+.schrack-log-level-warning {
+	background: #b26200;
+}
+
+.schrack-log-level-error {
+	background: #b32d2e;
+}

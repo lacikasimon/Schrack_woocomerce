@@ -1,0 +1,178 @@
+<?php
+/**
+ * Main plugin bootstrap.
+ *
+ * @package SchrackWooCommerceSync
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class Schrack_Plugin {
+	/**
+	 * Singleton instance.
+	 *
+	 * @var Schrack_Plugin|null
+	 */
+	private static ?Schrack_Plugin $instance = null;
+
+	/**
+	 * Settings service.
+	 *
+	 * @var Schrack_Settings|null
+	 */
+	private ?Schrack_Settings $settings = null;
+
+	/**
+	 * Logger service.
+	 *
+	 * @var Schrack_Logger|null
+	 */
+	private ?Schrack_Logger $logger = null;
+
+	/**
+	 * Admin service.
+	 *
+	 * @var Schrack_Admin|null
+	 */
+	private ?Schrack_Admin $admin = null;
+
+	/**
+	 * Cron service.
+	 *
+	 * @var Schrack_Cron|null
+	 */
+	private ?Schrack_Cron $cron = null;
+
+	/**
+	 * Returns the singleton instance.
+	 */
+	public static function instance(): Schrack_Plugin {
+		if ( null === self::$instance ) {
+			self::$instance = new self();
+		}
+
+		return self::$instance;
+	}
+
+	/**
+	 * Initializes the plugin.
+	 */
+	public function init(): void {
+		$this->load_dependencies();
+
+		$this->settings = new Schrack_Settings();
+		$this->logger   = new Schrack_Logger( $this->settings );
+		$this->cron     = new Schrack_Cron( $this->settings, $this->logger );
+		$this->cron->init();
+
+		if ( is_admin() ) {
+			$this->admin = new Schrack_Admin( $this->settings, $this->logger, $this->cron );
+			$this->admin->init();
+		}
+
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			Schrack_WP_CLI::register( $this->settings, $this->logger, $this->cron );
+		}
+
+		add_action( 'admin_notices', array( $this, 'dependency_notices' ) );
+	}
+
+	/**
+	 * Loads required class files.
+	 */
+	private function load_dependencies(): void {
+		$files = array(
+			'class-schrack-settings.php',
+			'class-schrack-logger.php',
+			'class-schrack-category-markup.php',
+			'class-schrack-soap-client.php',
+			'class-schrack-product-mapper.php',
+			'class-schrack-catalog-importer.php',
+			'class-schrack-price-sync.php',
+			'class-schrack-stock-sync.php',
+			'class-schrack-cron.php',
+			'class-schrack-admin.php',
+			'class-schrack-wp-cli.php',
+		);
+
+		foreach ( $files as $file ) {
+			require_once SCHRACK_WC_SYNC_PATH . 'includes/' . $file;
+		}
+	}
+
+	/**
+	 * Activation checks and setup.
+	 */
+	public static function activate(): void {
+		if ( version_compare( PHP_VERSION, '8.1', '<' ) ) {
+			wp_die( esc_html__( 'Schrack WooCommerce Sync requires PHP 8.1 or newer.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( ! extension_loaded( 'soap' ) ) {
+			wp_die( esc_html__( 'Schrack WooCommerce Sync requires the PHP SOAP extension.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( ! function_exists( 'is_plugin_active' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		if ( ! class_exists( 'WooCommerce' ) && ! is_plugin_active( 'woocommerce/woocommerce.php' ) ) {
+			wp_die( esc_html__( 'Schrack WooCommerce Sync requires WooCommerce to be installed and active.', 'schrack-woocommerce-sync' ) );
+		}
+
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-settings.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-logger.php';
+
+		Schrack_Settings::install_defaults();
+		Schrack_Logger::create_table();
+	}
+
+	/**
+	 * Deactivation cleanup.
+	 */
+	public static function deactivate(): void {
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-settings.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-cron.php';
+
+		Schrack_Cron::clear_scheduled_actions();
+	}
+
+	/**
+	 * Shows dependency notices after activation-time checks are no longer enough.
+	 */
+	public function dependency_notices(): void {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			return;
+		}
+
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			printf(
+				'<div class="notice notice-error"><p>%s</p></div>',
+				esc_html__( 'Schrack WooCommerce Sync is inactive until WooCommerce is active.', 'schrack-woocommerce-sync' )
+			);
+		}
+
+		if ( ! extension_loaded( 'soap' ) ) {
+			printf(
+				'<div class="notice notice-error"><p>%s</p></div>',
+				esc_html__( 'Schrack WooCommerce Sync requires the PHP SOAP extension.', 'schrack-woocommerce-sync' )
+			);
+		}
+	}
+
+	/**
+	 * Returns settings.
+	 */
+	public function settings(): ?Schrack_Settings {
+		return $this->settings;
+	}
+
+	/**
+	 * Returns logger.
+	 */
+	public function logger(): ?Schrack_Logger {
+		return $this->logger;
+	}
+}
