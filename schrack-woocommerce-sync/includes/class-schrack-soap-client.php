@@ -32,6 +32,13 @@ class Schrack_Soap_Client {
 	private ?SoapClient $client = null;
 
 	/**
+	 * WSDL URL that was successfully loaded.
+	 *
+	 * @var string
+	 */
+	private string $loaded_wsdl_url = '';
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct( Schrack_Settings $settings, Schrack_Logger $logger ) {
@@ -59,6 +66,13 @@ class Schrack_Soap_Client {
 		$types = $this->get_client()->__getTypes();
 
 		return is_array( $types ) ? $types : array();
+	}
+
+	/**
+	 * Returns the WSDL URL used by the native SOAP client.
+	 */
+	public function get_loaded_wsdl_url(): string {
+		return $this->loaded_wsdl_url;
 	}
 
 	/**
@@ -221,9 +235,88 @@ class Schrack_Soap_Client {
 			$options['location'] = $endpoint;
 		}
 
-		$this->client = new SoapClient( $wsdl, $options );
+		$this->client = $this->create_client_with_fallback( $wsdl, $options );
 
 		return $this->client;
+	}
+
+	/**
+	 * Creates the native SOAP client and falls back when the TEST WSDL is down.
+	 *
+	 * The service endpoint remains controlled by the SoapClient location option.
+	 *
+	 * @param string              $wsdl Primary WSDL URL.
+	 * @param array<string,mixed> $options SoapClient options.
+	 * @throws Throwable When the primary and fallback WSDL fail.
+	 */
+	private function create_client_with_fallback( string $wsdl, array $options ): SoapClient {
+		try {
+			$client                = new SoapClient( $wsdl, $options );
+			$this->loaded_wsdl_url = $wsdl;
+
+			return $client;
+		} catch ( Throwable $exception ) {
+			$fallback_wsdl = $this->fallback_wsdl_url( $wsdl );
+
+			if ( '' === $fallback_wsdl ) {
+				throw $exception;
+			}
+
+			$this->logger->warning(
+				'soap',
+				'Primary Schrack WSDL failed; trying fallback WSDL.',
+				null,
+				array(
+					'primary_wsdl'  => $wsdl,
+					'fallback_wsdl' => $fallback_wsdl,
+					'error'         => $this->safe_error_message( $exception->getMessage() ),
+				)
+			);
+
+			try {
+				$client                = new SoapClient( $fallback_wsdl, $options );
+				$this->loaded_wsdl_url = $fallback_wsdl;
+
+				return $client;
+			} catch ( Throwable $fallback_exception ) {
+				$this->logger->error(
+					'soap',
+					'Fallback Schrack WSDL failed.',
+					null,
+					array(
+						'primary_wsdl'  => $wsdl,
+						'fallback_wsdl' => $fallback_wsdl,
+						'primary_error'  => $this->safe_error_message( $exception->getMessage() ),
+						'fallback_error' => $this->safe_error_message( $fallback_exception->getMessage() ),
+					)
+				);
+
+				throw new RuntimeException(
+					sprintf(
+						/* translators: 1: primary WSDL error, 2: fallback WSDL error. */
+						__( 'Could not load Schrack WSDL. Primary error: %1$s Fallback error: %2$s', 'schrack-woocommerce-sync' ),
+						$this->safe_error_message( $exception->getMessage() ),
+						$this->safe_error_message( $fallback_exception->getMessage() )
+					),
+					0,
+					$fallback_exception
+				);
+			}
+		}
+	}
+
+	/**
+	 * Returns a fallback WSDL URL for known Schrack TEST WSDL outages.
+	 */
+	private function fallback_wsdl_url( string $wsdl ): string {
+		if (
+			'test' === $this->settings->get( 'environment', 'test' ) &&
+			Schrack_Settings::DEFAULT_TEST_WSDL === $wsdl
+		) {
+			return Schrack_Settings::DEFAULT_LIVE_WSDL;
+		}
+
+		return '';
 	}
 
 	/**

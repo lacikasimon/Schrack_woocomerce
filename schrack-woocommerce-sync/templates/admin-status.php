@@ -50,6 +50,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<th><?php esc_html_e( 'Last run', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Processed', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Errors', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Catalog cursor', 'schrack-woocommerce-sync' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -60,6 +61,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 						<td><?php echo esc_html( (string) ( $row['last_run'] ?? '-' ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $row['processed'] ?? 0 ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $row['errors'] ?? 0 ) ); ?></td>
+						<td>
+							<?php
+							if ( 'catalog' === $operation && ! empty( $row['total_items'] ) ) {
+								printf(
+									'%s / %s',
+									esc_html( (string) ( $row['cursor'] ?? 0 ) ),
+									esc_html( (string) $row['total_items'] )
+								);
+							} else {
+								echo esc_html( '-' );
+							}
+							?>
+						</td>
 					</tr>
 				<?php endforeach; ?>
 			</tbody>

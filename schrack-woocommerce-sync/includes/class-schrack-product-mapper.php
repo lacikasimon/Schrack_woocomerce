@@ -57,7 +57,7 @@ class Schrack_Product_Mapper {
 	 * @param array<string,mixed> $data Normalized product data.
 	 */
 	public function upsert( array $data ): int {
-		$sku = isset( $data['sku'] ) ? sanitize_text_field( (string) $data['sku'] ) : '';
+		$sku = isset( $data['sku'] ) ? sanitize_text_field( $this->string_value( $data['sku'] ) ) : '';
 
 		if ( '' === $sku ) {
 			throw new InvalidArgumentException( 'SKU is required for Schrack product import.' );
@@ -86,7 +86,7 @@ class Schrack_Product_Mapper {
 		$this->apply_product_data( $product, $data, true );
 		$product_id = $product->save();
 
-		$this->logger->info( 'catalog', 'Created Schrack product.', (string) $data['sku'], array( 'product_id' => $product_id ) );
+		$this->logger->info( 'catalog', 'Created Schrack product.', $this->string_value( $data['sku'] ?? '' ), array( 'product_id' => $product_id ) );
 
 		return (int) $product_id;
 	}
@@ -107,7 +107,7 @@ class Schrack_Product_Mapper {
 		$this->apply_product_data( $product, $data, false );
 		$product->save();
 
-		$this->logger->info( 'catalog', 'Updated Schrack product.', (string) $data['sku'], array( 'product_id' => $product_id ) );
+		$this->logger->info( 'catalog', 'Updated Schrack product.', $this->string_value( $data['sku'] ?? '' ), array( 'product_id' => $product_id ) );
 
 		return $product_id;
 	}
@@ -116,6 +116,7 @@ class Schrack_Product_Mapper {
 	 * Updates WooCommerce regular price from a Schrack purchase price.
 	 */
 	public function update_price( int $product_id, float $purchase_price ): float {
+		$purchase_price = max( 0.0, $purchase_price );
 		$product = wc_get_product( $product_id );
 
 		if ( ! $product instanceof WC_Product ) {
@@ -199,7 +200,7 @@ class Schrack_Product_Mapper {
 		}
 
 		$parts = is_array( $category_path )
-			? array_map( 'sanitize_text_field', $category_path )
+			? array_map( static fn ( mixed $part ): string => sanitize_text_field( is_scalar( $part ) ? (string) $part : '' ), $category_path )
 			: preg_split( '/\s*(?:>|\/|\|)\s*/', sanitize_text_field( $category_path ) );
 
 		$parts = array_values( array_filter( array_map( 'trim', (array) $parts ) ) );
@@ -247,7 +248,12 @@ class Schrack_Product_Mapper {
 	 * @param bool                $is_new Whether this is a new product.
 	 */
 	private function apply_product_data( WC_Product $product, array $data, bool $is_new ): void {
-		$sku = sanitize_text_field( (string) ( $data['sku'] ?? '' ) );
+		$sku  = sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) );
+		$name = trim( sanitize_text_field( $this->string_value( $data['name'] ?? '' ) ) );
+
+		if ( $is_new && '' === $name ) {
+			$name = 'Schrack ' . $sku;
+		}
 
 		if ( $is_new ) {
 			$product->set_sku( $sku );
@@ -255,32 +261,66 @@ class Schrack_Product_Mapper {
 			$product->set_catalog_visibility( 'visible' );
 		}
 
-		$product->set_name( sanitize_text_field( (string) ( $data['name'] ?? 'Schrack ' . $sku ) ) );
-
-		if ( isset( $data['short_description'] ) ) {
-			$product->set_short_description( wp_kses_post( (string) $data['short_description'] ) );
+		if ( '' !== $name ) {
+			$product->set_name( $name );
 		}
 
-		if ( isset( $data['description'] ) ) {
-			$product->set_description( wp_kses_post( (string) $data['description'] ) );
+		if ( $is_new || $this->has_text_value( $data, 'short_description' ) ) {
+			$product->set_short_description( wp_kses_post( $this->string_value( $data['short_description'] ?? '' ) ) );
+		}
+
+		if ( $is_new || $this->has_text_value( $data, 'description' ) ) {
+			$product->set_description( wp_kses_post( $this->string_value( $data['description'] ?? '' ) ) );
 		}
 
 		if ( ! empty( $data['category_path'] ) ) {
-			$category_ids = $this->assign_categories( is_array( $data['category_path'] ) ? $data['category_path'] : (string) $data['category_path'] );
+			$category_ids = $this->assign_categories( is_array( $data['category_path'] ) ? $data['category_path'] : $this->string_value( $data['category_path'] ) );
 			if ( ! empty( $category_ids ) ) {
 				$product->set_category_ids( $category_ids );
 			}
 		}
 
 		$product->update_meta_data( '_schrack_item_number', $sku );
-		$product->update_meta_data( '_schrack_ean', sanitize_text_field( (string) ( $data['ean'] ?? '' ) ) );
-		$product->update_meta_data( '_schrack_manufacturer', sanitize_text_field( (string) ( $data['manufacturer'] ?? '' ) ) );
-		$product->update_meta_data( '_schrack_raw_category', sanitize_text_field( is_array( $data['category_path'] ?? '' ) ? implode( ' > ', $data['category_path'] ) : (string) ( $data['category_path'] ?? '' ) ) );
-		$product->update_meta_data( '_schrack_unit', sanitize_text_field( (string) ( $data['unit'] ?? '' ) ) );
-		$product->update_meta_data( '_schrack_catalog_status', sanitize_text_field( (string) ( $data['catalog_status'] ?? '' ) ) );
+		$this->update_optional_meta( $product, '_schrack_ean', $data, 'ean', $is_new );
+		$this->update_optional_meta( $product, '_schrack_manufacturer', $data, 'manufacturer', $is_new );
+		$this->update_optional_meta( $product, '_schrack_unit', $data, 'unit', $is_new );
+		$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
+
+		if ( $is_new || ! empty( $data['category_path'] ) ) {
+			$product->update_meta_data( '_schrack_raw_category', sanitize_text_field( is_array( $data['category_path'] ?? '' ) ? implode( ' > ', $data['category_path'] ) : $this->string_value( $data['category_path'] ?? '' ) ) );
+		}
 
 		if ( ! empty( $data['technical_attributes'] ) ) {
 			$product->update_meta_data( '_schrack_technical_attributes', wp_json_encode( $data['technical_attributes'] ) );
 		}
+	}
+
+	/**
+	 * Checks whether an optional text value has meaningful content.
+	 *
+	 * @param array<string,mixed> $data Product data.
+	 */
+	private function has_text_value( array $data, string $key ): bool {
+		return isset( $data[ $key ] ) && is_scalar( $data[ $key ] ) && '' !== trim( (string) $data[ $key ] );
+	}
+
+	/**
+	 * Updates optional Schrack metadata without wiping existing values on sparse imports.
+	 *
+	 * @param array<string,mixed> $data Product data.
+	 */
+	private function update_optional_meta( WC_Product $product, string $meta_key, array $data, string $data_key, bool $is_new ): void {
+		if ( ! $is_new && ! $this->has_text_value( $data, $data_key ) ) {
+			return;
+		}
+
+		$product->update_meta_data( $meta_key, sanitize_text_field( $this->string_value( $data[ $data_key ] ?? '' ) ) );
+	}
+
+	/**
+	 * Safely converts scalar input to a string.
+	 */
+	private function string_value( mixed $value ): string {
+		return is_scalar( $value ) ? (string) $value : '';
 	}
 }

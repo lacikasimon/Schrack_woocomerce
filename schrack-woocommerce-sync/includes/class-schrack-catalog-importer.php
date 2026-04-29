@@ -53,22 +53,23 @@ class Schrack_Catalog_Importer {
 	 *
 	 * @param string $format CSV, XML, or DATANORM.
 	 * @param int    $limit Batch limit.
-	 * @return array<string,int>
+	 * @return array<string,mixed>
 	 */
 	public function import_from_soap( string $format = 'CSV', int $limit = 25 ): array {
-		$raw = $this->client->get_catalog_as( $format );
+		$raw   = $this->client->get_catalog_as( $format );
 		$items = $this->parse_catalog_response( $raw, $format );
 
-		return $this->import_items( array_slice( $items, 0, max( 1, $limit ) ) );
+		return $this->import_items_with_cursor( $items, $format, max( 1, $limit ) );
 	}
 
 	/**
 	 * Imports normalized catalog rows.
 	 *
 	 * @param array<int,array<string,mixed>> $items Items.
-	 * @return array<string,int>
+	 * @param array<string,mixed>            $status_context Extra status fields.
+	 * @return array<string,mixed>
 	 */
-	public function import_items( array $items ): array {
+	public function import_items( array $items, array $status_context = array() ): array {
 		$processed = 0;
 		$errors    = 0;
 
@@ -81,24 +82,132 @@ class Schrack_Catalog_Importer {
 				$this->logger->error(
 					'catalog',
 					'Failed to import Schrack catalog item.',
-					isset( $item['sku'] ) ? (string) $item['sku'] : null,
+					$this->item_sku( $item ),
 					array( 'error' => $exception->getMessage() )
 				);
 			}
 		}
 
-		$this->settings->update_status(
-			'catalog',
+		$result = array_merge(
 			array(
 				'processed' => $processed,
 				'errors'    => $errors,
-			)
+			),
+			$status_context
 		);
 
-		return array(
-			'processed' => $processed,
-			'errors'    => $errors,
+		$this->settings->update_status(
+			'catalog',
+			$result
 		);
+
+		return $result;
+	}
+
+	/**
+	 * Imports a catalog batch and advances the persisted cursor.
+	 *
+	 * @param array<int,array<string,mixed>> $items Parsed catalog items.
+	 * @return array<string,mixed>
+	 */
+	private function import_items_with_cursor( array $items, string $format, int $limit ): array {
+		$total_items = count( $items );
+		$format      = strtoupper( $format );
+
+		if ( 0 === $total_items ) {
+			return $this->import_items(
+				array(),
+				array(
+					'cursor'          => 0,
+					'total_items'     => 0,
+					'batch_start'     => 0,
+					'batch_count'     => 0,
+					'batch_limit'     => $limit,
+					'completed_cycle' => 'yes',
+					'catalog_format'  => $format,
+				)
+			);
+		}
+
+		$signature = $this->catalog_signature( $items );
+		$offset    = $this->catalog_cursor( $format, $signature, $total_items );
+		$batch     = array_slice( $items, $offset, $limit );
+
+		if ( empty( $batch ) && $offset > 0 ) {
+			$offset = 0;
+			$batch  = array_slice( $items, 0, $limit );
+		}
+
+		$batch_count     = count( $batch );
+		$next_cursor     = $offset + $batch_count;
+		$completed_cycle = $next_cursor >= $total_items;
+
+		if ( $completed_cycle ) {
+			$next_cursor = 0;
+		}
+
+		return $this->import_items(
+			$batch,
+			array(
+				'cursor'            => $next_cursor,
+				'total_items'       => $total_items,
+				'batch_start'       => $offset,
+				'batch_count'       => $batch_count,
+				'batch_limit'       => $limit,
+				'completed_cycle'   => $completed_cycle ? 'yes' : 'no',
+				'catalog_format'    => $format,
+				'catalog_signature' => $signature,
+			)
+		);
+	}
+
+	/**
+	 * Returns the stored catalog cursor, resetting it when the catalog changed.
+	 */
+	private function catalog_cursor( string $format, string $signature, int $total_items ): int {
+		$status = $this->settings->get_status();
+		$row    = isset( $status['catalog'] ) && is_array( $status['catalog'] ) ? $status['catalog'] : array();
+
+		if (
+			$format !== (string) ( $row['catalog_format'] ?? '' ) ||
+			$signature !== (string) ( $row['catalog_signature'] ?? '' )
+		) {
+			return 0;
+		}
+
+		$cursor = absint( $row['cursor'] ?? 0 );
+
+		return $cursor < $total_items ? $cursor : 0;
+	}
+
+	/**
+	 * Builds a stable signature from the parsed SKU sequence.
+	 *
+	 * @param array<int,array<string,mixed>> $items Parsed catalog items.
+	 */
+	private function catalog_signature( array $items ): string {
+		$context = hash_init( 'sha256' );
+
+		foreach ( $items as $item ) {
+			hash_update( $context, (string) $this->item_sku( $item ) . "\n" );
+		}
+
+		return hash_final( $context );
+	}
+
+	/**
+	 * Extracts a log-safe SKU from a normalized item.
+	 *
+	 * @param array<string,mixed> $item Normalized item.
+	 */
+	private function item_sku( array $item ): ?string {
+		if ( ! isset( $item['sku'] ) || ! is_scalar( $item['sku'] ) ) {
+			return null;
+		}
+
+		$sku = trim( (string) $item['sku'] );
+
+		return '' !== $sku ? $sku : null;
 	}
 
 	/**
@@ -183,6 +292,13 @@ class Schrack_Catalog_Importer {
 			return '';
 		}
 
+		$status_code = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( $status_code < 200 || $status_code >= 300 ) {
+			$this->logger->error( 'catalog', 'Failed to download Schrack catalog file.', null, array( 'status_code' => $status_code ) );
+			return '';
+		}
+
 		$body = wp_remote_retrieve_body( $response );
 
 		if ( '' === $body ) {
@@ -257,20 +373,20 @@ class Schrack_Catalog_Importer {
 	}
 
 	/**
-	 * Writes downloaded binary data to a temporary file through WP_Filesystem.
+	 * Writes downloaded binary data to a temporary file for ZIP extraction.
 	 */
 	private function write_temp_file( string $path, string $body ): bool {
-		global $wp_filesystem;
+		$bytes = file_put_contents( $path, $body );
 
-		if ( ! function_exists( 'WP_Filesystem' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-		}
-
-		if ( ! WP_Filesystem() || ! $wp_filesystem ) {
+		if ( false === $bytes ) {
 			return false;
 		}
 
-		return (bool) $wp_filesystem->put_contents( $path, $body, defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644 );
+		if ( defined( 'FS_CHMOD_FILE' ) && is_writable( $path ) ) {
+			chmod( $path, FS_CHMOD_FILE );
+		}
+
+		return $bytes === strlen( $body );
 	}
 
 	/**
@@ -286,17 +402,22 @@ class Schrack_Catalog_Importer {
 		}
 
 		$delimiter = str_contains( $lines[0], ';' ) ? ';' : ',';
-		$headers   = array_map( 'sanitize_key', str_getcsv( array_shift( $lines ), $delimiter ) );
+		$headers   = $this->normalize_csv_headers( str_getcsv( array_shift( $lines ), $delimiter ) );
 		$items     = array();
+
+		if ( empty( $headers ) ) {
+			$this->logger->warning( 'catalog', 'Schrack CSV catalog did not contain readable headers.' );
+			return array();
+		}
 
 		foreach ( $lines as $line ) {
 			if ( '' === trim( $line ) ) {
 				continue;
 			}
 
-			$row = array_combine( $headers, str_getcsv( $line, $delimiter ) );
+			$row = $this->combine_csv_row( $headers, str_getcsv( $line, $delimiter ) );
 
-			if ( ! is_array( $row ) ) {
+			if ( empty( $row ) ) {
 				continue;
 			}
 
@@ -316,12 +437,23 @@ class Schrack_Catalog_Importer {
 	 * @return array<int,array<string,mixed>>
 	 */
 	private function parse_xml_catalog( string $content ): array {
-		$xml = simplexml_load_string( $content );
+		if ( ! function_exists( 'simplexml_load_string' ) ) {
+			$this->logger->warning( 'catalog', 'PHP SimpleXML extension is not available for Schrack XML catalog parsing.' );
+			return array();
+		}
+
+		$previous = libxml_use_internal_errors( true );
+		$xml      = simplexml_load_string( $content, 'SimpleXMLElement', LIBXML_NONET );
 
 		if ( false === $xml ) {
+			libxml_clear_errors();
+			libxml_use_internal_errors( $previous );
 			$this->logger->warning( 'catalog', 'Unable to parse Schrack XML catalog response.' );
 			return array();
 		}
+
+		libxml_clear_errors();
+		libxml_use_internal_errors( $previous );
 
 		$items = array();
 
@@ -338,28 +470,70 @@ class Schrack_Catalog_Importer {
 	}
 
 	/**
+	 * Normalizes CSV headers and keeps duplicate/empty columns addressable.
+	 *
+	 * @param array<int,mixed> $headers Raw headers.
+	 * @return array<int,string>
+	 */
+	private function normalize_csv_headers( array $headers ): array {
+		$normalized = array();
+		$seen       = array();
+
+		foreach ( $headers as $index => $header ) {
+			$header = preg_replace( '/^\xEF\xBB\xBF/', '', (string) $header );
+			$key    = sanitize_key( (string) $header );
+
+			if ( '' === $key ) {
+				$key = 'column_' . $index;
+			}
+
+			if ( isset( $seen[ $key ] ) ) {
+				$key = $key . '_' . $index;
+			}
+
+			$seen[ $key ] = true;
+			$normalized[] = $key;
+		}
+
+		return $normalized;
+	}
+
+	/**
+	 * Combines a CSV row with headers without allowing malformed rows to fatal.
+	 *
+	 * @param array<int,string> $headers CSV headers.
+	 * @param array<int,mixed>  $values CSV row values.
+	 * @return array<string,mixed>
+	 */
+	private function combine_csv_row( array $headers, array $values ): array {
+		$column_count = count( $headers );
+
+		if ( 0 === $column_count ) {
+			return array();
+		}
+
+		if ( count( $values ) < $column_count ) {
+			$values = array_pad( $values, $column_count, '' );
+		} elseif ( count( $values ) > $column_count ) {
+			$values = array_slice( $values, 0, $column_count );
+		}
+
+		$row = array_combine( $headers, $values );
+
+		return is_array( $row ) ? $row : array();
+	}
+
+	/**
 	 * Normalizes a parser row to mapper data.
 	 *
-	 * @param array<string,mixed> $row Raw parser row.
+	 * @param array<int|string,mixed> $row Raw parser row.
 	 * @return array<string,mixed>
 	 */
 	private function normalize_catalog_row( array $row ): array {
-		$get = static function ( array $keys ) use ( $row ): string {
-			foreach ( $keys as $key ) {
-				$normalized = sanitize_key( $key );
-				if ( isset( $row[ $normalized ] ) && '' !== $row[ $normalized ] ) {
-					return is_scalar( $row[ $normalized ] ) ? (string) $row[ $normalized ] : '';
-				}
-				if ( isset( $row[ $key ] ) && '' !== $row[ $key ] ) {
-					return is_scalar( $row[ $key ] ) ? (string) $row[ $key ] : '';
-				}
-			}
-
-			return '';
-		};
+		$get = fn ( array $keys ): string => $this->find_catalog_value( $row, $keys );
 
 		return array(
-			'sku'               => sanitize_text_field( $get( array( 'sku', 'item_number', 'itemnumber', 'article', 'artikelnr' ) ) ),
+			'sku'               => sanitize_text_field( $get( array( 'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_number', 'articlenumber', 'artikelnr' ) ) ),
 			'name'              => sanitize_text_field( $get( array( 'name', 'title', 'description_short', 'bezeichnung' ) ) ),
 			'short_description' => wp_kses_post( $get( array( 'short_description', 'shortdescription', 'description_short' ) ) ),
 			'description'       => wp_kses_post( $get( array( 'description', 'long_description', 'longdescription' ) ) ),
@@ -369,5 +543,66 @@ class Schrack_Catalog_Importer {
 			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure' ) ) ),
 			'catalog_status'    => sanitize_text_field( $get( array( 'catalog_status', 'status' ) ) ),
 		);
+	}
+
+	/**
+	 * Finds the first scalar catalog value by broad key aliases, including nested XML rows.
+	 *
+	 * @param array<int|string,mixed> $row Raw parser row.
+	 * @param array<int,string>   $keys Key aliases.
+	 */
+	private function find_catalog_value( array $row, array $keys ): string {
+		$normalized_keys = array_map( 'sanitize_key', $keys );
+
+		foreach ( $row as $key => $value ) {
+			$normalized_key = sanitize_key( (string) $key );
+
+			if ( in_array( $normalized_key, $normalized_keys, true ) ) {
+				if ( is_scalar( $value ) && '' !== (string) $value ) {
+					return (string) $value;
+				}
+
+				if ( is_array( $value ) ) {
+					$scalar = $this->first_scalar_value( $value );
+
+					if ( '' !== $scalar ) {
+						return $scalar;
+					}
+				}
+			}
+
+			if ( is_array( $value ) ) {
+				$nested = $this->find_catalog_value( $value, $keys );
+
+				if ( '' !== $nested ) {
+					return $nested;
+				}
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Returns the first scalar value in a nested parser fragment.
+	 *
+	 * @param array<int|string,mixed> $data Parser fragment.
+	 */
+	private function first_scalar_value( array $data ): string {
+		foreach ( $data as $value ) {
+			if ( is_scalar( $value ) && '' !== (string) $value ) {
+				return (string) $value;
+			}
+
+			if ( is_array( $value ) ) {
+				$nested = $this->first_scalar_value( $value );
+
+				if ( '' !== $nested ) {
+					return $nested;
+				}
+			}
+		}
+
+		return '';
 	}
 }

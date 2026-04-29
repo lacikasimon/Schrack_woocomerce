@@ -76,6 +76,7 @@ class Schrack_Category_Markup {
 	 * Calculates sale price from purchase price.
 	 */
 	public function calculate_sale_price( float $purchase_price, int $product_id = 0 ): float {
+		$purchase_price = max( 0.0, $purchase_price );
 		$rule       = $this->get_rule_for_product( $product_id );
 		$markup     = '' !== $rule['markup'] ? (float) $rule['markup'] : (float) $this->settings->get( 'default_markup', 20 );
 		$min_margin = '' !== $rule['min_margin'] ? (float) $rule['min_margin'] : 0.0;
@@ -151,6 +152,10 @@ class Schrack_Category_Markup {
 		$value = is_string( $value ) ? trim( str_replace( ',', '.', $value ) ) : $value;
 
 		if ( '' === $value || null === $value ) {
+			return '';
+		}
+
+		if ( ! is_numeric( $value ) ) {
 			return '';
 		}
 

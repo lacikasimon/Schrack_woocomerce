@@ -164,7 +164,7 @@ class Schrack_Stock_Sync {
 
 		if ( is_numeric( $node ) && empty( $context ) ) {
 			$warehouses[] = array(
-				'quantity' => (float) $node,
+				'quantity' => max( 0, (float) $node ),
 				'source'   => 'all',
 				'label'    => '',
 			);
@@ -180,7 +180,7 @@ class Schrack_Stock_Sync {
 		foreach ( $node as $key => $value ) {
 			$key_string = strtolower( (string) $key );
 
-			if ( is_scalar( $value ) && preg_match( '/(warehouse|store|location|branch|depot|name|type|country)/', $key_string ) ) {
+			if ( is_scalar( $value ) && preg_match( '/(warehouse|store|location|branch|depot|stockid|stock_id|name|type|country)/', $key_string ) ) {
 				$local_context[ $key_string ] = sanitize_text_field( (string) $value );
 			}
 		}
@@ -194,9 +194,12 @@ class Schrack_Stock_Sync {
 				$this->is_decimal_like( (string) $value )
 			) {
 				$label = implode( ' ', $local_context );
+				if ( '' === $label ) {
+					$label = $key_string;
+				}
 				$warehouses[] = array(
-					'quantity' => (float) str_replace( ',', '.', (string) $value ),
-					'source'   => $this->classify_source( $label ),
+					'quantity' => max( 0, (float) str_replace( ',', '.', (string) $value ) ),
+					'source'   => $this->classify_quantity_source( $key_string, $label ),
 					'label'    => $label,
 				);
 			}
@@ -205,6 +208,21 @@ class Schrack_Stock_Sync {
 				$this->collect_quantities( $value, $warehouses, $local_context );
 			}
 		}
+	}
+
+	/**
+	 * Classifies stock source from quantity field names first, then labels.
+	 */
+	private function classify_quantity_source( string $quantity_key, string $label ): string {
+		if ( str_contains( $quantity_key, 'pickup' ) ) {
+			return 'store';
+		}
+
+		if ( str_contains( $quantity_key, 'delivery' ) ) {
+			return 'central';
+		}
+
+		return $this->classify_source( $label );
 	}
 
 	/**
@@ -217,7 +235,7 @@ class Schrack_Stock_Sync {
 			return 'store';
 		}
 
-		if ( str_contains( $label, 'central' ) || str_contains( $label, 'cz' ) || str_contains( $label, 'at' ) || str_contains( $label, 'warehouse' ) || str_contains( $label, 'depot' ) ) {
+		if ( str_contains( $label, 'central' ) || preg_match( '/\b(cz|at)\b/', $label ) || str_contains( $label, 'warehouse' ) || str_contains( $label, 'depot' ) ) {
 			return 'central';
 		}
 

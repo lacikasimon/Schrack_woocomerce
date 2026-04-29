@@ -136,7 +136,7 @@ class Schrack_Price_Sync {
 	 */
 	public function extract_price( mixed $response ): ?float {
 		if ( is_numeric( $response ) ) {
-			return (float) $response;
+			return $this->normalize_price( (string) $response );
 		}
 
 		if ( is_object( $response ) ) {
@@ -155,7 +155,7 @@ class Schrack_Price_Sync {
 				preg_match( '/(price|net|amount|value)/', $key_string ) &&
 				$this->is_decimal_like( (string) $value )
 			) {
-				return (float) str_replace( ',', '.', (string) $value );
+				return $this->normalize_price( (string) $value );
 			}
 
 			$nested = $this->extract_price( $value );
@@ -197,5 +197,14 @@ class Schrack_Price_Sync {
 	 */
 	private function is_decimal_like( string $value ): bool {
 		return (bool) preg_match( '/^-?\d+(?:[,.]\d+)?$/', trim( $value ) );
+	}
+
+	/**
+	 * Parses Schrack decimal strings and rejects negative WooCommerce prices.
+	 */
+	private function normalize_price( string $value ): ?float {
+		$price = (float) str_replace( ',', '.', trim( $value ) );
+
+		return $price >= 0 ? $price : null;
 	}
 }

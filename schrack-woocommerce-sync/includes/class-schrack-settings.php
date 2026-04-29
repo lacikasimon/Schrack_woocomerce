@@ -119,10 +119,10 @@ class Schrack_Settings {
 	public function sanitize( array $input, array $current = array() ): array {
 		$current = wp_parse_args( $current, self::defaults() );
 
-		$environment = isset( $input['environment'] ) && 'live' === $input['environment'] ? 'live' : 'test';
+		$environment = isset( $input['environment'] ) && 'live' === sanitize_key( wp_unslash( (string) $input['environment'] ) ) ? 'live' : 'test';
 
-		$endpoint = isset( $input['soap_endpoint_url'] ) ? esc_url_raw( trim( (string) $input['soap_endpoint_url'] ) ) : '';
-		$wsdl     = isset( $input['wsdl_url'] ) ? esc_url_raw( trim( (string) $input['wsdl_url'] ) ) : '';
+		$endpoint = isset( $input['soap_endpoint_url'] ) ? esc_url_raw( trim( wp_unslash( (string) $input['soap_endpoint_url'] ) ) ) : '';
+		$wsdl     = isset( $input['wsdl_url'] ) ? esc_url_raw( trim( wp_unslash( (string) $input['wsdl_url'] ) ) ) : '';
 
 		if ( '' === $endpoint ) {
 			$endpoint = 'live' === $environment ? self::DEFAULT_LIVE_URL : self::DEFAULT_TEST_URL;
@@ -148,18 +148,18 @@ class Schrack_Settings {
 			$wsdl = self::DEFAULT_TEST_WSDL;
 		}
 
-		$password = isset( $input['webshop_password'] ) ? (string) $input['webshop_password'] : '';
-		$provider = isset( $input['provider_code'] ) ? (string) $input['provider_code'] : '';
+		$password = isset( $input['webshop_password'] ) ? wp_unslash( (string) $input['webshop_password'] ) : '';
+		$provider = isset( $input['provider_code'] ) ? wp_unslash( (string) $input['provider_code'] ) : '';
 
 		return array(
 			'environment'             => $environment,
 			'soap_endpoint_url'       => $endpoint,
 			'wsdl_url'                => $wsdl,
-			'datanorm_url'            => isset( $input['datanorm_url'] ) ? esc_url_raw( trim( (string) $input['datanorm_url'] ) ) : self::DEFAULT_DATANORM_URL,
+			'datanorm_url'            => isset( $input['datanorm_url'] ) ? esc_url_raw( trim( wp_unslash( (string) $input['datanorm_url'] ) ) ) : self::DEFAULT_DATANORM_URL,
 			'customer_number'         => isset( $input['customer_number'] ) ? sanitize_text_field( wp_unslash( (string) $input['customer_number'] ) ) : '',
 			'webshop_username'        => isset( $input['webshop_username'] ) ? sanitize_text_field( wp_unslash( (string) $input['webshop_username'] ) ) : '',
-			'webshop_password'        => '' !== $password ? sanitize_text_field( wp_unslash( $password ) ) : (string) $current['webshop_password'],
-			'provider_code'           => '' !== $provider ? sanitize_text_field( wp_unslash( $provider ) ) : (string) $current['provider_code'],
+			'webshop_password'        => '' !== $password ? sanitize_text_field( $password ) : (string) $current['webshop_password'],
+			'provider_code'           => '' !== $provider ? sanitize_text_field( $provider ) : (string) $current['provider_code'],
 			'default_markup'          => $this->sanitize_float( $input['default_markup'] ?? 20, 0, 500 ),
 			'sync_batch_size'         => max( 1, min( 500, absint( $input['sync_batch_size'] ?? 25 ) ) ),
 			'rate_limit_sleep'        => max( 0, min( 30, absint( $input['rate_limit_sleep'] ?? 0 ) ) ),

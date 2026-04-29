@@ -73,10 +73,12 @@ Use TEST credentials until SOAP payload field names have been verified against t
 
 The settings screen includes:
 
-- SOAP connection test
+- WSDL connection test
 - WSDL functions/types listing through `__getFunctions()` and `__getTypes()`
 
 The WSDL list is shown only when debug mode is enabled.
+
+When the default TEST WSDL is temporarily unavailable, the SOAP client can load the LIVE WSDL as the schema while keeping the configured TEST endpoint as the SOAP call location.
 
 ## Manual MVP Tools
 
@@ -145,7 +147,7 @@ Recurring jobs are registered through Action Scheduler when available:
 
 If Action Scheduler is unavailable, WP-Cron is used as a fallback.
 
-The first implementation includes batch hooks and status tracking. Full cursor based catalog pagination is marked with TODO comments for the next phase.
+Catalog imports persist a cursor in the status option. Each batch continues from the previous offset, resets when the parsed catalog SKU sequence changes, and wraps to the beginning after a full pass.
 
 ## WP-CLI
 

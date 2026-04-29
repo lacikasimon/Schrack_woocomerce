@@ -128,7 +128,6 @@ class Schrack_Cron {
 		$limit    = (int) $this->settings->get( 'sync_batch_size', 25 );
 
 		try {
-			// TODO: Persist catalog cursor/page offsets for multi-batch imports.
 			$result = $importer->import_from_soap( 'CSV', $limit );
 			$this->logger->info( 'catalog', 'Finished Schrack catalog import batch.', null, $result );
 		} catch ( Throwable $exception ) {
@@ -143,9 +142,14 @@ class Schrack_Cron {
 	public function run_price_sync(): void {
 		$sync  = new Schrack_Price_Sync( $this->settings, $this->logger );
 		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
-		$result = $sync->sync_batch( $limit );
 
-		$this->logger->info( 'price', 'Finished Schrack price sync batch.', null, $result );
+		try {
+			$result = $sync->sync_batch( $limit );
+			$this->logger->info( 'price', 'Finished Schrack price sync batch.', null, $result );
+		} catch ( Throwable $exception ) {
+			$this->logger->error( 'price', 'Schrack price sync batch failed.', null, array( 'error' => $exception->getMessage() ) );
+			$this->settings->update_status( 'price', array( 'processed' => 0, 'errors' => 1 ) );
+		}
 	}
 
 	/**
@@ -154,9 +158,14 @@ class Schrack_Cron {
 	public function run_stock_sync(): void {
 		$sync  = new Schrack_Stock_Sync( $this->settings, $this->logger );
 		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
-		$result = $sync->sync_batch( $limit );
 
-		$this->logger->info( 'stock', 'Finished Schrack stock sync batch.', null, $result );
+		try {
+			$result = $sync->sync_batch( $limit );
+			$this->logger->info( 'stock', 'Finished Schrack stock sync batch.', null, $result );
+		} catch ( Throwable $exception ) {
+			$this->logger->error( 'stock', 'Schrack stock sync batch failed.', null, array( 'error' => $exception->getMessage() ) );
+			$this->settings->update_status( 'stock', array( 'processed' => 0, 'errors' => 1 ) );
+		}
 	}
 
 	/**

@@ -175,7 +175,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schrack-inline-actions">
 			<input type="hidden" name="action" value="schrack_wc_sync_soap_debug">
 			<?php wp_nonce_field( 'schrack_wc_sync_soap_debug' ); ?>
-			<button type="submit" class="button button-secondary" name="debug_task" value="test_connection"><?php esc_html_e( 'Test SOAP connection', 'schrack-woocommerce-sync' ); ?></button>
+			<button type="submit" class="button button-secondary" name="debug_task" value="test_connection"><?php esc_html_e( 'Test WSDL connection', 'schrack-woocommerce-sync' ); ?></button>
 			<button type="submit" class="button button-secondary" name="debug_task" value="list_wsdl"><?php esc_html_e( 'List WSDL functions/types', 'schrack-woocommerce-sync' ); ?></button>
 		</form>
 	</div>

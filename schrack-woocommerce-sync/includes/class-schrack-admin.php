@@ -135,7 +135,7 @@ class Schrack_Admin {
 		check_admin_referer( 'schrack_wc_sync_settings' );
 
 		$input = isset( $_POST['schrack_settings'] ) && is_array( $_POST['schrack_settings'] )
-			? wp_unslash( $_POST['schrack_settings'] )
+			? $_POST['schrack_settings']
 			: array();
 
 		$this->settings->update( $input );
@@ -179,26 +179,37 @@ class Schrack_Admin {
 					$this->redirect( 'schrack-sync' );
 				}
 
-				$data = array(
-					'functions' => $client->get_functions(),
-					'types'     => $client->get_types(),
+				$functions = $client->get_functions();
+				$types     = $client->get_types();
+				$data      = array(
+					'wsdl_url'          => $client->get_loaded_wsdl_url(),
+					'soap_endpoint_url' => (string) $this->settings->get( 'soap_endpoint_url' ),
+					'functions'         => $functions,
+					'types'             => $types,
 				);
 
-				$this->set_notice( 'success', __( 'WSDL functions and types loaded.', 'schrack-woocommerce-sync' ), $data );
+				$this->set_notice(
+					'success',
+					$this->append_wsdl_fallback_note( __( 'WSDL functions and types loaded.', 'schrack-woocommerce-sync' ), $client ),
+					$data
+				);
 			} else {
 				$functions = $client->get_functions();
 				$this->set_notice(
 					'success',
-					sprintf(
-						/* translators: %d: SOAP function count. */
-						__( 'SOAP connection OK. WSDL exposes %d functions.', 'schrack-woocommerce-sync' ),
-						count( $functions )
+					$this->append_wsdl_fallback_note(
+						sprintf(
+							/* translators: %d: SOAP function count. */
+							__( 'WSDL connection OK. WSDL exposes %d functions.', 'schrack-woocommerce-sync' ),
+							count( $functions )
+						),
+						$client
 					)
 				);
 			}
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'soap', 'SOAP debug action failed.', null, array( 'error' => $exception->getMessage() ) );
-			$this->set_notice( 'error', esc_html( $exception->getMessage() ) );
+			$this->set_notice( 'error', $exception->getMessage() );
 		}
 
 		$this->redirect( 'schrack-sync' );
@@ -254,7 +265,7 @@ class Schrack_Admin {
 			}
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'admin', 'Manual SKU action failed.', $sku, array( 'error' => $exception->getMessage() ) );
-			$this->set_notice( 'error', esc_html( $exception->getMessage() ) );
+			$this->set_notice( 'error', $exception->getMessage() );
 		}
 
 		$this->redirect( 'schrack-sync-manual' );
@@ -410,7 +421,7 @@ class Schrack_Admin {
 		$mapper = new Schrack_Product_Mapper( $this->settings, $this->logger );
 		$data   = array(
 			'sku'               => $sku,
-			'name'              => isset( $_POST['product_name'] ) && '' !== $_POST['product_name'] ? sanitize_text_field( wp_unslash( (string) $_POST['product_name'] ) ) : 'Schrack ' . $sku,
+			'name'              => isset( $_POST['product_name'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['product_name'] ) ) : '',
 			'short_description' => isset( $_POST['short_description'] ) ? wp_kses_post( wp_unslash( (string) $_POST['short_description'] ) ) : '',
 			'description'       => isset( $_POST['description'] ) ? wp_kses_post( wp_unslash( (string) $_POST['description'] ) ) : '',
 			'manufacturer'      => isset( $_POST['manufacturer'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['manufacturer'] ) ) : '',
@@ -464,6 +475,24 @@ class Schrack_Admin {
 		}
 
 		return $data;
+	}
+
+	/**
+	 * Adds a note when the SOAP client used a fallback WSDL URL.
+	 */
+	private function append_wsdl_fallback_note( string $message, Schrack_Soap_Client $client ): string {
+		$loaded_wsdl     = $client->get_loaded_wsdl_url();
+		$configured_wsdl = (string) $this->settings->get( 'wsdl_url' );
+
+		if ( '' === $loaded_wsdl || $loaded_wsdl === $configured_wsdl ) {
+			return $message;
+		}
+
+		return $message . ' ' . sprintf(
+			/* translators: %s: fallback WSDL URL. */
+			__( 'Loaded WSDL from fallback URL %s because the configured TEST WSDL is unavailable. SOAP calls still use the configured endpoint URL.', 'schrack-woocommerce-sync' ),
+			$loaded_wsdl
+		);
 	}
 
 	/**
