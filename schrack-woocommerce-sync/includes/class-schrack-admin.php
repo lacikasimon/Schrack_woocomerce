@@ -390,12 +390,14 @@ class Schrack_Admin {
 			return;
 		}
 
-		$type = in_array( $notice['type'], array( 'success', 'warning', 'error', 'info' ), true ) ? $notice['type'] : 'info';
+		$notice_type    = isset( $notice['type'] ) ? (string) $notice['type'] : 'info';
+		$notice_message = isset( $notice['message'] ) ? (string) $notice['message'] : '';
+		$type           = in_array( $notice_type, array( 'success', 'warning', 'error', 'info' ), true ) ? $notice_type : 'info';
 
 		printf(
 			'<div class="notice notice-%1$s"><p>%2$s</p></div>',
 			esc_attr( $type ),
-			esc_html( (string) $notice['message'] )
+			esc_html( $notice_message )
 		);
 
 		if ( ! empty( $notice['data'] ) ) {

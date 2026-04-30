@@ -71,7 +71,7 @@ class Schrack_Stock_Sync {
 			return null;
 		}
 
-		$sku = $product->get_sku();
+		$sku = $this->product_schrack_sku( $product );
 
 		if ( '' === $sku ) {
 			$this->logger->warning( 'stock', 'Skipped stock sync because product has no SKU.', null, array( 'product_id' => $product_id ) );
@@ -86,12 +86,20 @@ class Schrack_Stock_Sync {
 	/**
 	 * Syncs a batch of Schrack products.
 	 *
-	 * @return array<string,int>
+	 * @return array<string,mixed>
 	 */
 	public function sync_batch( int $limit ): array {
-		$product_ids = $this->get_schrack_product_ids( $limit );
-		$processed   = 0;
-		$errors      = 0;
+		$limit       = max( 1, $limit );
+		$batch       = $this->get_schrack_product_batch( $limit, $this->batch_cursor() );
+		$product_ids = $batch['product_ids'];
+
+		if ( empty( $product_ids ) && $batch['batch_start'] > 0 ) {
+			$batch       = $this->get_schrack_product_batch( $limit, 0 );
+			$product_ids = $batch['product_ids'];
+		}
+
+		$processed = 0;
+		$errors    = 0;
 
 		foreach ( $product_ids as $product_id ) {
 			try {
@@ -103,17 +111,37 @@ class Schrack_Stock_Sync {
 			}
 		}
 
+		$batch_count     = count( $product_ids );
+		$next_cursor     = $batch['batch_start'] + $batch_count;
+		$completed_cycle = 0 === $batch['total_products'] || $next_cursor >= $batch['total_products'];
+
+		if ( $completed_cycle ) {
+			$next_cursor = 0;
+		}
+
 		$this->settings->update_status(
 			'stock',
 			array(
-				'processed' => $processed,
-				'errors'    => $errors,
+				'processed'       => $processed,
+				'errors'          => $errors,
+				'cursor'          => $next_cursor,
+				'total_products'  => $batch['total_products'],
+				'batch_start'     => $batch['batch_start'],
+				'batch_count'     => $batch_count,
+				'batch_limit'     => $limit,
+				'completed_cycle' => $completed_cycle ? 'yes' : 'no',
 			)
 		);
 
 		return array(
-			'processed' => $processed,
-			'errors'    => $errors,
+			'processed'       => $processed,
+			'errors'          => $errors,
+			'cursor'          => $next_cursor,
+			'total_products'  => $batch['total_products'],
+			'batch_start'     => $batch['batch_start'],
+			'batch_count'     => $batch_count,
+			'batch_limit'     => $limit,
+			'completed_cycle' => $completed_cycle ? 'yes' : 'no',
 		);
 	}
 
@@ -137,6 +165,15 @@ class Schrack_Stock_Sync {
 				return $source === $warehouse['source'];
 			}
 		);
+
+		if ( empty( $filtered ) && 'all' !== $source ) {
+			$filtered = array_filter(
+				$warehouses,
+				static function ( array $warehouse ): bool {
+					return 'all' === $warehouse['source'];
+				}
+			);
+		}
 
 		$total = 0.0;
 
@@ -243,17 +280,30 @@ class Schrack_Stock_Sync {
 	}
 
 	/**
-	 * Returns Schrack product IDs for batch work.
-	 *
-	 * @return array<int,int>
+	 * Returns the stored cursor for stock batch work.
 	 */
-	private function get_schrack_product_ids( int $limit ): array {
+	private function batch_cursor(): int {
+		$status = $this->settings->get_status();
+		$row    = isset( $status['stock'] ) && is_array( $status['stock'] ) ? $status['stock'] : array();
+
+		return absint( $row['cursor'] ?? 0 );
+	}
+
+	/**
+	 * Returns a stable batch of Schrack product IDs.
+	 *
+	 * @return array{product_ids:array<int,int>,total_products:int,batch_start:int}
+	 */
+	private function get_schrack_product_batch( int $limit, int $offset ): array {
 		$query = new WP_Query(
 			array(
 				'post_type'      => 'product',
 				'post_status'    => array( 'publish', 'draft', 'private' ),
 				'posts_per_page' => max( 1, $limit ),
+				'offset'         => max( 0, $offset ),
 				'fields'         => 'ids',
+				'orderby'        => 'ID',
+				'order'          => 'ASC',
 				'meta_query'     => array(
 					array(
 						'key'     => '_schrack_item_number',
@@ -263,7 +313,21 @@ class Schrack_Stock_Sync {
 			)
 		);
 
-		return array_map( 'absint', $query->posts );
+		return array(
+			'product_ids'    => array_map( 'absint', $query->posts ),
+			'total_products' => (int) $query->found_posts,
+			'batch_start'    => max( 0, $offset ),
+		);
+	}
+
+	/**
+	 * Returns the Schrack item number for a product, preferring the stored import meta.
+	 */
+	private function product_schrack_sku( WC_Product $product ): string {
+		$meta_sku = $product->get_meta( '_schrack_item_number', true );
+		$sku      = is_scalar( $meta_sku ) && '' !== trim( (string) $meta_sku ) ? (string) $meta_sku : $product->get_sku();
+
+		return sanitize_text_field( $sku );
 	}
 
 	/**

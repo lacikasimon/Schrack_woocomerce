@@ -164,9 +164,9 @@ class Schrack_Settings {
 			'sync_batch_size'         => max( 1, min( 500, absint( $input['sync_batch_size'] ?? 25 ) ) ),
 			'rate_limit_sleep'        => max( 0, min( 30, absint( $input['rate_limit_sleep'] ?? 0 ) ) ),
 			'soap_retries'            => max( 0, min( 5, absint( $input['soap_retries'] ?? 2 ) ) ),
-			'price_sync_frequency'    => $this->sanitize_frequency( $input['price_sync_frequency'] ?? 'daily', array( 'hourly', 'six_hours', 'daily' ) ),
-			'stock_sync_frequency'    => $this->sanitize_frequency( $input['stock_sync_frequency'] ?? 'hourly', array( 'thirty_minutes', 'hourly' ) ),
-			'catalog_sync_frequency'  => $this->sanitize_frequency( $input['catalog_sync_frequency'] ?? 'daily', array( 'daily', 'weekly' ) ),
+			'price_sync_frequency'    => $this->sanitize_frequency( $input['price_sync_frequency'] ?? 'daily', array( 'hourly', 'six_hours', 'daily' ), 'daily' ),
+			'stock_sync_frequency'    => $this->sanitize_frequency( $input['stock_sync_frequency'] ?? 'hourly', array( 'thirty_minutes', 'hourly' ), 'hourly' ),
+			'catalog_sync_frequency'  => $this->sanitize_frequency( $input['catalog_sync_frequency'] ?? 'daily', array( 'daily', 'weekly' ), 'daily' ),
 			'import_mode'             => $this->sanitize_choice( $input['import_mode'] ?? 'catalog_price_stock', array( 'catalog_only', 'catalog_price', 'catalog_price_stock' ), 'catalog_price_stock' ),
 			'publish_status'          => $this->sanitize_choice( $input['publish_status'] ?? 'draft', array( 'draft', 'publish' ), 'draft' ),
 			'stock_handling_enabled'  => isset( $input['stock_handling_enabled'] ) ? 'yes' : 'no',
@@ -253,10 +253,11 @@ class Schrack_Settings {
 	/**
 	 * Sanitizes a frequency choice.
 	 *
-	 * @param mixed        $value Value.
+	 * @param mixed             $value Value.
 	 * @param array<int,string> $allowed Allowed values.
+	 * @param string            $default Default.
 	 */
-	private function sanitize_frequency( mixed $value, array $allowed ): string {
-		return $this->sanitize_choice( $value, $allowed, $allowed[0] );
+	private function sanitize_frequency( mixed $value, array $allowed, string $default ): string {
+		return $this->sanitize_choice( $value, $allowed, $default );
 	}
 }

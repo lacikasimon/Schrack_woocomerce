@@ -147,7 +147,7 @@ Recurring jobs are registered through Action Scheduler when available:
 
 If Action Scheduler is unavailable, WP-Cron is used as a fallback.
 
-Catalog imports persist a cursor in the status option. Each batch continues from the previous offset, resets when the parsed catalog SKU sequence changes, and wraps to the beginning after a full pass.
+Catalog, price, and stock batches persist cursors in the status option. Each batch continues from the previous offset and wraps to the beginning after a full pass. Catalog imports also reset when the parsed SKU sequence changes.
 
 ## WP-CLI
 

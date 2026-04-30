@@ -287,7 +287,7 @@ class Schrack_Product_Mapper {
 		$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
 
 		if ( $is_new || ! empty( $data['category_path'] ) ) {
-			$product->update_meta_data( '_schrack_raw_category', sanitize_text_field( is_array( $data['category_path'] ?? '' ) ? implode( ' > ', $data['category_path'] ) : $this->string_value( $data['category_path'] ?? '' ) ) );
+			$product->update_meta_data( '_schrack_raw_category', $this->category_path_label( $data['category_path'] ?? '' ) );
 		}
 
 		if ( ! empty( $data['technical_attributes'] ) ) {
@@ -315,6 +315,22 @@ class Schrack_Product_Mapper {
 		}
 
 		$product->update_meta_data( $meta_key, sanitize_text_field( $this->string_value( $data[ $data_key ] ?? '' ) ) );
+	}
+
+	/**
+	 * Formats a category path for metadata without array-to-string notices.
+	 */
+	private function category_path_label( mixed $category_path ): string {
+		if ( is_array( $category_path ) ) {
+			$parts = array_map(
+				static fn ( mixed $part ): string => sanitize_text_field( is_scalar( $part ) ? (string) $part : '' ),
+				$category_path
+			);
+
+			return implode( ' > ', array_values( array_filter( array_map( 'trim', $parts ) ) ) );
+		}
+
+		return sanitize_text_field( $this->string_value( $category_path ) );
 	}
 
 	/**
