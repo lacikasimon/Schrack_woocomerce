@@ -227,7 +227,18 @@ class Schrack_Catalog_Importer {
 		}
 
 		if ( filter_var( $content, FILTER_VALIDATE_URL ) ) {
+			$this->logger->debug(
+				'catalog',
+				'Schrack catalog response contained a download URL.',
+				null,
+				array( 'download_url' => $this->safe_download_url_label( $content ) )
+			);
 			$content = $this->download_catalog_content( $content );
+
+			if ( '' === $content ) {
+				$this->logger->warning( 'catalog', 'Downloaded Schrack catalog content was empty or unreadable.' );
+				return array();
+			}
 		}
 
 		if ( 'XML' === $format ) {
@@ -306,6 +317,18 @@ class Schrack_Catalog_Importer {
 			return '';
 		}
 
+		$this->logger->debug(
+			'catalog',
+			'Downloaded Schrack catalog file.',
+			null,
+			array(
+				'status_code'  => $status_code,
+				'content_type' => wp_remote_retrieve_header( $response, 'content-type' ),
+				'bytes'        => strlen( $body ),
+				'is_zip'       => $this->looks_like_zip( $body ) ? 'yes' : 'no',
+			)
+		);
+
 		if ( $this->looks_like_zip( $body ) ) {
 			return $this->extract_first_zip_entry( $body );
 		}
@@ -361,6 +384,16 @@ class Schrack_Catalog_Importer {
 			$zip->close();
 			wp_delete_file( $temp_file );
 
+			$this->logger->debug(
+				'catalog',
+				'Extracted Schrack catalog ZIP entry.',
+				null,
+				array(
+					'entry_name' => $name,
+					'bytes'      => false === $content ? 0 : strlen( $content ),
+				)
+			);
+
 			return false === $content ? '' : $content;
 		}
 
@@ -395,15 +428,35 @@ class Schrack_Catalog_Importer {
 	 * @return array<int,array<string,mixed>>
 	 */
 	private function parse_csv_catalog( string $content ): array {
+		if ( '' === trim( $content ) ) {
+			$this->logger->warning( 'catalog', 'Schrack CSV catalog content was empty.' );
+			return array();
+		}
+
 		$lines = preg_split( '/\r\n|\n|\r/', trim( $content ) );
 
 		if ( empty( $lines ) ) {
 			return array();
 		}
 
-		$delimiter = str_contains( $lines[0], ';' ) ? ';' : ',';
-		$headers   = $this->normalize_csv_headers( str_getcsv( array_shift( $lines ), $delimiter ) );
-		$items     = array();
+		if ( $this->looks_like_markup( $content ) ) {
+			$this->logger->warning(
+				'catalog',
+				'Schrack catalog download returned markup instead of CSV.',
+				null,
+				array( 'preview' => $this->content_preview( $content ) )
+			);
+
+			return array();
+		}
+
+		$delimiter        = $this->detect_csv_delimiter( $lines );
+		$raw_headers      = str_getcsv( array_shift( $lines ), $delimiter );
+		$headers          = $this->normalize_csv_headers( $raw_headers );
+		$items            = array();
+		$rows_seen        = 0;
+		$rows_without_sku = 0;
+		$first_row        = array();
 
 		if ( empty( $headers ) ) {
 			$this->logger->warning( 'catalog', 'Schrack CSV catalog did not contain readable headers.' );
@@ -421,11 +474,59 @@ class Schrack_Catalog_Importer {
 				continue;
 			}
 
+			++$rows_seen;
+
+			if ( empty( $first_row ) ) {
+				$first_row = $row;
+			}
+
 			$item = $this->normalize_catalog_row( $row );
 
 			if ( '' !== $item['sku'] ) {
 				$items[] = $item;
+			} else {
+				++$rows_without_sku;
 			}
+		}
+
+		if ( 0 === $rows_seen ) {
+			$this->logger->warning(
+				'catalog',
+				'Schrack CSV catalog contained headers but no data rows.',
+				null,
+				array(
+					'delimiter'   => $delimiter,
+					'headers'     => $headers,
+					'raw_headers' => array_values( array_map( static fn ( mixed $header ): string => (string) $header, $raw_headers ) ),
+				)
+			);
+		} elseif ( empty( $items ) ) {
+			$this->logger->warning(
+				'catalog',
+				'Schrack CSV catalog rows were found, but no SKU/item-number column was recognized.',
+				null,
+				array(
+					'delimiter'        => $delimiter,
+					'headers'          => $headers,
+					'raw_headers'      => array_values( array_map( static fn ( mixed $header ): string => (string) $header, $raw_headers ) ),
+					'rows_seen'        => $rows_seen,
+					'rows_without_sku' => $rows_without_sku,
+					'first_row'        => $this->preview_row( $first_row ),
+				)
+			);
+		} else {
+			$this->logger->debug(
+				'catalog',
+				'Parsed Schrack CSV catalog.',
+				null,
+				array(
+					'delimiter'        => $delimiter,
+					'headers'          => $headers,
+					'rows_seen'        => $rows_seen,
+					'items'            => count( $items ),
+					'rows_without_sku' => $rows_without_sku,
+				)
+			);
 		}
 
 		return $items;
@@ -481,7 +582,7 @@ class Schrack_Catalog_Importer {
 
 		foreach ( $headers as $index => $header ) {
 			$header = preg_replace( '/^\xEF\xBB\xBF/', '', (string) $header );
-			$key    = sanitize_key( (string) $header );
+			$key    = $this->catalog_key( (string) $header );
 
 			if ( '' === $key ) {
 				$key = 'column_' . $index;
@@ -533,14 +634,14 @@ class Schrack_Catalog_Importer {
 		$get = fn ( array $keys ): string => $this->find_catalog_value( $row, $keys );
 
 		return array(
-			'sku'               => sanitize_text_field( $get( array( 'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_number', 'articlenumber', 'artikelnr' ) ) ),
-			'name'              => sanitize_text_field( $get( array( 'name', 'title', 'description_short', 'bezeichnung' ) ) ),
-			'short_description' => wp_kses_post( $get( array( 'short_description', 'shortdescription', 'description_short' ) ) ),
-			'description'       => wp_kses_post( $get( array( 'description', 'long_description', 'longdescription' ) ) ),
-			'manufacturer'      => sanitize_text_field( $get( array( 'manufacturer', 'brand', 'hersteller' ) ) ),
-			'ean'               => sanitize_text_field( $get( array( 'ean', 'gtin' ) ) ),
-			'category_path'     => sanitize_text_field( $get( array( 'category_path', 'category', 'warenhauptgruppe' ) ) ),
-			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure' ) ) ),
+			'sku'               => sanitize_text_field( $get( array( 'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_id', 'articleid', 'article_number', 'articlenumber', 'artikel', 'artikelnummer', 'artikelnr', 'artnr', 'artno', 'bestellnummer', 'ordernumber', 'materialnumber', 'materialnr', 'productid', 'productnumber', 'partnumber', 'schrackarticlenumber', 'schrackartikelnummer', 'schrackartikel', 'edsarticleid', 'edsartikelnummer' ) ) ),
+			'name'              => sanitize_text_field( $get( array( 'name', 'title', 'productname', 'itemname', 'description_short', 'descriptionshort', 'shorttext', 'kurztext', 'bezeichnung', 'bezeichnung1', 'artikelbezeichnung' ) ) ),
+			'short_description' => wp_kses_post( $get( array( 'short_description', 'shortdescription', 'description_short', 'descriptionshort', 'shorttext', 'kurztext' ) ) ),
+			'description'       => wp_kses_post( $get( array( 'description', 'long_description', 'longdescription', 'longtext', 'langtext', 'beschreibung' ) ) ),
+			'manufacturer'      => sanitize_text_field( $get( array( 'manufacturer', 'brand', 'hersteller', 'producer', 'supplier' ) ) ),
+			'ean'               => sanitize_text_field( $get( array( 'ean', 'gtin', 'barcode', 'barcodeno' ) ) ),
+			'category_path'     => sanitize_text_field( $get( array( 'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup' ) ) ),
+			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure', 'mengeneinheit', 'salesunit' ) ) ),
 			'catalog_status'    => sanitize_text_field( $get( array( 'catalog_status', 'status' ) ) ),
 		);
 	}
@@ -552,10 +653,10 @@ class Schrack_Catalog_Importer {
 	 * @param array<int,string>   $keys Key aliases.
 	 */
 	private function find_catalog_value( array $row, array $keys ): string {
-		$normalized_keys = array_map( 'sanitize_key', $keys );
+		$normalized_keys = array_map( array( $this, 'catalog_key' ), $keys );
 
 		foreach ( $row as $key => $value ) {
-			$normalized_key = sanitize_key( (string) $key );
+			$normalized_key = $this->catalog_key( (string) $key );
 
 			if ( in_array( $normalized_key, $normalized_keys, true ) ) {
 				if ( is_scalar( $value ) && '' !== (string) $value ) {
@@ -581,6 +682,91 @@ class Schrack_Catalog_Importer {
 		}
 
 		return '';
+	}
+
+	/**
+	 * Detects the most likely CSV delimiter from the header line.
+	 *
+	 * @param array<int,string> $lines CSV lines.
+	 */
+	private function detect_csv_delimiter( array $lines ): string {
+		$first_line  = (string) ( $lines[0] ?? '' );
+		$candidates  = array( ';', ',', "\t", '|' );
+		$best        = ';';
+		$best_columns = 0;
+
+		foreach ( $candidates as $candidate ) {
+			$columns = count( str_getcsv( $first_line, $candidate ) );
+
+			if ( $columns > $best_columns ) {
+				$best         = $candidate;
+				$best_columns = $columns;
+			}
+		}
+
+		return $best;
+	}
+
+	/**
+	 * Normalizes loose catalog keys so separators and accents do not matter.
+	 */
+	private function catalog_key( string $key ): string {
+		$key = preg_replace( '/^\xEF\xBB\xBF/', '', $key );
+
+		if ( function_exists( 'remove_accents' ) ) {
+			$key = remove_accents( $key );
+		}
+
+		$key = strtolower( $key );
+		$key = preg_replace( '/[^a-z0-9]+/', '', $key );
+
+		return null === $key ? '' : $key;
+	}
+
+	/**
+	 * Builds a short row preview for parser diagnostics.
+	 *
+	 * @param array<string,mixed> $row CSV row.
+	 * @return array<string,string>
+	 */
+	private function preview_row( array $row ): array {
+		$preview = array();
+
+		foreach ( array_slice( $row, 0, 12, true ) as $key => $value ) {
+			$preview[ (string) $key ] = is_scalar( $value ) ? substr( (string) $value, 0, 80 ) : gettype( $value );
+		}
+
+		return $preview;
+	}
+
+	/**
+	 * Checks whether a download looks like an HTML/XML error page.
+	 */
+	private function looks_like_markup( string $content ): bool {
+		return (bool) preg_match( '/^\s*</', $content );
+	}
+
+	/**
+	 * Returns a safe, token-free label for a download URL.
+	 */
+	private function safe_download_url_label( string $url ): string {
+		$host = (string) wp_parse_url( $url, PHP_URL_HOST );
+		$path = (string) wp_parse_url( $url, PHP_URL_PATH );
+
+		return '' !== $host ? $host . $path : '[download-url]';
+	}
+
+	/**
+	 * Returns a short content preview for diagnostics.
+	 */
+	private function content_preview( string $content ): string {
+		$content = preg_replace( '/\s+/', ' ', trim( $content ) );
+
+		if ( null === $content ) {
+			return '';
+		}
+
+		return substr( $content, 0, 300 );
 	}
 
 	/**
