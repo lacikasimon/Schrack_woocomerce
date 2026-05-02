@@ -143,6 +143,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<th><?php esc_html_e( 'Operation', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Last run', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Processed', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Batches', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Errors', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Batch cursor', 'schrack-woocommerce-sync' ); ?></th>
 				</tr>
@@ -154,6 +155,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 						<td><?php echo esc_html( ucfirst( $operation ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $row['last_run'] ?? '-' ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $row['processed'] ?? 0 ) ); ?></td>
+						<td><?php echo esc_html( (string) ( $row['batches_processed'] ?? '-' ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $row['errors'] ?? 0 ) ); ?></td>
 						<td>
 							<?php

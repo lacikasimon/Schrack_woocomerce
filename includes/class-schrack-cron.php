@@ -271,10 +271,39 @@ class Schrack_Cron {
 	public function run_price_sync( bool $queue_continuation = true ): array {
 		$sync  = new Schrack_Price_Sync( $this->settings, $this->logger );
 		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
+		$max_batches = max( 1, (int) $this->settings->get( 'sync_batches_per_run', 3 ) );
+		$started_at  = time();
 
 		try {
-			$result = $sync->sync_batch( $limit );
-			$this->logger->info( 'price', 'Finished Schrack price sync batch.', null, $result );
+			$result          = array();
+			$total_processed = 0;
+			$total_errors    = 0;
+			$batches         = 0;
+
+			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				$result = $sync->sync_batch( $limit );
+				++$batches;
+
+				$total_processed += (int) ( $result['processed'] ?? 0 );
+				$total_errors    += (int) ( $result['errors'] ?? 0 );
+
+				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at ) ) {
+					break;
+				}
+			}
+
+			$result = array_merge(
+				$result,
+				array(
+					'processed'           => $total_processed,
+					'errors'              => $total_errors,
+					'batches_processed'   => $batches,
+					'sync_batches_per_run'=> $max_batches,
+				)
+			);
+
+			$this->settings->update_status( 'price', $result );
+			$this->logger->info( 'price', 'Finished Schrack price sync run.', null, $result );
 			if ( $queue_continuation ) {
 				$this->queue_next_batch_if_needed( self::HOOK_PRICES, 'price', $result );
 			}
@@ -296,10 +325,39 @@ class Schrack_Cron {
 	public function run_stock_sync( bool $queue_continuation = true ): array {
 		$sync  = new Schrack_Stock_Sync( $this->settings, $this->logger );
 		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
+		$max_batches = max( 1, (int) $this->settings->get( 'sync_batches_per_run', 3 ) );
+		$started_at  = time();
 
 		try {
-			$result = $sync->sync_batch( $limit );
-			$this->logger->info( 'stock', 'Finished Schrack stock sync batch.', null, $result );
+			$result          = array();
+			$total_processed = 0;
+			$total_errors    = 0;
+			$batches         = 0;
+
+			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				$result = $sync->sync_batch( $limit );
+				++$batches;
+
+				$total_processed += (int) ( $result['processed'] ?? 0 );
+				$total_errors    += (int) ( $result['errors'] ?? 0 );
+
+				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at ) ) {
+					break;
+				}
+			}
+
+			$result = array_merge(
+				$result,
+				array(
+					'processed'           => $total_processed,
+					'errors'              => $total_errors,
+					'batches_processed'   => $batches,
+					'sync_batches_per_run'=> $max_batches,
+				)
+			);
+
+			$this->settings->update_status( 'stock', $result );
+			$this->logger->info( 'stock', 'Finished Schrack stock sync run.', null, $result );
 			if ( $queue_continuation ) {
 				$this->queue_next_batch_if_needed( self::HOOK_STOCK, 'stock', $result );
 			}
@@ -321,10 +379,42 @@ class Schrack_Cron {
 	public function run_image_sync( bool $queue_continuation = true ): array {
 		$sync  = new Schrack_Image_Sync( $this->settings, $this->logger );
 		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
+		$max_batches = max( 1, (int) $this->settings->get( 'sync_batches_per_run', 3 ) );
+		$started_at  = time();
 
 		try {
-			$result = $sync->sync_batch( $limit );
-			$this->logger->info( 'images', 'Finished Schrack image sync batch.', null, $result );
+			$result          = array();
+			$total_processed = 0;
+			$total_imported  = 0;
+			$total_errors    = 0;
+			$batches         = 0;
+
+			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				$result = $sync->sync_batch( $limit );
+				++$batches;
+
+				$total_processed += (int) ( $result['processed'] ?? 0 );
+				$total_imported  += (int) ( $result['imported'] ?? 0 );
+				$total_errors    += (int) ( $result['errors'] ?? 0 );
+
+				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at ) ) {
+					break;
+				}
+			}
+
+			$result = array_merge(
+				$result,
+				array(
+					'processed'           => $total_processed,
+					'imported'            => $total_imported,
+					'errors'              => $total_errors,
+					'batches_processed'   => $batches,
+					'sync_batches_per_run'=> $max_batches,
+				)
+			);
+
+			$this->settings->update_status( 'images', $result );
+			$this->logger->info( 'images', 'Finished Schrack image sync run.', null, $result );
 			if ( $queue_continuation ) {
 				$this->queue_next_batch_if_needed( self::HOOK_IMAGES, 'images', $result );
 			}
