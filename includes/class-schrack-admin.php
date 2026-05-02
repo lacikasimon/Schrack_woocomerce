@@ -350,7 +350,7 @@ class Schrack_Admin {
 
 		$notice       = $this->get_notice();
 		$queue_status = $this->cron->queue_status();
-		$stop_request = $this->settings->stop_request();
+		$stop_request = $this->active_stop_request( $this->settings->stop_request(), $queue_status );
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-sync.php';
 	}
@@ -383,9 +383,32 @@ class Schrack_Admin {
 		$settings = $this->settings->all();
 		$notice   = $this->get_notice();
 		$queue_status = $this->cron->queue_status();
-		$stop_request = $this->settings->stop_request();
+		$stop_request = $this->active_stop_request( $this->settings->stop_request(), $queue_status );
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-status.php';
+	}
+
+	/**
+	 * Keeps the stop banner visible only while a sync action is actually running.
+	 *
+	 * @param array<string,mixed>|null      $stop_request Stop request.
+	 * @param array<int,array<string,mixed>> $queue_status Queue status rows.
+	 * @return array<string,mixed>|null
+	 */
+	private function active_stop_request( ?array $stop_request, array $queue_status ): ?array {
+		if ( null === $stop_request ) {
+			return null;
+		}
+
+		foreach ( $queue_status as $row ) {
+			if ( absint( $row['running'] ?? 0 ) > 0 ) {
+				return $stop_request;
+			}
+		}
+
+		$this->settings->clear_stop_request();
+
+		return null;
 	}
 
 	/**

@@ -222,8 +222,15 @@ class Schrack_Cron {
 		$this->maybe_schedule_recurring_actions();
 
 		$after = $this->queue_totals();
+		$stop_request_active = $before['running'] > 0;
+
+		if ( ! $stop_request_active ) {
+			$this->settings->clear_stop_request();
+		}
+
 		$result = array(
 			'stop_requested'       => 'yes',
+			'stop_request_active'  => $stop_request_active ? 'yes' : 'no',
 			'requested_at'         => $stop_request['requested_at'] ?? current_time( 'mysql' ),
 			'pending_before'       => $before['pending'],
 			'pending_after_cleanup' => $after_cleanup['pending'],
