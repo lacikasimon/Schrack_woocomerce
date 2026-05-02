@@ -83,7 +83,6 @@ class Schrack_Soap_Client {
 	 */
 	public function get_catalog_as( string $format = 'CSV' ): mixed {
 		$format = strtoupper( sanitize_key( $format ) );
-		$method = 'XML' === $format ? 'GetCatalogAsXMLV32' : 'GetCatalogAsCsvV33';
 		$payload = array_merge(
 			$this->auth_payload(),
 			array(
@@ -95,7 +94,7 @@ class Schrack_Soap_Client {
 			$payload['Delimiter'] = ';';
 		}
 
-		return $this->call( $method, $payload );
+		return $this->call_catalog_methods( $this->catalog_methods_for_format( $format ), $payload, $format );
 	}
 
 	/**
@@ -152,11 +151,12 @@ class Schrack_Soap_Client {
 	 * @throws RuntimeException When the method is forbidden.
 	 * @throws SoapFault When SOAP fails after retries.
 	 */
-	public function call( string $method, array $payload ): mixed {
+	public function call( string $method, array $payload, ?int $retries_override = null ): mixed {
 		$this->guard_forbidden_method( $method );
 
 		$payload = apply_filters( 'schrack_wc_sync_soap_payload_' . $method, $payload, $method );
-		$retries = max( 0, (int) $this->settings->get( 'soap_retries', 2 ) );
+		$retries = null === $retries_override ? (int) $this->settings->get( 'soap_retries', 2 ) : $retries_override;
+		$retries = max( 0, $retries );
 		$attempt = 0;
 		$last_exception = null;
 
@@ -164,18 +164,22 @@ class Schrack_Soap_Client {
 			++$attempt;
 
 			try {
+				$client = $this->get_client();
+
 				$this->logger->debug(
 					'soap',
 					'Calling Schrack SOAP method.',
 					null,
 					array(
-						'method'  => $method,
-						'attempt' => $attempt,
-						'payload' => $this->redact_payload( $payload ),
+						'method'            => $method,
+						'attempt'           => $attempt,
+						'soap_endpoint_url' => (string) $this->settings->get( 'soap_endpoint_url' ),
+						'loaded_wsdl_url'   => $this->loaded_wsdl_url,
+						'payload'           => $this->redact_payload( $payload ),
 					)
 				);
 
-				$result = $this->get_client()->__soapCall( $method, array( $payload ) );
+				$result = $client->__soapCall( $method, array( $payload ) );
 
 				$sleep = max( 0, (int) $this->settings->get( 'rate_limit_sleep', 0 ) );
 				if ( $sleep > 0 ) {
@@ -191,9 +195,11 @@ class Schrack_Soap_Client {
 					'Schrack SOAP call failed.',
 					null,
 					array(
-						'method'  => $method,
-						'attempt' => $attempt,
-						'error'   => $this->safe_error_message( $exception->getMessage() ),
+						'method'            => $method,
+						'attempt'           => $attempt,
+						'soap_endpoint_url' => (string) $this->settings->get( 'soap_endpoint_url' ),
+						'loaded_wsdl_url'   => $this->loaded_wsdl_url,
+						'error'             => $this->safe_error_message( $exception->getMessage() ),
 					)
 				);
 
@@ -204,6 +210,76 @@ class Schrack_Soap_Client {
 		}
 
 		throw $last_exception;
+	}
+
+	/**
+	 * Calls the first working catalog method for the requested format.
+	 *
+	 * @param array<int,string>    $methods Ordered SOAP method fallbacks.
+	 * @param array<string,mixed>  $payload Request payload.
+	 * @throws Throwable When all catalog method variants fail.
+	 */
+	private function call_catalog_methods( array $methods, array $payload, string $format ): mixed {
+		$last_exception = null;
+		$method_count   = count( $methods );
+		$index          = 0;
+
+		foreach ( $methods as $method ) {
+			++$index;
+			$retries = 1 === $index ? null : min( 1, max( 0, (int) $this->settings->get( 'soap_retries', 2 ) ) );
+
+			try {
+				return $this->call( $method, $payload, $retries );
+			} catch ( Throwable $exception ) {
+				$last_exception = $exception;
+
+				if ( $index >= $method_count ) {
+					break;
+				}
+
+				$this->logger->warning(
+					'soap',
+					'Schrack catalog SOAP method failed; trying another catalog method.',
+					null,
+					array(
+						'format'       => $format,
+						'method'       => $method,
+						'next_method'  => $methods[ $index ] ?? '',
+						'endpoint_url' => (string) $this->settings->get( 'soap_endpoint_url' ),
+						'error'        => $this->safe_error_message( $exception->getMessage() ),
+					)
+				);
+			}
+		}
+
+		if ( $last_exception instanceof Throwable ) {
+			throw new RuntimeException(
+				sprintf(
+					/* translators: 1: catalog format, 2: SOAP methods, 3: last error. */
+					__( 'Schrack %1$s catalog SOAP call failed after trying methods: %2$s. Last error: %3$s', 'schrack-woocommerce-sync' ),
+					$format,
+					implode( ', ', $methods ),
+					$this->safe_error_message( $last_exception->getMessage() )
+				),
+				0,
+				$last_exception
+			);
+		}
+
+		throw new RuntimeException( 'No Schrack catalog SOAP method is configured.' );
+	}
+
+	/**
+	 * Returns ordered catalog method fallbacks for a format.
+	 *
+	 * @return array<int,string>
+	 */
+	private function catalog_methods_for_format( string $format ): array {
+		if ( 'XML' === $format ) {
+			return array( 'GetCatalogAsXMLV32', 'GetCatalogAsXMLV31', 'GetCatalogAsXMLV30' );
+		}
+
+		return array( 'GetCatalogAsCsvV34', 'GetCatalogAsCsvV33', 'GetCatalogAsCsvV32', 'GetCatalogAsCsvV31', 'GetCatalogAsCsvV30' );
 	}
 
 	/**

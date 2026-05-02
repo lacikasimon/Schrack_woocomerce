@@ -191,4 +191,4 @@ The SOAP client is aligned to the received Schrack templates:
 - `GetItemPriceV31`
 - `GetStockItemQuantitiesV40`
 
-Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
+Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
