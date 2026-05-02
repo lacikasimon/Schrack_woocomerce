@@ -24,12 +24,26 @@ It must not be used for order submission. Order related SOAP methods, including 
 
 ## Installation
 
-1. Copy the `schrack-woocommerce-sync` folder to `wp-content/plugins/`.
+1. Clone this repository into `wp-content/plugins/schrack-woocommerce-sync/`.
 2. Activate WooCommerce first.
 3. Activate `Schrack WooCommerce Sync`.
 4. Open `WooCommerce > Schrack Sync`.
 5. Configure TEST or LIVE credentials and save settings.
 6. Enable debug mode temporarily and use the WSDL function/type list to confirm the exact Schrack SOAP request structures.
+
+Example server deploy:
+
+```bash
+cd wp-content/plugins
+git clone git@github.com:lacikasimon/Schrack_woocomerce.git schrack-woocommerce-sync
+```
+
+For updates:
+
+```bash
+cd wp-content/plugins/schrack-woocommerce-sync
+git pull --ff-only
+```
 
 ## Publishing
 
