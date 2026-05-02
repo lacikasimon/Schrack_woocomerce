@@ -31,6 +31,13 @@ It must not be used for order submission. Order related SOAP methods, including 
 5. Configure TEST or LIVE credentials and save settings.
 6. Enable debug mode temporarily and use the WSDL function/type list to confirm the exact Schrack SOAP request structures.
 
+## Publishing
+
+Before creating a release ZIP, bump both plugin version values in `schrack-woocommerce-sync.php`:
+
+- Plugin header `Version`
+- `SCHRACK_WC_SYNC_VERSION`
+
 ## Settings
 
 The admin settings page stores values through the WordPress Options API:
