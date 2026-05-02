@@ -209,7 +209,7 @@ class Schrack_Cron {
 	}
 
 	/**
-	 * Requests running syncs to stop and clears queued follow-up actions.
+	 * Requests running syncs to stop, clears queued follow-up actions, and restores configured recurring schedules.
 	 *
 	 * @return array<string,mixed>
 	 */
@@ -218,15 +218,19 @@ class Schrack_Cron {
 		$stop_request = $this->settings->request_stop();
 
 		self::clear_scheduled_actions();
+		$after_cleanup = $this->queue_totals();
+		$this->maybe_schedule_recurring_actions();
 
 		$after = $this->queue_totals();
 		$result = array(
-			'stop_requested'    => 'yes',
-			'requested_at'      => $stop_request['requested_at'] ?? current_time( 'mysql' ),
-			'pending_before'    => $before['pending'],
-			'pending_after'     => $after['pending'],
-			'pending_cancelled' => max( 0, $before['pending'] - $after['pending'] ),
-			'running'           => $before['running'],
+			'stop_requested'       => 'yes',
+			'requested_at'         => $stop_request['requested_at'] ?? current_time( 'mysql' ),
+			'pending_before'       => $before['pending'],
+			'pending_after_cleanup' => $after_cleanup['pending'],
+			'pending_after'        => $after['pending'],
+			'pending_cancelled'    => max( 0, $before['pending'] - $after_cleanup['pending'] ),
+			'recurring_restored'   => $after['pending'],
+			'running'              => $before['running'],
 		);
 
 		$this->logger->warning( 'admin', 'Schrack sync stop was requested from admin.', null, $result );
