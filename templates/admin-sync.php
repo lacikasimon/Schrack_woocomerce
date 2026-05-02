@@ -37,6 +37,7 @@ $queue_status = isset( $queue_status ) && is_array( $queue_status ) ? $queue_sta
 							'running' => __( 'Running', 'schrack-woocommerce-sync' ),
 							'due'     => __( 'Due now', 'schrack-woocommerce-sync' ),
 							'queued'  => __( 'Queued', 'schrack-woocommerce-sync' ),
+							'scheduled' => __( 'Scheduled', 'schrack-woocommerce-sync' ),
 							default   => __( 'Idle', 'schrack-woocommerce-sync' ),
 						};
 						?>

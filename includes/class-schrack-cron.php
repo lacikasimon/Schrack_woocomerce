@@ -186,8 +186,10 @@ class Schrack_Cron {
 				$state = 'running';
 			} elseif ( $pending > 0 && null !== $next_run && $next_run <= $now ) {
 				$state = 'due';
-			} elseif ( $pending > 0 ) {
+			} elseif ( $pending > 0 && null !== $next_run && $next_run <= $now + 5 * MINUTE_IN_SECONDS ) {
 				$state = 'queued';
+			} elseif ( $pending > 0 ) {
+				$state = 'scheduled';
 			}
 
 			$rows[] = array(
@@ -198,7 +200,7 @@ class Schrack_Cron {
 				'running'   => $running,
 				'next_run'  => $next_run,
 				'state'     => $state,
-				'is_active' => in_array( $state, array( 'running', 'due' ), true ),
+				'is_active' => in_array( $state, array( 'running', 'due', 'queued' ), true ),
 			);
 		}
 
@@ -211,10 +213,39 @@ class Schrack_Cron {
 	public function run_catalog_import( bool $queue_continuation = true ): array {
 		$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
 		$limit    = (int) $this->settings->get( 'catalog_batch_size', 1000 );
+		$max_batches = max( 1, (int) $this->settings->get( 'catalog_batches_per_run', 3 ) );
+		$started_at  = time();
 
 		try {
-			$result = $importer->import_from_soap( 'CSV', $limit );
-			$this->logger->info( 'catalog', 'Finished Schrack catalog import batch.', null, $result );
+			$result          = array();
+			$total_processed = 0;
+			$total_errors    = 0;
+			$batches         = 0;
+
+			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				$result = $importer->import_from_soap( 'CSV', $limit );
+				++$batches;
+
+				$total_processed += (int) ( $result['processed'] ?? 0 );
+				$total_errors    += (int) ( $result['errors'] ?? 0 );
+
+				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at ) ) {
+					break;
+				}
+			}
+
+			$result = array_merge(
+				$result,
+				array(
+					'processed'              => $total_processed,
+					'errors'                 => $total_errors,
+					'batches_processed'      => $batches,
+					'catalog_batches_per_run'=> $max_batches,
+				)
+			);
+
+			$this->settings->update_status( 'catalog', $result );
+			$this->logger->info( 'catalog', 'Finished Schrack catalog import run.', null, $result );
 			if ( $queue_continuation ) {
 				if ( $this->should_continue_batch( $result ) ) {
 					$this->queue_next_batch_if_needed( self::HOOK_CATALOG, 'catalog', $result );
@@ -490,6 +521,19 @@ class Schrack_Cron {
 	 */
 	private function should_continue_batch( array $result ): bool {
 		return 'no' === (string) ( $result['completed_cycle'] ?? 'yes' ) && (int) ( $result['batch_count'] ?? 0 ) > 0;
+	}
+
+	/**
+	 * Stops a multi-batch action before PHP reaches its execution limit.
+	 */
+	private function should_pause_batch_run( int $started_at ): bool {
+		$max_execution_time = (int) ini_get( 'max_execution_time' );
+
+		if ( $max_execution_time <= 0 ) {
+			return false;
+		}
+
+		return time() - $started_at >= max( 10, $max_execution_time - 10 );
 	}
 
 	/**

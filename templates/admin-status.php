@@ -23,12 +23,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 		'queued'  => __( 'Queued', 'schrack-woocommerce-sync' ),
 		'due'     => __( 'Due now', 'schrack-woocommerce-sync' ),
 		'running' => __( 'Running', 'schrack-woocommerce-sync' ),
+		'scheduled' => __( 'Scheduled', 'schrack-woocommerce-sync' ),
 	);
 	$queue_state_classes         = array(
 		'idle'    => 'is-ok',
 		'queued'  => 'is-warning',
 		'due'     => 'is-warning',
 		'running' => 'is-error',
+		'scheduled' => 'is-ok',
 	);
 	$credential_fields           = array(
 		'customer_number'  => __( 'Customer number', 'schrack-woocommerce-sync' ),

@@ -70,6 +70,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<td><input id="schrack_catalog_batch_size" type="number" min="1" max="5000" step="1" name="schrack_settings[catalog_batch_size]" value="<?php echo esc_attr( $settings['catalog_batch_size'] ); ?>"></td>
 			</tr>
 			<tr>
+				<th scope="row"><label for="schrack_catalog_batches_per_run"><?php esc_html_e( 'Catalog batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td><input id="schrack_catalog_batches_per_run" type="number" min="1" max="20" step="1" name="schrack_settings[catalog_batches_per_run]" value="<?php echo esc_attr( $settings['catalog_batches_per_run'] ); ?>"></td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="schrack_batch_size"><?php esc_html_e( 'Price/stock/image batch size', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td><input id="schrack_batch_size" type="number" min="1" max="500" step="1" name="schrack_settings[sync_batch_size]" value="<?php echo esc_attr( $settings['sync_batch_size'] ); ?>"></td>
 			</tr>
