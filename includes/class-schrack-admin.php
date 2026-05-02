@@ -223,11 +223,14 @@ class Schrack_Admin {
 		check_admin_referer( 'schrack_wc_sync_manual_sync' );
 
 		$task = isset( $_POST['sync_task'] ) ? sanitize_key( wp_unslash( (string) $_POST['sync_task'] ) ) : '';
+		$result = $this->cron->queue_action( $task );
 
-		if ( $this->cron->queue_action( $task ) ) {
-			$this->set_notice( 'success', __( 'Sync task queued.', 'schrack-woocommerce-sync' ) );
+		if ( ! empty( $result['queued'] ) ) {
+			$this->set_notice( 'success', (string) $result['message'] );
+		} elseif ( 'active_sync' === (string) ( $result['code'] ?? '' ) ) {
+			$this->set_notice( 'warning', (string) $result['message'] );
 		} else {
-			$this->set_notice( 'error', __( 'Unknown sync task.', 'schrack-woocommerce-sync' ) );
+			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'Unknown sync task.', 'schrack-woocommerce-sync' ) ) );
 		}
 
 		$this->redirect( 'schrack-sync-manual' );
@@ -320,7 +323,8 @@ class Schrack_Admin {
 	public function render_manual_page(): void {
 		$this->assert_can_manage();
 
-		$notice = $this->get_notice();
+		$notice       = $this->get_notice();
+		$queue_status = $this->cron->queue_status();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-sync.php';
 	}
@@ -352,6 +356,7 @@ class Schrack_Admin {
 		$status   = $this->settings->get_status();
 		$settings = $this->settings->all();
 		$notice   = $this->get_notice();
+		$queue_status = $this->cron->queue_status();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-status.php';
 	}

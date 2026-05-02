@@ -96,19 +96,50 @@ class Schrack_Cron {
 
 	/**
 	 * Queues an immediate manual task.
+	 *
+	 * @return array{queued:bool,code:string,message:string,task:string}
 	 */
-	public function queue_action( string $task ): bool {
-		$hook = match ( $task ) {
-			'catalog' => self::HOOK_CATALOG,
-			'prices'  => self::HOOK_PRICES,
-			'stock'   => self::HOOK_STOCK,
-			'images'  => self::HOOK_IMAGES,
-			'full'    => self::HOOK_FULL,
-			default   => '',
-		};
+	public function queue_action( string $task ): array {
+		$definitions = $this->task_definitions();
+		$hook        = (string) ( $definitions[ $task ]['hook'] ?? '' );
 
 		if ( '' === $hook ) {
-			return false;
+			return array(
+				'queued'  => false,
+				'code'    => 'unknown_task',
+				'message' => __( 'Unknown sync task.', 'schrack-woocommerce-sync' ),
+				'task'    => $task,
+			);
+		}
+
+		$conflict = $this->active_sync_conflict();
+
+		if ( null !== $conflict ) {
+			$message = sprintf(
+				/* translators: %s: operation name. */
+				__( 'A Schrack sync task is already running or queued: %s.', 'schrack-woocommerce-sync' ),
+				(string) $conflict['label']
+			);
+
+			$this->logger->warning(
+				$task,
+				'Skipped manual Schrack sync queue request because another sync is active.',
+				null,
+				array(
+					'requested_task' => $task,
+					'active_task'    => $conflict['task'],
+					'active_hook'    => $conflict['hook'],
+					'pending'        => $conflict['pending'],
+					'running'        => $conflict['running'],
+				)
+			);
+
+			return array(
+				'queued'  => false,
+				'code'    => 'active_sync',
+				'message' => $message,
+				'task'    => $task,
+			);
 		}
 
 		$args = 'full' === $task ? array( 'catalog' ) : array();
@@ -116,13 +147,62 @@ class Schrack_Cron {
 		if ( function_exists( 'as_enqueue_async_action' ) ) {
 			as_enqueue_async_action( $hook, $args, self::GROUP );
 			$this->logger->info( $task, 'Queued manual Schrack sync task in Action Scheduler.' );
-			return true;
+			return array(
+				'queued'  => true,
+				'code'    => 'queued',
+				'message' => __( 'Sync task queued.', 'schrack-woocommerce-sync' ),
+				'task'    => $task,
+			);
 		}
 
 		wp_schedule_single_event( time() + 5, $hook, $args );
 		$this->logger->info( $task, 'Queued manual Schrack sync task in WP-Cron fallback.' );
 
-		return true;
+		return array(
+			'queued'  => true,
+			'code'    => 'queued',
+			'message' => __( 'Sync task queued.', 'schrack-woocommerce-sync' ),
+			'task'    => $task,
+		);
+	}
+
+	/**
+	 * Returns the current Action Scheduler/WP-Cron queue state for Schrack tasks.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function queue_status(): array {
+		$rows = array();
+		$now  = time();
+
+		foreach ( $this->task_definitions() as $task => $definition ) {
+			$hook     = (string) $definition['hook'];
+			$pending  = $this->scheduled_action_count( $hook, 'pending' );
+			$running  = $this->scheduled_action_count( $hook, 'in-progress' );
+			$next_run = $this->next_scheduled_timestamp( $hook );
+			$state    = 'idle';
+
+			if ( $running > 0 ) {
+				$state = 'running';
+			} elseif ( $pending > 0 && null !== $next_run && $next_run <= $now ) {
+				$state = 'due';
+			} elseif ( $pending > 0 ) {
+				$state = 'queued';
+			}
+
+			$rows[] = array(
+				'task'      => $task,
+				'label'     => $definition['label'],
+				'hook'      => $hook,
+				'pending'   => $pending,
+				'running'   => $running,
+				'next_run'  => $next_run,
+				'state'     => $state,
+				'is_active' => in_array( $state, array( 'running', 'due' ), true ),
+			);
+		}
+
+		return $rows;
 	}
 
 	/**
@@ -362,6 +442,22 @@ class Schrack_Cron {
 	private function queue_sync_batch( string $hook, string $operation, array $args = array(), array $context = array() ): void {
 		$sleep = max( 0, (int) $this->settings->get( 'rate_limit_sleep', 0 ) );
 
+		if ( $this->has_active_followup_action( $hook, $args ) ) {
+			$this->logger->debug(
+				$operation,
+				'Skipped duplicate Schrack follow-up batch queue request.',
+				null,
+				array_merge(
+					array(
+						'hook'      => $hook,
+						'next_args' => $args,
+					),
+					$context
+				)
+			);
+			return;
+		}
+
 		if ( 0 === $sleep && function_exists( 'as_enqueue_async_action' ) ) {
 			as_enqueue_async_action( $hook, $args, self::GROUP );
 		} elseif ( function_exists( 'as_schedule_single_action' ) ) {
@@ -394,6 +490,110 @@ class Schrack_Cron {
 	 */
 	private function should_continue_batch( array $result ): bool {
 		return 'no' === (string) ( $result['completed_cycle'] ?? 'yes' ) && (int) ( $result['batch_count'] ?? 0 ) > 0;
+	}
+
+	/**
+	 * Returns the first running or immediately due Schrack sync task.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function active_sync_conflict(): ?array {
+		foreach ( $this->queue_status() as $row ) {
+			if ( ! empty( $row['is_active'] ) ) {
+				return $row;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Returns whether the same follow-up action is already running or due.
+	 *
+	 * @param array<int,mixed> $args Hook arguments.
+	 */
+	private function has_active_followup_action( string $hook, array $args ): bool {
+		$next_run = $this->next_scheduled_timestamp( $hook, $args );
+
+		return null !== $next_run && $next_run <= time() + 60;
+	}
+
+	/**
+	 * Counts Action Scheduler actions for a hook/status pair.
+	 *
+	 * @param array<int,mixed>|null $args Optional exact hook arguments.
+	 */
+	private function scheduled_action_count( string $hook, string $status, ?array $args = null ): int {
+		if ( function_exists( 'as_get_scheduled_actions' ) ) {
+			$query = array(
+				'hook'          => $hook,
+				'group'         => self::GROUP,
+				'status'        => $status,
+				'per_page'      => 1000,
+				'return_format' => 'ids',
+			);
+
+			if ( null !== $args ) {
+				$query['args'] = $args;
+			}
+
+			$actions = as_get_scheduled_actions( $query );
+
+			return is_array( $actions ) ? count( $actions ) : 0;
+		}
+
+		if ( 'pending' !== $status ) {
+			return 0;
+		}
+
+		return null !== $this->next_scheduled_timestamp( $hook, $args ) ? 1 : 0;
+	}
+
+	/**
+	 * Returns the next scheduled timestamp for a hook.
+	 *
+	 * @param array<int,mixed>|null $args Optional exact hook arguments.
+	 */
+	private function next_scheduled_timestamp( string $hook, ?array $args = null ): ?int {
+		$timestamp = false;
+
+		if ( function_exists( 'as_next_scheduled_action' ) ) {
+			$timestamp = as_next_scheduled_action( $hook, $args, self::GROUP );
+		} else {
+			$timestamp = null === $args ? wp_next_scheduled( $hook ) : wp_next_scheduled( $hook, $args );
+		}
+
+		return false === $timestamp || null === $timestamp ? null : (int) $timestamp;
+	}
+
+	/**
+	 * Returns queue-aware task definitions.
+	 *
+	 * @return array<string,array{hook:string,label:string}>
+	 */
+	private function task_definitions(): array {
+		return array(
+			'catalog' => array(
+				'hook'  => self::HOOK_CATALOG,
+				'label' => __( 'Catalog', 'schrack-woocommerce-sync' ),
+			),
+			'full'    => array(
+				'hook'  => self::HOOK_FULL,
+				'label' => __( 'Full sync', 'schrack-woocommerce-sync' ),
+			),
+			'prices'  => array(
+				'hook'  => self::HOOK_PRICES,
+				'label' => __( 'Prices', 'schrack-woocommerce-sync' ),
+			),
+			'stock'   => array(
+				'hook'  => self::HOOK_STOCK,
+				'label' => __( 'Stock', 'schrack-woocommerce-sync' ),
+			),
+			'images'  => array(
+				'hook'  => self::HOOK_IMAGES,
+				'label' => __( 'Images', 'schrack-woocommerce-sync' ),
+			),
+		);
 	}
 
 	/**

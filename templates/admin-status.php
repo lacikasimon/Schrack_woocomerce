@@ -17,6 +17,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 	$woocommerce_active          = class_exists( 'WooCommerce' );
 	$soap_available              = extension_loaded( 'soap' );
 	$action_scheduler_available  = function_exists( 'as_enqueue_async_action' );
+	$queue_status                = isset( $queue_status ) && is_array( $queue_status ) ? $queue_status : array();
+	$queue_state_labels          = array(
+		'idle'    => __( 'Idle', 'schrack-woocommerce-sync' ),
+		'queued'  => __( 'Queued', 'schrack-woocommerce-sync' ),
+		'due'     => __( 'Due now', 'schrack-woocommerce-sync' ),
+		'running' => __( 'Running', 'schrack-woocommerce-sync' ),
+	);
+	$queue_state_classes         = array(
+		'idle'    => 'is-ok',
+		'queued'  => 'is-warning',
+		'due'     => 'is-warning',
+		'running' => 'is-error',
+	);
 	$credential_fields           = array(
 		'customer_number'  => __( 'Customer number', 'schrack-woocommerce-sync' ),
 		'webshop_username' => __( 'Webshop username', 'schrack-woocommerce-sync' ),
@@ -84,6 +97,40 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</tbody>
 			</table>
 		</div>
+	</div>
+
+	<div class="schrack-panel">
+		<h2><?php esc_html_e( 'Active Queue', 'schrack-woocommerce-sync' ); ?></h2>
+		<table class="widefat striped">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Operation', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'State', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Pending', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Running', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Next run', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Hook', 'schrack-woocommerce-sync' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $queue_status as $row ) : ?>
+					<?php
+					$state      = (string) ( $row['state'] ?? 'idle' );
+					$next_run   = absint( $row['next_run'] ?? 0 );
+					$state_text = (string) ( $queue_state_labels[ $state ] ?? ucfirst( $state ) );
+					$state_class = (string) ( $queue_state_classes[ $state ] ?? 'is-warning' );
+					?>
+					<tr>
+						<td><?php echo esc_html( (string) ( $row['label'] ?? '' ) ); ?></td>
+						<td><span class="schrack-status-pill <?php echo esc_attr( $state_class ); ?>"><?php echo esc_html( $state_text ); ?></span></td>
+						<td><?php echo esc_html( (string) absint( $row['pending'] ?? 0 ) ); ?></td>
+						<td><?php echo esc_html( (string) absint( $row['running'] ?? 0 ) ); ?></td>
+						<td><?php echo $next_run > 0 ? esc_html( wp_date( 'Y-m-d H:i:s', $next_run ) ) : esc_html__( '-', 'schrack-woocommerce-sync' ); ?></td>
+						<td><code><?php echo esc_html( (string) ( $row['hook'] ?? '' ) ); ?></code></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
 	</div>
 
 	<div class="schrack-panel">

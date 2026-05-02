@@ -8,6 +8,8 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+
+$queue_status = isset( $queue_status ) && is_array( $queue_status ) ? $queue_status : array();
 ?>
 <div class="wrap schrack-sync-admin">
 	<h1><?php esc_html_e( 'Schrack Manual Sync', 'schrack-woocommerce-sync' ); ?></h1>
@@ -15,6 +17,40 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<?php $this->render_notice( $notice ); ?>
 
 	<div class="schrack-grid">
+		<div class="schrack-panel">
+			<h2><?php esc_html_e( 'Active Queue', 'schrack-woocommerce-sync' ); ?></h2>
+			<table class="widefat striped">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Operation', 'schrack-woocommerce-sync' ); ?></th>
+						<th><?php esc_html_e( 'State', 'schrack-woocommerce-sync' ); ?></th>
+						<th><?php esc_html_e( 'Pending', 'schrack-woocommerce-sync' ); ?></th>
+						<th><?php esc_html_e( 'Running', 'schrack-woocommerce-sync' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $queue_status as $row ) : ?>
+						<?php
+						$state       = (string) ( $row['state'] ?? 'idle' );
+						$state_class = in_array( $state, array( 'running' ), true ) ? 'is-error' : ( in_array( $state, array( 'queued', 'due' ), true ) ? 'is-warning' : 'is-ok' );
+						$state_label = match ( $state ) {
+							'running' => __( 'Running', 'schrack-woocommerce-sync' ),
+							'due'     => __( 'Due now', 'schrack-woocommerce-sync' ),
+							'queued'  => __( 'Queued', 'schrack-woocommerce-sync' ),
+							default   => __( 'Idle', 'schrack-woocommerce-sync' ),
+						};
+						?>
+						<tr>
+							<td><?php echo esc_html( (string) ( $row['label'] ?? '' ) ); ?></td>
+							<td><span class="schrack-status-pill <?php echo esc_attr( $state_class ); ?>"><?php echo esc_html( $state_label ); ?></span></td>
+							<td><?php echo esc_html( (string) absint( $row['pending'] ?? 0 ) ); ?></td>
+							<td><?php echo esc_html( (string) absint( $row['running'] ?? 0 ) ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+
 		<div class="schrack-panel">
 			<h2><?php esc_html_e( 'Batch Sync', 'schrack-woocommerce-sync' ); ?></h2>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schrack-button-grid">
