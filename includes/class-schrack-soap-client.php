@@ -189,6 +189,7 @@ class Schrack_Soap_Client {
 	 */
 	public function call( string $method, array $payload, ?int $retries_override = null ): mixed {
 		$this->guard_forbidden_method( $method );
+		$this->guard_soap_pause( $method );
 
 		$payload = apply_filters( 'schrack_wc_sync_soap_payload_' . $method, $payload, $method );
 		$retries = null === $retries_override ? (int) $this->settings->get( 'soap_retries', 2 ) : $retries_override;
@@ -240,7 +241,8 @@ class Schrack_Soap_Client {
 					)
 				);
 
-				if ( $this->is_rate_limit_message( $error_message ) ) {
+				if ( self::is_rate_limit_message( $error_message ) ) {
+					$this->pause_for_rate_limit( $method, $error_message );
 					throw new Schrack_Rate_Limit_Exception( $error_message, 0, $exception );
 				}
 
@@ -485,7 +487,7 @@ class Schrack_Soap_Client {
 	/**
 	 * Detects Schrack-side throttling messages.
 	 */
-	private function is_rate_limit_message( string $message ): bool {
+	public static function is_rate_limit_message( string $message ): bool {
 		$message = strtolower( $message );
 
 		return str_contains( $message, 'to many messages' )
@@ -493,6 +495,63 @@ class Schrack_Soap_Client {
 			|| str_contains( $message, 'messages in period' )
 			|| str_contains( $message, 'rate limit' )
 			|| str_contains( $message, 'throttl' );
+	}
+
+	/**
+	 * Blocks outbound SOAP calls while a previous rate-limit response is cooling down.
+	 */
+	private function guard_soap_pause( string $method ): void {
+		$pause = $this->settings->soap_pause();
+
+		if ( null === $pause ) {
+			return;
+		}
+
+		$paused_until = absint( $pause['paused_until'] ?? 0 );
+		$message      = sprintf(
+			'Schrack SOAP calls are paused until %s after rate limit response.',
+			wp_date( 'Y-m-d H:i:s', $paused_until )
+		);
+
+		$this->logger->warning(
+			'soap',
+			'Skipped Schrack SOAP call because rate-limit cooldown is active.',
+			null,
+			array(
+				'method'       => $method,
+				'paused_until' => wp_date( 'Y-m-d H:i:s', $paused_until ),
+				'pause_method' => (string) ( $pause['method'] ?? '' ),
+			)
+		);
+
+		throw new Schrack_Rate_Limit_Exception( $message );
+	}
+
+	/**
+	 * Starts a global cooldown after Schrack throttles SOAP messages.
+	 */
+	private function pause_for_rate_limit( string $method, string $error ): void {
+		$cooldown = $this->soap_rate_limit_cooldown();
+		$pause    = $this->settings->pause_soap( $cooldown, $method, $error );
+
+		$this->logger->warning(
+			'soap',
+			'Paused Schrack SOAP calls after rate-limit response.',
+			null,
+			array(
+				'method'       => $method,
+				'cooldown'     => $cooldown,
+				'paused_until' => wp_date( 'Y-m-d H:i:s', absint( $pause['paused_until'] ?? 0 ) ),
+				'error'        => $error,
+			)
+		);
+	}
+
+	/**
+	 * Returns a conservative cooldown for Schrack message quota responses.
+	 */
+	private function soap_rate_limit_cooldown(): int {
+		return max( 300, min( 3600, (int) $this->settings->get( 'soap_rate_limit_cooldown', 600 ) ) );
 	}
 
 	/**

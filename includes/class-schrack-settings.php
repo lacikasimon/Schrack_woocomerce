@@ -14,6 +14,7 @@ class Schrack_Settings {
 	public const STATUS_OPTION_NAME   = 'schrack_wc_sync_status';
 	public const MARKUPS_OPTION_NAME  = 'schrack_wc_sync_category_markups';
 	public const STOP_TRANSIENT_NAME  = 'schrack_wc_sync_stop_requested';
+	public const SOAP_PAUSE_TRANSIENT_NAME = 'schrack_wc_sync_soap_paused';
 	public const DEFAULT_TEST_WSDL    = 'https://ws-test.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice?wsdl';
 	public const DEFAULT_TEST_URL     = 'https://ws-test.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice';
 	public const DEFAULT_LIVE_WSDL    = 'https://ws.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice?wsdl';
@@ -60,7 +61,7 @@ class Schrack_Settings {
 			'price_request_size'     => 10,
 			'stock_request_size'     => 25,
 			'rate_limit_sleep'       => 0,
-			'soap_rate_limit_cooldown'=> 120,
+			'soap_rate_limit_cooldown'=> 600,
 			'soap_retries'           => 2,
 			'price_sync_frequency'   => 'daily',
 			'stock_sync_frequency'   => 'hourly',
@@ -176,7 +177,7 @@ class Schrack_Settings {
 			'price_request_size'      => max( 1, min( 100, absint( $input['price_request_size'] ?? ( $current['price_request_size'] ?? 10 ) ) ) ),
 			'stock_request_size'      => max( 1, min( 100, absint( $input['stock_request_size'] ?? ( $current['stock_request_size'] ?? 25 ) ) ) ),
 			'rate_limit_sleep'        => max( 0, min( 30, absint( $input['rate_limit_sleep'] ?? 0 ) ) ),
-			'soap_rate_limit_cooldown'=> max( 30, min( 1800, absint( $input['soap_rate_limit_cooldown'] ?? ( $current['soap_rate_limit_cooldown'] ?? 120 ) ) ) ),
+			'soap_rate_limit_cooldown'=> max( 300, min( 3600, absint( $input['soap_rate_limit_cooldown'] ?? ( $current['soap_rate_limit_cooldown'] ?? 600 ) ) ) ),
 			'soap_retries'            => max( 0, min( 5, absint( $input['soap_retries'] ?? 2 ) ) ),
 			'price_sync_frequency'    => $this->sanitize_frequency( $input['price_sync_frequency'] ?? 'daily', array( 'hourly', 'six_hours', 'daily' ), 'daily' ),
 			'stock_sync_frequency'    => $this->sanitize_frequency( $input['stock_sync_frequency'] ?? 'hourly', array( 'thirty_minutes', 'hourly' ), 'hourly' ),
@@ -234,7 +235,7 @@ class Schrack_Settings {
 	 *
 	 * @return array<string,mixed>
 	 */
-	public function request_stop( int $ttl = HOUR_IN_SECONDS ): array {
+	public function request_stop( int $ttl = 5 * MINUTE_IN_SECONDS ): array {
 		$ttl     = max( MINUTE_IN_SECONDS, $ttl );
 		$expires = time() + $ttl;
 		$request = array(
@@ -271,6 +272,54 @@ class Schrack_Settings {
 	 */
 	public function is_stop_requested(): bool {
 		return null !== $this->stop_request();
+	}
+
+	/**
+	 * Pauses all Schrack SOAP calls after a server-side throttling response.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function pause_soap( int $ttl, string $method, string $error ): array {
+		$ttl   = max( MINUTE_IN_SECONDS, $ttl );
+		$until = time() + $ttl;
+		$pause = array(
+			'method'       => sanitize_text_field( $method ),
+			'error'        => sanitize_text_field( $error ),
+			'paused_at'    => current_time( 'mysql' ),
+			'paused_until' => $until,
+			'ttl'          => $ttl,
+		);
+
+		set_transient( self::SOAP_PAUSE_TRANSIENT_NAME, $pause, $ttl );
+
+		return $pause;
+	}
+
+	/**
+	 * Clears the Schrack SOAP pause.
+	 */
+	public function clear_soap_pause(): void {
+		delete_transient( self::SOAP_PAUSE_TRANSIENT_NAME );
+	}
+
+	/**
+	 * Returns the active Schrack SOAP pause, if any.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	public function soap_pause(): ?array {
+		$pause = get_transient( self::SOAP_PAUSE_TRANSIENT_NAME );
+
+		if ( ! is_array( $pause ) ) {
+			return null;
+		}
+
+		if ( absint( $pause['paused_until'] ?? 0 ) <= time() ) {
+			$this->clear_soap_pause();
+			return null;
+		}
+
+		return $pause;
 	}
 
 	/**

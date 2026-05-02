@@ -406,8 +406,6 @@ class Schrack_Admin {
 			}
 		}
 
-		$this->settings->clear_stop_request();
-
 		return null;
 	}
 

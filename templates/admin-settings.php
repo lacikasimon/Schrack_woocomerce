@@ -95,7 +95,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_soap_rate_limit_cooldown"><?php esc_html_e( 'SOAP rate-limit cooldown seconds', 'schrack-woocommerce-sync' ); ?></label></th>
-				<td><input id="schrack_soap_rate_limit_cooldown" type="number" min="30" max="1800" step="1" name="schrack_settings[soap_rate_limit_cooldown]" value="<?php echo esc_attr( $settings['soap_rate_limit_cooldown'] ); ?>"></td>
+				<td><input id="schrack_soap_rate_limit_cooldown" type="number" min="300" max="3600" step="1" name="schrack_settings[soap_rate_limit_cooldown]" value="<?php echo esc_attr( $settings['soap_rate_limit_cooldown'] ); ?>"></td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_soap_retries"><?php esc_html_e( 'SOAP retries', 'schrack-woocommerce-sync' ); ?></label></th>

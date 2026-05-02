@@ -170,6 +170,10 @@ class Schrack_Stock_Sync {
 			} catch ( Schrack_Rate_Limit_Exception $exception ) {
 				throw $exception;
 			} catch ( Throwable $exception ) {
+				if ( Schrack_Soap_Client::is_rate_limit_message( $exception->getMessage() ) ) {
+					throw new Schrack_Rate_Limit_Exception( $exception->getMessage(), 0, $exception );
+				}
+
 				$errors += count( $sku_by_product_id );
 				$this->logger->error(
 					'stock',

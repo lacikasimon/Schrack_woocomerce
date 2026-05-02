@@ -222,15 +222,9 @@ class Schrack_Cron {
 		$this->maybe_schedule_recurring_actions();
 
 		$after = $this->queue_totals();
-		$stop_request_active = $before['running'] > 0;
-
-		if ( ! $stop_request_active ) {
-			$this->settings->clear_stop_request();
-		}
-
 		$result = array(
 			'stop_requested'       => 'yes',
-			'stop_request_active'  => $stop_request_active ? 'yes' : 'no',
+			'stop_request_active'  => 'yes',
 			'requested_at'         => $stop_request['requested_at'] ?? current_time( 'mysql' ),
 			'pending_before'       => $before['pending'],
 			'pending_after_cleanup' => $after_cleanup['pending'],
@@ -848,6 +842,7 @@ class Schrack_Cron {
 		$status    = $this->settings->get_status();
 		$last_row  = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
 		$error     = $exception->getMessage();
+		$this->settings->pause_soap( $cooldown, $operation, $error );
 		$result    = array(
 			'processed'        => $processed,
 			'errors'           => $errors,
@@ -924,7 +919,7 @@ class Schrack_Cron {
 	 * Returns the configured pause after a Schrack SOAP throttling response.
 	 */
 	private function rate_limit_cooldown(): int {
-		return max( 30, min( 1800, (int) $this->settings->get( 'soap_rate_limit_cooldown', 120 ) ) );
+		return max( 300, min( 3600, (int) $this->settings->get( 'soap_rate_limit_cooldown', 600 ) ) );
 	}
 
 	/**
