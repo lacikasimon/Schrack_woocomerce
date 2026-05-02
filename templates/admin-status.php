@@ -99,7 +99,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</tr>
 			</thead>
 			<tbody>
-				<?php foreach ( array( 'catalog', 'price', 'stock' ) as $operation ) : ?>
+				<?php foreach ( array( 'catalog', 'price', 'stock', 'images' ) as $operation ) : ?>
 					<?php $row = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array(); ?>
 					<tr>
 						<td><?php echo esc_html( ucfirst( $operation ) ); ?></td>

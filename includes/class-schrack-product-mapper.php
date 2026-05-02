@@ -285,7 +285,7 @@ class Schrack_Product_Mapper {
 		$this->update_optional_meta( $product, '_schrack_manufacturer', $data, 'manufacturer', $is_new );
 		$this->update_optional_meta( $product, '_schrack_unit', $data, 'unit', $is_new );
 		$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
-		$this->maybe_import_product_image( $product, $data, $is_new );
+		$this->update_product_image_url( $product, $data, $is_new );
 
 		if ( $is_new || ! empty( $data['category_path'] ) ) {
 			$product->update_meta_data( '_schrack_raw_category', $this->category_path_label( $data['category_path'] ?? '' ) );
@@ -319,36 +319,57 @@ class Schrack_Product_Mapper {
 	}
 
 	/**
-	 * Imports the Schrack catalog photo as the WooCommerce featured image.
+	 * Stores the Schrack catalog photo URL without slowing down product creation.
 	 *
 	 * @param array<string,mixed> $data Product data.
 	 */
-	private function maybe_import_product_image( WC_Product $product, array $data, bool $is_new ): void {
+	private function update_product_image_url( WC_Product $product, array $data, bool $is_new ): void {
 		$image_url = isset( $data['image_url'] ) ? esc_url_raw( trim( $this->string_value( $data['image_url'] ) ) ) : '';
 
-		if ( '' === $image_url ) {
+		if ( '' === $image_url && ! $is_new ) {
 			return;
 		}
 
-		$previous_url = sanitize_text_field( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) );
 		$product->update_meta_data( '_schrack_image_url', $image_url );
+	}
 
+	/**
+	 * Imports a stored Schrack catalog photo as the WooCommerce featured image.
+	 */
+	public function import_product_image( int $product_id ): int {
 		if ( 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
-			return;
+			return 0;
 		}
 
-		if ( ! $is_new && $previous_url === $image_url && (int) $product->get_image_id() > 0 ) {
-			return;
+		$product = wc_get_product( $product_id );
+
+		if ( ! $product instanceof WC_Product ) {
+			return 0;
+		}
+
+		$image_url    = esc_url_raw( trim( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) ) );
+		$imported_url = sanitize_text_field( $this->string_value( $product->get_meta( '_schrack_imported_image_url', true ) ) );
+
+		if ( '' === $image_url ) {
+			return 0;
+		}
+
+		if ( $imported_url === $image_url && (int) $product->get_image_id() > 0 ) {
+			return (int) $product->get_image_id();
 		}
 
 		$attachment_id = $this->sideload_product_image( $image_url, $product );
 
 		if ( $attachment_id <= 0 ) {
-			return;
+			return 0;
 		}
 
 		$product->set_image_id( $attachment_id );
 		$product->update_meta_data( '_schrack_image_attachment_id', $attachment_id );
+		$product->update_meta_data( '_schrack_imported_image_url', $image_url );
+		$product->save();
+
+		return $attachment_id;
 	}
 
 	/**

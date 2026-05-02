@@ -15,6 +15,7 @@ class Schrack_Cron {
 	public const HOOK_PRICES  = 'schrack_wc_sync_prices';
 	public const HOOK_STOCK   = 'schrack_wc_sync_stock';
 	public const HOOK_FULL    = 'schrack_wc_sync_full';
+	public const HOOK_IMAGES  = 'schrack_wc_sync_images';
 
 	/**
 	 * Settings.
@@ -47,6 +48,7 @@ class Schrack_Cron {
 		add_action( self::HOOK_CATALOG, array( $this, 'run_catalog_import' ) );
 		add_action( self::HOOK_PRICES, array( $this, 'run_price_sync' ) );
 		add_action( self::HOOK_STOCK, array( $this, 'run_stock_sync' ) );
+		add_action( self::HOOK_IMAGES, array( $this, 'run_image_sync' ) );
 		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
 	}
 
@@ -100,6 +102,7 @@ class Schrack_Cron {
 			'catalog' => self::HOOK_CATALOG,
 			'prices'  => self::HOOK_PRICES,
 			'stock'   => self::HOOK_STOCK,
+			'images'  => self::HOOK_IMAGES,
 			'full'    => self::HOOK_FULL,
 			default   => '',
 		};
@@ -133,7 +136,11 @@ class Schrack_Cron {
 			$result = $importer->import_from_soap( 'CSV', $limit );
 			$this->logger->info( 'catalog', 'Finished Schrack catalog import batch.', null, $result );
 			if ( $queue_continuation ) {
-				$this->queue_next_batch_if_needed( self::HOOK_CATALOG, 'catalog', $result );
+				if ( $this->should_continue_batch( $result ) ) {
+					$this->queue_next_batch_if_needed( self::HOOK_CATALOG, 'catalog', $result );
+				} elseif ( $this->should_import_images() ) {
+					$this->queue_sync_batch( self::HOOK_IMAGES, 'images', array(), array( 'source' => 'catalog_completed' ) );
+				}
 			}
 			return $result;
 		} catch ( Throwable $exception ) {
@@ -198,6 +205,31 @@ class Schrack_Cron {
 	}
 
 	/**
+	 * Runs an image import batch.
+	 */
+	public function run_image_sync( bool $queue_continuation = true ): array {
+		$sync  = new Schrack_Image_Sync( $this->settings, $this->logger );
+		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
+
+		try {
+			$result = $sync->sync_batch( $limit );
+			$this->logger->info( 'images', 'Finished Schrack image sync batch.', null, $result );
+			if ( $queue_continuation ) {
+				$this->queue_next_batch_if_needed( self::HOOK_IMAGES, 'images', $result );
+			}
+			return $result;
+		} catch ( Throwable $exception ) {
+			$this->logger->error( 'images', 'Schrack image sync batch failed.', null, array( 'error' => $exception->getMessage() ) );
+			$this->settings->update_status( 'images', array( 'processed' => 0, 'errors' => 1 ) );
+			return array(
+				'processed'       => 0,
+				'errors'          => 1,
+				'completed_cycle' => 'yes',
+			);
+		}
+	}
+
+	/**
 	 * Runs catalog, price, and stock tasks.
 	 */
 	public function run_full_sync( string $stage = 'catalog' ): void {
@@ -213,6 +245,8 @@ class Schrack_Cron {
 
 			if ( in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
 				$this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'price' ), array( 'next_stage' => 'price' ) );
+			} elseif ( $this->should_import_images() ) {
+				$this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'images' ), array( 'next_stage' => 'images' ) );
 			}
 
 			return;
@@ -228,6 +262,8 @@ class Schrack_Cron {
 
 			if ( 'catalog_price_stock' === $mode ) {
 				$this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'stock' ), array( 'next_stage' => 'stock' ) );
+			} elseif ( $this->should_import_images() ) {
+				$this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'images' ), array( 'next_stage' => 'images' ) );
 			}
 
 			return;
@@ -235,7 +271,18 @@ class Schrack_Cron {
 
 		if ( 'stock' === $stage && 'catalog_price_stock' === $mode ) {
 			$result = $this->run_stock_sync( false );
-			$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'stock' ) );
+			if ( $this->should_continue_batch( $result ) ) {
+				$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'stock' ) );
+			} elseif ( $this->should_import_images() ) {
+				$this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'images' ), array( 'next_stage' => 'images' ) );
+			}
+
+			return;
+		}
+
+		if ( 'images' === $stage && $this->should_import_images() ) {
+			$result = $this->run_image_sync( false );
+			$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'images' ) );
 		}
 	}
 
@@ -243,7 +290,7 @@ class Schrack_Cron {
 	 * Clears scheduled actions.
 	 */
 	public static function clear_scheduled_actions(): void {
-		foreach ( array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL ) as $hook ) {
+		foreach ( array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES ) as $hook ) {
 			if ( function_exists( 'as_unschedule_all_actions' ) ) {
 				as_unschedule_all_actions( $hook, null, self::GROUP );
 			}
@@ -313,14 +360,16 @@ class Schrack_Cron {
 	 * @param array<string,mixed> $context Extra log context.
 	 */
 	private function queue_sync_batch( string $hook, string $operation, array $args = array(), array $context = array() ): void {
-		$delay = max( 5, (int) $this->settings->get( 'rate_limit_sleep', 0 ) );
+		$sleep = max( 0, (int) $this->settings->get( 'rate_limit_sleep', 0 ) );
 
-		if ( function_exists( 'as_schedule_single_action' ) ) {
-			as_schedule_single_action( time() + $delay, $hook, $args, self::GROUP );
+		if ( 0 === $sleep && function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action( $hook, $args, self::GROUP );
+		} elseif ( function_exists( 'as_schedule_single_action' ) ) {
+			as_schedule_single_action( time() + max( 1, $sleep ), $hook, $args, self::GROUP );
 		} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
 			as_enqueue_async_action( $hook, $args, self::GROUP );
 		} else {
-			wp_schedule_single_event( time() + $delay, $hook, $args );
+			wp_schedule_single_event( time() + max( 5, $sleep ), $hook, $args );
 		}
 
 		$this->logger->info(
@@ -331,6 +380,7 @@ class Schrack_Cron {
 				array(
 					'hook'      => $hook,
 					'next_args' => $args,
+					'sleep'     => $sleep,
 				),
 				$context
 			)
@@ -344,5 +394,12 @@ class Schrack_Cron {
 	 */
 	private function should_continue_batch( array $result ): bool {
 		return 'no' === (string) ( $result['completed_cycle'] ?? 'yes' ) && (int) ( $result['batch_count'] ?? 0 ) > 0;
+	}
+
+	/**
+	 * Returns whether media-library image import should run after catalog data.
+	 */
+	private function should_import_images(): bool {
+		return 'yes' === $this->settings->get( 'image_import_enabled', 'yes' );
 	}
 }

@@ -90,6 +90,7 @@ class Schrack_Plugin {
 			'class-schrack-soap-client.php',
 			'class-schrack-product-mapper.php',
 			'class-schrack-catalog-importer.php',
+			'class-schrack-image-sync.php',
 			'class-schrack-price-sync.php',
 			'class-schrack-stock-sync.php',
 			'class-schrack-cron.php',

@@ -21,6 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<input type="hidden" name="action" value="schrack_wc_sync_manual_sync">
 				<?php wp_nonce_field( 'schrack_wc_sync_manual_sync' ); ?>
 				<button type="submit" class="button button-secondary" name="sync_task" value="catalog"><?php esc_html_e( 'Import catalog', 'schrack-woocommerce-sync' ); ?></button>
+				<button type="submit" class="button button-secondary" name="sync_task" value="images"><?php esc_html_e( 'Sync images', 'schrack-woocommerce-sync' ); ?></button>
 				<button type="submit" class="button button-secondary" name="sync_task" value="prices"><?php esc_html_e( 'Sync prices', 'schrack-woocommerce-sync' ); ?></button>
 				<button type="submit" class="button button-secondary" name="sync_task" value="stock"><?php esc_html_e( 'Sync stock', 'schrack-woocommerce-sync' ); ?></button>
 				<button type="submit" class="button button-primary" name="sync_task" value="full"><?php esc_html_e( 'Full sync', 'schrack-woocommerce-sync' ); ?></button>

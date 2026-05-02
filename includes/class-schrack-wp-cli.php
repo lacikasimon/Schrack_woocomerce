@@ -74,6 +74,14 @@ class Schrack_WP_CLI {
 	}
 
 	/**
+	 * Imports an image batch.
+	 */
+	public function images(): void {
+		$this->cron->run_image_sync();
+		WP_CLI::success( 'Schrack image sync batch finished.' );
+	}
+
+	/**
 	 * Runs full sync batch.
 	 */
 	public function full(): void {
