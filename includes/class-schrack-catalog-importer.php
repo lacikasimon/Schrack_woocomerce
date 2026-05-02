@@ -56,10 +56,23 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,mixed>
 	 */
 	public function import_from_soap( string $format = 'CSV', int $limit = 25 ): array {
-		$raw   = $this->client->get_catalog_as( $format );
-		$items = $this->parse_catalog_response( $raw, $format );
+		$format = strtoupper( $format );
+		$limit  = max( 1, $limit );
 
-		return $this->import_items_with_cursor( $items, $format, max( 1, $limit ) );
+		$cache = $this->active_catalog_cache( $format );
+
+		if ( null !== $cache ) {
+			return $this->import_cached_items_with_cursor( $cache, $format, $limit );
+		}
+
+		$raw       = $this->client->get_catalog_as( $format );
+		$items     = $this->parse_catalog_response( $raw, $format );
+		$signature = $this->catalog_signature( $items );
+		$context   = empty( $items )
+			? array( 'catalog_cache' => 'empty' )
+			: $this->write_catalog_cache( $format, $signature, $items );
+
+		return $this->import_items_with_cursor( $items, $format, $limit, $context, $signature );
 	}
 
 	/**
@@ -110,7 +123,7 @@ class Schrack_Catalog_Importer {
 	 * @param array<int,array<string,mixed>> $items Parsed catalog items.
 	 * @return array<string,mixed>
 	 */
-	private function import_items_with_cursor( array $items, string $format, int $limit ): array {
+	private function import_items_with_cursor( array $items, string $format, int $limit, array $status_context = array(), ?string $signature = null ): array {
 		$total_items = count( $items );
 		$format      = strtoupper( $format );
 
@@ -129,7 +142,7 @@ class Schrack_Catalog_Importer {
 			);
 		}
 
-		$signature = $this->catalog_signature( $items );
+		$signature = $signature ?: $this->catalog_signature( $items );
 		$offset    = $this->catalog_cursor( $format, $signature, $total_items );
 		$batch     = array_slice( $items, $offset, $limit );
 
@@ -144,11 +157,79 @@ class Schrack_Catalog_Importer {
 
 		if ( $completed_cycle ) {
 			$next_cursor = 0;
+			$this->delete_catalog_cache( $format, $signature );
+		}
+
+		return $this->import_items(
+			$batch,
+			array_merge(
+				$status_context,
+				array(
+					'cursor'            => $next_cursor,
+					'total_items'       => $total_items,
+					'batch_start'       => $offset,
+					'batch_count'       => $batch_count,
+					'batch_limit'       => $limit,
+					'completed_cycle'   => $completed_cycle ? 'yes' : 'no',
+					'catalog_format'    => $format,
+					'catalog_signature' => $signature,
+				)
+			)
+		);
+	}
+
+	/**
+	 * Imports one batch from the parsed catalog cache.
+	 *
+	 * @param array<string,mixed> $cache Catalog cache metadata.
+	 * @return array<string,mixed>
+	 */
+	private function import_cached_items_with_cursor( array $cache, string $format, int $limit ): array {
+		$signature   = (string) $cache['signature'];
+		$total_items = absint( $cache['total_items'] ?? 0 );
+
+		if ( 0 === $total_items ) {
+			$this->delete_catalog_cache( $format, $signature );
+			return $this->import_items_with_cursor( array(), $format, $limit );
+		}
+
+		$offset = $this->catalog_cursor( $format, $signature, $total_items );
+		$batch  = $this->read_catalog_cache_batch( (string) $cache['items_path'], $offset, $limit );
+
+		if ( empty( $batch ) && $offset > 0 ) {
+			$offset = 0;
+			$batch  = $this->read_catalog_cache_batch( (string) $cache['items_path'], 0, $limit );
+		}
+
+		if ( empty( $batch ) && $offset < $total_items ) {
+			$this->logger->warning(
+				'catalog',
+				'Parsed Schrack catalog cache was unreadable; refreshing from SOAP.',
+				null,
+				array(
+					'catalog_cache_key' => $cache['key'] ?? '',
+					'cursor'            => $offset,
+					'total_items'       => $total_items,
+				)
+			);
+			$this->delete_catalog_cache( $format, $signature );
+			return $this->import_from_soap( $format, $limit );
+		}
+
+		$batch_count     = count( $batch );
+		$next_cursor     = $offset + $batch_count;
+		$completed_cycle = $next_cursor >= $total_items;
+
+		if ( $completed_cycle ) {
+			$next_cursor = 0;
+			$this->delete_catalog_cache( $format, $signature );
 		}
 
 		return $this->import_items(
 			$batch,
 			array(
+				'catalog_cache'     => 'hit',
+				'catalog_cache_key' => $cache['key'] ?? '',
 				'cursor'            => $next_cursor,
 				'total_items'       => $total_items,
 				'batch_start'       => $offset,
@@ -193,6 +274,275 @@ class Schrack_Catalog_Importer {
 		}
 
 		return hash_final( $context );
+	}
+
+	/**
+	 * Returns the cache for an in-progress catalog import cycle.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function active_catalog_cache( string $format ): ?array {
+		$status = $this->settings->get_status();
+		$row    = isset( $status['catalog'] ) && is_array( $status['catalog'] ) ? $status['catalog'] : array();
+
+		if (
+			'no' !== (string) ( $row['completed_cycle'] ?? 'yes' ) ||
+			$format !== (string) ( $row['catalog_format'] ?? '' ) ||
+			'' === (string) ( $row['catalog_signature'] ?? '' ) ||
+			absint( $row['cursor'] ?? 0 ) <= 0
+		) {
+			return null;
+		}
+
+		$cache = $this->catalog_cache_metadata( $format, (string) $row['catalog_signature'] );
+
+		if ( null === $cache ) {
+			return null;
+		}
+
+		$this->logger->debug(
+			'catalog',
+			'Using cached parsed Schrack catalog.',
+			null,
+			array(
+				'catalog_cache_key' => $cache['key'] ?? '',
+				'cursor'            => absint( $row['cursor'] ?? 0 ),
+				'total_items'       => absint( $cache['total_items'] ?? 0 ),
+			)
+		);
+
+		return $cache;
+	}
+
+	/**
+	 * Writes parsed catalog items to a JSONL cache for the remaining batches.
+	 *
+	 * @param array<int,array<string,mixed>> $items Parsed catalog items.
+	 * @return array<string,mixed>
+	 */
+	private function write_catalog_cache( string $format, string $signature, array $items ): array {
+		$paths = $this->catalog_cache_paths( $format, $signature );
+
+		if ( empty( $paths ) ) {
+			return array( 'catalog_cache' => 'disabled' );
+		}
+
+		$this->cleanup_catalog_caches( $format, (string) $paths['key'] );
+
+		$items_temp = (string) $paths['items_path'] . '.tmp';
+		$meta_temp  = (string) $paths['meta_path'] . '.tmp';
+		$handle     = fopen( $items_temp, 'wb' );
+
+		if ( false === $handle ) {
+			$this->logger->warning( 'catalog', 'Could not open parsed Schrack catalog cache for writing.' );
+			return array( 'catalog_cache' => 'write_failed' );
+		}
+
+		$written = 0;
+
+		foreach ( $items as $item ) {
+			$encoded = wp_json_encode( $item );
+
+			if ( ! is_string( $encoded ) ) {
+				continue;
+			}
+
+			if ( false === fwrite( $handle, $encoded . "\n" ) ) {
+				fclose( $handle );
+				wp_delete_file( $items_temp );
+				$this->logger->warning( 'catalog', 'Could not write parsed Schrack catalog cache.' );
+				return array( 'catalog_cache' => 'write_failed' );
+			}
+
+			++$written;
+		}
+
+		fclose( $handle );
+
+		$meta = array(
+			'format'      => $format,
+			'signature'   => $signature,
+			'total_items' => $written,
+			'created_at'  => time(),
+			'key'         => $paths['key'],
+		);
+
+		$meta_json = wp_json_encode( $meta );
+
+		if (
+			! is_string( $meta_json ) ||
+			false === file_put_contents( $meta_temp, $meta_json ) ||
+			! rename( $items_temp, (string) $paths['items_path'] ) ||
+			! rename( $meta_temp, (string) $paths['meta_path'] )
+		) {
+			wp_delete_file( $items_temp );
+			wp_delete_file( $meta_temp );
+			$this->logger->warning( 'catalog', 'Could not finalize parsed Schrack catalog cache.' );
+			return array( 'catalog_cache' => 'write_failed' );
+		}
+
+		$this->logger->debug(
+			'catalog',
+			'Wrote parsed Schrack catalog cache.',
+			null,
+			array(
+				'catalog_cache_key' => $paths['key'],
+				'total_items'       => $written,
+			)
+		);
+
+		return array(
+			'catalog_cache'     => 'written',
+			'catalog_cache_key' => $paths['key'],
+		);
+	}
+
+	/**
+	 * Reads one batch from a parsed catalog JSONL cache.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function read_catalog_cache_batch( string $path, int $offset, int $limit ): array {
+		if ( ! is_readable( $path ) ) {
+			return array();
+		}
+
+		$items = array();
+
+		try {
+			$file = new SplFileObject( $path, 'r' );
+			$file->seek( max( 0, $offset ) );
+
+			while ( ! $file->eof() && count( $items ) < $limit ) {
+				$line = trim( (string) $file->current() );
+				$file->next();
+
+				if ( '' === $line ) {
+					continue;
+				}
+
+				$item = json_decode( $line, true );
+
+				if ( is_array( $item ) && '' !== $this->item_sku( $item ) ) {
+					$items[] = $item;
+				}
+			}
+		} catch ( Throwable ) {
+			return array();
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Returns parsed catalog cache metadata when cache files are present and valid.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function catalog_cache_metadata( string $format, string $signature ): ?array {
+		$paths = $this->catalog_cache_paths( $format, $signature );
+
+		if ( empty( $paths ) || ! is_readable( (string) $paths['items_path'] ) || ! is_readable( (string) $paths['meta_path'] ) ) {
+			return null;
+		}
+
+		$meta_raw = file_get_contents( (string) $paths['meta_path'] );
+		$meta     = is_string( $meta_raw ) ? json_decode( $meta_raw, true ) : null;
+
+		if (
+			! is_array( $meta ) ||
+			$format !== (string) ( $meta['format'] ?? '' ) ||
+			$signature !== (string) ( $meta['signature'] ?? '' ) ||
+			absint( $meta['total_items'] ?? 0 ) <= 0
+		) {
+			return null;
+		}
+
+		return array_merge(
+			$meta,
+			array(
+				'items_path' => $paths['items_path'],
+				'meta_path'  => $paths['meta_path'],
+				'key'        => $paths['key'],
+			)
+		);
+	}
+
+	/**
+	 * Returns deterministic cache paths for a catalog signature.
+	 *
+	 * @return array<string,string>
+	 */
+	private function catalog_cache_paths( string $format, string $signature ): array {
+		$dir = $this->catalog_cache_dir();
+
+		if ( '' === $dir ) {
+			return array();
+		}
+
+		$key  = strtolower( $format ) . '-' . substr( preg_replace( '/[^a-f0-9]/', '', strtolower( $signature ) ) ?? '', 0, 24 );
+		$base = trailingslashit( $dir ) . 'catalog-' . $key;
+
+		return array(
+			'key'        => $key,
+			'items_path' => $base . '.jsonl',
+			'meta_path'  => $base . '.meta.json',
+		);
+	}
+
+	/**
+	 * Returns the plugin upload cache directory.
+	 */
+	private function catalog_cache_dir(): string {
+		$upload = wp_upload_dir( null, false );
+
+		if ( ! empty( $upload['error'] ) || empty( $upload['basedir'] ) ) {
+			return '';
+		}
+
+		$dir = trailingslashit( (string) $upload['basedir'] ) . 'schrack-wc-sync';
+
+		if ( ! wp_mkdir_p( $dir ) ) {
+			return '';
+		}
+
+		return $dir;
+	}
+
+	/**
+	 * Deletes a parsed catalog cache.
+	 */
+	private function delete_catalog_cache( string $format, string $signature ): void {
+		$paths = $this->catalog_cache_paths( $format, $signature );
+
+		foreach ( array( 'items_path', 'meta_path' ) as $key ) {
+			if ( ! empty( $paths[ $key ] ) && file_exists( (string) $paths[ $key ] ) ) {
+				wp_delete_file( (string) $paths[ $key ] );
+			}
+		}
+	}
+
+	/**
+	 * Removes stale parsed catalog cache files for a format.
+	 */
+	private function cleanup_catalog_caches( string $format, string $keep_key = '' ): void {
+		$dir = $this->catalog_cache_dir();
+
+		if ( '' === $dir ) {
+			return;
+		}
+
+		$pattern = trailingslashit( $dir ) . 'catalog-' . strtolower( $format ) . '-*';
+
+		foreach ( glob( $pattern ) ?: array() as $path ) {
+			if ( '' !== $keep_key && str_contains( basename( $path ), 'catalog-' . $keep_key ) ) {
+				continue;
+			}
+
+			if ( is_file( $path ) ) {
+				wp_delete_file( $path );
+			}
+		}
 	}
 
 	/**

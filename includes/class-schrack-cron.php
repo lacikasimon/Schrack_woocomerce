@@ -130,7 +130,7 @@ class Schrack_Cron {
 	 */
 	public function run_catalog_import( bool $queue_continuation = true ): array {
 		$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
-		$limit    = (int) $this->settings->get( 'sync_batch_size', 25 );
+		$limit    = (int) $this->settings->get( 'catalog_batch_size', 1000 );
 
 		try {
 			$result = $importer->import_from_soap( 'CSV', $limit );
