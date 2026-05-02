@@ -252,7 +252,7 @@ class Schrack_Admin {
 			'warning',
 			sprintf(
 				/* translators: 1: cancelled pending actions, 2: running actions. */
-				__( 'Stop requested. Cancelled %1$d queued sync actions. %2$d running action(s) will stop at the next safe checkpoint. Configured recurring syncs were restored.', 'schrack-woocommerce-sync' ),
+				__( 'Stop requested. Cancelled %1$d queued sync actions. %2$d running action(s) will stop at the next safe checkpoint. Configured recurring syncs were reset.', 'schrack-woocommerce-sync' ),
 				absint( $result['pending_cancelled'] ?? 0 ),
 				absint( $result['running'] ?? 0 )
 			),

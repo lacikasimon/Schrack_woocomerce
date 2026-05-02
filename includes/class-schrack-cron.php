@@ -236,6 +236,7 @@ class Schrack_Cron {
 			'pending_after_cleanup' => $after_cleanup['pending'],
 			'pending_after'        => $after['pending'],
 			'pending_cancelled'    => max( 0, $before['pending'] - $after_cleanup['pending'] ),
+			'recurring_reset'      => 'yes',
 			'recurring_restored'   => $after['pending'],
 			'running'              => $before['running'],
 		);
@@ -667,18 +668,68 @@ class Schrack_Cron {
 	 */
 	private function schedule_recurring_action( string $hook, string $frequency ): void {
 		$interval = $this->settings->frequency_to_seconds( $frequency );
+		$first_run = $this->next_recurring_timestamp( $frequency );
 
 		if ( function_exists( 'as_next_scheduled_action' ) && function_exists( 'as_schedule_recurring_action' ) ) {
 			if ( ! as_next_scheduled_action( $hook, array(), self::GROUP ) ) {
-				as_schedule_recurring_action( time() + $interval, $interval, $hook, array(), self::GROUP );
+				as_schedule_recurring_action( $first_run, $interval, $hook, array(), self::GROUP );
 			}
 
 			return;
 		}
 
 		if ( ! wp_next_scheduled( $hook ) ) {
-			wp_schedule_event( time() + $interval, $this->wp_cron_frequency_key( $frequency ), $hook );
+			wp_schedule_event( $first_run, $this->wp_cron_frequency_key( $frequency ), $hook );
 		}
+	}
+
+	/**
+	 * Returns the next clean schedule boundary for configured recurring syncs.
+	 */
+	private function next_recurring_timestamp( string $frequency ): int {
+		$now = new DateTimeImmutable( 'now', wp_timezone() );
+
+		return match ( $frequency ) {
+			'thirty_minutes' => $this->next_boundary_timestamp( $now, 30 * MINUTE_IN_SECONDS ),
+			'hourly'         => $this->next_boundary_timestamp( $now, HOUR_IN_SECONDS ),
+			'six_hours'      => $this->next_boundary_timestamp( $now, 6 * HOUR_IN_SECONDS ),
+			'weekly'         => $this->next_weekly_timestamp( $now ),
+			default          => $this->next_daily_timestamp( $now ),
+		};
+	}
+
+	/**
+	 * Returns the next local time boundary for minute/hour based intervals.
+	 */
+	private function next_boundary_timestamp( DateTimeImmutable $now, int $interval ): int {
+		$seconds = (int) $now->format( 'H' ) * HOUR_IN_SECONDS + (int) $now->format( 'i' ) * MINUTE_IN_SECONDS + (int) $now->format( 's' );
+		$next    = (int) ( ceil( ( $seconds + 1 ) / $interval ) * $interval );
+		$days    = intdiv( $next, DAY_IN_SECONDS );
+		$next   %= DAY_IN_SECONDS;
+		$hour    = intdiv( $next, HOUR_IN_SECONDS );
+		$minute  = intdiv( $next % HOUR_IN_SECONDS, MINUTE_IN_SECONDS );
+
+		return $now->modify( '+' . $days . ' days' )->setTime( $hour, $minute, 0 )->getTimestamp();
+	}
+
+	/**
+	 * Returns the next local midnight.
+	 */
+	private function next_daily_timestamp( DateTimeImmutable $now ): int {
+		return $now->modify( '+1 day' )->setTime( 0, 0, 0 )->getTimestamp();
+	}
+
+	/**
+	 * Returns the next local Monday midnight.
+	 */
+	private function next_weekly_timestamp( DateTimeImmutable $now ): int {
+		$next = $now->modify( 'monday this week' )->setTime( 0, 0, 0 );
+
+		if ( $next <= $now ) {
+			$next = $next->modify( '+1 week' );
+		}
+
+		return $next->getTimestamp();
 	}
 
 	/**
