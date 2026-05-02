@@ -285,6 +285,7 @@ class Schrack_Product_Mapper {
 		$this->update_optional_meta( $product, '_schrack_manufacturer', $data, 'manufacturer', $is_new );
 		$this->update_optional_meta( $product, '_schrack_unit', $data, 'unit', $is_new );
 		$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
+		$this->maybe_import_product_image( $product, $data, $is_new );
 
 		if ( $is_new || ! empty( $data['category_path'] ) ) {
 			$product->update_meta_data( '_schrack_raw_category', $this->category_path_label( $data['category_path'] ?? '' ) );
@@ -315,6 +316,111 @@ class Schrack_Product_Mapper {
 		}
 
 		$product->update_meta_data( $meta_key, sanitize_text_field( $this->string_value( $data[ $data_key ] ?? '' ) ) );
+	}
+
+	/**
+	 * Imports the Schrack catalog photo as the WooCommerce featured image.
+	 *
+	 * @param array<string,mixed> $data Product data.
+	 */
+	private function maybe_import_product_image( WC_Product $product, array $data, bool $is_new ): void {
+		$image_url = isset( $data['image_url'] ) ? esc_url_raw( trim( $this->string_value( $data['image_url'] ) ) ) : '';
+
+		if ( '' === $image_url ) {
+			return;
+		}
+
+		$previous_url = sanitize_text_field( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) );
+		$product->update_meta_data( '_schrack_image_url', $image_url );
+
+		if ( 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
+			return;
+		}
+
+		if ( ! $is_new && $previous_url === $image_url && (int) $product->get_image_id() > 0 ) {
+			return;
+		}
+
+		$attachment_id = $this->sideload_product_image( $image_url, $product );
+
+		if ( $attachment_id <= 0 ) {
+			return;
+		}
+
+		$product->set_image_id( $attachment_id );
+		$product->update_meta_data( '_schrack_image_attachment_id', $attachment_id );
+	}
+
+	/**
+	 * Downloads one remote catalog image into the WordPress media library.
+	 */
+	private function sideload_product_image( string $image_url, WC_Product $product ): int {
+		if ( ! function_exists( 'download_url' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+		}
+
+		if ( ! function_exists( 'media_handle_sideload' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/media.php';
+			require_once ABSPATH . 'wp-admin/includes/image.php';
+		}
+
+		$temp_file = download_url( $image_url, 45 );
+
+		if ( is_wp_error( $temp_file ) ) {
+			$this->logger->warning(
+				'catalog',
+				'Failed to download Schrack product image.',
+				$product->get_sku(),
+				array(
+					'image_url' => $image_url,
+					'error'     => $temp_file->get_error_message(),
+				)
+			);
+			return 0;
+		}
+
+		$file = array(
+			'name'     => $this->image_filename_from_url( $image_url ),
+			'tmp_name' => $temp_file,
+		);
+
+		$attachment_id = media_handle_sideload( $file, (int) $product->get_id(), $product->get_name() );
+
+		if ( is_wp_error( $attachment_id ) ) {
+			@unlink( $temp_file );
+			$this->logger->warning(
+				'catalog',
+				'Failed to attach Schrack product image.',
+				$product->get_sku(),
+				array(
+					'image_url' => $image_url,
+					'error'     => $attachment_id->get_error_message(),
+				)
+			);
+			return 0;
+		}
+
+		$this->logger->info(
+			'catalog',
+			'Imported Schrack product image.',
+			$product->get_sku(),
+			array(
+				'image_url'     => $image_url,
+				'attachment_id' => (int) $attachment_id,
+			)
+		);
+
+		return (int) $attachment_id;
+	}
+
+	/**
+	 * Builds a stable media filename from a Schrack image URL.
+	 */
+	private function image_filename_from_url( string $image_url ): string {
+		$path     = (string) wp_parse_url( $image_url, PHP_URL_PATH );
+		$filename = sanitize_file_name( wp_basename( $path ) );
+
+		return '' !== $filename ? $filename : 'schrack-product-image.jpg';
 	}
 
 	/**

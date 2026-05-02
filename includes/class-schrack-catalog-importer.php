@@ -649,6 +649,7 @@ class Schrack_Catalog_Importer {
 			'description'       => wp_kses_post( $get( array( 'description', 'long_description', 'longdescription', 'textprodus', 'longtext', 'langtext', 'beschreibung' ) ) ),
 			'manufacturer'      => sanitize_text_field( $get( array( 'manufacturer', 'brand', 'hersteller', 'producer', 'supplier' ) ) ),
 			'ean'               => sanitize_text_field( $get( array( 'ean', 'gtin', 'barcode', 'barcodeno' ) ) ),
+			'image_url'         => esc_url_raw( $get( array( 'image_url', 'imageurl', 'photo_url', 'photourl', 'foto_url', 'fotourl', 'foto', 'fotografie', 'photo', 'photograph', 'picture', 'bild', 'image', 'thumbnail', 'productimage', 'productimageurl' ) ) ),
 			'category_path'     => sanitize_text_field( '' !== $category_path ? $category_path : $get( array( 'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup' ) ) ),
 			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit' ) ) ),
 			'catalog_status'    => sanitize_text_field( $get( array( 'catalog_status', 'status' ) ) ),

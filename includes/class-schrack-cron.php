@@ -47,7 +47,7 @@ class Schrack_Cron {
 		add_action( self::HOOK_CATALOG, array( $this, 'run_catalog_import' ) );
 		add_action( self::HOOK_PRICES, array( $this, 'run_price_sync' ) );
 		add_action( self::HOOK_STOCK, array( $this, 'run_stock_sync' ) );
-		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ) );
+		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
 	}
 
 	/**
@@ -108,13 +108,15 @@ class Schrack_Cron {
 			return false;
 		}
 
+		$args = 'full' === $task ? array( 'catalog' ) : array();
+
 		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( $hook, array(), self::GROUP );
+			as_enqueue_async_action( $hook, $args, self::GROUP );
 			$this->logger->info( $task, 'Queued manual Schrack sync task in Action Scheduler.' );
 			return true;
 		}
 
-		wp_schedule_single_event( time() + 5, $hook );
+		wp_schedule_single_event( time() + 5, $hook, $args );
 		$this->logger->info( $task, 'Queued manual Schrack sync task in WP-Cron fallback.' );
 
 		return true;
@@ -123,65 +125,117 @@ class Schrack_Cron {
 	/**
 	 * Runs a catalog import batch.
 	 */
-	public function run_catalog_import(): void {
+	public function run_catalog_import( bool $queue_continuation = true ): array {
 		$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
 		$limit    = (int) $this->settings->get( 'sync_batch_size', 25 );
 
 		try {
 			$result = $importer->import_from_soap( 'CSV', $limit );
 			$this->logger->info( 'catalog', 'Finished Schrack catalog import batch.', null, $result );
+			if ( $queue_continuation ) {
+				$this->queue_next_batch_if_needed( self::HOOK_CATALOG, 'catalog', $result );
+			}
+			return $result;
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'catalog', 'Schrack catalog import batch failed.', null, array( 'error' => $exception->getMessage() ) );
 			$this->settings->update_status( 'catalog', array( 'processed' => 0, 'errors' => 1 ) );
+			return array(
+				'processed'       => 0,
+				'errors'          => 1,
+				'completed_cycle' => 'yes',
+			);
 		}
 	}
 
 	/**
 	 * Runs a price sync batch.
 	 */
-	public function run_price_sync(): void {
+	public function run_price_sync( bool $queue_continuation = true ): array {
 		$sync  = new Schrack_Price_Sync( $this->settings, $this->logger );
 		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
 
 		try {
 			$result = $sync->sync_batch( $limit );
 			$this->logger->info( 'price', 'Finished Schrack price sync batch.', null, $result );
+			if ( $queue_continuation ) {
+				$this->queue_next_batch_if_needed( self::HOOK_PRICES, 'price', $result );
+			}
+			return $result;
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'price', 'Schrack price sync batch failed.', null, array( 'error' => $exception->getMessage() ) );
 			$this->settings->update_status( 'price', array( 'processed' => 0, 'errors' => 1 ) );
+			return array(
+				'processed'       => 0,
+				'errors'          => 1,
+				'completed_cycle' => 'yes',
+			);
 		}
 	}
 
 	/**
 	 * Runs a stock sync batch.
 	 */
-	public function run_stock_sync(): void {
+	public function run_stock_sync( bool $queue_continuation = true ): array {
 		$sync  = new Schrack_Stock_Sync( $this->settings, $this->logger );
 		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
 
 		try {
 			$result = $sync->sync_batch( $limit );
 			$this->logger->info( 'stock', 'Finished Schrack stock sync batch.', null, $result );
+			if ( $queue_continuation ) {
+				$this->queue_next_batch_if_needed( self::HOOK_STOCK, 'stock', $result );
+			}
+			return $result;
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'stock', 'Schrack stock sync batch failed.', null, array( 'error' => $exception->getMessage() ) );
 			$this->settings->update_status( 'stock', array( 'processed' => 0, 'errors' => 1 ) );
+			return array(
+				'processed'       => 0,
+				'errors'          => 1,
+				'completed_cycle' => 'yes',
+			);
 		}
 	}
 
 	/**
 	 * Runs catalog, price, and stock tasks.
 	 */
-	public function run_full_sync(): void {
+	public function run_full_sync( string $stage = 'catalog' ): void {
 		$mode = (string) $this->settings->get( 'import_mode', 'catalog_price_stock' );
 
-		$this->run_catalog_import();
+		if ( 'catalog' === $stage ) {
+			$result = $this->run_catalog_import( false );
 
-		if ( in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
-			$this->run_price_sync();
+			if ( $this->should_continue_batch( $result ) ) {
+				$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'catalog' ) );
+				return;
+			}
+
+			if ( in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
+				$this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'price' ), array( 'next_stage' => 'price' ) );
+			}
+
+			return;
 		}
 
-		if ( 'catalog_price_stock' === $mode ) {
-			$this->run_stock_sync();
+		if ( 'price' === $stage && in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
+			$result = $this->run_price_sync( false );
+
+			if ( $this->should_continue_batch( $result ) ) {
+				$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'price' ) );
+				return;
+			}
+
+			if ( 'catalog_price_stock' === $mode ) {
+				$this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'stock' ), array( 'next_stage' => 'stock' ) );
+			}
+
+			return;
+		}
+
+		if ( 'stock' === $stage && 'catalog_price_stock' === $mode ) {
+			$result = $this->run_stock_sync( false );
+			$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'stock' ) );
 		}
 	}
 
@@ -191,7 +245,7 @@ class Schrack_Cron {
 	public static function clear_scheduled_actions(): void {
 		foreach ( array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL ) as $hook ) {
 			if ( function_exists( 'as_unschedule_all_actions' ) ) {
-				as_unschedule_all_actions( $hook, array(), self::GROUP );
+				as_unschedule_all_actions( $hook, null, self::GROUP );
 			}
 
 			wp_clear_scheduled_hook( $hook );
@@ -228,5 +282,67 @@ class Schrack_Cron {
 			'hourly'         => 'hourly',
 			default          => 'daily',
 		};
+	}
+
+	/**
+	 * Queues the next batch when the current cursor has not completed a cycle.
+	 *
+	 * @param array<string,mixed> $result Last batch result.
+	 * @param array<int,mixed>    $args Hook arguments.
+	 */
+	private function queue_next_batch_if_needed( string $hook, string $operation, array $result, array $args = array() ): void {
+		if ( ! $this->should_continue_batch( $result ) ) {
+			return;
+		}
+
+		$this->queue_sync_batch(
+			$hook,
+			$operation,
+			$args,
+			array(
+				'cursor'      => $result['cursor'] ?? null,
+				'batch_count' => $result['batch_count'] ?? null,
+			)
+		);
+	}
+
+	/**
+	 * Queues one follow-up sync action.
+	 *
+	 * @param array<int,mixed>    $args Hook arguments.
+	 * @param array<string,mixed> $context Extra log context.
+	 */
+	private function queue_sync_batch( string $hook, string $operation, array $args = array(), array $context = array() ): void {
+		$delay = max( 5, (int) $this->settings->get( 'rate_limit_sleep', 0 ) );
+
+		if ( function_exists( 'as_schedule_single_action' ) ) {
+			as_schedule_single_action( time() + $delay, $hook, $args, self::GROUP );
+		} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action( $hook, $args, self::GROUP );
+		} else {
+			wp_schedule_single_event( time() + $delay, $hook, $args );
+		}
+
+		$this->logger->info(
+			$operation,
+			'Queued next Schrack sync batch.',
+			null,
+			array_merge(
+				array(
+					'hook'      => $hook,
+					'next_args' => $args,
+				),
+				$context
+			)
+		);
+	}
+
+	/**
+	 * Determines whether a batch result has more work behind its cursor.
+	 *
+	 * @param array<string,mixed> $result Last batch result.
+	 */
+	private function should_continue_batch( array $result ): bool {
+		return 'no' === (string) ( $result['completed_cycle'] ?? 'yes' ) && (int) ( $result['batch_count'] ?? 0 ) > 0;
 	}
 }
