@@ -58,8 +58,14 @@ class Schrack_Image_Sync {
 		$processed = 0;
 		$errors    = 0;
 		$imported  = 0;
+		$stopped   = false;
 
 		foreach ( $product_ids as $product_id ) {
+			if ( $this->settings->is_stop_requested() ) {
+				$stopped = true;
+				break;
+			}
+
 			try {
 				$attachment_id = $this->mapper->import_product_image( $product_id );
 				++$processed;
@@ -81,9 +87,9 @@ class Schrack_Image_Sync {
 			}
 		}
 
-		$batch_count     = count( $product_ids );
+		$batch_count     = $stopped ? min( count( $product_ids ), $processed + $errors ) : count( $product_ids );
 		$next_cursor     = $batch['batch_start'] + $batch_count;
-		$completed_cycle = 0 === $batch['total_products'] || $next_cursor >= $batch['total_products'];
+		$completed_cycle = ! $stopped && ( 0 === $batch['total_products'] || $next_cursor >= $batch['total_products'] );
 
 		if ( $completed_cycle ) {
 			$next_cursor = 0;
@@ -100,6 +106,10 @@ class Schrack_Image_Sync {
 			'batch_limit'     => $limit,
 			'completed_cycle' => $completed_cycle ? 'yes' : 'no',
 		);
+
+		if ( $stopped ) {
+			$result['stopped'] = 'yes';
+		}
 
 		$this->settings->update_status( 'images', $result );
 

@@ -18,6 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	$soap_available              = extension_loaded( 'soap' );
 	$action_scheduler_available  = function_exists( 'as_enqueue_async_action' );
 	$queue_status                = isset( $queue_status ) && is_array( $queue_status ) ? $queue_status : array();
+	$stop_request                = isset( $stop_request ) && is_array( $stop_request ) ? $stop_request : null;
 	$queue_state_labels          = array(
 		'idle'    => __( 'Idle', 'schrack-woocommerce-sync' ),
 		'queued'  => __( 'Queued', 'schrack-woocommerce-sync' ),
@@ -102,7 +103,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 	</div>
 
 	<div class="schrack-panel">
-		<h2><?php esc_html_e( 'Active Queue', 'schrack-woocommerce-sync' ); ?></h2>
+		<div class="schrack-panel-header">
+			<h2><?php esc_html_e( 'Active Queue', 'schrack-woocommerce-sync' ); ?></h2>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="schrack_wc_sync_stop_syncs">
+				<input type="hidden" name="redirect_page" value="schrack-sync-status">
+				<?php wp_nonce_field( 'schrack_wc_sync_stop_syncs' ); ?>
+				<button type="submit" class="button button-secondary schrack-stop-button"><?php esc_html_e( 'Stop syncs', 'schrack-woocommerce-sync' ); ?></button>
+			</form>
+		</div>
+		<?php if ( null !== $stop_request ) : ?>
+			<p><span class="schrack-status-pill is-warning"><?php esc_html_e( 'Stop requested', 'schrack-woocommerce-sync' ); ?></span> <?php echo esc_html( (string) ( $stop_request['requested_at'] ?? '' ) ); ?></p>
+		<?php endif; ?>
 		<table class="widefat striped">
 			<thead>
 				<tr>

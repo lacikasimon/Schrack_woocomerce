@@ -88,4 +88,18 @@ class Schrack_WP_CLI {
 		$this->cron->run_full_sync();
 		WP_CLI::success( 'Schrack full sync batch finished.' );
 	}
+
+	/**
+	 * Stops queued and running sync work.
+	 */
+	public function stop(): void {
+		$result = $this->cron->stop_actions();
+		WP_CLI::success(
+			sprintf(
+				'Schrack sync stop requested. Cancelled %d queued action(s); %d running action(s) will stop at the next checkpoint.',
+				absint( $result['pending_cancelled'] ?? 0 ),
+				absint( $result['running'] ?? 0 )
+			)
+		);
+	}
 }

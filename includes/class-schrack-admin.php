@@ -61,6 +61,7 @@ class Schrack_Admin {
 		add_action( 'admin_post_schrack_wc_sync_save_markups', array( $this, 'save_markups' ) );
 		add_action( 'admin_post_schrack_wc_sync_soap_debug', array( $this, 'soap_debug' ) );
 		add_action( 'admin_post_schrack_wc_sync_manual_sync', array( $this, 'manual_sync' ) );
+		add_action( 'admin_post_schrack_wc_sync_stop_syncs', array( $this, 'stop_syncs' ) );
 		add_action( 'admin_post_schrack_wc_sync_sku_action', array( $this, 'sku_action' ) );
 		add_action( 'admin_post_schrack_wc_sync_clear_logs', array( $this, 'clear_logs' ) );
 	}
@@ -237,6 +238,30 @@ class Schrack_Admin {
 	}
 
 	/**
+	 * Stops queued sync actions and asks running batches to exit safely.
+	 */
+	public function stop_syncs(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_stop_syncs' );
+
+		$result        = $this->cron->stop_actions();
+		$redirect_page = isset( $_POST['redirect_page'] ) ? sanitize_key( wp_unslash( (string) $_POST['redirect_page'] ) ) : 'schrack-sync-manual';
+		$redirect_page = in_array( $redirect_page, array( 'schrack-sync-manual', 'schrack-sync-status' ), true ) ? $redirect_page : 'schrack-sync-manual';
+
+		$this->set_notice(
+			'warning',
+			sprintf(
+				/* translators: 1: cancelled pending actions, 2: running actions. */
+				__( 'Stop requested. Cancelled %1$d queued sync actions. %2$d running action(s) will stop at the next safe checkpoint.', 'schrack-woocommerce-sync' ),
+				absint( $result['pending_cancelled'] ?? 0 ),
+				absint( $result['running'] ?? 0 )
+			),
+			$result
+		);
+		$this->redirect( $redirect_page );
+	}
+
+	/**
 	 * Handles manual SKU tests and MVP product upsert.
 	 */
 	public function sku_action(): void {
@@ -325,6 +350,7 @@ class Schrack_Admin {
 
 		$notice       = $this->get_notice();
 		$queue_status = $this->cron->queue_status();
+		$stop_request = $this->settings->stop_request();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-sync.php';
 	}
@@ -357,6 +383,7 @@ class Schrack_Admin {
 		$settings = $this->settings->all();
 		$notice   = $this->get_notice();
 		$queue_status = $this->cron->queue_status();
+		$stop_request = $this->settings->stop_request();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-status.php';
 	}

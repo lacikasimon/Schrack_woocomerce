@@ -13,6 +13,7 @@ class Schrack_Settings {
 	public const OPTION_NAME          = 'schrack_wc_sync_settings';
 	public const STATUS_OPTION_NAME   = 'schrack_wc_sync_status';
 	public const MARKUPS_OPTION_NAME  = 'schrack_wc_sync_category_markups';
+	public const STOP_TRANSIENT_NAME  = 'schrack_wc_sync_stop_requested';
 	public const DEFAULT_TEST_WSDL    = 'https://ws-test.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice?wsdl';
 	public const DEFAULT_TEST_URL     = 'https://ws-test.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice';
 	public const DEFAULT_LIVE_WSDL    = 'https://ws.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice?wsdl';
@@ -226,6 +227,50 @@ class Schrack_Settings {
 		$status = get_option( self::STATUS_OPTION_NAME, array() );
 
 		return is_array( $status ) ? $status : array();
+	}
+
+	/**
+	 * Requests all running/queued syncs to stop at their next safe checkpoint.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function request_stop( int $ttl = HOUR_IN_SECONDS ): array {
+		$ttl     = max( MINUTE_IN_SECONDS, $ttl );
+		$expires = time() + $ttl;
+		$request = array(
+			'requested_at'        => current_time( 'mysql' ),
+			'requested_timestamp' => time(),
+			'expires_at'          => $expires,
+		);
+
+		set_transient( self::STOP_TRANSIENT_NAME, $request, $ttl );
+
+		return $request;
+	}
+
+	/**
+	 * Clears a previously requested sync stop.
+	 */
+	public function clear_stop_request(): void {
+		delete_transient( self::STOP_TRANSIENT_NAME );
+	}
+
+	/**
+	 * Returns the active stop request, if any.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	public function stop_request(): ?array {
+		$request = get_transient( self::STOP_TRANSIENT_NAME );
+
+		return is_array( $request ) ? $request : null;
+	}
+
+	/**
+	 * Returns whether sync work should stop.
+	 */
+	public function is_stop_requested(): bool {
+		return null !== $this->stop_request();
 	}
 
 	/**

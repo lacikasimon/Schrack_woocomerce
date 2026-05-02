@@ -81,6 +81,35 @@
 	margin: 0 0 14px;
 }
 
+.schrack-panel-header {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	justify-content: space-between;
+	margin-bottom: 14px;
+}
+
+.schrack-panel-header h2 {
+	margin: 0;
+}
+
+.schrack-panel-header form {
+	margin: 0;
+}
+
+.schrack-stop-button {
+	border-color: var(--schrack-red) !important;
+	color: var(--schrack-red) !important;
+}
+
+.schrack-stop-button:hover,
+.schrack-stop-button:focus {
+	background: #fcf0f1 !important;
+	border-color: #8a2424 !important;
+	color: #8a2424 !important;
+}
+
 .schrack-sync-admin > form h2:not(:first-of-type) {
 	border-top: 1px solid #f0f0f1;
 	margin-top: 22px;

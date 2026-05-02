@@ -136,9 +136,15 @@ class Schrack_Price_Sync {
 
 		$processed = 0;
 		$errors    = 0;
+		$stopped   = false;
 		$product_skus = array();
 
 		foreach ( $product_ids as $product_id ) {
+			if ( $this->settings->is_stop_requested() ) {
+				$stopped = true;
+				break;
+			}
+
 			$product = wc_get_product( $product_id );
 
 			if ( ! $product instanceof WC_Product ) {
@@ -160,6 +166,11 @@ class Schrack_Price_Sync {
 		$request_size = max( 1, min( $limit, (int) $this->settings->get( 'price_request_size', 10 ) ) );
 
 		foreach ( array_chunk( $product_skus, $request_size, true ) as $sku_by_product_id ) {
+			if ( $this->settings->is_stop_requested() ) {
+				$stopped = true;
+				break;
+			}
+
 			try {
 				$result = $this->fetch_prices( array_values( $sku_by_product_id ) );
 				$prices = $result['prices'];
@@ -196,31 +207,22 @@ class Schrack_Price_Sync {
 					)
 				);
 			}
+
+			if ( $this->settings->is_stop_requested() ) {
+				$stopped = true;
+				break;
+			}
 		}
 
-		$batch_count     = count( $product_ids );
+		$batch_count     = $stopped ? min( count( $product_ids ), $processed + $errors ) : count( $product_ids );
 		$next_cursor     = $batch['batch_start'] + $batch_count;
-		$completed_cycle = 0 === $batch['total_products'] || $next_cursor >= $batch['total_products'];
+		$completed_cycle = ! $stopped && ( 0 === $batch['total_products'] || $next_cursor >= $batch['total_products'] );
 
 		if ( $completed_cycle ) {
 			$next_cursor = 0;
 		}
 
-		$this->settings->update_status(
-			'price',
-			array(
-				'processed'       => $processed,
-				'errors'          => $errors,
-				'cursor'          => $next_cursor,
-				'total_products'  => $batch['total_products'],
-				'batch_start'     => $batch['batch_start'],
-				'batch_count'     => $batch_count,
-				'batch_limit'     => $limit,
-				'completed_cycle' => $completed_cycle ? 'yes' : 'no',
-			)
-		);
-
-		return array(
+		$result = array(
 			'processed'       => $processed,
 			'errors'          => $errors,
 			'cursor'          => $next_cursor,
@@ -230,6 +232,14 @@ class Schrack_Price_Sync {
 			'batch_limit'     => $limit,
 			'completed_cycle' => $completed_cycle ? 'yes' : 'no',
 		);
+
+		if ( $stopped ) {
+			$result['stopped'] = 'yes';
+		}
+
+		$this->settings->update_status( 'price', $result );
+
+		return $result;
 	}
 
 	/**

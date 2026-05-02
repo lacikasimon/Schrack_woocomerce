@@ -143,6 +143,7 @@ class Schrack_Cron {
 		}
 
 		$args = 'full' === $task ? array( 'catalog' ) : array();
+		$this->settings->clear_stop_request();
 
 		if ( function_exists( 'as_enqueue_async_action' ) ) {
 			as_enqueue_async_action( $hook, $args, self::GROUP );
@@ -208,6 +209,32 @@ class Schrack_Cron {
 	}
 
 	/**
+	 * Requests running syncs to stop and clears queued follow-up actions.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function stop_actions(): array {
+		$before       = $this->queue_totals();
+		$stop_request = $this->settings->request_stop();
+
+		self::clear_scheduled_actions();
+
+		$after = $this->queue_totals();
+		$result = array(
+			'stop_requested'    => 'yes',
+			'requested_at'      => $stop_request['requested_at'] ?? current_time( 'mysql' ),
+			'pending_before'    => $before['pending'],
+			'pending_after'     => $after['pending'],
+			'pending_cancelled' => max( 0, $before['pending'] - $after['pending'] ),
+			'running'           => $before['running'],
+		);
+
+		$this->logger->warning( 'admin', 'Schrack sync stop was requested from admin.', null, $result );
+
+		return $result;
+	}
+
+	/**
 	 * Runs a catalog import batch.
 	 */
 	public function run_catalog_import( bool $queue_continuation = true ): array {
@@ -217,17 +244,33 @@ class Schrack_Cron {
 		$started_at  = time();
 
 		try {
+			if ( $this->settings->is_stop_requested() ) {
+				return $this->handle_stopped_sync( 'catalog', 0, 0 );
+			}
+
 			$result          = array();
 			$total_processed = 0;
 			$total_errors    = 0;
 			$batches         = 0;
 
 			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( 'catalog', $total_processed, $total_errors );
+				}
+
 				$result = $importer->import_from_soap( 'CSV', $limit );
 				++$batches;
 
 				$total_processed += (int) ( $result['processed'] ?? 0 );
 				$total_errors    += (int) ( $result['errors'] ?? 0 );
+
+				if ( $this->is_stopped_result( $result ) ) {
+					return $this->handle_stopped_sync( 'catalog', $total_processed, $total_errors );
+				}
+
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( 'catalog', $total_processed, $total_errors );
+				}
 
 				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at ) ) {
 					break;
@@ -283,17 +326,33 @@ class Schrack_Cron {
 		$started_at  = time();
 
 		try {
+			if ( $this->settings->is_stop_requested() ) {
+				return $this->handle_stopped_sync( 'price', 0, 0 );
+			}
+
 			$result          = array();
 			$total_processed = 0;
 			$total_errors    = 0;
 			$batches         = 0;
 
 			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( 'price', $total_processed, $total_errors );
+				}
+
 				$result = $sync->sync_batch( $limit );
 				++$batches;
 
 				$total_processed += (int) ( $result['processed'] ?? 0 );
 				$total_errors    += (int) ( $result['errors'] ?? 0 );
+
+				if ( $this->is_stopped_result( $result ) ) {
+					return $this->handle_stopped_sync( 'price', $total_processed, $total_errors );
+				}
+
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( 'price', $total_processed, $total_errors );
+				}
 
 				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at ) ) {
 					break;
@@ -345,17 +404,33 @@ class Schrack_Cron {
 		$started_at  = time();
 
 		try {
+			if ( $this->settings->is_stop_requested() ) {
+				return $this->handle_stopped_sync( 'stock', 0, 0 );
+			}
+
 			$result          = array();
 			$total_processed = 0;
 			$total_errors    = 0;
 			$batches         = 0;
 
 			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( 'stock', $total_processed, $total_errors );
+				}
+
 				$result = $sync->sync_batch( $limit );
 				++$batches;
 
 				$total_processed += (int) ( $result['processed'] ?? 0 );
 				$total_errors    += (int) ( $result['errors'] ?? 0 );
+
+				if ( $this->is_stopped_result( $result ) ) {
+					return $this->handle_stopped_sync( 'stock', $total_processed, $total_errors );
+				}
+
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( 'stock', $total_processed, $total_errors );
+				}
 
 				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at ) ) {
 					break;
@@ -407,6 +482,10 @@ class Schrack_Cron {
 		$started_at  = time();
 
 		try {
+			if ( $this->settings->is_stop_requested() ) {
+				return $this->handle_stopped_sync( 'images', 0, 0 );
+			}
+
 			$result          = array();
 			$total_processed = 0;
 			$total_imported  = 0;
@@ -414,12 +493,24 @@ class Schrack_Cron {
 			$batches         = 0;
 
 			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( 'images', $total_processed, $total_errors, array( 'imported' => $total_imported ) );
+				}
+
 				$result = $sync->sync_batch( $limit );
 				++$batches;
 
 				$total_processed += (int) ( $result['processed'] ?? 0 );
 				$total_imported  += (int) ( $result['imported'] ?? 0 );
 				$total_errors    += (int) ( $result['errors'] ?? 0 );
+
+				if ( $this->is_stopped_result( $result ) ) {
+					return $this->handle_stopped_sync( 'images', $total_processed, $total_errors, array( 'imported' => $total_imported ) );
+				}
+
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( 'images', $total_processed, $total_errors, array( 'imported' => $total_imported ) );
+				}
 
 				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at ) ) {
 					break;
@@ -460,8 +551,17 @@ class Schrack_Cron {
 	public function run_full_sync( string $stage = 'catalog' ): void {
 		$mode = (string) $this->settings->get( 'import_mode', 'catalog_price_stock' );
 
+		if ( $this->settings->is_stop_requested() ) {
+			$this->handle_stopped_sync( 'full', 0, 0, array( 'stage' => $stage ) );
+			return;
+		}
+
 		if ( 'catalog' === $stage ) {
 			$result = $this->run_catalog_import( false );
+
+			if ( $this->is_stopped_result( $result ) ) {
+				return;
+			}
 
 			if ( $this->is_rate_limited_result( $result ) ) {
 				$this->queue_rate_limited_batch( self::HOOK_FULL, 'full', array( 'catalog' ), $result );
@@ -485,6 +585,10 @@ class Schrack_Cron {
 		if ( 'price' === $stage && in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
 			$result = $this->run_price_sync( false );
 
+			if ( $this->is_stopped_result( $result ) ) {
+				return;
+			}
+
 			if ( $this->is_rate_limited_result( $result ) ) {
 				$this->queue_rate_limited_batch( self::HOOK_FULL, 'full', array( 'price' ), $result );
 				return;
@@ -506,6 +610,10 @@ class Schrack_Cron {
 
 		if ( 'stock' === $stage && 'catalog_price_stock' === $mode ) {
 			$result = $this->run_stock_sync( false );
+			if ( $this->is_stopped_result( $result ) ) {
+				return;
+			}
+
 			if ( $this->is_rate_limited_result( $result ) ) {
 				$this->queue_rate_limited_batch( self::HOOK_FULL, 'full', array( 'stock' ), $result );
 				return;
@@ -522,6 +630,10 @@ class Schrack_Cron {
 
 		if ( 'images' === $stage && $this->should_import_images() ) {
 			$result = $this->run_image_sync( false );
+			if ( $this->is_stopped_result( $result ) ) {
+				return;
+			}
+
 			$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'images' ) );
 		}
 	}
@@ -710,6 +822,43 @@ class Schrack_Cron {
 	}
 
 	/**
+	 * Records that a sync run stopped by admin request.
+	 *
+	 * @param array<string,mixed> $extra Extra status values.
+	 * @return array<string,mixed>
+	 */
+	private function handle_stopped_sync( string $operation, int $processed, int $errors, array $extra = array() ): array {
+		$status       = $this->settings->get_status();
+		$last_row     = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
+		$stop_request = $this->settings->stop_request();
+		$result       = array_merge(
+			array(
+				'processed'       => $processed,
+				'errors'          => $errors,
+				'cursor'          => absint( $last_row['cursor'] ?? 0 ),
+				'batch_start'     => absint( $last_row['batch_start'] ?? 0 ),
+				'batch_count'     => 0,
+				'batch_limit'     => absint( $last_row['batch_limit'] ?? 0 ),
+				'completed_cycle' => 'no',
+				'stopped'         => 'yes',
+				'stop_requested_at' => is_array( $stop_request ) ? (string) ( $stop_request['requested_at'] ?? '' ) : current_time( 'mysql' ),
+			),
+			$extra
+		);
+
+		foreach ( array( 'total_items', 'total_products' ) as $total_key ) {
+			if ( isset( $last_row[ $total_key ] ) ) {
+				$result[ $total_key ] = absint( $last_row[ $total_key ] );
+			}
+		}
+
+		$this->settings->update_status( $operation, $result );
+		$this->logger->warning( $operation, 'Stopped Schrack sync because admin requested it.', null, $result );
+
+		return $result;
+	}
+
+	/**
 	 * Returns the configured pause after a Schrack SOAP throttling response.
 	 */
 	private function rate_limit_cooldown(): int {
@@ -722,7 +871,10 @@ class Schrack_Cron {
 	 * @param array<string,mixed> $result Last batch result.
 	 */
 	private function should_continue_batch( array $result ): bool {
-		return 'no' === (string) ( $result['completed_cycle'] ?? 'yes' ) && (int) ( $result['batch_count'] ?? 0 ) > 0;
+		return 'no' === (string) ( $result['completed_cycle'] ?? 'yes' )
+			&& (int) ( $result['batch_count'] ?? 0 ) > 0
+			&& ! $this->is_rate_limited_result( $result )
+			&& ! $this->is_stopped_result( $result );
 	}
 
 	/**
@@ -732,6 +884,15 @@ class Schrack_Cron {
 	 */
 	private function is_rate_limited_result( array $result ): bool {
 		return 'yes' === (string) ( $result['rate_limited'] ?? 'no' );
+	}
+
+	/**
+	 * Determines whether a stage stopped because admin requested it.
+	 *
+	 * @param array<string,mixed> $result Last batch result.
+	 */
+	private function is_stopped_result( array $result ): bool {
+		return 'yes' === (string) ( $result['stopped'] ?? 'no' );
 	}
 
 	/**
@@ -760,6 +921,26 @@ class Schrack_Cron {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Returns aggregate pending/running counts for all Schrack hooks.
+	 *
+	 * @return array{pending:int,running:int}
+	 */
+	private function queue_totals(): array {
+		$pending = 0;
+		$running = 0;
+
+		foreach ( $this->queue_status() as $row ) {
+			$pending += absint( $row['pending'] ?? 0 );
+			$running += absint( $row['running'] ?? 0 );
+		}
+
+		return array(
+			'pending' => $pending,
+			'running' => $running,
+		);
 	}
 
 	/**
