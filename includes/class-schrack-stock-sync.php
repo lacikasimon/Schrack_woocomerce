@@ -54,11 +54,29 @@ class Schrack_Stock_Sync {
 	 * @return array{total_stock:float,warehouses:array<int,array<string,mixed>>,raw:mixed}
 	 */
 	public function fetch_stock( string $sku ): array {
-		$raw    = $this->client->get_stock_item_quantities( $sku );
-		$mapped = $this->map_stock_response( $raw );
+		$raw           = $this->client->get_stock_item_quantities( $sku );
+		$sku           = $this->normalize_sku( $sku );
+		$mapped_by_sku = $this->map_stock_response_by_sku( $raw, array( $sku ) );
+		$mapped        = '' !== $sku && isset( $mapped_by_sku[ $sku ] ) ? $mapped_by_sku[ $sku ] : $this->map_stock_response( $raw );
 		$mapped['raw'] = $raw;
 
 		return $mapped;
+	}
+
+	/**
+	 * Fetches mapped stock data for multiple SKUs.
+	 *
+	 * @param array<int,string> $skus Schrack item numbers.
+	 * @return array{stocks:array<string,array{total_stock:float,warehouses:array<int,array<string,mixed>>}>,raw:mixed}
+	 */
+	public function fetch_stocks( array $skus ): array {
+		$skus = $this->normalize_skus( $skus );
+		$raw  = $this->client->get_stock_item_quantities_bulk( $skus );
+
+		return array(
+			'stocks' => $this->map_stock_response_by_sku( $raw, $skus ),
+			'raw'    => $raw,
+		);
 	}
 
 	/**
@@ -100,14 +118,57 @@ class Schrack_Stock_Sync {
 
 		$processed = 0;
 		$errors    = 0;
+		$product_skus = array();
 
 		foreach ( $product_ids as $product_id ) {
-			try {
-				$this->sync_product( $product_id );
+			$product = wc_get_product( $product_id );
+
+			if ( ! $product instanceof WC_Product ) {
 				++$processed;
+				continue;
+			}
+
+			$sku = $this->product_schrack_sku( $product );
+
+			if ( '' === $sku ) {
+				++$processed;
+				$this->logger->warning( 'stock', 'Skipped stock sync because product has no SKU.', null, array( 'product_id' => $product_id ) );
+				continue;
+			}
+
+			$product_skus[ $product_id ] = $sku;
+		}
+
+		$request_size = max( 1, min( $limit, (int) $this->settings->get( 'stock_request_size', 25 ) ) );
+
+		foreach ( array_chunk( $product_skus, $request_size, true ) as $sku_by_product_id ) {
+			try {
+				$result = $this->fetch_stocks( array_values( $sku_by_product_id ) );
+				$stocks = $result['stocks'];
+
+				foreach ( $sku_by_product_id as $product_id => $sku ) {
+					if ( ! isset( $stocks[ $sku ] ) ) {
+						++$errors;
+						$this->logger->warning( 'stock', 'Schrack stock response did not contain a mappable stock row for SKU.', $sku, array( 'product_id' => $product_id ) );
+						continue;
+					}
+
+					$this->mapper->update_stock( (int) $product_id, $stocks[ $sku ] );
+					++$processed;
+				}
+			} catch ( Schrack_Rate_Limit_Exception $exception ) {
+				throw $exception;
 			} catch ( Throwable $exception ) {
-				++$errors;
-				$this->logger->error( 'stock', 'Failed to sync Schrack stock.', null, array( 'product_id' => $product_id, 'error' => $exception->getMessage() ) );
+				$errors += count( $sku_by_product_id );
+				$this->logger->error(
+					'stock',
+					'Failed to sync Schrack stock chunk.',
+					null,
+					array(
+						'sku_count' => count( $sku_by_product_id ),
+						'error'     => $exception->getMessage(),
+					)
+				);
 			}
 		}
 
@@ -143,6 +204,26 @@ class Schrack_Stock_Sync {
 			'batch_limit'     => $limit,
 			'completed_cycle' => $completed_cycle ? 'yes' : 'no',
 		);
+	}
+
+	/**
+	 * Maps a multi-item stock response by item number.
+	 *
+	 * @param mixed             $response SOAP response.
+	 * @param array<int,string> $skus Requested SKUs.
+	 * @return array<string,array{total_stock:float,warehouses:array<int,array<string,mixed>>}>
+	 */
+	public function map_stock_response_by_sku( mixed $response, array $skus ): array {
+		$skus   = $this->normalize_skus( $skus );
+		$stocks = array();
+
+		$this->collect_stock_items( $response, array_fill_keys( $skus, true ), $stocks );
+
+		if ( 1 === count( $skus ) && ! isset( $stocks[ $skus[0] ] ) ) {
+			$stocks[ $skus[0] ] = $this->map_stock_response( $response );
+		}
+
+		return $stocks;
 	}
 
 	/**
@@ -185,6 +266,41 @@ class Schrack_Stock_Sync {
 			'total_stock' => $total,
 			'warehouses'  => array_values( $filtered ),
 		);
+	}
+
+	/**
+	 * Recursively finds item nodes containing an item number and stock quantities.
+	 *
+	 * @param mixed                                                                 $node Node.
+	 * @param array<string,bool>                                                    $sku_lookup Requested SKU lookup.
+	 * @param array<string,array{total_stock:float,warehouses:array<int,array<string,mixed>>}> $stocks Stock map.
+	 */
+	private function collect_stock_items( mixed $node, array $sku_lookup, array &$stocks ): void {
+		if ( is_object( $node ) ) {
+			$node = get_object_vars( $node );
+		}
+
+		if ( ! is_array( $node ) ) {
+			return;
+		}
+
+		$sku = $this->sku_from_node( $node );
+
+		if ( '' !== $sku && isset( $sku_lookup[ $sku ] ) ) {
+			$stocks[ $sku ] = $this->map_stock_response( $node );
+		}
+
+		foreach ( $node as $key => $value ) {
+			$key_sku = $this->normalize_sku( $key );
+
+			if ( '' !== $key_sku && isset( $sku_lookup[ $key_sku ] ) ) {
+				$stocks[ $key_sku ] = $this->map_stock_response( $value );
+			}
+
+			if ( is_array( $value ) || is_object( $value ) ) {
+				$this->collect_stock_items( $value, $sku_lookup, $stocks );
+			}
+		}
 	}
 
 	/**
@@ -327,7 +443,55 @@ class Schrack_Stock_Sync {
 		$meta_sku = $product->get_meta( '_schrack_item_number', true );
 		$sku      = is_scalar( $meta_sku ) && '' !== trim( (string) $meta_sku ) ? (string) $meta_sku : $product->get_sku();
 
-		return sanitize_text_field( $sku );
+		return $this->normalize_sku( $sku );
+	}
+
+	/**
+	 * Extracts a SKU-like value from a SOAP item node.
+	 *
+	 * @param array<string,mixed> $node Item node.
+	 */
+	private function sku_from_node( array $node ): string {
+		$keys = array( 'itemid', 'item_id', 'id', 'itemno', 'item_no', 'itemnumber', 'item_number' );
+
+		foreach ( $node as $key => $value ) {
+			if ( is_scalar( $value ) && in_array( strtolower( (string) $key ), $keys, true ) ) {
+				return $this->normalize_sku( $value );
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Normalizes SKU lists for response mapping.
+	 *
+	 * @param array<int,string> $skus SKUs.
+	 * @return array<int,string>
+	 */
+	private function normalize_skus( array $skus ): array {
+		$normalized = array();
+
+		foreach ( $skus as $sku ) {
+			$sku = $this->normalize_sku( $sku );
+
+			if ( '' !== $sku ) {
+				$normalized[ $sku ] = $sku;
+			}
+		}
+
+		return array_values( $normalized );
+	}
+
+	/**
+	 * Normalizes one SKU.
+	 */
+	private function normalize_sku( mixed $sku ): string {
+		if ( ! is_scalar( $sku ) ) {
+			return '';
+		}
+
+		return sanitize_text_field( trim( (string) $sku ) );
 	}
 
 	/**

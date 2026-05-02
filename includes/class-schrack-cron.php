@@ -254,6 +254,14 @@ class Schrack_Cron {
 				}
 			}
 			return $result;
+		} catch ( Schrack_Rate_Limit_Exception $exception ) {
+			$result = $this->handle_rate_limited_sync( 'catalog', $total_processed ?? 0, $total_errors ?? 0, $exception );
+
+			if ( $queue_continuation ) {
+				$this->queue_rate_limited_batch( self::HOOK_CATALOG, 'catalog', array(), $result );
+			}
+
+			return $result;
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'catalog', 'Schrack catalog import batch failed.', null, array( 'error' => $exception->getMessage() ) );
 			$this->settings->update_status( 'catalog', array( 'processed' => 0, 'errors' => 1 ) );
@@ -308,6 +316,14 @@ class Schrack_Cron {
 				$this->queue_next_batch_if_needed( self::HOOK_PRICES, 'price', $result );
 			}
 			return $result;
+		} catch ( Schrack_Rate_Limit_Exception $exception ) {
+			$result = $this->handle_rate_limited_sync( 'price', $total_processed ?? 0, $total_errors ?? 0, $exception );
+
+			if ( $queue_continuation ) {
+				$this->queue_rate_limited_batch( self::HOOK_PRICES, 'price', array(), $result );
+			}
+
+			return $result;
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'price', 'Schrack price sync batch failed.', null, array( 'error' => $exception->getMessage() ) );
 			$this->settings->update_status( 'price', array( 'processed' => 0, 'errors' => 1 ) );
@@ -361,6 +377,14 @@ class Schrack_Cron {
 			if ( $queue_continuation ) {
 				$this->queue_next_batch_if_needed( self::HOOK_STOCK, 'stock', $result );
 			}
+			return $result;
+		} catch ( Schrack_Rate_Limit_Exception $exception ) {
+			$result = $this->handle_rate_limited_sync( 'stock', $total_processed ?? 0, $total_errors ?? 0, $exception );
+
+			if ( $queue_continuation ) {
+				$this->queue_rate_limited_batch( self::HOOK_STOCK, 'stock', array(), $result );
+			}
+
 			return $result;
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'stock', 'Schrack stock sync batch failed.', null, array( 'error' => $exception->getMessage() ) );
@@ -439,6 +463,11 @@ class Schrack_Cron {
 		if ( 'catalog' === $stage ) {
 			$result = $this->run_catalog_import( false );
 
+			if ( $this->is_rate_limited_result( $result ) ) {
+				$this->queue_rate_limited_batch( self::HOOK_FULL, 'full', array( 'catalog' ), $result );
+				return;
+			}
+
 			if ( $this->should_continue_batch( $result ) ) {
 				$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'catalog' ) );
 				return;
@@ -456,6 +485,11 @@ class Schrack_Cron {
 		if ( 'price' === $stage && in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
 			$result = $this->run_price_sync( false );
 
+			if ( $this->is_rate_limited_result( $result ) ) {
+				$this->queue_rate_limited_batch( self::HOOK_FULL, 'full', array( 'price' ), $result );
+				return;
+			}
+
 			if ( $this->should_continue_batch( $result ) ) {
 				$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'price' ) );
 				return;
@@ -472,6 +506,11 @@ class Schrack_Cron {
 
 		if ( 'stock' === $stage && 'catalog_price_stock' === $mode ) {
 			$result = $this->run_stock_sync( false );
+			if ( $this->is_rate_limited_result( $result ) ) {
+				$this->queue_rate_limited_batch( self::HOOK_FULL, 'full', array( 'stock' ), $result );
+				return;
+			}
+
 			if ( $this->should_continue_batch( $result ) ) {
 				$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'stock' ) );
 			} elseif ( $this->should_import_images() ) {
@@ -560,10 +599,11 @@ class Schrack_Cron {
 	 * @param array<int,mixed>    $args Hook arguments.
 	 * @param array<string,mixed> $context Extra log context.
 	 */
-	private function queue_sync_batch( string $hook, string $operation, array $args = array(), array $context = array() ): void {
-		$sleep = max( 0, (int) $this->settings->get( 'rate_limit_sleep', 0 ) );
+	private function queue_sync_batch( string $hook, string $operation, array $args = array(), array $context = array(), ?int $delay_override = null ): void {
+		$sleep            = null === $delay_override ? max( 0, (int) $this->settings->get( 'rate_limit_sleep', 0 ) ) : max( 0, $delay_override );
+		$duplicate_window = max( 60, $sleep + 5 );
 
-		if ( $this->has_active_followup_action( $hook, $args ) ) {
+		if ( $this->has_active_followup_action( $hook, $args, $duplicate_window ) ) {
 			$this->logger->debug(
 				$operation,
 				'Skipped duplicate Schrack follow-up batch queue request.',
@@ -605,12 +645,93 @@ class Schrack_Cron {
 	}
 
 	/**
+	 * Queues a delayed retry after Schrack throttles SOAP messages.
+	 *
+	 * @param array<int,mixed>    $args Hook arguments.
+	 * @param array<string,mixed> $result Rate-limited result.
+	 */
+	private function queue_rate_limited_batch( string $hook, string $operation, array $args, array $result ): void {
+		$cooldown = max( 30, (int) ( $result['cooldown_seconds'] ?? $this->rate_limit_cooldown() ) );
+
+		$this->queue_sync_batch(
+			$hook,
+			$operation,
+			$args,
+			array(
+				'rate_limited' => 'yes',
+				'retry_after'  => $result['retry_after'] ?? null,
+			),
+			$cooldown
+		);
+	}
+
+	/**
+	 * Records a paused sync run after Schrack rate limiting.
+	 */
+	private function handle_rate_limited_sync( string $operation, int $processed, int $errors, Throwable $exception ): array {
+		$cooldown  = $this->rate_limit_cooldown();
+		$retry_at  = time() + $cooldown;
+		$status    = $this->settings->get_status();
+		$last_row  = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
+		$error     = $exception->getMessage();
+		$result    = array(
+			'processed'        => $processed,
+			'errors'           => $errors,
+			'cursor'           => absint( $last_row['cursor'] ?? 0 ),
+			'batch_start'      => absint( $last_row['batch_start'] ?? 0 ),
+			'batch_count'      => max( 1, absint( $last_row['batch_count'] ?? 0 ) ),
+			'batch_limit'      => absint( $last_row['batch_limit'] ?? 0 ),
+			'completed_cycle'  => 'no',
+			'rate_limited'     => 'yes',
+			'cooldown_seconds' => $cooldown,
+			'retry_after'      => wp_date( 'Y-m-d H:i:s', $retry_at ),
+			'error'            => $error,
+		);
+
+		foreach ( array( 'total_items', 'total_products' ) as $total_key ) {
+			if ( isset( $last_row[ $total_key ] ) ) {
+				$result[ $total_key ] = absint( $last_row[ $total_key ] );
+			}
+		}
+
+		$this->settings->update_status( $operation, $result );
+		$this->logger->warning(
+			$operation,
+			'Paused Schrack sync because SOAP rate limit was reached.',
+			null,
+			array(
+				'cooldown_seconds' => $cooldown,
+				'retry_after'      => $result['retry_after'],
+				'error'            => $error,
+			)
+		);
+
+		return $result;
+	}
+
+	/**
+	 * Returns the configured pause after a Schrack SOAP throttling response.
+	 */
+	private function rate_limit_cooldown(): int {
+		return max( 30, min( 1800, (int) $this->settings->get( 'soap_rate_limit_cooldown', 120 ) ) );
+	}
+
+	/**
 	 * Determines whether a batch result has more work behind its cursor.
 	 *
 	 * @param array<string,mixed> $result Last batch result.
 	 */
 	private function should_continue_batch( array $result ): bool {
 		return 'no' === (string) ( $result['completed_cycle'] ?? 'yes' ) && (int) ( $result['batch_count'] ?? 0 ) > 0;
+	}
+
+	/**
+	 * Determines whether a stage paused because Schrack throttled SOAP messages.
+	 *
+	 * @param array<string,mixed> $result Last batch result.
+	 */
+	private function is_rate_limited_result( array $result ): bool {
+		return 'yes' === (string) ( $result['rate_limited'] ?? 'no' );
 	}
 
 	/**
@@ -646,10 +767,10 @@ class Schrack_Cron {
 	 *
 	 * @param array<int,mixed> $args Hook arguments.
 	 */
-	private function has_active_followup_action( string $hook, array $args ): bool {
+	private function has_active_followup_action( string $hook, array $args, int $window = 60 ): bool {
 		$next_run = $this->next_scheduled_timestamp( $hook, $args );
 
-		return null !== $next_run && $next_run <= time() + 60;
+		return null !== $next_run && $next_run <= time() + max( 0, $window );
 	}
 
 	/**

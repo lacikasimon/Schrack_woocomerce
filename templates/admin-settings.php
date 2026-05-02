@@ -82,8 +82,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<td><input id="schrack_sync_batches_per_run" type="number" min="1" max="20" step="1" name="schrack_settings[sync_batches_per_run]" value="<?php echo esc_attr( $settings['sync_batches_per_run'] ); ?>"></td>
 			</tr>
 			<tr>
+				<th scope="row"><label for="schrack_price_request_size"><?php esc_html_e( 'Price items per SOAP request', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td><input id="schrack_price_request_size" type="number" min="1" max="100" step="1" name="schrack_settings[price_request_size]" value="<?php echo esc_attr( $settings['price_request_size'] ); ?>"></td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_stock_request_size"><?php esc_html_e( 'Stock items per SOAP request', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td><input id="schrack_stock_request_size" type="number" min="1" max="100" step="1" name="schrack_settings[stock_request_size]" value="<?php echo esc_attr( $settings['stock_request_size'] ); ?>"></td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="schrack_rate_limit_sleep"><?php esc_html_e( 'Batch sleep seconds', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td><input id="schrack_rate_limit_sleep" type="number" min="0" max="30" step="1" name="schrack_settings[rate_limit_sleep]" value="<?php echo esc_attr( $settings['rate_limit_sleep'] ); ?>"></td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_soap_rate_limit_cooldown"><?php esc_html_e( 'SOAP rate-limit cooldown seconds', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td><input id="schrack_soap_rate_limit_cooldown" type="number" min="30" max="1800" step="1" name="schrack_settings[soap_rate_limit_cooldown]" value="<?php echo esc_attr( $settings['soap_rate_limit_cooldown'] ); ?>"></td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_soap_retries"><?php esc_html_e( 'SOAP retries', 'schrack-woocommerce-sync' ); ?></label></th>

@@ -9,6 +9,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+class Schrack_Rate_Limit_Exception extends RuntimeException {}
+
 class Schrack_Soap_Client {
 	/**
 	 * Settings service.
@@ -104,17 +106,35 @@ class Schrack_Soap_Client {
 	 * @return mixed
 	 */
 	public function get_item_price( string $sku ): mixed {
+		return $this->get_item_prices( array( $sku ) );
+	}
+
+	/**
+	 * Fetches current purchase prices for multiple SKUs in one SOAP message.
+	 *
+	 * @param array<int,string> $skus Schrack item numbers.
+	 * @return mixed
+	 */
+	public function get_item_prices( array $skus ): mixed {
+		$items = array();
+
+		foreach ( $this->normalize_skus( $skus ) as $sku ) {
+			$items[] = array(
+				'ID'       => $sku,
+				'Quantity' => 1,
+			);
+		}
+
+		if ( empty( $items ) ) {
+			throw new InvalidArgumentException( 'At least one Schrack SKU is required for price lookup.' );
+		}
+
 		$payload = array_merge(
 			$this->auth_payload(),
 			array(
 				'CustomerNumber' => (string) $this->settings->get( 'customer_number', '' ),
 				'Items'          => array(
-					'Item' => array(
-						array(
-							'ID'       => sanitize_text_field( $sku ),
-							'Quantity' => 1,
-						),
-					),
+					'Item' => $items,
 				),
 			)
 		);
@@ -129,11 +149,27 @@ class Schrack_Soap_Client {
 	 * @return mixed
 	 */
 	public function get_stock_item_quantities( string $sku ): mixed {
+		return $this->get_stock_item_quantities_bulk( array( $sku ) );
+	}
+
+	/**
+	 * Fetches stock quantities for multiple SKUs in one SOAP message.
+	 *
+	 * @param array<int,string> $skus Schrack item numbers.
+	 * @return mixed
+	 */
+	public function get_stock_item_quantities_bulk( array $skus ): mixed {
+		$item_ids = $this->normalize_skus( $skus );
+
+		if ( empty( $item_ids ) ) {
+			throw new InvalidArgumentException( 'At least one Schrack SKU is required for stock lookup.' );
+		}
+
 		$payload = array_merge(
 			$this->auth_payload(),
 			array(
 				'ItemIDs' => array(
-					'ItemID' => array( sanitize_text_field( $sku ) ),
+					'ItemID' => $item_ids,
 				),
 			)
 		);
@@ -189,6 +225,7 @@ class Schrack_Soap_Client {
 				return $result;
 			} catch ( SoapFault $exception ) {
 				$last_exception = $exception;
+				$error_message  = $this->safe_error_message( $exception->getMessage() );
 
 				$this->logger->warning(
 					'soap',
@@ -199,9 +236,13 @@ class Schrack_Soap_Client {
 						'attempt'           => $attempt,
 						'soap_endpoint_url' => (string) $this->settings->get( 'soap_endpoint_url' ),
 						'loaded_wsdl_url'   => $this->loaded_wsdl_url,
-						'error'             => $this->safe_error_message( $exception->getMessage() ),
+						'error'             => $error_message,
 					)
 				);
+
+				if ( $this->is_rate_limit_message( $error_message ) ) {
+					throw new Schrack_Rate_Limit_Exception( $error_message, 0, $exception );
+				}
 
 				if ( $attempt <= $retries ) {
 					sleep( min( 3, $attempt ) );
@@ -230,6 +271,8 @@ class Schrack_Soap_Client {
 
 			try {
 				return $this->call( $method, $payload, $retries );
+			} catch ( Schrack_Rate_Limit_Exception $exception ) {
+				throw $exception;
 			} catch ( Throwable $exception ) {
 				$last_exception = $exception;
 
@@ -411,6 +454,45 @@ class Schrack_Soap_Client {
 				'Password' => (string) $this->settings->get( 'webshop_password', '' ),
 			),
 		);
+	}
+
+	/**
+	 * Normalizes and deduplicates Schrack SKU lists before SOAP calls.
+	 *
+	 * @param array<int,string> $skus Raw SKUs.
+	 * @return array<int,string>
+	 */
+	private function normalize_skus( array $skus ): array {
+		$normalized = array();
+
+		foreach ( $skus as $sku ) {
+			if ( ! is_scalar( $sku ) ) {
+				continue;
+			}
+
+			$sku = sanitize_text_field( trim( (string) $sku ) );
+
+			if ( '' === $sku ) {
+				continue;
+			}
+
+			$normalized[ $sku ] = $sku;
+		}
+
+		return array_values( $normalized );
+	}
+
+	/**
+	 * Detects Schrack-side throttling messages.
+	 */
+	private function is_rate_limit_message( string $message ): bool {
+		$message = strtolower( $message );
+
+		return str_contains( $message, 'to many messages' )
+			|| str_contains( $message, 'too many messages' )
+			|| str_contains( $message, 'messages in period' )
+			|| str_contains( $message, 'rate limit' )
+			|| str_contains( $message, 'throttl' );
 	}
 
 	/**
