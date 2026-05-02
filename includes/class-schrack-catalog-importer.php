@@ -456,6 +456,7 @@ class Schrack_Catalog_Importer {
 		$items            = array();
 		$rows_seen        = 0;
 		$rows_without_sku = 0;
+		$header_rows      = 0;
 		$first_row        = array();
 
 		if ( empty( $headers ) ) {
@@ -471,6 +472,11 @@ class Schrack_Catalog_Importer {
 			$row = $this->combine_csv_row( $headers, str_getcsv( $line, $delimiter ) );
 
 			if ( empty( $row ) ) {
+				continue;
+			}
+
+			if ( $this->is_csv_header_continuation_row( $row ) ) {
+				++$header_rows;
 				continue;
 			}
 
@@ -511,6 +517,7 @@ class Schrack_Catalog_Importer {
 					'raw_headers'      => array_values( array_map( static fn ( mixed $header ): string => (string) $header, $raw_headers ) ),
 					'rows_seen'        => $rows_seen,
 					'rows_without_sku' => $rows_without_sku,
+					'header_rows'      => $header_rows,
 					'first_row'        => $this->preview_row( $first_row ),
 				)
 			);
@@ -525,6 +532,7 @@ class Schrack_Catalog_Importer {
 					'rows_seen'        => $rows_seen,
 					'items'            => count( $items ),
 					'rows_without_sku' => $rows_without_sku,
+					'header_rows'      => $header_rows,
 				)
 			);
 		}
@@ -631,19 +639,36 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,mixed>
 	 */
 	private function normalize_catalog_row( array $row ): array {
-		$get = fn ( array $keys ): string => $this->find_catalog_value( $row, $keys );
+		$get           = fn ( array $keys ): string => $this->find_catalog_value( $row, $keys );
+		$category_path = $this->catalog_category_path( $row );
 
 		return array(
-			'sku'               => sanitize_text_field( $get( array( 'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_id', 'articleid', 'article_number', 'articlenumber', 'artikel', 'artikelnummer', 'artikelnr', 'artnr', 'artno', 'bestellnummer', 'ordernumber', 'materialnumber', 'materialnr', 'productid', 'productnumber', 'partnumber', 'schrackarticlenumber', 'schrackartikelnummer', 'schrackartikel', 'edsarticleid', 'edsartikelnummer' ) ) ),
-			'name'              => sanitize_text_field( $get( array( 'name', 'title', 'productname', 'itemname', 'description_short', 'descriptionshort', 'shorttext', 'kurztext', 'bezeichnung', 'bezeichnung1', 'artikelbezeichnung' ) ) ),
-			'short_description' => wp_kses_post( $get( array( 'short_description', 'shortdescription', 'description_short', 'descriptionshort', 'shorttext', 'kurztext' ) ) ),
-			'description'       => wp_kses_post( $get( array( 'description', 'long_description', 'longdescription', 'longtext', 'langtext', 'beschreibung' ) ) ),
+			'sku'               => sanitize_text_field( $get( array( 'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_id', 'articleid', 'article_number', 'articlenumber', 'artikel', 'artikelnummer', 'artikelnr', 'artnr', 'artno', 'bestellnummer', 'ordernumber', 'materialnumber', 'materialnr', 'productid', 'productnumber', 'partnumber', 'produs', 'schrackarticlenumber', 'schrackartikelnummer', 'schrackartikel', 'edsarticleid', 'edsartikelnummer' ) ) ),
+			'name'              => sanitize_text_field( $get( array( 'name', 'title', 'productname', 'itemname', 'produsname', 'textprodus', 'description_short', 'descriptionshort', 'shorttext', 'kurztext', 'bezeichnung', 'bezeichnung1', 'artikelbezeichnung' ) ) ),
+			'short_description' => wp_kses_post( $get( array( 'short_description', 'shortdescription', 'description_short', 'descriptionshort', 'textprodus', 'shorttext', 'kurztext' ) ) ),
+			'description'       => wp_kses_post( $get( array( 'description', 'long_description', 'longdescription', 'textprodus', 'longtext', 'langtext', 'beschreibung' ) ) ),
 			'manufacturer'      => sanitize_text_field( $get( array( 'manufacturer', 'brand', 'hersteller', 'producer', 'supplier' ) ) ),
 			'ean'               => sanitize_text_field( $get( array( 'ean', 'gtin', 'barcode', 'barcodeno' ) ) ),
-			'category_path'     => sanitize_text_field( $get( array( 'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup' ) ) ),
-			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure', 'mengeneinheit', 'salesunit' ) ) ),
+			'category_path'     => sanitize_text_field( '' !== $category_path ? $category_path : $get( array( 'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup' ) ) ),
+			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit' ) ) ),
 			'catalog_status'    => sanitize_text_field( $get( array( 'catalog_status', 'status' ) ) ),
 		);
+	}
+
+	/**
+	 * Builds a category path from split catalog group columns when available.
+	 *
+	 * @param array<int|string,mixed> $row Raw parser row.
+	 */
+	private function catalog_category_path( array $row ): string {
+		$parts = array(
+			$this->find_catalog_value( $row, array( 'maingroup' ) ),
+			$this->find_catalog_value( $row, array( 'group' ) ),
+		);
+
+		$parts = array_values( array_filter( array_map( 'trim', $parts ) ) );
+
+		return implode( ' > ', $parts );
 	}
 
 	/**
@@ -721,6 +746,41 @@ class Schrack_Catalog_Importer {
 		$key = preg_replace( '/[^a-z0-9]+/', '', $key );
 
 		return null === $key ? '' : $key;
+	}
+
+	/**
+	 * Detects secondary header rows in Schrack CSV exports.
+	 *
+	 * @param array<string,mixed> $row CSV row.
+	 */
+	private function is_csv_header_continuation_row( array $row ): bool {
+		$header_like_values = array(
+			'assortment',
+			'businesslineid',
+			'businesslinetext',
+			'datasheet',
+			'ean',
+			'minorderquantity',
+			'pret',
+			'pretnet',
+			'pretspecial',
+			'productadditionaltext',
+			'validdela',
+			'validpanala',
+		);
+		$matches = 0;
+
+		foreach ( $row as $value ) {
+			if ( ! is_scalar( $value ) ) {
+				continue;
+			}
+
+			if ( in_array( $this->catalog_key( (string) $value ), $header_like_values, true ) ) {
+				++$matches;
+			}
+		}
+
+		return $matches >= 3;
 	}
 
 	/**
