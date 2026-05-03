@@ -19,17 +19,45 @@
 		});
 	}
 
+	function directCategoryCheckbox(node) {
+		var label = node ? node.querySelector('.schrack-bulk-tree__label') : null;
+
+		return label ? label.querySelector('[data-bulk-category-checkbox]') : null;
+	}
+
+	function descendantCategoryCheckboxes(node) {
+		var childList = toArray(node ? node.children : []).filter(function (child) {
+			return child.classList && child.classList.contains('schrack-bulk-tree__list');
+		})[0];
+
+		return childList ? toArray(childList.querySelectorAll('[data-bulk-category-checkbox]')) : [];
+	}
+
 	function updateBulkSelectionState(root) {
 		var selectedCount = root.querySelector('[data-bulk-selected-count]');
 
-		categoryCheckboxes(root).forEach(function (checkbox) {
-			var node = closestCategoryNode(checkbox);
-			var childCheckboxes = node ? toArray(node.querySelectorAll('[data-bulk-category-node] [data-bulk-category-checkbox]')) : [];
+		toArray(root.querySelectorAll('[data-bulk-category-node]')).reverse().forEach(function (node) {
+			var checkbox = directCategoryCheckbox(node);
+			var childCheckboxes = descendantCategoryCheckboxes(node);
 			var checkedChildren = childCheckboxes.filter(function (childCheckbox) {
 				return childCheckbox.checked;
 			});
+			var indeterminateChildren = childCheckboxes.filter(function (childCheckbox) {
+				return childCheckbox.indeterminate;
+			});
 
-			checkbox.indeterminate = checkedChildren.length > 0 && checkedChildren.length < childCheckboxes.length;
+			if (!checkbox) {
+				return;
+			}
+
+			if (0 === childCheckboxes.length) {
+				checkbox.indeterminate = false;
+				return;
+			}
+
+			checkbox.indeterminate = (checkedChildren.length > 0 && checkedChildren.length < childCheckboxes.length) ||
+				(checkedChildren.length === childCheckboxes.length && !checkbox.checked) ||
+				indeterminateChildren.length > 0;
 		});
 
 		if (selectedCount) {
@@ -230,7 +258,7 @@
 
 			node = closestCategoryNode(checkbox);
 			if (node) {
-				toArray(node.querySelectorAll('[data-bulk-category-node] [data-bulk-category-checkbox]')).forEach(function (childCheckbox) {
+				descendantCategoryCheckboxes(node).forEach(function (childCheckbox) {
 					childCheckbox.checked = checkbox.checked;
 					childCheckbox.indeterminate = false;
 				});

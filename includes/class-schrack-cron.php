@@ -336,11 +336,14 @@ class Schrack_Cron {
 				return $this->handle_stopped_sync( 'catalog', 0, 0 );
 			}
 
-			$result           = array();
-			$total_processed  = 0;
-			$total_errors     = 0;
-			$total_image_urls = 0;
-			$batches          = 0;
+			$result                    = array();
+			$total_processed           = 0;
+			$total_errors              = 0;
+			$total_image_seen          = 0;
+			$total_image_urls          = 0;
+			$total_image_backfilled   = 0;
+			$total_image_meta_errors  = 0;
+			$batches                   = 0;
 
 			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
 				if ( $this->settings->is_stop_requested() ) {
@@ -350,9 +353,12 @@ class Schrack_Cron {
 				$result = $importer->import_from_soap( 'CSV', $limit );
 				++$batches;
 
-				$total_processed  += (int) ( $result['processed'] ?? 0 );
-				$total_errors     += (int) ( $result['errors'] ?? 0 );
-				$total_image_urls += (int) ( $result['image_urls_stored'] ?? 0 );
+				$total_processed           += (int) ( $result['processed'] ?? 0 );
+				$total_errors              += (int) ( $result['errors'] ?? 0 );
+				$total_image_seen          += (int) ( $result['image_urls_seen'] ?? 0 );
+				$total_image_urls          += (int) ( $result['image_urls_stored'] ?? 0 );
+				$total_image_backfilled  += (int) ( $result['image_urls_backfilled'] ?? 0 );
+				$total_image_meta_errors += (int) ( $result['image_url_meta_errors'] ?? 0 );
 
 				if ( $this->is_stopped_result( $result ) ) {
 					return $this->handle_stopped_sync( 'catalog', $total_processed, $total_errors );
@@ -372,7 +378,10 @@ class Schrack_Cron {
 				array(
 					'processed'               => $total_processed,
 					'errors'                  => $total_errors,
+					'image_urls_seen'         => $total_image_seen,
 					'image_urls_stored'       => $total_image_urls,
+					'image_urls_backfilled'   => $total_image_backfilled,
+					'image_url_meta_errors'   => $total_image_meta_errors,
 					'batches_processed'       => $batches,
 					'catalog_batches_per_run' => $max_batches,
 				)

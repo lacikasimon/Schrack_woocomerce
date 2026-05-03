@@ -75,7 +75,7 @@ $render_bulk_category_nodes = static function ( int $parent_id ) use ( &$render_
 		return;
 	}
 	?>
-	<ul class="schrack-bulk-tree__list" role="<?php echo 0 === $parent_id ? 'tree' : 'group'; ?>">
+	<ul class="schrack-bulk-tree__list" role="<?php echo esc_attr( 0 === $parent_id ? 'tree' : 'group' ); ?>">
 		<?php foreach ( $terms_by_parent[ $parent_id ] as $term ) : ?>
 			<?php
 			$term_id       = (int) $term->term_id;

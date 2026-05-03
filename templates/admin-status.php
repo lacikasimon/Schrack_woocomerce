@@ -167,12 +167,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 					$row     = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
 					$details = array();
 
-					if ( 'catalog' === $operation && isset( $row['image_urls_stored'] ) ) {
-						$details[] = sprintf(
-							/* translators: %d: image URL count. */
-							__( 'Image URLs: %d', 'schrack-woocommerce-sync' ),
-							absint( $row['image_urls_stored'] )
-						);
+					if ( 'catalog' === $operation ) {
+						foreach ( array( 'image_urls_seen', 'image_urls_stored', 'image_urls_backfilled', 'image_url_meta_errors' ) as $detail_key ) {
+							if ( isset( $row[ $detail_key ] ) ) {
+								$details[] = ucwords( str_replace( '_', ' ', $detail_key ) ) . ': ' . absint( $row[ $detail_key ] );
+							}
+						}
 					}
 
 					if ( 'images' === $operation ) {

@@ -83,17 +83,34 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,mixed>
 	 */
 	public function import_items( array $items, array $status_context = array() ): array {
-		$processed         = 0;
-		$errors            = 0;
-		$image_urls_stored = 0;
+		$processed             = 0;
+		$errors                = 0;
+		$image_urls_seen       = 0;
+		$image_urls_stored     = 0;
+		$image_urls_backfilled = 0;
+		$image_url_meta_errors = 0;
 
 		foreach ( $items as $item ) {
 			try {
-				$this->mapper->upsert( $item );
+				$product_id = $this->mapper->upsert( $item );
 				++$processed;
 
-				if ( '' !== $this->item_image_url( $item ) ) {
-					++$image_urls_stored;
+				$image_url = $this->item_image_url( $item );
+
+				if ( '' !== $image_url ) {
+					++$image_urls_seen;
+
+					$meta_status = $this->ensure_product_image_url_meta( $product_id, $image_url, $this->item_sku( $item ) );
+
+					if ( in_array( $meta_status, array( 'verified', 'backfilled' ), true ) ) {
+						++$image_urls_stored;
+					}
+
+					if ( 'backfilled' === $meta_status ) {
+						++$image_urls_backfilled;
+					} elseif ( 'failed' === $meta_status ) {
+						++$image_url_meta_errors;
+					}
 				}
 			} catch ( Throwable $exception ) {
 				++$errors;
@@ -108,9 +125,12 @@ class Schrack_Catalog_Importer {
 
 		$result = array_merge(
 			array(
-				'processed'         => $processed,
-				'errors'            => $errors,
-				'image_urls_stored' => $image_urls_stored,
+				'processed'             => $processed,
+				'errors'                => $errors,
+				'image_urls_seen'       => $image_urls_seen,
+				'image_urls_stored'     => $image_urls_stored,
+				'image_urls_backfilled' => $image_urls_backfilled,
+				'image_url_meta_errors' => $image_url_meta_errors,
 			),
 			$status_context
 		);
@@ -121,6 +141,54 @@ class Schrack_Catalog_Importer {
 		);
 
 		return $result;
+	}
+
+	/**
+	 * Ensures the catalog image URL is actually persisted on the WooCommerce product.
+	 */
+	private function ensure_product_image_url_meta( int $product_id, string $image_url, ?string $sku = null ): string {
+		if ( $product_id <= 0 || '' === $image_url ) {
+			return 'failed';
+		}
+
+		$current_url = $this->normalize_catalog_url( (string) get_post_meta( $product_id, '_schrack_image_url', true ) );
+
+		if ( $current_url === $image_url ) {
+			return 'verified';
+		}
+
+		update_post_meta( $product_id, '_schrack_image_url', $image_url );
+		update_post_meta( $product_id, '_schrack_image_status', 'pending' );
+		delete_post_meta( $product_id, '_schrack_image_error' );
+
+		$stored_url = $this->normalize_catalog_url( (string) get_post_meta( $product_id, '_schrack_image_url', true ) );
+
+		if ( $stored_url === $image_url ) {
+			$this->logger->debug(
+				'catalog',
+				'Backfilled missing Schrack image URL meta during catalog sync.',
+				$sku,
+				array(
+					'product_id' => $product_id,
+					'image_url'  => $image_url,
+				)
+			);
+
+			return 'backfilled';
+		}
+
+		$this->logger->warning(
+			'catalog',
+			'Could not verify Schrack image URL meta after catalog sync.',
+			$sku,
+			array(
+				'product_id'   => $product_id,
+				'expected_url' => $image_url,
+				'stored_url'   => $stored_url,
+			)
+		);
+
+		return 'failed';
 	}
 
 	/**
