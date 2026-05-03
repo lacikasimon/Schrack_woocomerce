@@ -92,7 +92,7 @@ class Schrack_Product_Filter_Renderer {
 									<span data-category-selected-label><?php echo esc_html( $category['label'] ); ?></span>
 									<button type="button" data-category-clear aria-label="<?php esc_attr_e( 'Sterge categoria', 'schrack-woocommerce-sync' ); ?>">&times;</button>
 								</div>
-								<div class="schrack-category-picker__results" data-category-results role="listbox" hidden></div>
+								<div class="schrack-category-picker__results" data-category-results role="tree" hidden></div>
 							</div>
 							<?php endif; ?>
 
@@ -769,84 +769,246 @@ class Schrack_Product_Filter_Renderer {
 	public function render_category_results( string $search = '', int $selected = 0, int $limit = 30 ): array {
 		$search = sanitize_text_field( $search );
 		$limit  = max( 5, min( 80, $limit ) );
-		$terms  = $this->category_terms_for_picker( $search, $limit );
+		$tree   = $this->category_tree_for_picker( $search, $limit );
+		$nodes  = $tree['nodes'];
 
 		ob_start();
 		?>
 		<div class="schrack-category-picker__list">
-			<?php if ( empty( $terms ) ) : ?>
+			<?php if ( empty( $nodes ) ) : ?>
 				<div class="schrack-category-picker__empty">
 					<?php esc_html_e( 'Nu s-au gasit categorii.', 'schrack-woocommerce-sync' ); ?>
 				</div>
 			<?php else : ?>
-				<?php foreach ( $terms as $term ) : ?>
-					<button
-						type="button"
-						class="schrack-category-picker__option <?php echo $selected === $term['id'] ? 'is-selected' : ''; ?>"
-						data-category-option
-						data-category-id="<?php echo esc_attr( (string) $term['id'] ); ?>"
-						data-category-label="<?php echo esc_attr( $term['path'] ); ?>"
-						style="<?php echo esc_attr( '--schrack-category-depth:' . $term['depth'] ); ?>"
-						role="option"
-						aria-selected="<?php echo $selected === $term['id'] ? 'true' : 'false'; ?>"
-					>
-						<span class="schrack-category-picker__name"><?php echo esc_html( $term['name'] ); ?></span>
-						<span class="schrack-category-picker__path"><?php echo esc_html( $term['path'] ); ?></span>
-						<span class="schrack-category-picker__count"><?php echo esc_html( (string) $term['count'] ); ?></span>
-					</button>
-				<?php endforeach; ?>
+				<?php $this->render_category_tree_nodes( $nodes, $selected ); ?>
+				<?php if ( $tree['limited'] ) : ?>
+					<div class="schrack-category-picker__empty schrack-category-picker__empty--hint">
+						<?php esc_html_e( 'Sunt afisate primele potriviri. Continua cautarea pentru rezultate mai exacte.', 'schrack-woocommerce-sync' ); ?>
+					</div>
+				<?php endif; ?>
 			<?php endif; ?>
 		</div>
 		<?php
 
 		return array(
 			'html'  => (string) ob_get_clean(),
-			'count' => count( $terms ),
+			'count' => (int) $tree['count'],
 		);
 	}
 
 	/**
-	 * Returns matching categories for the async picker.
+	 * Renders category tree nodes.
 	 *
-	 * @return array<int,array{id:int,name:string,path:string,depth:int,count:int}>
+	 * @param array<int,array<string,mixed>> $nodes Category nodes.
 	 */
-	private function category_terms_for_picker( string $search, int $limit ): array {
+	private function render_category_tree_nodes( array $nodes, int $selected ): void {
+		foreach ( $nodes as $node ) {
+			$node_id      = (int) $node['id'];
+			$has_children = ! empty( $node['children'] );
+			$is_selected  = $selected === $node_id;
+			$classes      = array( 'schrack-category-picker__node' );
+
+			if ( $has_children ) {
+				$classes[] = 'has-children';
+			}
+
+			if ( ! empty( $node['match'] ) ) {
+				$classes[] = 'is-match';
+			}
+
+			?>
+			<div class="<?php echo esc_attr( implode( ' ', $classes ) ); ?>">
+				<button
+					type="button"
+					class="schrack-category-picker__option <?php echo $is_selected ? 'is-selected' : ''; ?>"
+					data-category-option
+					data-category-id="<?php echo esc_attr( (string) $node_id ); ?>"
+					data-category-label="<?php echo esc_attr( (string) $node['path'] ); ?>"
+					style="<?php echo esc_attr( '--schrack-category-depth:' . (int) $node['depth'] ); ?>"
+					role="treeitem"
+					aria-level="<?php echo esc_attr( (string) ( (int) $node['depth'] + 1 ) ); ?>"
+					aria-selected="<?php echo $is_selected ? 'true' : 'false'; ?>"
+					<?php echo $has_children ? 'aria-expanded="true"' : ''; ?>
+				>
+					<span class="schrack-category-picker__branch" aria-hidden="true"></span>
+					<span class="schrack-category-picker__name"><?php echo esc_html( (string) $node['name'] ); ?></span>
+					<span class="schrack-category-picker__count"><?php echo esc_html( (string) $node['count'] ); ?></span>
+					<span class="schrack-category-picker__path"><?php echo esc_html( (string) $node['path'] ); ?></span>
+				</button>
+
+				<?php if ( $has_children ) : ?>
+					<div class="schrack-category-picker__children" role="group">
+						<?php $this->render_category_tree_nodes( $node['children'], $selected ); ?>
+					</div>
+				<?php endif; ?>
+			</div>
+			<?php
+		}
+	}
+
+	/**
+	 * Returns matching categories as a tree for the async picker.
+	 *
+	 * @return array{nodes:array<int,array<string,mixed>>,count:int,limited:bool}
+	 */
+	private function category_tree_for_picker( string $search, int $limit ): array {
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
-			return array();
+			return array(
+				'nodes'   => array(),
+				'count'   => 0,
+				'limited' => false,
+			);
 		}
 
-		$args = array(
-			'taxonomy'   => 'product_cat',
-			'hide_empty' => false,
-			'orderby'    => 'name',
-			'order'      => 'ASC',
-			'number'     => $limit * 3,
-		);
+		$search    = trim( $search );
+		$match_ids = array();
+		$limited   = false;
 
 		if ( '' !== $search ) {
-			$args['name__like'] = $search;
-		}
+			$matches = get_terms(
+				array(
+					'taxonomy'   => 'product_cat',
+					'hide_empty' => false,
+					'orderby'    => 'name',
+					'order'      => 'ASC',
+					'number'     => $limit + 1,
+					'name__like' => $search,
+				)
+			);
 
-		$terms = get_terms( $args );
+			if ( is_wp_error( $matches ) || ! is_array( $matches ) || empty( $matches ) ) {
+				return array(
+					'nodes'   => array(),
+					'count'   => 0,
+					'limited' => false,
+				);
+			}
+
+			if ( count( $matches ) > $limit ) {
+				$limited = true;
+				$matches = array_slice( $matches, 0, $limit );
+			}
+
+			$include_ids = array();
+
+			foreach ( $matches as $term ) {
+				if ( ! $term instanceof WP_Term ) {
+					continue;
+				}
+
+				$term_id              = (int) $term->term_id;
+				$match_ids[ $term_id ] = true;
+				$include_ids[ $term_id ] = $term_id;
+
+				foreach ( get_ancestors( $term_id, 'product_cat', 'taxonomy' ) as $ancestor_id ) {
+					$include_ids[ (int) $ancestor_id ] = (int) $ancestor_id;
+				}
+			}
+
+			$terms = get_terms(
+				array(
+					'taxonomy'   => 'product_cat',
+					'hide_empty' => false,
+					'include'    => array_values( $include_ids ),
+				)
+			);
+		} else {
+			$terms = get_terms(
+				array(
+					'taxonomy'   => 'product_cat',
+					'hide_empty' => false,
+					'orderby'    => 'name',
+					'order'      => 'ASC',
+				)
+			);
+		}
 
 		if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
-			return array();
+			return array(
+				'nodes'   => array(),
+				'count'   => 0,
+				'limited' => false,
+			);
 		}
 
-		$items = array();
+		$views = array();
 
 		foreach ( $terms as $term ) {
 			if ( $term instanceof WP_Term ) {
-				$items[] = $this->category_term_view( $term );
+				$view            = $this->category_term_view( $term );
+				$view['parent']   = (int) $term->parent;
+				$view['match']    = isset( $match_ids[ (int) $view['id'] ] );
+				$view['children'] = array();
+				$views[ (int) $view['id'] ] = $view;
 			}
 		}
 
-		usort(
-			$items,
-			static fn ( array $a, array $b ): int => strnatcasecmp( (string) $a['path'], (string) $b['path'] )
-		);
+		$nodes = $this->category_tree_nodes_from_views( $views );
 
-		return array_slice( $items, 0, $limit );
+		return array(
+			'nodes'   => $nodes,
+			'count'   => $this->count_category_tree_nodes( $nodes ),
+			'limited' => $limited,
+		);
+	}
+
+	/**
+	 * Builds nested category tree nodes from term views.
+	 *
+	 * @param array<int,array<string,mixed>> $views Category views keyed by term ID.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function category_tree_nodes_from_views( array $views ): array {
+		$children_by_parent = array();
+
+		foreach ( $views as $id => $view ) {
+			$parent = (int) ( $view['parent'] ?? 0 );
+
+			if ( $parent > 0 && ! isset( $views[ $parent ] ) ) {
+				$parent = 0;
+			}
+
+			$children_by_parent[ $parent ][] = (int) $id;
+		}
+
+		foreach ( $children_by_parent as &$child_ids ) {
+			usort(
+				$child_ids,
+				static fn ( int $a, int $b ): int => strnatcasecmp( (string) $views[ $a ]['name'], (string) $views[ $b ]['name'] )
+			);
+		}
+
+		unset( $child_ids );
+
+		$build = function ( int $parent ) use ( &$build, $children_by_parent, $views ): array {
+			$nodes = array();
+
+			foreach ( $children_by_parent[ $parent ] ?? array() as $id ) {
+				$node             = $views[ $id ];
+				$node['children'] = $build( (int) $id );
+				$nodes[]          = $node;
+			}
+
+			return $nodes;
+		};
+
+		return $build( 0 );
+	}
+
+	/**
+	 * Counts visible category tree nodes.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes Category nodes.
+	 */
+	private function count_category_tree_nodes( array $nodes ): int {
+		$count = 0;
+
+		foreach ( $nodes as $node ) {
+			++$count;
+			$count += $this->count_category_tree_nodes( $node['children'] ?? array() );
+		}
+
+		return $count;
 	}
 
 	/**

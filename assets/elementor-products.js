@@ -192,6 +192,18 @@
 		setSelectedCategory(root, defaultId, defaultLabel);
 	}
 
+	function categorySearchTerm(root) {
+		var picker = categoryPicker(root);
+		var value = picker.input ? picker.input.value.trim() : '';
+		var selectedLabel = picker.selectedLabel ? picker.selectedLabel.textContent.trim() : '';
+
+		if (picker.hidden && picker.hidden.value && selectedLabel && value === selectedLabel) {
+			return '';
+		}
+
+		return value;
+	}
+
 	function requestCategories(root, search) {
 		var ajaxUrl = root.getAttribute('data-ajax-url');
 		var action = root.getAttribute('data-category-action');
@@ -241,7 +253,7 @@
 			requestProducts(root, 1);
 		}, 450);
 		var delayedCategoryRequest = debounce(function () {
-			requestCategories(root, categorySearch ? categorySearch.value.trim() : '');
+			requestCategories(root, categorySearchTerm(root));
 		}, 250);
 
 		if (root.getAttribute('data-filter-ready') === 'yes') {
@@ -282,7 +294,7 @@
 
 		if (categorySearch) {
 			categorySearch.addEventListener('focus', function () {
-				requestCategories(root, categorySearch.value.trim());
+				requestCategories(root, categorySearchTerm(root));
 			});
 		}
 
