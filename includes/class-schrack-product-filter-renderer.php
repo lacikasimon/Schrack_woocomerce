@@ -209,20 +209,21 @@ class Schrack_Product_Filter_Renderer {
 		$settings = $this->sanitize_settings( $settings );
 
 		return array(
-			'products_per_page'   => $settings['products_per_page'],
-			'columns'             => $settings['columns'],
-			'default_category'    => $settings['default_category'],
-			'default_orderby'     => $settings['default_orderby'],
-			'pagination_mode'     => $settings['pagination_mode'],
-			'exact_totals'        => $settings['exact_totals'] ? 'yes' : 'no',
-			'min_search_chars'    => $settings['min_search_chars'],
+			'products_per_page'      => $settings['products_per_page'],
+			'columns'                => $settings['columns'],
+			'default_category'       => $settings['default_category'],
+			'default_orderby'        => $settings['default_orderby'],
+			'pagination_mode'        => $settings['pagination_mode'],
+			'pagination_granularity' => $settings['pagination_granularity'],
+			'exact_totals'           => $settings['exact_totals'] ? 'yes' : 'no',
+			'min_search_chars'       => $settings['min_search_chars'],
 			'category_results_limit' => $settings['category_results_limit'],
-			'show_images'         => $settings['show_images'] ? 'yes' : 'no',
-			'show_categories'     => $settings['show_categories'] ? 'yes' : 'no',
-			'show_excerpt'        => $settings['show_excerpt'] ? 'yes' : 'no',
-			'show_stock'          => $settings['show_stock'] ? 'yes' : 'no',
-			'show_add_to_cart'    => $settings['show_add_to_cart'] ? 'yes' : 'no',
-			'hide_out_of_stock'   => $settings['hide_out_of_stock'] ? 'yes' : 'no',
+			'show_images'            => $settings['show_images'] ? 'yes' : 'no',
+			'show_categories'        => $settings['show_categories'] ? 'yes' : 'no',
+			'show_excerpt'           => $settings['show_excerpt'] ? 'yes' : 'no',
+			'show_stock'             => $settings['show_stock'] ? 'yes' : 'no',
+			'show_add_to_cart'       => $settings['show_add_to_cart'] ? 'yes' : 'no',
+			'hide_out_of_stock'      => $settings['hide_out_of_stock'] ? 'yes' : 'no',
 			'button_text'         => $settings['button_text'],
 			'load_more_text'      => $settings['load_more_text'],
 			'details_button_text' => $settings['details_button_text'],
@@ -597,8 +598,11 @@ class Schrack_Product_Filter_Renderer {
 			return '';
 		}
 
-		$start = max( 1, $current_page - 2 );
-		$end   = min( $total_pages, $current_page + 2 );
+		$granularity = (int) $settings['pagination_granularity'];
+		$side        = intdiv( $granularity - 1, 2 );
+		$start       = max( 1, $current_page - $side );
+		$end         = min( $total_pages, $start + $granularity - 1 );
+		$start       = max( 1, $end - $granularity + 1 );
 
 		ob_start();
 		?>
@@ -1092,47 +1096,53 @@ class Schrack_Product_Filter_Renderer {
 	 * @return array<string,mixed>
 	 */
 	private function sanitize_settings( array $settings ): array {
-		$columns           = max( 5, min( 6, absint( $settings['columns'] ?? 5 ) ) );
-		$products_per_page = max( 1, min( 60, absint( $settings['products_per_page'] ?? 12 ) ) );
-		$orderby           = sanitize_key( (string) ( $settings['default_orderby'] ?? 'menu_order' ) );
-		$pagination_mode   = sanitize_key( (string) ( $settings['pagination_mode'] ?? 'load_more' ) );
+		$columns                = max( 5, min( 6, absint( $settings['columns'] ?? 5 ) ) );
+		$products_per_page      = max( 1, min( 60, absint( $settings['products_per_page'] ?? 12 ) ) );
+		$orderby                = sanitize_key( (string) ( $settings['default_orderby'] ?? 'menu_order' ) );
+		$pagination_mode        = sanitize_key( (string) ( $settings['pagination_mode'] ?? 'numbered' ) );
+		$pagination_granularity = max( 3, min( 11, absint( $settings['pagination_granularity'] ?? 7 ) ) );
+
+		if ( 0 === $pagination_granularity % 2 ) {
+			++$pagination_granularity;
+		}
 
 		if ( ! array_key_exists( $orderby, $this->orderby_options() ) ) {
 			$orderby = 'menu_order';
 		}
 
 		if ( ! in_array( $pagination_mode, array( 'load_more', 'numbered' ), true ) ) {
-			$pagination_mode = 'load_more';
+			$pagination_mode = 'numbered';
 		}
 
 		return array(
-			'products_per_page'   => $products_per_page,
-			'columns'             => $columns,
-			'default_category'    => absint( $settings['default_category'] ?? 0 ),
-			'default_orderby'     => $orderby,
-			'pagination_mode'     => $pagination_mode,
-			'exact_totals'        => $this->truthy( $settings['exact_totals'] ?? 'no' ),
-			'min_search_chars'    => max( 1, min( 5, absint( $settings['min_search_chars'] ?? 2 ) ) ),
+			'products_per_page'      => $products_per_page,
+			'columns'                => $columns,
+			'default_category'       => absint( $settings['default_category'] ?? 0 ),
+			'default_orderby'        => $orderby,
+			'pagination_mode'        => $pagination_mode,
+			'pagination_granularity' => $pagination_granularity,
+			'exact_totals'           => $this->truthy( $settings['exact_totals'] ?? 'no' ),
+			'min_search_chars'       => max( 1, min( 5, absint( $settings['min_search_chars'] ?? 2 ) ) ),
 			'category_results_limit' => max( 10, min( 80, absint( $settings['category_results_limit'] ?? 30 ) ) ),
-			'show_search'         => $this->truthy( $settings['show_search'] ?? 'yes' ),
-			'show_category_filter'=> $this->truthy( $settings['show_category_filter'] ?? 'yes' ),
-			'show_category_search'=> $this->truthy( $settings['show_category_search'] ?? 'yes' ),
-			'show_price_filter'   => $this->truthy( $settings['show_price_filter'] ?? 'yes' ),
-			'show_sort'           => $this->truthy( $settings['show_sort'] ?? 'yes' ),
-			'show_images'         => $this->truthy( $settings['show_images'] ?? 'yes' ),
-			'show_categories'     => $this->truthy( $settings['show_categories'] ?? 'yes' ),
-			'show_excerpt'        => $this->truthy( $settings['show_excerpt'] ?? 'yes' ),
-			'show_stock'          => $this->truthy( $settings['show_stock'] ?? 'yes' ),
-			'show_add_to_cart'    => $this->truthy( $settings['show_add_to_cart'] ?? 'yes' ),
-			'hide_out_of_stock'   => $this->truthy( $settings['hide_out_of_stock'] ?? 'no' ),
-			'button_text'         => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Aplica filtrele', 'schrack-woocommerce-sync' ) ) ),
-			'reset_text'          => sanitize_text_field( (string) ( $settings['reset_text'] ?? __( 'Reseteaza', 'schrack-woocommerce-sync' ) ) ),
-			'load_more_text'      => sanitize_text_field( (string) ( $settings['load_more_text'] ?? __( 'Incarca mai multe', 'schrack-woocommerce-sync' ) ) ),
-			'details_button_text' => sanitize_text_field( (string) ( $settings['details_button_text'] ?? __( 'Detalii', 'schrack-woocommerce-sync' ) ) ),
-			'accent_color'        => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
-			'action_color'        => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
-			'card_radius'         => $this->slider_size( $settings['card_radius'] ?? 8, 0, 8 ),
-			'sidebar_width'       => $this->slider_size( $settings['sidebar_width'] ?? 300, 260, 420 ),
+			'show_search'            => $this->truthy( $settings['show_search'] ?? 'yes' ),
+			'show_category_filter'   => $this->truthy( $settings['show_category_filter'] ?? 'yes' ),
+			'show_category_search'   => $this->truthy( $settings['show_category_search'] ?? 'yes' ),
+			'show_price_filter'      => $this->truthy( $settings['show_price_filter'] ?? 'yes' ),
+			'show_sort'              => $this->truthy( $settings['show_sort'] ?? 'yes' ),
+			'show_images'            => $this->truthy( $settings['show_images'] ?? 'yes' ),
+			'show_categories'        => $this->truthy( $settings['show_categories'] ?? 'yes' ),
+			'show_excerpt'           => $this->truthy( $settings['show_excerpt'] ?? 'yes' ),
+			'show_stock'             => $this->truthy( $settings['show_stock'] ?? 'yes' ),
+			'show_add_to_cart'       => $this->truthy( $settings['show_add_to_cart'] ?? 'yes' ),
+			'hide_out_of_stock'      => $this->truthy( $settings['hide_out_of_stock'] ?? 'no' ),
+			'button_text'            => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Aplica filtrele', 'schrack-woocommerce-sync' ) ) ),
+			'reset_text'             => sanitize_text_field( (string) ( $settings['reset_text'] ?? __( 'Reseteaza', 'schrack-woocommerce-sync' ) ) ),
+			'load_more_text'         => sanitize_text_field( (string) ( $settings['load_more_text'] ?? __( 'Incarca mai multe', 'schrack-woocommerce-sync' ) ) ),
+			'details_button_text'    => sanitize_text_field( (string) ( $settings['details_button_text'] ?? __( 'Detalii', 'schrack-woocommerce-sync' ) ) ),
+			'accent_color'           => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
+			'action_color'           => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
+			'card_radius'            => $this->slider_size( $settings['card_radius'] ?? 8, 0, 8 ),
+			'sidebar_width'          => $this->slider_size( $settings['sidebar_width'] ?? 300, 260, 420 ),
 		);
 	}
 

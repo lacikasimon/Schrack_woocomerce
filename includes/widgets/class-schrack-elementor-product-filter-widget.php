@@ -140,11 +140,27 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'       => __( 'Mod paginare', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT,
-				'default'     => 'load_more',
-				'description' => __( 'Incarca mai multe este recomandat pentru cataloage mari, deoarece evita numararea costisitoare a paginilor.', 'schrack-woocommerce-sync' ),
+				'default'     => 'numbered',
+				'description' => __( 'Paginile numerotate pastreaza navigarea clasica si afiseaza totalul rezultatelor.', 'schrack-woocommerce-sync' ),
 				'options'     => array(
-					'load_more' => __( 'Incarca mai multe', 'schrack-woocommerce-sync' ),
 					'numbered'  => __( 'Pagini numerotate', 'schrack-woocommerce-sync' ),
+					'load_more' => __( 'Incarca mai multe', 'schrack-woocommerce-sync' ),
+				),
+			)
+		);
+
+		$this->add_control(
+			'pagination_granularity',
+			array(
+				'label'       => __( 'Granulatie paginare', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::NUMBER,
+				'default'     => 7,
+				'min'         => 3,
+				'max'         => 11,
+				'step'        => 2,
+				'description' => __( 'Controleaza cate numere de pagina sunt vizibile in jurul paginii curente.', 'schrack-woocommerce-sync' ),
+				'condition'   => array(
+					'pagination_mode' => 'numbered',
 				),
 			)
 		);
