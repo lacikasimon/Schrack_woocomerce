@@ -669,6 +669,8 @@ class Schrack_Cron {
 			$run_id         = (string) ( $claimed['run_id'] ?? '' );
 			$queued_workers  = 0;
 			$queued_products = 0;
+			$failed_workers  = 0;
+			$queue_errors    = 0;
 			$stopped         = false;
 
 			foreach ( $chunks as $index => $product_ids ) {
@@ -684,10 +686,11 @@ class Schrack_Cron {
 					continue;
 				}
 
-				$this->queue_sync_batch(
+				$product_ids = array_values( array_map( 'absint', $product_ids ) );
+				$queued      = $this->queue_sync_batch(
 					self::HOOK_IMAGE_WORKER,
 					'images',
-					array( array_values( array_map( 'absint', $product_ids ) ), $run_id, $index + 1 ),
+					array( $product_ids, $run_id, $index + 1 ),
 					array(
 						'run_id'       => $run_id,
 						'worker_index' => $index + 1,
@@ -695,18 +698,26 @@ class Schrack_Cron {
 					),
 					0
 				);
+
+				if ( ! $queued ) {
+					$sync->release_product_claims( $product_ids, $run_id );
+					++$failed_workers;
+					$queue_errors += count( $product_ids );
+					continue;
+				}
+
 				++$queued_workers;
 				$queued_products += count( $product_ids );
 			}
 
 			$total_products   = absint( $claimed['total_products'] ?? 0 );
-			$completed_cycle  = $stopped ? 'no' : (string) ( $claimed['completed_cycle'] ?? 'yes' );
+			$completed_cycle  = $stopped || $queue_errors > 0 ? 'no' : (string) ( $claimed['completed_cycle'] ?? 'yes' );
 			$result           = array(
 				'processed'        => 0,
 				'imported'         => 0,
 				'attached'         => 0,
 				'skipped'          => 0,
-				'errors'           => 0,
+				'errors'           => $queue_errors,
 				'cursor'           => 0,
 				'total_products'   => $total_products,
 				'batch_start'      => 0,
@@ -717,18 +728,24 @@ class Schrack_Cron {
 				'run_id'           => $run_id,
 				'workers_requested' => $workers,
 				'workers_queued'   => $queued_workers,
+				'workers_failed'   => $failed_workers,
 				'queued_products'  => $queued_products,
+				'queue_errors'     => $queue_errors,
 			);
 
 			if ( $stopped ) {
 				$result['stopped'] = 'yes';
 			}
 
+			if ( $queue_errors > 0 ) {
+				$result['queue_failed'] = 'yes';
+			}
+
 			$this->settings->update_status( 'images', $result );
 			$this->logger->info( 'images', 'Queued parallel Schrack image sync workers.', null, $result );
 
 			if ( ! $stopped && $queue_continuation && 'no' === $completed_cycle && $queued_workers > 0 ) {
-				$this->queue_sync_batch(
+				if ( ! $this->queue_sync_batch(
 					self::HOOK_IMAGES,
 					'images',
 					array(),
@@ -738,7 +755,9 @@ class Schrack_Cron {
 						'queued_products' => $queued_products,
 					),
 					$this->image_parallel_followup_delay()
-				);
+				) ) {
+					$this->mark_queue_failed( 'images', $result, self::HOOK_IMAGES, array() );
+				}
 			}
 
 			return $result;
@@ -996,12 +1015,12 @@ class Schrack_Cron {
 	 * @param array<string,mixed> $result Last batch result.
 	 * @param array<int,mixed>    $args Hook arguments.
 	 */
-	private function queue_next_batch_if_needed( string $hook, string $operation, array $result, array $args = array() ): void {
+	private function queue_next_batch_if_needed( string $hook, string $operation, array $result, array $args = array() ): bool {
 		if ( ! $this->should_continue_batch( $result ) ) {
-			return;
+			return true;
 		}
 
-		$this->queue_sync_batch(
+		$queued = $this->queue_sync_batch(
 			$hook,
 			$operation,
 			$args,
@@ -1010,6 +1029,12 @@ class Schrack_Cron {
 				'batch_count' => $result['batch_count'] ?? null,
 			)
 		);
+
+		if ( ! $queued ) {
+			$this->mark_queue_failed( $operation, $result, $hook, $args );
+		}
+
+		return $queued;
 	}
 
 	/**
@@ -1102,7 +1127,7 @@ class Schrack_Cron {
 	private function queue_rate_limited_batch( string $hook, string $operation, array $args, array $result ): void {
 		$cooldown = max( 30, (int) ( $result['cooldown_seconds'] ?? $this->rate_limit_cooldown() ) );
 
-		$this->queue_sync_batch(
+		if ( ! $this->queue_sync_batch(
 			$hook,
 			$operation,
 			$args,
@@ -1111,6 +1136,29 @@ class Schrack_Cron {
 				'retry_after'  => $result['retry_after'] ?? null,
 			),
 			$cooldown
+		) ) {
+			$this->mark_queue_failed( $operation, $result, $hook, $args );
+		}
+	}
+
+	/**
+	 * Marks a still-incomplete sync as blocked by a queueing failure.
+	 *
+	 * @param array<string,mixed> $result Last batch result.
+	 * @param array<int,mixed>    $args Hook arguments.
+	 */
+	private function mark_queue_failed( string $operation, array $result, string $hook, array $args ): void {
+		$this->settings->update_status(
+			$operation,
+			array_merge(
+				$result,
+				array(
+					'completed_cycle' => 'no',
+					'queue_failed'    => 'yes',
+					'queue_hook'      => $hook,
+					'queue_args'      => $args,
+				)
+			)
 		);
 	}
 
