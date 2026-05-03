@@ -229,6 +229,19 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 			)
 		);
 
+		$this->add_control(
+			'category_results_limit',
+			array(
+				'label'       => __( 'Category search results', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::NUMBER,
+				'default'     => 30,
+				'min'         => 10,
+				'max'         => 80,
+				'step'        => 5,
+				'description' => __( 'Limits each async category search response for very large category trees.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
 		$this->end_controls_section();
 
 		$this->start_controls_section(
@@ -306,6 +319,26 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 				'default'    => array(
 					'unit' => 'px',
 					'size' => 8,
+				),
+			)
+		);
+
+		$this->add_control(
+			'sidebar_width',
+			array(
+				'label'      => __( 'Desktop sidebar width', 'schrack-woocommerce-sync' ),
+				'type'       => \Elementor\Controls_Manager::SLIDER,
+				'size_units' => array( 'px' ),
+				'range'      => array(
+					'px' => array(
+						'min'  => 260,
+						'max'  => 420,
+						'step' => 10,
+					),
+				),
+				'default'    => array(
+					'unit' => 'px',
+					'size' => 320,
 				),
 			)
 		);

@@ -11,6 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Product_Filter_Renderer {
 	public const AJAX_ACTION = 'schrack_wc_filter_products';
+	public const CATEGORY_AJAX_ACTION = 'schrack_wc_filter_categories';
 	public const NONCE_ACTION = 'schrack_wc_product_filter';
 
 	/**
@@ -35,7 +36,7 @@ class Schrack_Product_Filter_Renderer {
 		);
 		$results     = $this->render_results( $settings, $filters );
 		$config      = $this->public_settings( $settings );
-		$categories  = $this->product_categories();
+		$category    = $this->category_for_picker( $settings['default_category'] );
 		$style       = $this->inline_style( $settings );
 
 		ob_start();
@@ -45,81 +46,99 @@ class Schrack_Product_Filter_Renderer {
 			class="schrack-product-filter"
 			style="<?php echo esc_attr( $style ); ?>"
 			data-action="<?php echo esc_attr( self::AJAX_ACTION ); ?>"
+			data-category-action="<?php echo esc_attr( self::CATEGORY_AJAX_ACTION ); ?>"
 			data-ajax-url="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"
 			data-config="<?php echo esc_attr( wp_json_encode( $config ) ); ?>"
 			data-nonce="<?php echo esc_attr( wp_create_nonce( self::NONCE_ACTION ) ); ?>"
 		>
-			<form class="schrack-product-filter__form" method="get">
-				<div class="schrack-product-filter__controls">
-					<?php if ( $settings['show_search'] ) : ?>
-						<label class="schrack-product-filter__field">
-							<span><?php esc_html_e( 'Search products', 'schrack-woocommerce-sync' ); ?></span>
-							<input type="search" name="search" placeholder="<?php esc_attr_e( 'Name, SKU, item number', 'schrack-woocommerce-sync' ); ?>">
-						</label>
-					<?php endif; ?>
+			<div class="schrack-product-filter__layout">
+				<aside class="schrack-product-filter__sidebar">
+					<form class="schrack-product-filter__form" method="get">
+						<div class="schrack-product-filter__sidebar-head">
+							<span><?php esc_html_e( 'Filters', 'schrack-woocommerce-sync' ); ?></span>
+						</div>
 
-					<?php if ( $settings['show_category_filter'] ) : ?>
-						<?php if ( $settings['show_category_search'] ) : ?>
+						<div class="schrack-product-filter__controls">
+							<?php if ( $settings['show_search'] ) : ?>
 							<label class="schrack-product-filter__field">
-								<span><?php esc_html_e( 'Search categories', 'schrack-woocommerce-sync' ); ?></span>
-								<input type="search" name="category_search" data-category-search placeholder="<?php esc_attr_e( 'Type a category name', 'schrack-woocommerce-sync' ); ?>">
+								<span><?php esc_html_e( 'Search products', 'schrack-woocommerce-sync' ); ?></span>
+								<input type="search" name="search" placeholder="<?php esc_attr_e( 'Name, SKU, item number', 'schrack-woocommerce-sync' ); ?>">
 							</label>
-						<?php endif; ?>
+							<?php endif; ?>
 
-						<label class="schrack-product-filter__field">
-							<span><?php esc_html_e( 'Category', 'schrack-woocommerce-sync' ); ?></span>
-							<select name="category" data-category-select>
-								<option value=""><?php esc_html_e( 'All categories', 'schrack-woocommerce-sync' ); ?></option>
-								<?php foreach ( $categories as $category ) : ?>
-									<option
-										value="<?php echo esc_attr( (string) $category['id'] ); ?>"
-										data-filter-label="<?php echo esc_attr( strtolower( remove_accents( $category['name'] ) ) ); ?>"
-										<?php selected( $settings['default_category'], $category['id'] ); ?>
-									>
-										<?php echo esc_html( $category['name'] ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-						</label>
-					<?php endif; ?>
+							<?php if ( $settings['show_category_filter'] ) : ?>
+							<div
+								class="schrack-category-picker"
+								data-category-picker
+								data-default-category-id="<?php echo esc_attr( (string) $category['id'] ); ?>"
+								data-default-category-label="<?php echo esc_attr( $category['label'] ); ?>"
+							>
+								<?php if ( $settings['show_category_search'] ) : ?>
+									<label class="schrack-product-filter__field">
+										<span><?php esc_html_e( 'Category', 'schrack-woocommerce-sync' ); ?></span>
+										<input
+											type="search"
+											name="category_search"
+											value="<?php echo esc_attr( $category['label'] ); ?>"
+											data-category-search
+											autocomplete="off"
+											placeholder="<?php esc_attr_e( 'Search category', 'schrack-woocommerce-sync' ); ?>"
+											aria-expanded="false"
+										>
+									</label>
+								<?php endif; ?>
+								<input type="hidden" name="category" value="<?php echo esc_attr( (string) $category['id'] ); ?>" data-category-id>
+								<div class="schrack-category-picker__selected" data-category-selected <?php echo $category['id'] > 0 ? '' : 'hidden'; ?>>
+									<span data-category-selected-label><?php echo esc_html( $category['label'] ); ?></span>
+									<button type="button" data-category-clear aria-label="<?php esc_attr_e( 'Clear category', 'schrack-woocommerce-sync' ); ?>">&times;</button>
+								</div>
+								<div class="schrack-category-picker__results" data-category-results role="listbox" hidden></div>
+							</div>
+							<?php endif; ?>
 
-					<?php if ( $settings['show_price_filter'] ) : ?>
-						<label class="schrack-product-filter__field schrack-product-filter__field--price">
-							<span><?php esc_html_e( 'Min price', 'schrack-woocommerce-sync' ); ?></span>
-							<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" placeholder="0">
-						</label>
-						<label class="schrack-product-filter__field schrack-product-filter__field--price">
-							<span><?php esc_html_e( 'Max price', 'schrack-woocommerce-sync' ); ?></span>
-							<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal">
-						</label>
-					<?php endif; ?>
+							<?php if ( $settings['show_price_filter'] ) : ?>
+							<div class="schrack-product-filter__price-row">
+								<label class="schrack-product-filter__field schrack-product-filter__field--price">
+									<span><?php esc_html_e( 'Min price', 'schrack-woocommerce-sync' ); ?></span>
+									<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" placeholder="0">
+								</label>
+								<label class="schrack-product-filter__field schrack-product-filter__field--price">
+									<span><?php esc_html_e( 'Max price', 'schrack-woocommerce-sync' ); ?></span>
+									<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal">
+								</label>
+							</div>
+							<?php endif; ?>
 
-					<?php if ( $settings['show_sort'] ) : ?>
-						<label class="schrack-product-filter__field">
-							<span><?php esc_html_e( 'Sort by', 'schrack-woocommerce-sync' ); ?></span>
-							<select name="orderby">
-								<?php foreach ( $this->orderby_options() as $value => $label ) : ?>
-									<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $settings['default_orderby'], $value ); ?>>
-										<?php echo esc_html( $label ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-						</label>
-					<?php endif; ?>
-				</div>
+							<?php if ( $settings['show_sort'] ) : ?>
+							<label class="schrack-product-filter__field">
+								<span><?php esc_html_e( 'Sort by', 'schrack-woocommerce-sync' ); ?></span>
+								<select name="orderby">
+									<?php foreach ( $this->orderby_options() as $value => $label ) : ?>
+										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $settings['default_orderby'], $value ); ?>>
+											<?php echo esc_html( $label ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+							</label>
+							<?php endif; ?>
+						</div>
 
-				<div class="schrack-product-filter__actions">
-					<button type="submit" class="schrack-product-filter__button">
-						<?php echo esc_html( $settings['button_text'] ); ?>
-					</button>
-					<button type="button" class="schrack-product-filter__reset" data-filter-reset>
-						<?php echo esc_html( $settings['reset_text'] ); ?>
-					</button>
-				</div>
-			</form>
+						<div class="schrack-product-filter__actions">
+							<button type="submit" class="schrack-product-filter__button">
+								<?php echo esc_html( $settings['button_text'] ); ?>
+							</button>
+							<button type="button" class="schrack-product-filter__reset" data-filter-reset>
+								<?php echo esc_html( $settings['reset_text'] ); ?>
+							</button>
+						</div>
+					</form>
+				</aside>
 
-			<div class="schrack-product-filter__results" aria-live="polite">
-				<?php echo $results['html']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<section class="schrack-product-filter__content">
+					<div class="schrack-product-filter__results" aria-live="polite">
+						<?php echo $results['html']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					</div>
+				</section>
 			</div>
 		</div>
 		<?php
@@ -197,6 +216,7 @@ class Schrack_Product_Filter_Renderer {
 			'pagination_mode'     => $settings['pagination_mode'],
 			'exact_totals'        => $settings['exact_totals'] ? 'yes' : 'no',
 			'min_search_chars'    => $settings['min_search_chars'],
+			'category_results_limit' => $settings['category_results_limit'],
 			'show_images'         => $settings['show_images'] ? 'yes' : 'no',
 			'show_categories'     => $settings['show_categories'] ? 'yes' : 'no',
 			'show_excerpt'        => $settings['show_excerpt'] ? 'yes' : 'no',
@@ -704,8 +724,9 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function search_is_too_short( array $settings, array $filters ): bool {
 		$search = trim( (string) ( $filters['search'] ?? '' ) );
+		$length = function_exists( 'mb_strlen' ) ? mb_strlen( $search ) : strlen( $search );
 
-		return '' !== $search && strlen( $search ) < (int) $settings['min_search_chars'];
+		return '' !== $search && $length < (int) $settings['min_search_chars'];
 	}
 
 	/**
@@ -741,36 +762,148 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
-	 * Returns product categories for the filter dropdown.
+	 * Renders async category picker results.
 	 *
-	 * @return array<int,array{id:int,name:string}>
+	 * @return array<string,mixed>
 	 */
-	private function product_categories(): array {
+	public function render_category_results( string $search = '', int $selected = 0, int $limit = 30 ): array {
+		$search = sanitize_text_field( $search );
+		$limit  = max( 5, min( 80, $limit ) );
+		$terms  = $this->category_terms_for_picker( $search, $limit );
+
+		ob_start();
+		?>
+		<div class="schrack-category-picker__list">
+			<?php if ( empty( $terms ) ) : ?>
+				<div class="schrack-category-picker__empty">
+					<?php esc_html_e( 'No categories found.', 'schrack-woocommerce-sync' ); ?>
+				</div>
+			<?php else : ?>
+				<?php foreach ( $terms as $term ) : ?>
+					<button
+						type="button"
+						class="schrack-category-picker__option <?php echo $selected === $term['id'] ? 'is-selected' : ''; ?>"
+						data-category-option
+						data-category-id="<?php echo esc_attr( (string) $term['id'] ); ?>"
+						data-category-label="<?php echo esc_attr( $term['path'] ); ?>"
+						style="<?php echo esc_attr( '--schrack-category-depth:' . $term['depth'] ); ?>"
+						role="option"
+						aria-selected="<?php echo $selected === $term['id'] ? 'true' : 'false'; ?>"
+					>
+						<span class="schrack-category-picker__name"><?php echo esc_html( $term['name'] ); ?></span>
+						<span class="schrack-category-picker__path"><?php echo esc_html( $term['path'] ); ?></span>
+						<span class="schrack-category-picker__count"><?php echo esc_html( (string) $term['count'] ); ?></span>
+					</button>
+				<?php endforeach; ?>
+			<?php endif; ?>
+		</div>
+		<?php
+
+		return array(
+			'html'  => (string) ob_get_clean(),
+			'count' => count( $terms ),
+		);
+	}
+
+	/**
+	 * Returns matching categories for the async picker.
+	 *
+	 * @return array<int,array{id:int,name:string,path:string,depth:int,count:int}>
+	 */
+	private function category_terms_for_picker( string $search, int $limit ): array {
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
 			return array();
 		}
 
-		$terms = get_terms(
-			array(
-				'taxonomy'   => 'product_cat',
-				'hide_empty' => false,
-				'orderby'    => 'name',
-				'order'      => 'ASC',
-			)
+		$args = array(
+			'taxonomy'   => 'product_cat',
+			'hide_empty' => false,
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+			'number'     => $limit * 3,
 		);
+
+		if ( '' !== $search ) {
+			$args['name__like'] = $search;
+		}
+
+		$terms = get_terms( $args );
 
 		if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
 			return array();
 		}
 
-		return array_map(
-			static function ( WP_Term $term ): array {
-				return array(
-					'id'   => (int) $term->term_id,
-					'name' => $term->name,
-				);
-			},
-			$terms
+		$items = array();
+
+		foreach ( $terms as $term ) {
+			if ( $term instanceof WP_Term ) {
+				$items[] = $this->category_term_view( $term );
+			}
+		}
+
+		usort(
+			$items,
+			static fn ( array $a, array $b ): int => strnatcasecmp( (string) $a['path'], (string) $b['path'] )
+		);
+
+		return array_slice( $items, 0, $limit );
+	}
+
+	/**
+	 * Returns the selected category display data.
+	 *
+	 * @return array{id:int,label:string}
+	 */
+	private function category_for_picker( int $category_id ): array {
+		if ( $category_id <= 0 || ! taxonomy_exists( 'product_cat' ) ) {
+			return array(
+				'id'    => 0,
+				'label' => '',
+			);
+		}
+
+		$term = get_term( $category_id, 'product_cat' );
+
+		if ( ! $term instanceof WP_Term || is_wp_error( $term ) ) {
+			return array(
+				'id'    => 0,
+				'label' => '',
+			);
+		}
+
+		$view = $this->category_term_view( $term );
+
+		return array(
+			'id'    => (int) $view['id'],
+			'label' => (string) $view['path'],
+		);
+	}
+
+	/**
+	 * Converts a product category term into picker display data.
+	 *
+	 * @return array{id:int,name:string,path:string,depth:int,count:int}
+	 */
+	private function category_term_view( WP_Term $term ): array {
+		$ancestors = array_reverse( get_ancestors( (int) $term->term_id, 'product_cat', 'taxonomy' ) );
+		$parts     = array();
+
+		foreach ( $ancestors as $ancestor_id ) {
+			$ancestor = get_term( (int) $ancestor_id, 'product_cat' );
+
+			if ( $ancestor instanceof WP_Term && ! is_wp_error( $ancestor ) ) {
+				$parts[] = $ancestor->name;
+			}
+		}
+
+		$parts[] = $term->name;
+
+		return array(
+			'id'    => (int) $term->term_id,
+			'name'  => $term->name,
+			'path'  => implode( ' / ', $parts ),
+			'depth' => count( $ancestors ),
+			'count' => (int) $term->count,
 		);
 	}
 
@@ -818,6 +951,7 @@ class Schrack_Product_Filter_Renderer {
 			'pagination_mode'     => $pagination_mode,
 			'exact_totals'        => $this->truthy( $settings['exact_totals'] ?? 'no' ),
 			'min_search_chars'    => max( 1, min( 5, absint( $settings['min_search_chars'] ?? 2 ) ) ),
+			'category_results_limit' => max( 10, min( 80, absint( $settings['category_results_limit'] ?? 30 ) ) ),
 			'show_search'         => $this->truthy( $settings['show_search'] ?? 'yes' ),
 			'show_category_filter'=> $this->truthy( $settings['show_category_filter'] ?? 'yes' ),
 			'show_category_search'=> $this->truthy( $settings['show_category_search'] ?? 'yes' ),
@@ -836,6 +970,7 @@ class Schrack_Product_Filter_Renderer {
 			'accent_color'        => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
 			'action_color'        => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
 			'card_radius'         => $this->slider_size( $settings['card_radius'] ?? 8, 0, 8 ),
+			'sidebar_width'       => $this->slider_size( $settings['sidebar_width'] ?? 320, 260, 420 ),
 		);
 	}
 
@@ -910,11 +1045,12 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function inline_style( array $settings ): string {
 		return sprintf(
-			'--schrack-filter-accent:%1$s;--schrack-filter-action:%2$s;--schrack-filter-card-radius:%3$dpx;--schrack-filter-columns:%4$d;',
+			'--schrack-filter-accent:%1$s;--schrack-filter-action:%2$s;--schrack-filter-card-radius:%3$dpx;--schrack-filter-columns:%4$d;--schrack-filter-sidebar-width:%5$dpx;',
 			esc_attr( (string) $settings['accent_color'] ),
 			esc_attr( (string) $settings['action_color'] ),
 			absint( $settings['card_radius'] ),
-			absint( $settings['columns'] )
+			absint( $settings['columns'] ),
+			absint( $settings['sidebar_width'] )
 		);
 	}
 }

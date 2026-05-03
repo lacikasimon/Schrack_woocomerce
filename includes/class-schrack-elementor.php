@@ -42,6 +42,8 @@ class Schrack_Elementor {
 		add_action( 'elementor/widgets/widgets_registered', array( $this, 'register_legacy_widgets' ) );
 		add_action( 'wp_ajax_' . Schrack_Product_Filter_Renderer::AJAX_ACTION, array( $this, 'ajax_filter_products' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::AJAX_ACTION, array( $this, 'ajax_filter_products' ) );
+		add_action( 'wp_ajax_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
+		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
 	}
 
 	/**
@@ -154,5 +156,18 @@ class Schrack_Elementor {
 		);
 
 		wp_send_json_success( $this->renderer->render_results( $config, $filters ) );
+	}
+
+	/**
+	 * Handles AJAX category picker search.
+	 */
+	public function ajax_filter_categories(): void {
+		check_ajax_referer( Schrack_Product_Filter_Renderer::NONCE_ACTION, 'nonce' );
+
+		$search   = isset( $_POST['search'] ) ? wp_unslash( (string) $_POST['search'] ) : '';
+		$selected = isset( $_POST['selected'] ) ? absint( wp_unslash( (string) $_POST['selected'] ) ) : 0;
+		$limit    = isset( $_POST['limit'] ) ? absint( wp_unslash( (string) $_POST['limit'] ) ) : 30;
+
+		wp_send_json_success( $this->renderer->render_category_results( $search, $selected, $limit ) );
 	}
 }
