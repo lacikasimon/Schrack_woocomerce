@@ -1018,7 +1018,7 @@ class Schrack_Cron {
 	 * @param array<int,mixed>    $args Hook arguments.
 	 * @param array<string,mixed> $context Extra log context.
 	 */
-	private function queue_sync_batch( string $hook, string $operation, array $args = array(), array $context = array(), ?int $delay_override = null ): void {
+	private function queue_sync_batch( string $hook, string $operation, array $args = array(), array $context = array(), ?int $delay_override = null ): bool {
 		$sleep            = null === $delay_override ? max( 0, (int) $this->settings->get( 'rate_limit_sleep', 0 ) ) : max( 0, $delay_override );
 		$duplicate_window = max( 60, $sleep + 5 );
 
@@ -1035,17 +1035,43 @@ class Schrack_Cron {
 					$context
 				)
 			);
-			return;
+			return true;
 		}
 
-		if ( 0 === $sleep && function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( $hook, $args, self::GROUP );
-		} elseif ( function_exists( 'as_schedule_single_action' ) ) {
-			as_schedule_single_action( time() + max( 1, $sleep ), $hook, $args, self::GROUP );
+		$queued       = false;
+		$action_id    = 0;
+		$queue_runner = '';
+
+		if ( function_exists( 'as_schedule_single_action' ) ) {
+			$action_id    = absint( as_schedule_single_action( time() + max( 1, $sleep ), $hook, $args, self::GROUP ) );
+			$queued       = $action_id > 0;
+			$queue_runner = 'action_scheduler_single';
 		} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( $hook, $args, self::GROUP );
+			$action_id    = absint( as_enqueue_async_action( $hook, $args, self::GROUP ) );
+			$queued       = $action_id > 0;
+			$queue_runner = 'action_scheduler_async';
 		} else {
-			wp_schedule_single_event( time() + max( 5, $sleep ), $hook, $args );
+			$queued       = false !== wp_schedule_single_event( time() + max( 5, $sleep ), $hook, $args );
+			$queue_runner = 'wp_cron';
+		}
+
+		if ( ! $queued ) {
+			$this->logger->error(
+				$operation,
+				'Failed to queue next Schrack sync batch.',
+				null,
+				array_merge(
+					array(
+						'hook'         => $hook,
+						'next_args'    => $args,
+						'sleep'        => $sleep,
+						'queue_runner' => $queue_runner,
+					),
+					$context
+				)
+			);
+
+			return false;
 		}
 
 		$this->logger->info(
@@ -1057,10 +1083,14 @@ class Schrack_Cron {
 					'hook'      => $hook,
 					'next_args' => $args,
 					'sleep'     => $sleep,
+					'queue_runner' => $queue_runner,
+					'action_id' => $action_id,
 				),
 				$context
 			)
 		);
+
+		return true;
 	}
 
 	/**
@@ -1274,14 +1304,140 @@ class Schrack_Cron {
 	}
 
 	/**
-	 * Returns whether the same follow-up action is already running or due.
+	 * Returns whether the same follow-up action is already pending soon.
 	 *
 	 * @param array<int,mixed> $args Hook arguments.
 	 */
 	private function has_active_followup_action( string $hook, array $args, int $window = 60 ): bool {
-		$next_run = $this->next_scheduled_timestamp( $hook, $args );
+		$next_run = $this->next_pending_scheduled_timestamp( $hook, $args );
 
 		return null !== $next_run && $next_run <= time() + max( 0, $window );
+	}
+
+	/**
+	 * Returns the next pending Action Scheduler/WP-Cron timestamp for an exact hook/args pair.
+	 *
+	 * Unlike as_next_scheduled_action(), this intentionally ignores the current in-progress
+	 * action so one running batch cannot block its own follow-up batch.
+	 *
+	 * @param array<int,mixed>|null $args Optional exact hook arguments.
+	 */
+	private function next_pending_scheduled_timestamp( string $hook, ?array $args = null ): ?int {
+		if ( function_exists( 'as_get_scheduled_actions' ) ) {
+			$query = array(
+				'hook'     => $hook,
+				'group'    => self::GROUP,
+				'status'   => 'pending',
+				'per_page' => 20,
+				'orderby'  => 'date',
+				'order'    => 'ASC',
+			);
+
+			if ( null !== $args ) {
+				$query['args'] = $args;
+			}
+
+			try {
+				$actions = as_get_scheduled_actions( $query, 'ids' );
+			} catch ( Throwable ) {
+				$query['return_format'] = 'ids';
+
+				try {
+					$actions = as_get_scheduled_actions( $query );
+				} catch ( Throwable ) {
+					return null;
+				}
+			}
+
+			if ( ! is_array( $actions ) ) {
+				return null;
+			}
+
+			$next = null;
+
+			foreach ( $actions as $action ) {
+				$timestamp = is_numeric( $action )
+					? $this->scheduled_action_timestamp( (int) $action )
+					: $this->scheduled_action_object_timestamp( $action );
+
+				if ( null === $timestamp ) {
+					continue;
+				}
+
+				if ( null === $next || $timestamp < $next ) {
+					$next = $timestamp;
+				}
+			}
+
+			return $next;
+		}
+
+		$timestamp = null === $args ? wp_next_scheduled( $hook ) : wp_next_scheduled( $hook, $args );
+
+		return false === $timestamp || null === $timestamp ? null : (int) $timestamp;
+	}
+
+	/**
+	 * Returns a scheduled Action Scheduler action timestamp by ID.
+	 */
+	private function scheduled_action_timestamp( int $action_id ): ?int {
+		if ( $action_id <= 0 || ! class_exists( 'ActionScheduler_Store' ) || ! method_exists( 'ActionScheduler_Store', 'instance' ) ) {
+			return null;
+		}
+
+		try {
+			$store = ActionScheduler_Store::instance();
+
+			if ( ! is_object( $store ) || ! method_exists( $store, 'fetch_action' ) ) {
+				return null;
+			}
+
+			return $this->scheduled_action_object_timestamp( $store->fetch_action( $action_id ) );
+		} catch ( Throwable ) {
+			return null;
+		}
+	}
+
+	/**
+	 * Extracts a timestamp from an Action Scheduler action object.
+	 */
+	private function scheduled_action_object_timestamp( mixed $action ): ?int {
+		if ( ! is_object( $action ) || ! method_exists( $action, 'get_schedule' ) ) {
+			return null;
+		}
+
+		try {
+			$schedule = $action->get_schedule();
+
+			if ( ! is_object( $schedule ) || ! method_exists( $schedule, 'get_date' ) ) {
+				return null;
+			}
+
+			return $this->scheduled_date_timestamp( $schedule->get_date() );
+		} catch ( Throwable ) {
+			return null;
+		}
+	}
+
+	/**
+	 * Normalizes Action Scheduler date values.
+	 */
+	private function scheduled_date_timestamp( mixed $date ): ?int {
+		if ( $date instanceof DateTimeInterface ) {
+			return $date->getTimestamp();
+		}
+
+		if ( is_numeric( $date ) ) {
+			return (int) $date;
+		}
+
+		if ( is_string( $date ) && '' !== trim( $date ) ) {
+			$timestamp = strtotime( $date );
+
+			return false === $timestamp ? null : $timestamp;
+		}
+
+		return null;
 	}
 
 	/**
