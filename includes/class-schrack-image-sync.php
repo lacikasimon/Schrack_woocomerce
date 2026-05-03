@@ -55,6 +55,18 @@ class Schrack_Image_Sync {
 			$product_ids = $batch['product_ids'];
 		}
 
+		if ( empty( $product_ids ) && 0 === (int) $batch['total_products'] ) {
+			$this->logger->info(
+				'images',
+				'No Schrack products with stored image URLs were found for image sync.',
+				null,
+				array(
+					'meta_key'    => '_schrack_image_url',
+					'batch_limit' => $limit,
+				)
+			);
+		}
+
 		$processed = 0;
 		$errors    = 0;
 		$imported  = 0;

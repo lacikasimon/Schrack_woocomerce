@@ -97,7 +97,7 @@ class Schrack_Cron {
 	/**
 	 * Queues an immediate manual task.
 	 *
-	 * @return array{queued:bool,code:string,message:string,task:string}
+	 * @return array<string,mixed>
 	 */
 	public function queue_action( string $task ): array {
 		$definitions = $this->task_definitions();
@@ -145,26 +145,93 @@ class Schrack_Cron {
 		$args = 'full' === $task ? array( 'catalog' ) : array();
 		$this->settings->clear_stop_request();
 
-		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( $hook, $args, self::GROUP );
-			$this->logger->info( $task, 'Queued manual Schrack sync task in Action Scheduler.' );
+		$queued = $this->queue_manual_action( $hook, $args );
+
+		if ( ! empty( $queued['queued'] ) ) {
+			$this->logger->info(
+				$task,
+				'Queued manual Schrack sync task.',
+				null,
+				array_merge(
+					array(
+						'hook' => $hook,
+						'args' => $args,
+					),
+					$queued
+				)
+			);
+
 			return array(
 				'queued'  => true,
 				'code'    => 'queued',
 				'message' => __( 'Sync task queued.', 'schrack-woocommerce-sync' ),
 				'task'    => $task,
+			) + $queued;
+		}
+
+		$this->logger->error(
+			$task,
+			'Failed to queue manual Schrack sync task.',
+			null,
+			array(
+				'hook' => $hook,
+				'args' => $args,
+			)
+		);
+
+		return array(
+			'queued'  => false,
+			'code'    => 'queue_failed',
+			'message' => __( 'Could not queue sync task. Please check Action Scheduler/WP-Cron.', 'schrack-woocommerce-sync' ),
+			'task'    => $task,
+		);
+	}
+
+	/**
+	 * Queues a manual action in a way that stays visible in Action Scheduler status.
+	 *
+	 * @param array<int,mixed> $args Hook arguments.
+	 * @return array<string,mixed>
+	 */
+	private function queue_manual_action( string $hook, array $args ): array {
+		$scheduled_for = time() + 1;
+
+		if ( function_exists( 'as_schedule_single_action' ) ) {
+			$action_id = absint( as_schedule_single_action( $scheduled_for, $hook, $args, self::GROUP ) );
+
+			if ( $action_id > 0 ) {
+				return array(
+					'queued'        => true,
+					'queue_runner'  => 'action_scheduler_single',
+					'action_id'     => $action_id,
+					'scheduled_for' => wp_date( 'Y-m-d H:i:s', $scheduled_for ),
+				);
+			}
+		}
+
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			$action_id = absint( as_enqueue_async_action( $hook, $args, self::GROUP ) );
+
+			if ( $action_id > 0 ) {
+				return array(
+					'queued'       => true,
+					'queue_runner' => 'action_scheduler_async',
+					'action_id'    => $action_id,
+				);
+			}
+		}
+
+		$wp_cron_result = wp_schedule_single_event( time() + 5, $hook, $args );
+
+		if ( false !== $wp_cron_result ) {
+			return array(
+				'queued'        => true,
+				'queue_runner'  => 'wp_cron',
+				'scheduled_for' => wp_date( 'Y-m-d H:i:s', time() + 5 ),
 			);
 		}
 
-		wp_schedule_single_event( time() + 5, $hook, $args );
-		$this->logger->info( $task, 'Queued manual Schrack sync task in WP-Cron fallback.' );
-
-		return array(
-			'queued'  => true,
-			'code'    => 'queued',
-			'message' => __( 'Sync task queued.', 'schrack-woocommerce-sync' ),
-			'task'    => $task,
-		);
+		return array( 'queued' => false );
 	}
 
 	/**
@@ -185,6 +252,8 @@ class Schrack_Cron {
 
 			if ( $running > 0 ) {
 				$state = 'running';
+			} elseif ( $pending > 0 && null === $next_run ) {
+				$state = 'queued';
 			} elseif ( $pending > 0 && null !== $next_run && $next_run <= $now ) {
 				$state = 'due';
 			} elseif ( $pending > 0 && null !== $next_run && $next_run <= $now + 5 * MINUTE_IN_SECONDS ) {

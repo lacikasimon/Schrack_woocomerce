@@ -389,7 +389,7 @@ class Schrack_Product_Mapper {
 
 		if ( is_wp_error( $temp_file ) ) {
 			$this->logger->warning(
-				'catalog',
+				'images',
 				'Failed to download Schrack product image.',
 				$product->get_sku(),
 				array(
@@ -410,7 +410,7 @@ class Schrack_Product_Mapper {
 		if ( is_wp_error( $attachment_id ) ) {
 			@unlink( $temp_file );
 			$this->logger->warning(
-				'catalog',
+				'images',
 				'Failed to attach Schrack product image.',
 				$product->get_sku(),
 				array(
@@ -422,7 +422,7 @@ class Schrack_Product_Mapper {
 		}
 
 		$this->logger->info(
-			'catalog',
+			'images',
 			'Imported Schrack product image.',
 			$product->get_sku(),
 			array(

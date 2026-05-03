@@ -227,7 +227,7 @@ class Schrack_Admin {
 		$result = $this->cron->queue_action( $task );
 
 		if ( ! empty( $result['queued'] ) ) {
-			$this->set_notice( 'success', (string) $result['message'] );
+			$this->set_notice( 'success', (string) $result['message'], $this->format_debug_data( $result ) );
 		} elseif ( 'active_sync' === (string) ( $result['code'] ?? '' ) ) {
 			$this->set_notice( 'warning', (string) $result['message'] );
 		} else {
