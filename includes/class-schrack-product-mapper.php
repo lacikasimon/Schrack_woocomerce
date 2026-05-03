@@ -374,6 +374,7 @@ class Schrack_Product_Mapper {
 
 		$image_url    = $this->normalize_image_url( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) );
 		$imported_url = $this->normalize_image_url( $this->string_value( $product->get_meta( '_schrack_imported_image_url', true ) ) );
+		$stored_attachment_id = absint( $product->get_meta( '_schrack_image_attachment_id', true ) );
 
 		if ( '' === $image_url ) {
 			$this->mark_product_image_sync( $product, 'missing_url', '', 0 );
@@ -385,14 +386,37 @@ class Schrack_Product_Mapper {
 			);
 		}
 
-		if ( $imported_url === $image_url && (int) $product->get_image_id() > 0 ) {
+		if ( $imported_url === $image_url && $this->is_valid_image_attachment( (int) $product->get_image_id() ) ) {
 			$attachment_id = (int) $product->get_image_id();
+			$this->mark_attachment_image_source( $attachment_id, $image_url );
 			$this->mark_product_image_sync( $product, 'already_imported', $image_url, $attachment_id );
 			$product->save();
 
 			return array(
 				'status'        => 'already_imported',
 				'attachment_id' => $attachment_id,
+				'image_url'     => $image_url,
+			);
+		}
+
+		if ( $imported_url === $image_url && $this->is_valid_image_attachment( $stored_attachment_id ) ) {
+			$this->attach_existing_product_image( $product, $stored_attachment_id, $image_url, 'reused_existing' );
+
+			return array(
+				'status'        => 'reused_existing',
+				'attachment_id' => $stored_attachment_id,
+				'image_url'     => $image_url,
+			);
+		}
+
+		$existing_attachment_id = $this->find_existing_image_attachment( $image_url );
+
+		if ( $existing_attachment_id > 0 ) {
+			$this->attach_existing_product_image( $product, $existing_attachment_id, $image_url, 'reused_existing' );
+
+			return array(
+				'status'        => 'reused_existing',
+				'attachment_id' => $existing_attachment_id,
 				'image_url'     => $image_url,
 			);
 		}
@@ -415,6 +439,7 @@ class Schrack_Product_Mapper {
 		$product->set_image_id( $attachment_id );
 		$product->update_meta_data( '_schrack_image_attachment_id', $attachment_id );
 		$product->update_meta_data( '_schrack_imported_image_url', $image_url );
+		$this->mark_attachment_image_source( $attachment_id, $image_url );
 		$this->mark_product_image_sync( $product, 'imported', $image_url, $attachment_id );
 		$product->save();
 
@@ -423,6 +448,167 @@ class Schrack_Product_Mapper {
 			'attachment_id' => $attachment_id,
 			'image_url'     => $image_url,
 		);
+	}
+
+	/**
+	 * Reuses a previously imported attachment without downloading it again.
+	 */
+	private function attach_existing_product_image( WC_Product $product, int $attachment_id, string $image_url, string $status ): void {
+		$product->set_image_id( $attachment_id );
+		$product->update_meta_data( '_schrack_image_attachment_id', $attachment_id );
+		$product->update_meta_data( '_schrack_imported_image_url', $image_url );
+		$this->mark_attachment_image_source( $attachment_id, $image_url );
+		$this->mark_product_image_sync( $product, $status, $image_url, $attachment_id );
+		$product->save();
+
+		$this->logger->info(
+			'images',
+			'Reused existing Schrack product image attachment.',
+			$product->get_sku(),
+			array(
+				'image_url'     => $image_url,
+				'attachment_id' => $attachment_id,
+				'product_id'    => (int) $product->get_id(),
+			)
+		);
+	}
+
+	/**
+	 * Finds an existing media-library attachment for a normalized Schrack image URL.
+	 */
+	private function find_existing_image_attachment( string $image_url ): int {
+		$attachment_id = $this->find_attachment_by_source_hash( $image_url );
+
+		if ( $attachment_id > 0 ) {
+			return $attachment_id;
+		}
+
+		return $this->find_legacy_product_attachment_by_url( $image_url );
+	}
+
+	/**
+	 * Finds attachments imported by current plugin versions.
+	 */
+	private function find_attachment_by_source_hash( string $image_url ): int {
+		$hash = $this->image_source_hash( $image_url );
+
+		if ( '' === $hash ) {
+			return 0;
+		}
+
+		$query = new WP_Query(
+			array(
+				'post_type'              => 'attachment',
+				'post_status'            => 'inherit',
+				'posts_per_page'         => 5,
+				'fields'                 => 'ids',
+				'no_found_rows'          => true,
+				'cache_results'          => false,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'meta_query'             => array(
+					array(
+						'key'   => '_schrack_image_source_hash',
+						'value' => $hash,
+					),
+				),
+			)
+		);
+
+		foreach ( $query->posts as $attachment_id ) {
+			$attachment_id = absint( $attachment_id );
+
+			if ( $this->attachment_matches_image_url( $attachment_id, $image_url ) ) {
+				return $attachment_id;
+			}
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Finds attachments imported by older plugin versions via product meta.
+	 */
+	private function find_legacy_product_attachment_by_url( string $image_url ): int {
+		global $wpdb;
+
+		if ( '' === $image_url ) {
+			return 0;
+		}
+
+		$attachment_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT CAST(attachment_meta.meta_value AS UNSIGNED)
+				FROM {$wpdb->postmeta} AS imported_meta
+				INNER JOIN {$wpdb->posts} AS products
+					ON products.ID = imported_meta.post_id AND products.post_type = 'product'
+				INNER JOIN {$wpdb->postmeta} AS attachment_meta
+					ON attachment_meta.post_id = imported_meta.post_id AND attachment_meta.meta_key = '_schrack_image_attachment_id'
+				WHERE imported_meta.meta_key = '_schrack_imported_image_url'
+					AND imported_meta.meta_value = %s
+					AND attachment_meta.meta_value <> ''
+				LIMIT 10",
+				$image_url
+			)
+		);
+
+		foreach ( $attachment_ids as $attachment_id ) {
+			$attachment_id = absint( $attachment_id );
+
+			if ( $this->is_valid_image_attachment( $attachment_id ) ) {
+				$this->mark_attachment_image_source( $attachment_id, $image_url );
+				return $attachment_id;
+			}
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Tags an imported attachment so future products can reuse it by URL.
+	 */
+	private function mark_attachment_image_source( int $attachment_id, string $image_url ): void {
+		if ( ! $this->is_valid_image_attachment( $attachment_id ) || '' === $image_url ) {
+			return;
+		}
+
+		update_post_meta( $attachment_id, '_schrack_image_source_url', $image_url );
+		update_post_meta( $attachment_id, '_schrack_image_source_hash', $this->image_source_hash( $image_url ) );
+	}
+
+	/**
+	 * Checks whether an attachment is a usable image.
+	 */
+	private function is_valid_image_attachment( int $attachment_id ): bool {
+		if ( $attachment_id <= 0 || 'attachment' !== get_post_type( $attachment_id ) ) {
+			return false;
+		}
+
+		return function_exists( 'wp_attachment_is_image' )
+			? wp_attachment_is_image( $attachment_id )
+			: '' !== (string) wp_get_attachment_url( $attachment_id );
+	}
+
+	/**
+	 * Confirms an attachment was imported from the same normalized image URL.
+	 */
+	private function attachment_matches_image_url( int $attachment_id, string $image_url ): bool {
+		if ( ! $this->is_valid_image_attachment( $attachment_id ) ) {
+			return false;
+		}
+
+		$stored_url = $this->normalize_image_url( $this->string_value( get_post_meta( $attachment_id, '_schrack_image_source_url', true ) ) );
+
+		return $stored_url === $image_url;
+	}
+
+	/**
+	 * Builds a stable hash for source image URL lookups.
+	 */
+	private function image_source_hash( string $image_url ): string {
+		$image_url = $this->normalize_image_url( $image_url );
+
+		return '' === $image_url ? '' : hash( 'sha256', $image_url );
 	}
 
 	/**

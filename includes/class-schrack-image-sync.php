@@ -151,6 +151,7 @@ class Schrack_Image_Sync {
 		$imported  = 0;
 		$attached  = 0;
 		$skipped   = 0;
+		$reused    = 0;
 		$stopped   = false;
 
 		try {
@@ -168,6 +169,8 @@ class Schrack_Image_Sync {
 
 					if ( 'imported' === $status ) {
 						++$imported;
+					} elseif ( 'reused_existing' === $status ) {
+						++$reused;
 					} elseif ( in_array( $status, array( 'failed', 'missing_product' ), true ) ) {
 						++$errors;
 					} else {
@@ -200,6 +203,7 @@ class Schrack_Image_Sync {
 			'imported'    => $imported,
 			'attached'    => $attached,
 			'skipped'     => $skipped,
+			'reused'      => $reused,
 			'errors'      => $errors,
 			'batch_count' => count( $product_ids ),
 		);

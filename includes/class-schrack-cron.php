@@ -613,6 +613,7 @@ class Schrack_Cron {
 			$result          = array();
 			$total_processed = 0;
 			$total_imported  = 0;
+			$total_reused    = 0;
 			$total_errors    = 0;
 			$batches         = 0;
 
@@ -626,6 +627,7 @@ class Schrack_Cron {
 
 				$total_processed += (int) ( $result['processed'] ?? 0 );
 				$total_imported  += (int) ( $result['imported'] ?? 0 );
+				$total_reused    += (int) ( $result['reused'] ?? 0 );
 				$total_errors    += (int) ( $result['errors'] ?? 0 );
 				$this->release_batch_memory();
 
@@ -647,6 +649,7 @@ class Schrack_Cron {
 				array(
 					'processed'           => $total_processed,
 					'imported'            => $total_imported,
+					'reused'              => $total_reused,
 					'errors'              => $total_errors,
 					'batches_processed'   => $batches,
 					'sync_batches_per_run' => $max_batches,
@@ -740,6 +743,7 @@ class Schrack_Cron {
 					'imported'         => 0,
 					'attached'         => 0,
 					'skipped'          => 0,
+					'reused'           => 0,
 					'errors'           => $queue_errors,
 					'cursor'           => 0,
 					'total_products'   => $total_products,
@@ -866,6 +870,7 @@ class Schrack_Cron {
 				'imported'         => 0,
 				'attached'         => 0,
 				'skipped'          => 0,
+				'reused'           => 0,
 				'errors'           => 0,
 				'cursor'           => 0,
 				'total_products'   => absint( $last_row['total_products'] ?? 0 ),
