@@ -65,7 +65,14 @@ class Schrack_Catalog_Importer {
 			return $this->import_cached_items_with_cursor( $cache, $format, $limit );
 		}
 
-		$raw       = $this->client->get_catalog_as( $format );
+		$raw = $this->client->get_catalog_as( $format );
+
+		$streamed_result = $this->import_streamed_catalog_response( $raw, $format, $limit );
+
+		if ( null !== $streamed_result ) {
+			return $streamed_result;
+		}
+
 		$items     = $this->parse_catalog_response( $raw, $format );
 		$signature = $this->catalog_signature( $items );
 		$context   = empty( $items )
@@ -258,7 +265,7 @@ class Schrack_Catalog_Importer {
 	 * @param array<string,mixed> $cache Catalog cache metadata.
 	 * @return array<string,mixed>
 	 */
-	private function import_cached_items_with_cursor( array $cache, string $format, int $limit ): array {
+	private function import_cached_items_with_cursor( array $cache, string $format, int $limit, array $status_context = array() ): array {
 		$signature   = (string) $cache['signature'];
 		$total_items = absint( $cache['total_items'] ?? 0 );
 
@@ -301,17 +308,20 @@ class Schrack_Catalog_Importer {
 
 		return $this->import_items(
 			$batch,
-			array(
-				'catalog_cache'     => 'hit',
-				'catalog_cache_key' => $cache['key'] ?? '',
-				'cursor'            => $next_cursor,
-				'total_items'       => $total_items,
-				'batch_start'       => $offset,
-				'batch_count'       => $batch_count,
-				'batch_limit'       => $limit,
-				'completed_cycle'   => $completed_cycle ? 'yes' : 'no',
-				'catalog_format'    => $format,
-				'catalog_signature' => $signature,
+			array_merge(
+				array(
+					'catalog_cache'     => 'hit',
+					'catalog_cache_key' => $cache['key'] ?? '',
+					'cursor'            => $next_cursor,
+					'total_items'       => $total_items,
+					'batch_start'       => $offset,
+					'batch_count'       => $batch_count,
+					'batch_limit'       => $limit,
+					'completed_cycle'   => $completed_cycle ? 'yes' : 'no',
+					'catalog_format'    => $format,
+					'catalog_signature' => $signature,
+				),
+				$status_context
 			)
 		);
 	}
@@ -645,6 +655,585 @@ class Schrack_Catalog_Importer {
 		}
 
 		return esc_url_raw( trim( (string) $item['image_url'] ) );
+	}
+
+	/**
+	 * Imports a catalog response through a streamed on-disk cache when possible.
+	 *
+	 * This avoids keeping the downloaded ZIP, extracted CSV, parsed rows, and batch in
+	 * memory at the same time.
+	 *
+	 * @return array<string,mixed>|null Null when the response should use the legacy parser.
+	 */
+	private function import_streamed_catalog_response( mixed $raw, string $format, int $limit ): ?array {
+		if ( 'CSV' !== strtoupper( $format ) ) {
+			return null;
+		}
+
+		$content = $this->extract_catalog_content( $raw );
+
+		if ( '' === $content ) {
+			return null;
+		}
+
+		$source = $this->catalog_response_source_file( $content );
+		unset( $content );
+
+		if ( null === $source ) {
+			return null;
+		}
+
+		try {
+			$cache = $this->write_csv_catalog_cache_from_file( (string) $source['path'], $format );
+		} finally {
+			$this->delete_temp_files( (array) ( $source['cleanup_paths'] ?? array() ) );
+		}
+
+		if ( null === $cache ) {
+			return null;
+		}
+
+		if ( 0 === absint( $cache['total_items'] ?? 0 ) ) {
+			return $this->import_items_with_cursor(
+				array(),
+				$format,
+				$limit,
+				array(
+					'catalog_cache'     => 'empty',
+					'catalog_streamed'  => 'yes',
+					'catalog_signature' => (string) ( $cache['signature'] ?? '' ),
+				),
+				(string) ( $cache['signature'] ?? '' )
+			);
+		}
+
+		return $this->import_cached_items_with_cursor(
+			$cache,
+			$format,
+			$limit,
+			array(
+				'catalog_cache'    => 'written',
+				'catalog_streamed' => 'yes',
+			)
+		);
+	}
+
+	/**
+	 * Stores a catalog response as a temporary source file.
+	 *
+	 * @return array{path:string,cleanup_paths:array<int,string>}|null
+	 */
+	private function catalog_response_source_file( string $content ): ?array {
+		if ( filter_var( $content, FILTER_VALIDATE_URL ) ) {
+			$this->logger->debug(
+				'catalog',
+				'Schrack catalog response contained a download URL.',
+				null,
+				array( 'download_url' => $this->safe_download_url_label( $content ) )
+			);
+
+			$download = $this->download_catalog_file( $content );
+
+			if ( null === $download ) {
+				return null;
+			}
+
+			$path    = (string) $download['path'];
+			$cleanup = array( $path );
+
+			if ( ! empty( $download['is_zip'] ) ) {
+				$entry = $this->extract_first_zip_entry_file( $path );
+
+				if ( null === $entry ) {
+					$this->delete_temp_files( $cleanup );
+					return null;
+				}
+
+				$path      = (string) $entry['path'];
+				$cleanup[] = $path;
+			}
+
+			return array(
+				'path'          => $path,
+				'cleanup_paths' => $cleanup,
+			);
+		}
+
+		if ( $this->looks_like_markup( $content ) ) {
+			return null;
+		}
+
+		$temp_file = wp_tempnam( 'schrack-catalog-content' );
+
+		if ( ! $temp_file || ! $this->write_temp_file( $temp_file, $content ) ) {
+			if ( $temp_file ) {
+				wp_delete_file( $temp_file );
+			}
+
+			$this->logger->warning( 'catalog', 'Could not write Schrack catalog response to a temporary file.' );
+			return null;
+		}
+
+		$path    = $temp_file;
+		$cleanup = array( $temp_file );
+
+		if ( $this->is_zip_file( $temp_file ) ) {
+			$entry = $this->extract_first_zip_entry_file( $temp_file );
+
+			if ( null === $entry ) {
+				$this->delete_temp_files( $cleanup );
+				return null;
+			}
+
+			$path      = (string) $entry['path'];
+			$cleanup[] = $path;
+		}
+
+		return array(
+			'path'          => $path,
+			'cleanup_paths' => $cleanup,
+		);
+	}
+
+	/**
+	 * Downloads a catalog file directly to disk.
+	 *
+	 * @return array{path:string,bytes:int,is_zip:bool}|null
+	 */
+	private function download_catalog_file( string $url ): ?array {
+		$temp_file = wp_tempnam( 'schrack-catalog-download' );
+
+		if ( ! $temp_file ) {
+			$this->logger->error( 'catalog', 'Could not create a temporary file for Schrack catalog download.' );
+			return null;
+		}
+
+		$response = wp_remote_get(
+			$url,
+			array(
+				'timeout'  => 120,
+				'stream'   => true,
+				'filename' => $temp_file,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			wp_delete_file( $temp_file );
+			$this->logger->error( 'catalog', 'Failed to download Schrack catalog file.', null, array( 'error' => $response->get_error_message() ) );
+			return null;
+		}
+
+		$status_code = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( $status_code < 200 || $status_code >= 300 ) {
+			wp_delete_file( $temp_file );
+			$this->logger->error( 'catalog', 'Failed to download Schrack catalog file.', null, array( 'status_code' => $status_code ) );
+			return null;
+		}
+
+		$bytes  = is_file( $temp_file ) ? (int) filesize( $temp_file ) : 0;
+		$is_zip = $this->is_zip_file( $temp_file );
+
+		if ( $bytes <= 0 ) {
+			wp_delete_file( $temp_file );
+			$this->logger->warning( 'catalog', 'Downloaded Schrack catalog file was empty.' );
+			return null;
+		}
+
+		$this->logger->debug(
+			'catalog',
+			'Downloaded Schrack catalog file.',
+			null,
+			array(
+				'status_code'  => $status_code,
+				'content_type' => wp_remote_retrieve_header( $response, 'content-type' ),
+				'bytes'        => $bytes,
+				'is_zip'       => $is_zip ? 'yes' : 'no',
+				'streamed'     => 'yes',
+			)
+		);
+
+		return array(
+			'path'   => $temp_file,
+			'bytes'  => $bytes,
+			'is_zip' => $is_zip,
+		);
+	}
+
+	/**
+	 * Checks whether a file starts with a ZIP signature.
+	 */
+	private function is_zip_file( string $path ): bool {
+		if ( ! is_readable( $path ) ) {
+			return false;
+		}
+
+		$handle = fopen( $path, 'rb' );
+
+		if ( false === $handle ) {
+			return false;
+		}
+
+		$signature = fread( $handle, 4 );
+		fclose( $handle );
+
+		return "PK\x03\x04" === $signature || "PK\x05\x06" === $signature;
+	}
+
+	/**
+	 * Extracts the first non-directory ZIP entry to a temporary file without loading it into memory.
+	 *
+	 * @return array{path:string,entry_name:string,bytes:int}|null
+	 */
+	private function extract_first_zip_entry_file( string $zip_path ): ?array {
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			$this->logger->error( 'catalog', 'Schrack catalog response is a ZIP file, but PHP ZipArchive is not available.' );
+			return null;
+		}
+
+		$zip = new ZipArchive();
+
+		if ( true !== $zip->open( $zip_path ) ) {
+			$this->logger->error( 'catalog', 'Could not open Schrack catalog ZIP.' );
+			return null;
+		}
+
+		for ( $index = 0; $index < $zip->numFiles; ++$index ) {
+			$name = $zip->getNameIndex( $index );
+
+			if ( false === $name || str_ends_with( $name, '/' ) ) {
+				continue;
+			}
+
+			$source = $zip->getStream( $name );
+
+			if ( false === $source ) {
+				continue;
+			}
+
+			$temp_file = wp_tempnam( 'schrack-catalog-entry' );
+
+			if ( ! $temp_file ) {
+				fclose( $source );
+				$zip->close();
+				$this->logger->error( 'catalog', 'Could not create a temporary file for Schrack catalog ZIP entry.' );
+				return null;
+			}
+
+			$target = fopen( $temp_file, 'wb' );
+
+			if ( false === $target ) {
+				fclose( $source );
+				wp_delete_file( $temp_file );
+				$zip->close();
+				$this->logger->error( 'catalog', 'Could not write Schrack catalog ZIP entry to a temporary file.' );
+				return null;
+			}
+
+			stream_copy_to_stream( $source, $target );
+			fclose( $source );
+			fclose( $target );
+			$zip->close();
+
+			$bytes = is_file( $temp_file ) ? (int) filesize( $temp_file ) : 0;
+
+			$this->logger->debug(
+				'catalog',
+				'Extracted Schrack catalog ZIP entry.',
+				null,
+				array(
+					'entry_name' => $name,
+					'bytes'      => $bytes,
+					'streamed'   => 'yes',
+				)
+			);
+
+			return array(
+				'path'       => $temp_file,
+				'entry_name' => $name,
+				'bytes'      => $bytes,
+			);
+		}
+
+		$zip->close();
+		$this->logger->warning( 'catalog', 'Schrack catalog ZIP did not contain a readable file.' );
+
+		return null;
+	}
+
+	/**
+	 * Parses a CSV source file directly into the parsed JSONL catalog cache.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function write_csv_catalog_cache_from_file( string $path, string $format ): ?array {
+		if ( ! is_readable( $path ) ) {
+			return null;
+		}
+
+		$handle = fopen( $path, 'rb' );
+
+		if ( false === $handle ) {
+			return null;
+		}
+
+		$first_line = fgets( $handle );
+
+		if ( false === $first_line || '' === trim( $first_line ) ) {
+			fclose( $handle );
+			$this->logger->warning( 'catalog', 'Schrack CSV catalog content was empty.' );
+			return $this->empty_streamed_catalog_cache( $format );
+		}
+
+		if ( $this->looks_like_markup( $first_line ) ) {
+			fclose( $handle );
+			$this->logger->warning(
+				'catalog',
+				'Schrack catalog download returned markup instead of CSV.',
+				null,
+				array( 'preview' => $this->content_preview( $first_line ) )
+			);
+			return $this->empty_streamed_catalog_cache( $format );
+		}
+
+		$delimiter   = $this->detect_csv_delimiter_from_line( $first_line );
+		$raw_headers = str_getcsv( $first_line, $delimiter );
+		$headers     = $this->normalize_csv_headers( $raw_headers );
+
+		if ( empty( $headers ) ) {
+			fclose( $handle );
+			$this->logger->warning( 'catalog', 'Schrack CSV catalog did not contain readable headers.' );
+			return $this->empty_streamed_catalog_cache( $format );
+		}
+
+		$items_temp = wp_tempnam( 'schrack-catalog-items' );
+
+		if ( ! $items_temp ) {
+			fclose( $handle );
+			$this->logger->warning( 'catalog', 'Could not create a temporary parsed Schrack catalog cache.' );
+			return null;
+		}
+
+		$output = fopen( $items_temp, 'wb' );
+
+		if ( false === $output ) {
+			fclose( $handle );
+			wp_delete_file( $items_temp );
+			$this->logger->warning( 'catalog', 'Could not open parsed Schrack catalog cache for writing.' );
+			return null;
+		}
+
+		$signature_context = hash_init( 'sha256' );
+		$rows_seen         = 0;
+		$rows_without_sku  = 0;
+		$header_rows       = 0;
+		$written           = 0;
+		$first_row         = array();
+		$write_failed      = false;
+
+		while ( false !== ( $values = fgetcsv( $handle, 0, $delimiter ) ) ) {
+			if ( $this->csv_values_are_blank( $values ) ) {
+				continue;
+			}
+
+			$row = $this->combine_csv_row( $headers, $values );
+
+			if ( empty( $row ) ) {
+				continue;
+			}
+
+			if ( $this->is_csv_header_continuation_row( $row ) ) {
+				++$header_rows;
+				continue;
+			}
+
+			++$rows_seen;
+
+			if ( empty( $first_row ) ) {
+				$first_row = $row;
+			}
+
+			$item = $this->normalize_catalog_row( $row );
+
+			if ( '' === $item['sku'] ) {
+				++$rows_without_sku;
+				continue;
+			}
+
+			hash_update( $signature_context, (string) $this->item_sku( $item ) . "\n" );
+			$encoded = wp_json_encode( $item );
+
+			if ( ! is_string( $encoded ) || false === fwrite( $output, $encoded . "\n" ) ) {
+				$write_failed = true;
+				break;
+			}
+
+			++$written;
+		}
+
+		fclose( $handle );
+		fclose( $output );
+
+		$signature = hash_final( $signature_context );
+
+		if ( $write_failed ) {
+			wp_delete_file( $items_temp );
+			$this->logger->warning( 'catalog', 'Could not write parsed Schrack catalog cache.' );
+			return null;
+		}
+
+		if ( 0 === $rows_seen ) {
+			wp_delete_file( $items_temp );
+			$this->logger->warning(
+				'catalog',
+				'Schrack CSV catalog contained headers but no data rows.',
+				null,
+				array(
+					'delimiter'   => $delimiter,
+					'headers'     => $headers,
+					'raw_headers' => array_values( array_map( static fn ( mixed $header ): string => (string) $header, $raw_headers ) ),
+					'streamed'    => 'yes',
+				)
+			);
+
+			return $this->empty_streamed_catalog_cache( $format, $signature );
+		}
+
+		if ( 0 === $written ) {
+			wp_delete_file( $items_temp );
+			$this->logger->warning(
+				'catalog',
+				'Schrack CSV catalog rows were found, but no SKU/item-number column was recognized.',
+				null,
+				array(
+					'delimiter'        => $delimiter,
+					'headers'          => $headers,
+					'raw_headers'      => array_values( array_map( static fn ( mixed $header ): string => (string) $header, $raw_headers ) ),
+					'rows_seen'        => $rows_seen,
+					'rows_without_sku' => $rows_without_sku,
+					'header_rows'      => $header_rows,
+					'first_row'        => $this->preview_row( $first_row ),
+					'streamed'         => 'yes',
+				)
+			);
+
+			return $this->empty_streamed_catalog_cache( $format, $signature );
+		}
+
+		$cache = $this->finalize_streamed_catalog_cache( $format, $signature, $items_temp, $written );
+
+		if ( null === $cache ) {
+			return null;
+		}
+
+		$this->logger->debug(
+			'catalog',
+			'Parsed Schrack CSV catalog.',
+			null,
+			array(
+				'delimiter'        => $delimiter,
+				'headers'          => $headers,
+				'rows_seen'        => $rows_seen,
+				'items'            => $written,
+				'rows_without_sku' => $rows_without_sku,
+				'header_rows'      => $header_rows,
+				'streamed'         => 'yes',
+			)
+		);
+
+		return $cache;
+	}
+
+	/**
+	 * Creates a metadata-only empty cache descriptor.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function empty_streamed_catalog_cache( string $format, string $signature = '' ): array {
+		return array(
+			'format'      => strtoupper( $format ),
+			'signature'   => '' !== $signature ? $signature : hash( 'sha256', '' ),
+			'total_items' => 0,
+			'created_at'  => time(),
+			'key'         => '',
+		);
+	}
+
+	/**
+	 * Moves a streamed JSONL temp file into the deterministic catalog cache path.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function finalize_streamed_catalog_cache( string $format, string $signature, string $items_temp, int $written ): ?array {
+		$paths = $this->catalog_cache_paths( $format, $signature );
+
+		if ( empty( $paths ) ) {
+			wp_delete_file( $items_temp );
+			return null;
+		}
+
+		$this->cleanup_catalog_caches( $format, (string) $paths['key'] );
+
+		foreach ( array( 'items_path', 'meta_path' ) as $target_key ) {
+			if ( ! empty( $paths[ $target_key ] ) && is_file( (string) $paths[ $target_key ] ) ) {
+				wp_delete_file( (string) $paths[ $target_key ] );
+			}
+		}
+
+		$meta_temp = (string) $paths['meta_path'] . '.tmp';
+		$meta      = array(
+			'format'      => strtoupper( $format ),
+			'signature'   => $signature,
+			'total_items' => $written,
+			'created_at'  => time(),
+			'key'         => $paths['key'],
+		);
+		$meta_json = wp_json_encode( $meta );
+
+		if (
+			! is_string( $meta_json ) ||
+			false === file_put_contents( $meta_temp, $meta_json ) ||
+			! rename( $items_temp, (string) $paths['items_path'] ) ||
+			! rename( $meta_temp, (string) $paths['meta_path'] )
+		) {
+			wp_delete_file( $items_temp );
+			wp_delete_file( $meta_temp );
+			wp_delete_file( (string) $paths['items_path'] );
+			$this->logger->warning( 'catalog', 'Could not finalize parsed Schrack catalog cache.' );
+			return null;
+		}
+
+		$this->logger->debug(
+			'catalog',
+			'Wrote parsed Schrack catalog cache.',
+			null,
+			array(
+				'catalog_cache_key' => $paths['key'],
+				'total_items'       => $written,
+				'streamed'          => 'yes',
+			)
+		);
+
+		return array_merge(
+			$meta,
+			array(
+				'items_path' => $paths['items_path'],
+				'meta_path'  => $paths['meta_path'],
+			)
+		);
+	}
+
+	/**
+	 * Deletes temporary source files created during streamed import.
+	 *
+	 * @param array<int,mixed> $paths Temporary paths.
+	 */
+	private function delete_temp_files( array $paths ): void {
+		foreach ( array_unique( array_filter( array_map( 'strval', $paths ) ) ) as $path ) {
+			if ( is_file( $path ) ) {
+				wp_delete_file( $path );
+			}
+		}
 	}
 
 	/**
@@ -1174,7 +1763,13 @@ class Schrack_Catalog_Importer {
 	 * @param array<int,string> $lines CSV lines.
 	 */
 	private function detect_csv_delimiter( array $lines ): string {
-		$first_line  = (string) ( $lines[0] ?? '' );
+		return $this->detect_csv_delimiter_from_line( (string) ( $lines[0] ?? '' ) );
+	}
+
+	/**
+	 * Detects the most likely CSV delimiter from one header line.
+	 */
+	private function detect_csv_delimiter_from_line( string $first_line ): string {
 		$candidates  = array( ';', ',', "\t", '|' );
 		$best        = ';';
 		$best_columns = 0;
@@ -1189,6 +1784,25 @@ class Schrack_Catalog_Importer {
 		}
 
 		return $best;
+	}
+
+	/**
+	 * Returns whether fgetcsv yielded an empty line.
+	 *
+	 * @param mixed $values CSV values.
+	 */
+	private function csv_values_are_blank( mixed $values ): bool {
+		if ( ! is_array( $values ) ) {
+			return true;
+		}
+
+		foreach ( $values as $value ) {
+			if ( is_scalar( $value ) && '' !== trim( (string) $value ) ) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**

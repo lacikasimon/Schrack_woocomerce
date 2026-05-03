@@ -359,6 +359,7 @@ class Schrack_Cron {
 				$total_image_urls          += (int) ( $result['image_urls_stored'] ?? 0 );
 				$total_image_backfilled  += (int) ( $result['image_urls_backfilled'] ?? 0 );
 				$total_image_meta_errors += (int) ( $result['image_url_meta_errors'] ?? 0 );
+				$this->release_batch_memory();
 
 				if ( $this->is_stopped_result( $result ) ) {
 					return $this->handle_stopped_sync( 'catalog', $total_processed, $total_errors );
@@ -445,6 +446,7 @@ class Schrack_Cron {
 
 				$total_processed += (int) ( $result['processed'] ?? 0 );
 				$total_errors    += (int) ( $result['errors'] ?? 0 );
+				$this->release_batch_memory();
 
 				if ( $this->is_stopped_result( $result ) ) {
 					return $this->handle_stopped_sync( 'price', $total_processed, $total_errors );
@@ -523,6 +525,7 @@ class Schrack_Cron {
 
 				$total_processed += (int) ( $result['processed'] ?? 0 );
 				$total_errors    += (int) ( $result['errors'] ?? 0 );
+				$this->release_batch_memory();
 
 				if ( $this->is_stopped_result( $result ) ) {
 					return $this->handle_stopped_sync( 'stock', $total_processed, $total_errors );
@@ -609,6 +612,7 @@ class Schrack_Cron {
 				$total_processed += (int) ( $result['processed'] ?? 0 );
 				$total_imported  += (int) ( $result['imported'] ?? 0 );
 				$total_errors    += (int) ( $result['errors'] ?? 0 );
+				$this->release_batch_memory();
 
 				if ( $this->is_stopped_result( $result ) ) {
 					return $this->handle_stopped_sync( 'images', $total_processed, $total_errors, array( 'imported' => $total_imported ) );
@@ -1210,6 +1214,28 @@ class Schrack_Cron {
 		}
 
 		return time() - $started_at >= max( 10, $max_execution_time - 10 );
+	}
+
+	/**
+	 * Releases runtime-only caches between batches on small-memory hosting.
+	 */
+	private function release_batch_memory(): void {
+		if ( function_exists( 'wp_cache_flush_runtime' ) ) {
+			wp_cache_flush_runtime();
+		}
+
+		if (
+			defined( 'SAVEQUERIES' ) &&
+			SAVEQUERIES &&
+			isset( $GLOBALS['wpdb']->queries ) &&
+			is_array( $GLOBALS['wpdb']->queries )
+		) {
+			$GLOBALS['wpdb']->queries = array();
+		}
+
+		if ( function_exists( 'gc_collect_cycles' ) ) {
+			gc_collect_cycles();
+		}
 	}
 
 	/**
