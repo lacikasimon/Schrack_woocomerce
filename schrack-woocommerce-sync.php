@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Schrack WooCommerce Sync
  * Description: Imports Schrack catalog data and synchronizes purchase prices and stock with WooCommerce products.
- * Version: 0.1.27
+ * Version: 0.1.28
  * Author: Schrack WooCommerce Sync
  * Requires PHP: 8.1
  * Requires Plugins: woocommerce
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SCHRACK_WC_SYNC_VERSION', '0.1.27' );
+define( 'SCHRACK_WC_SYNC_VERSION', '0.1.28' );
 define( 'SCHRACK_WC_SYNC_FILE', __FILE__ );
 define( 'SCHRACK_WC_SYNC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SCHRACK_WC_SYNC_URL', plugin_dir_url( __FILE__ ) );

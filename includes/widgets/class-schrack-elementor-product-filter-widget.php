@@ -107,6 +107,19 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		);
 
 		$this->add_control(
+			'inherit_current_category',
+			array(
+				'label'        => __( 'Preia categoria din URL', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+				'description'  => __( 'Pe arhivele WooCommerce de categorie, filtrul porneste automat cu categoria curenta.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
 			'default_orderby',
 			array(
 				'label'   => __( 'Sortare implicita', 'schrack-woocommerce-sync' ),

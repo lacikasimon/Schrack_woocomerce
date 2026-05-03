@@ -28,6 +28,7 @@ class Schrack_Product_Filter_Renderer {
 		wp_enqueue_script( 'schrack-wc-product-filter' );
 
 		$settings    = $this->sanitize_settings( $settings );
+		$settings    = $this->settings_with_request_category( $settings );
 		$instance_id = '' !== $instance_id ? sanitize_html_class( $instance_id ) : 'schrack-products-' . wp_rand( 1000, 999999 );
 		$filters     = array(
 			'category' => $settings['default_category'],
@@ -156,6 +157,11 @@ class Schrack_Product_Filter_Renderer {
 	public function render_results( array $settings, array $filters ): array {
 		$settings = $this->sanitize_settings( $settings );
 		$filters  = $this->sanitize_filters( $filters );
+
+		if ( empty( $filters['category'] ) && ! $settings['show_category_filter'] && $settings['default_category'] > 0 ) {
+			$filters['category'] = (int) $settings['default_category'];
+		}
+
 		$query    = $this->query_products( $settings, $filters );
 		$posts    = $this->visible_posts( $query, $settings );
 		$has_more = $this->has_more_results( $query, $settings, $filters );
@@ -209,25 +215,102 @@ class Schrack_Product_Filter_Renderer {
 		$settings = $this->sanitize_settings( $settings );
 
 		return array(
-			'products_per_page'      => $settings['products_per_page'],
-			'columns'                => $settings['columns'],
-			'default_category'       => $settings['default_category'],
-			'default_orderby'        => $settings['default_orderby'],
-			'pagination_mode'        => $settings['pagination_mode'],
-			'pagination_granularity' => $settings['pagination_granularity'],
-			'exact_totals'           => $settings['exact_totals'] ? 'yes' : 'no',
-			'min_search_chars'       => $settings['min_search_chars'],
-			'category_results_limit' => $settings['category_results_limit'],
-			'show_images'            => $settings['show_images'] ? 'yes' : 'no',
-			'show_categories'        => $settings['show_categories'] ? 'yes' : 'no',
-			'show_excerpt'           => $settings['show_excerpt'] ? 'yes' : 'no',
-			'show_stock'             => $settings['show_stock'] ? 'yes' : 'no',
-			'show_add_to_cart'       => $settings['show_add_to_cart'] ? 'yes' : 'no',
-			'hide_out_of_stock'      => $settings['hide_out_of_stock'] ? 'yes' : 'no',
-			'button_text'         => $settings['button_text'],
-			'load_more_text'      => $settings['load_more_text'],
-			'details_button_text' => $settings['details_button_text'],
+			'products_per_page'        => $settings['products_per_page'],
+			'columns'                  => $settings['columns'],
+			'default_category'         => $settings['default_category'],
+			'inherit_current_category' => $settings['inherit_current_category'] ? 'yes' : 'no',
+			'default_orderby'          => $settings['default_orderby'],
+			'pagination_mode'          => $settings['pagination_mode'],
+			'pagination_granularity'   => $settings['pagination_granularity'],
+			'exact_totals'             => $settings['exact_totals'] ? 'yes' : 'no',
+			'min_search_chars'         => $settings['min_search_chars'],
+			'category_results_limit'   => $settings['category_results_limit'],
+			'show_images'              => $settings['show_images'] ? 'yes' : 'no',
+			'show_categories'          => $settings['show_categories'] ? 'yes' : 'no',
+			'show_excerpt'             => $settings['show_excerpt'] ? 'yes' : 'no',
+			'show_stock'               => $settings['show_stock'] ? 'yes' : 'no',
+			'show_add_to_cart'         => $settings['show_add_to_cart'] ? 'yes' : 'no',
+			'hide_out_of_stock'        => $settings['hide_out_of_stock'] ? 'yes' : 'no',
+			'button_text'              => $settings['button_text'],
+			'load_more_text'           => $settings['load_more_text'],
+			'details_button_text'      => $settings['details_button_text'],
 		);
+	}
+
+	/**
+	 * Applies the current product category archive as the widget default category.
+	 *
+	 * @param array<string,mixed> $settings Sanitized settings.
+	 * @return array<string,mixed>
+	 */
+	private function settings_with_request_category( array $settings ): array {
+		if ( empty( $settings['inherit_current_category'] ) ) {
+			return $settings;
+		}
+
+		$current_category = $this->current_request_category_id();
+
+		if ( $current_category > 0 ) {
+			$settings['default_category'] = $current_category;
+		}
+
+		return $settings;
+	}
+
+	/**
+	 * Returns the product category represented by the current request URL.
+	 */
+	private function current_request_category_id(): int {
+		if ( ! taxonomy_exists( 'product_cat' ) ) {
+			return 0;
+		}
+
+		$queried = get_queried_object();
+
+		if ( $queried instanceof WP_Term && 'product_cat' === $queried->taxonomy ) {
+			return (int) $queried->term_id;
+		}
+
+		if ( function_exists( 'is_product_category' ) && is_product_category() ) {
+			$term = get_queried_object();
+
+			if ( $term instanceof WP_Term && 'product_cat' === $term->taxonomy ) {
+				return (int) $term->term_id;
+			}
+		}
+
+		return $this->category_id_from_request_path();
+	}
+
+	/**
+	 * Falls back to the last URL path segment for category archive templates.
+	 */
+	private function category_id_from_request_path(): int {
+		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( (string) $_SERVER['REQUEST_URI'] ) : '';
+		$path        = (string) wp_parse_url( $request_uri, PHP_URL_PATH );
+		$path        = trim( $path, '/' );
+
+		if ( '' === $path ) {
+			return 0;
+		}
+
+		$segments = array_reverse( array_values( array_filter( explode( '/', $path ) ) ) );
+
+		foreach ( $segments as $segment ) {
+			$slug = sanitize_title( rawurldecode( (string) $segment ) );
+
+			if ( '' === $slug || 'page' === $slug || is_numeric( $slug ) ) {
+				continue;
+			}
+
+			$term = get_term_by( 'slug', $slug, 'product_cat' );
+
+			if ( $term instanceof WP_Term ) {
+				return (int) $term->term_id;
+			}
+		}
+
+		return 0;
 	}
 
 	/**
@@ -1115,27 +1198,28 @@ class Schrack_Product_Filter_Renderer {
 		}
 
 		return array(
-			'products_per_page'      => $products_per_page,
-			'columns'                => $columns,
-			'default_category'       => absint( $settings['default_category'] ?? 0 ),
-			'default_orderby'        => $orderby,
-			'pagination_mode'        => $pagination_mode,
-			'pagination_granularity' => $pagination_granularity,
-			'exact_totals'           => $this->truthy( $settings['exact_totals'] ?? 'no' ),
-			'min_search_chars'       => max( 1, min( 5, absint( $settings['min_search_chars'] ?? 2 ) ) ),
-			'category_results_limit' => max( 10, min( 80, absint( $settings['category_results_limit'] ?? 30 ) ) ),
-			'show_search'            => $this->truthy( $settings['show_search'] ?? 'yes' ),
-			'show_category_filter'   => $this->truthy( $settings['show_category_filter'] ?? 'yes' ),
-			'show_category_search'   => $this->truthy( $settings['show_category_search'] ?? 'yes' ),
-			'show_price_filter'      => $this->truthy( $settings['show_price_filter'] ?? 'yes' ),
-			'show_sort'              => $this->truthy( $settings['show_sort'] ?? 'yes' ),
-			'show_images'            => $this->truthy( $settings['show_images'] ?? 'yes' ),
-			'show_categories'        => $this->truthy( $settings['show_categories'] ?? 'yes' ),
-			'show_excerpt'           => $this->truthy( $settings['show_excerpt'] ?? 'yes' ),
-			'show_stock'             => $this->truthy( $settings['show_stock'] ?? 'yes' ),
-			'show_add_to_cart'       => $this->truthy( $settings['show_add_to_cart'] ?? 'yes' ),
-			'hide_out_of_stock'      => $this->truthy( $settings['hide_out_of_stock'] ?? 'no' ),
-			'button_text'            => $this->localized_text_setting(
+			'products_per_page'        => $products_per_page,
+			'columns'                  => $columns,
+			'default_category'         => absint( $settings['default_category'] ?? 0 ),
+			'inherit_current_category' => $this->truthy( $settings['inherit_current_category'] ?? 'yes' ),
+			'default_orderby'          => $orderby,
+			'pagination_mode'          => $pagination_mode,
+			'pagination_granularity'   => $pagination_granularity,
+			'exact_totals'             => $this->truthy( $settings['exact_totals'] ?? 'no' ),
+			'min_search_chars'         => max( 1, min( 5, absint( $settings['min_search_chars'] ?? 2 ) ) ),
+			'category_results_limit'   => max( 10, min( 80, absint( $settings['category_results_limit'] ?? 30 ) ) ),
+			'show_search'              => $this->truthy( $settings['show_search'] ?? 'yes' ),
+			'show_category_filter'     => $this->truthy( $settings['show_category_filter'] ?? 'yes' ),
+			'show_category_search'     => $this->truthy( $settings['show_category_search'] ?? 'yes' ),
+			'show_price_filter'        => $this->truthy( $settings['show_price_filter'] ?? 'yes' ),
+			'show_sort'                => $this->truthy( $settings['show_sort'] ?? 'yes' ),
+			'show_images'              => $this->truthy( $settings['show_images'] ?? 'yes' ),
+			'show_categories'          => $this->truthy( $settings['show_categories'] ?? 'yes' ),
+			'show_excerpt'             => $this->truthy( $settings['show_excerpt'] ?? 'yes' ),
+			'show_stock'               => $this->truthy( $settings['show_stock'] ?? 'yes' ),
+			'show_add_to_cart'         => $this->truthy( $settings['show_add_to_cart'] ?? 'yes' ),
+			'hide_out_of_stock'        => $this->truthy( $settings['hide_out_of_stock'] ?? 'no' ),
+			'button_text'              => $this->localized_text_setting(
 				$settings['button_text'] ?? '',
 				__( 'Aplica filtrele', 'schrack-woocommerce-sync' ),
 				array(
@@ -1144,7 +1228,7 @@ class Schrack_Product_Filter_Renderer {
 					'Filter'        => __( 'Filtreaza', 'schrack-woocommerce-sync' ),
 				)
 			),
-			'reset_text'             => $this->localized_text_setting(
+			'reset_text'               => $this->localized_text_setting(
 				$settings['reset_text'] ?? '',
 				__( 'Reseteaza', 'schrack-woocommerce-sync' ),
 				array(
@@ -1153,7 +1237,7 @@ class Schrack_Product_Filter_Renderer {
 					'Reset filters' => __( 'Reseteaza filtrele', 'schrack-woocommerce-sync' ),
 				)
 			),
-			'load_more_text'         => $this->localized_text_setting(
+			'load_more_text'           => $this->localized_text_setting(
 				$settings['load_more_text'] ?? '',
 				__( 'Incarca mai multe', 'schrack-woocommerce-sync' ),
 				array(
@@ -1163,7 +1247,7 @@ class Schrack_Product_Filter_Renderer {
 					'Load more products' => __( 'Incarca mai multe produse', 'schrack-woocommerce-sync' ),
 				)
 			),
-			'details_button_text'    => $this->localized_text_setting(
+			'details_button_text'      => $this->localized_text_setting(
 				$settings['details_button_text'] ?? '',
 				__( 'Detalii', 'schrack-woocommerce-sync' ),
 				array(
@@ -1172,10 +1256,10 @@ class Schrack_Product_Filter_Renderer {
 					'Read more'    => __( 'Citeste mai mult', 'schrack-woocommerce-sync' ),
 				)
 			),
-			'accent_color'           => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
-			'action_color'           => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
-			'card_radius'            => $this->slider_size( $settings['card_radius'] ?? 8, 0, 8 ),
-			'sidebar_width'          => $this->slider_size( $settings['sidebar_width'] ?? 300, 260, 420 ),
+			'accent_color'             => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
+			'action_color'             => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
+			'card_radius'              => $this->slider_size( $settings['card_radius'] ?? 8, 0, 8 ),
+			'sidebar_width'            => $this->slider_size( $settings['sidebar_width'] ?? 300, 260, 420 ),
 		);
 	}
 
