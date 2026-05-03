@@ -1135,15 +1135,78 @@ class Schrack_Product_Filter_Renderer {
 			'show_stock'             => $this->truthy( $settings['show_stock'] ?? 'yes' ),
 			'show_add_to_cart'       => $this->truthy( $settings['show_add_to_cart'] ?? 'yes' ),
 			'hide_out_of_stock'      => $this->truthy( $settings['hide_out_of_stock'] ?? 'no' ),
-			'button_text'            => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Aplica filtrele', 'schrack-woocommerce-sync' ) ) ),
-			'reset_text'             => sanitize_text_field( (string) ( $settings['reset_text'] ?? __( 'Reseteaza', 'schrack-woocommerce-sync' ) ) ),
-			'load_more_text'         => sanitize_text_field( (string) ( $settings['load_more_text'] ?? __( 'Incarca mai multe', 'schrack-woocommerce-sync' ) ) ),
-			'details_button_text'    => sanitize_text_field( (string) ( $settings['details_button_text'] ?? __( 'Detalii', 'schrack-woocommerce-sync' ) ) ),
+			'button_text'            => $this->localized_text_setting(
+				$settings['button_text'] ?? '',
+				__( 'Aplica filtrele', 'schrack-woocommerce-sync' ),
+				array(
+					'Apply filter'  => __( 'Aplica filtrul', 'schrack-woocommerce-sync' ),
+					'Apply filters' => __( 'Aplica filtrele', 'schrack-woocommerce-sync' ),
+					'Filter'        => __( 'Filtreaza', 'schrack-woocommerce-sync' ),
+				)
+			),
+			'reset_text'             => $this->localized_text_setting(
+				$settings['reset_text'] ?? '',
+				__( 'Reseteaza', 'schrack-woocommerce-sync' ),
+				array(
+					'Clear'         => __( 'Sterge', 'schrack-woocommerce-sync' ),
+					'Reset'         => __( 'Reseteaza', 'schrack-woocommerce-sync' ),
+					'Reset filters' => __( 'Reseteaza filtrele', 'schrack-woocommerce-sync' ),
+				)
+			),
+			'load_more_text'         => $this->localized_text_setting(
+				$settings['load_more_text'] ?? '',
+				__( 'Incarca mai multe', 'schrack-woocommerce-sync' ),
+				array(
+					'Load more'          => __( 'Incarca mai multe', 'schrack-woocommerce-sync' ),
+					'Show more'          => __( 'Afiseaza mai multe', 'schrack-woocommerce-sync' ),
+					'More products'      => __( 'Mai multe produse', 'schrack-woocommerce-sync' ),
+					'Load more products' => __( 'Incarca mai multe produse', 'schrack-woocommerce-sync' ),
+				)
+			),
+			'details_button_text'    => $this->localized_text_setting(
+				$settings['details_button_text'] ?? '',
+				__( 'Detalii', 'schrack-woocommerce-sync' ),
+				array(
+					'Details'      => __( 'Detalii', 'schrack-woocommerce-sync' ),
+					'View details' => __( 'Vezi detalii', 'schrack-woocommerce-sync' ),
+					'Read more'    => __( 'Citeste mai mult', 'schrack-woocommerce-sync' ),
+				)
+			),
 			'accent_color'           => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
 			'action_color'           => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
 			'card_radius'            => $this->slider_size( $settings['card_radius'] ?? 8, 0, 8 ),
 			'sidebar_width'          => $this->slider_size( $settings['sidebar_width'] ?? 300, 260, 420 ),
 		);
+	}
+
+	/**
+	 * Returns a localized text setting while upgrading older saved English defaults.
+	 *
+	 * @param array<string,string> $legacy Legacy source labels mapped to localized labels.
+	 */
+	private function localized_text_setting( mixed $value, string $fallback, array $legacy ): string {
+		$text = sanitize_text_field( is_scalar( $value ) ? (string) $value : '' );
+
+		if ( '' === $text ) {
+			return $fallback;
+		}
+
+		$normalized = $this->normalize_label_key( $text );
+
+		foreach ( $legacy as $source => $localized ) {
+			if ( $normalized === $this->normalize_label_key( $source ) ) {
+				return $localized;
+			}
+		}
+
+		return $text;
+	}
+
+	/**
+	 * Normalizes a UI label for legacy default matching.
+	 */
+	private function normalize_label_key( string $label ): string {
+		return strtolower( trim( preg_replace( '/\s+/', ' ', $label ) ?? $label ) );
 	}
 
 	/**
