@@ -46,6 +46,13 @@ class Schrack_Plugin {
 	private ?Schrack_Cron $cron = null;
 
 	/**
+	 * Elementor integration.
+	 *
+	 * @var Schrack_Elementor|null
+	 */
+	private ?Schrack_Elementor $elementor = null;
+
+	/**
 	 * Returns the singleton instance.
 	 */
 	public static function instance(): Schrack_Plugin {
@@ -66,6 +73,8 @@ class Schrack_Plugin {
 		$this->logger   = new Schrack_Logger( $this->settings );
 		$this->cron     = new Schrack_Cron( $this->settings, $this->logger );
 		$this->cron->init();
+		$this->elementor = new Schrack_Elementor();
+		$this->elementor->init();
 
 		if ( is_admin() ) {
 			$this->admin = new Schrack_Admin( $this->settings, $this->logger, $this->cron );
@@ -93,6 +102,8 @@ class Schrack_Plugin {
 			'class-schrack-image-sync.php',
 			'class-schrack-price-sync.php',
 			'class-schrack-stock-sync.php',
+			'class-schrack-product-filter-renderer.php',
+			'class-schrack-elementor.php',
 			'class-schrack-cron.php',
 			'class-schrack-admin.php',
 			'class-schrack-wp-cli.php',
