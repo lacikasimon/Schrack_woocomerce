@@ -324,58 +324,111 @@ class Schrack_Product_Mapper {
 	 * @param array<string,mixed> $data Product data.
 	 */
 	private function update_product_image_url( WC_Product $product, array $data, bool $is_new ): void {
-		$image_url = isset( $data['image_url'] ) ? esc_url_raw( trim( $this->string_value( $data['image_url'] ) ) ) : '';
+		$image_url = isset( $data['image_url'] ) ? $this->normalize_image_url( $this->string_value( $data['image_url'] ) ) : '';
 
 		if ( '' === $image_url && ! $is_new ) {
 			return;
 		}
 
+		$current_url = $this->normalize_image_url( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) );
+
 		$product->update_meta_data( '_schrack_image_url', $image_url );
+
+		if ( '' !== $image_url && $image_url !== $current_url ) {
+			$product->update_meta_data( '_schrack_image_status', 'pending' );
+			$product->delete_meta_data( '_schrack_image_error' );
+		}
 	}
 
 	/**
 	 * Imports a stored Schrack catalog photo as the WooCommerce featured image.
 	 */
 	public function import_product_image( int $product_id ): int {
+		$result = $this->import_product_image_with_result( $product_id );
+
+		return absint( $result['attachment_id'] ?? 0 );
+	}
+
+	/**
+	 * Imports a stored Schrack catalog photo and returns a detailed sync result.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function import_product_image_with_result( int $product_id ): array {
 		if ( 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
-			return 0;
+			return array(
+				'status'        => 'skipped_disabled',
+				'attachment_id' => 0,
+			);
 		}
 
 		$product = wc_get_product( $product_id );
 
 		if ( ! $product instanceof WC_Product ) {
-			return 0;
+			return array(
+				'status'        => 'missing_product',
+				'attachment_id' => 0,
+				'error'         => 'WooCommerce product was not found.',
+			);
 		}
 
-		$image_url    = esc_url_raw( trim( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) ) );
-		$imported_url = sanitize_text_field( $this->string_value( $product->get_meta( '_schrack_imported_image_url', true ) ) );
+		$image_url    = $this->normalize_image_url( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) );
+		$imported_url = $this->normalize_image_url( $this->string_value( $product->get_meta( '_schrack_imported_image_url', true ) ) );
 
 		if ( '' === $image_url ) {
-			return 0;
+			$this->mark_product_image_sync( $product, 'missing_url', '', 0 );
+			$product->save();
+
+			return array(
+				'status'        => 'missing_url',
+				'attachment_id' => 0,
+			);
 		}
 
 		if ( $imported_url === $image_url && (int) $product->get_image_id() > 0 ) {
-			return (int) $product->get_image_id();
+			$attachment_id = (int) $product->get_image_id();
+			$this->mark_product_image_sync( $product, 'already_imported', $image_url, $attachment_id );
+			$product->save();
+
+			return array(
+				'status'        => 'already_imported',
+				'attachment_id' => $attachment_id,
+				'image_url'     => $image_url,
+			);
 		}
 
 		$attachment_id = $this->sideload_product_image( $image_url, $product );
 
-		if ( $attachment_id <= 0 ) {
-			return 0;
+		if ( is_wp_error( $attachment_id ) ) {
+			$error = $attachment_id->get_error_message();
+			$this->mark_product_image_sync( $product, 'failed', $image_url, 0, $error );
+			$product->save();
+
+			return array(
+				'status'        => 'failed',
+				'attachment_id' => 0,
+				'image_url'     => $image_url,
+				'error'         => $error,
+			);
 		}
 
 		$product->set_image_id( $attachment_id );
 		$product->update_meta_data( '_schrack_image_attachment_id', $attachment_id );
 		$product->update_meta_data( '_schrack_imported_image_url', $image_url );
+		$this->mark_product_image_sync( $product, 'imported', $image_url, $attachment_id );
 		$product->save();
 
-		return $attachment_id;
+		return array(
+			'status'        => 'imported',
+			'attachment_id' => $attachment_id,
+			'image_url'     => $image_url,
+		);
 	}
 
 	/**
 	 * Downloads one remote catalog image into the WordPress media library.
 	 */
-	private function sideload_product_image( string $image_url, WC_Product $product ): int {
+	private function sideload_product_image( string $image_url, WC_Product $product ): int|WP_Error {
 		if ( ! function_exists( 'download_url' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
 		}
@@ -397,7 +450,7 @@ class Schrack_Product_Mapper {
 					'error'     => $temp_file->get_error_message(),
 				)
 			);
-			return 0;
+			return $temp_file;
 		}
 
 		$file = array(
@@ -418,7 +471,7 @@ class Schrack_Product_Mapper {
 					'error'     => $attachment_id->get_error_message(),
 				)
 			);
-			return 0;
+			return $attachment_id;
 		}
 
 		$this->logger->info(
@@ -432,6 +485,50 @@ class Schrack_Product_Mapper {
 		);
 
 		return (int) $attachment_id;
+	}
+
+	/**
+	 * Stores image sync bookkeeping on the product.
+	 */
+	private function mark_product_image_sync( WC_Product $product, string $status, string $image_url, int $attachment_id = 0, string $error = '' ): void {
+		$product->update_meta_data( '_schrack_last_image_sync', current_time( 'mysql' ) );
+		$product->update_meta_data( '_schrack_last_image_attempt_ts', time() );
+		$product->update_meta_data( '_schrack_image_status', sanitize_key( $status ) );
+
+		if ( '' !== $image_url ) {
+			$product->update_meta_data( '_schrack_image_url', $image_url );
+		}
+
+		if ( $attachment_id > 0 ) {
+			$product->update_meta_data( '_schrack_image_attachment_id', $attachment_id );
+		}
+
+		if ( '' !== $error ) {
+			$product->update_meta_data( '_schrack_image_error', sanitize_text_field( $error ) );
+		} else {
+			$product->delete_meta_data( '_schrack_image_error' );
+		}
+	}
+
+	/**
+	 * Normalizes an image URL stored in catalog data or product meta.
+	 */
+	private function normalize_image_url( string $image_url ): string {
+		$image_url = html_entity_decode( trim( $image_url ), ENT_QUOTES );
+
+		if ( '' === $image_url ) {
+			return '';
+		}
+
+		if ( preg_match( '/\bsrc=[\'"]([^\'"]+)[\'"]/i', $image_url, $matches ) ) {
+			$image_url = $matches[1];
+		} elseif ( preg_match( '/https?:\/\/[^\s,;"\'<>|]+/i', $image_url, $matches ) ) {
+			$image_url = $matches[0];
+		} elseif ( str_starts_with( $image_url, '//' ) ) {
+			$image_url = 'https:' . $image_url;
+		}
+
+		return esc_url_raw( $image_url );
 	}
 
 	/**

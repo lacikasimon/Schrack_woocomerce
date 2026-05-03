@@ -83,13 +83,18 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,mixed>
 	 */
 	public function import_items( array $items, array $status_context = array() ): array {
-		$processed = 0;
-		$errors    = 0;
+		$processed         = 0;
+		$errors            = 0;
+		$image_urls_stored = 0;
 
 		foreach ( $items as $item ) {
 			try {
 				$this->mapper->upsert( $item );
 				++$processed;
+
+				if ( '' !== $this->item_image_url( $item ) ) {
+					++$image_urls_stored;
+				}
 			} catch ( Throwable $exception ) {
 				++$errors;
 				$this->logger->error(
@@ -103,8 +108,9 @@ class Schrack_Catalog_Importer {
 
 		$result = array_merge(
 			array(
-				'processed' => $processed,
-				'errors'    => $errors,
+				'processed'         => $processed,
+				'errors'            => $errors,
+				'image_urls_stored' => $image_urls_stored,
 			),
 			$status_context
 		);
@@ -561,6 +567,19 @@ class Schrack_Catalog_Importer {
 	}
 
 	/**
+	 * Returns the normalized catalog image URL from an item.
+	 *
+	 * @param array<string,mixed> $item Normalized item.
+	 */
+	private function item_image_url( array $item ): string {
+		if ( ! isset( $item['image_url'] ) || ! is_scalar( $item['image_url'] ) ) {
+			return '';
+		}
+
+		return esc_url_raw( trim( (string) $item['image_url'] ) );
+	}
+
+	/**
 	 * Parser boundary for future CSV/XML/DATANORM implementations.
 	 *
 	 * @param mixed  $raw Raw SOAP response.
@@ -999,11 +1018,32 @@ class Schrack_Catalog_Importer {
 			'description'       => wp_kses_post( $get( array( 'description', 'long_description', 'longdescription', 'textprodus', 'longtext', 'langtext', 'beschreibung' ) ) ),
 			'manufacturer'      => sanitize_text_field( $get( array( 'manufacturer', 'brand', 'hersteller', 'producer', 'supplier' ) ) ),
 			'ean'               => sanitize_text_field( $get( array( 'ean', 'gtin', 'barcode', 'barcodeno' ) ) ),
-			'image_url'         => esc_url_raw( $get( array( 'image_url', 'imageurl', 'photo_url', 'photourl', 'foto_url', 'fotourl', 'foto', 'fotografie', 'photo', 'photograph', 'picture', 'bild', 'image', 'thumbnail', 'productimage', 'productimageurl' ) ) ),
+			'image_url'         => $this->normalize_catalog_url( $get( array( 'image_url', 'imageurl', 'imageurl1', 'photo_url', 'photourl', 'foto_url', 'fotourl', 'foto', 'fotografie', 'photo', 'photograph', 'picture', 'pictureurl', 'bild', 'bildurl', 'artikelbild', 'image', 'image1', 'mainimage', 'mainimageurl', 'thumbnail', 'thumbnailurl', 'productimage', 'productimageurl', 'product_image', 'product_image_url', 'mediaurl' ) ) ),
 			'category_path'     => sanitize_text_field( '' !== $category_path ? $category_path : $get( array( 'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup' ) ) ),
 			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit' ) ) ),
 			'catalog_status'    => sanitize_text_field( $get( array( 'catalog_status', 'status' ) ) ),
 		);
+	}
+
+	/**
+	 * Normalizes catalog URL values that may arrive as plain URLs or small HTML fragments.
+	 */
+	private function normalize_catalog_url( string $value ): string {
+		$value = html_entity_decode( trim( $value ), ENT_QUOTES );
+
+		if ( '' === $value ) {
+			return '';
+		}
+
+		if ( preg_match( '/\bsrc=[\'"]([^\'"]+)[\'"]/i', $value, $matches ) ) {
+			$value = $matches[1];
+		} elseif ( preg_match( '/https?:\/\/[^\s,;"\'<>|]+/i', $value, $matches ) ) {
+			$value = $matches[0];
+		} elseif ( str_starts_with( $value, '//' ) ) {
+			$value = 'https:' . $value;
+		}
+
+		return esc_url_raw( $value );
 	}
 
 	/**

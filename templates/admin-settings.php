@@ -120,14 +120,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</select>
 				</td>
 			</tr>
-			<tr>
-				<th scope="row"><?php esc_html_e( 'Product images', 'schrack-woocommerce-sync' ); ?></th>
-				<td><label><input type="checkbox" name="schrack_settings[image_import_enabled]" value="yes" <?php checked( $settings['image_import_enabled'], 'yes' ); ?>> <?php esc_html_e( 'Import images from the Schrack Foto/Fotografie catalog column', 'schrack-woocommerce-sync' ); ?></label></td>
-			</tr>
-			<tr>
-				<th scope="row"><?php esc_html_e( 'Stock handling', 'schrack-woocommerce-sync' ); ?></th>
-				<td><label><input type="checkbox" name="schrack_settings[stock_handling_enabled]" value="yes" <?php checked( $settings['stock_handling_enabled'], 'yes' ); ?>> <?php esc_html_e( 'Enabled', 'schrack-woocommerce-sync' ); ?></label></td>
-			</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Product images', 'schrack-woocommerce-sync' ); ?></th>
+					<td><label><input type="checkbox" name="schrack_settings[image_import_enabled]" value="yes" <?php checked( $settings['image_import_enabled'], 'yes' ); ?>> <?php esc_html_e( 'Import images from the Schrack Foto/Fotografie catalog column', 'schrack-woocommerce-sync' ); ?></label></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="schrack_image_parallel_workers"><?php esc_html_e( 'Parallel image workers', 'schrack-woocommerce-sync' ); ?></label></th>
+					<td><input id="schrack_image_parallel_workers" type="number" min="1" max="10" step="1" name="schrack_settings[image_parallel_workers]" value="<?php echo esc_attr( $settings['image_parallel_workers'] ); ?>"></td>
+				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Stock handling', 'schrack-woocommerce-sync' ); ?></th>
+					<td><label><input type="checkbox" name="schrack_settings[stock_handling_enabled]" value="yes" <?php checked( $settings['stock_handling_enabled'], 'yes' ); ?>> <?php esc_html_e( 'Enabled', 'schrack-woocommerce-sync' ); ?></label></td>
+				</tr>
 			<tr>
 				<th scope="row"><?php esc_html_e( 'Delete missing products', 'schrack-woocommerce-sync' ); ?></th>
 				<td><label><input type="checkbox" name="schrack_settings[delete_missing_products]" value="yes" <?php checked( $settings['delete_missing_products'], 'yes' ); ?>> <?php esc_html_e( 'Enabled', 'schrack-woocommerce-sync' ); ?></label></td>

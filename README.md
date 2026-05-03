@@ -70,6 +70,7 @@ The admin settings page stores values through the WordPress Options API:
 - Batch sleep seconds
 - Import mode
 - Product publish status
+- Parallel image workers
 - Stock handling
 - Stock source
 - Delete missing products
@@ -155,6 +156,11 @@ Stored meta fields:
 - `_schrack_purchase_price`
 - `_schrack_unit`
 - `_schrack_catalog_status`
+- `_schrack_image_url`
+- `_schrack_imported_image_url`
+- `_schrack_image_attachment_id`
+- `_schrack_image_status`
+- `_schrack_image_error`
 - `_schrack_stock_breakdown`
 - `_schrack_technical_attributes`
 
@@ -170,6 +176,8 @@ If Action Scheduler is unavailable, WP-Cron is used as a fallback.
 
 Catalog, price, and stock batches persist cursors in the status option. Each batch continues from the previous offset and wraps to the beginning after a full pass. Catalog imports also reset when the parsed SKU sequence changes.
 
+Catalog sync stores product image URLs in `_schrack_image_url`. Image sync then claims existing products with pending image URLs and dispatches parallel Action Scheduler workers, controlled by the `Parallel image workers` setting. Failed image downloads are marked in product meta and retried after a cooldown.
+
 ## WP-CLI
 
 Commands:
@@ -178,6 +186,7 @@ Commands:
 wp schrack-sync catalog
 wp schrack-sync prices
 wp schrack-sync stock
+wp schrack-sync images
 wp schrack-sync full
 ```
 
@@ -187,7 +196,7 @@ Logs are stored in a custom database table:
 
 - Timestamp
 - Level: debug / info / warning / error
-- Operation: catalog / price / stock / soap / admin
+- Operation: catalog / price / stock / images / soap / admin
 - SKU
 - Message
 - Context

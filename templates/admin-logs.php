@@ -29,6 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<option value="catalog" <?php selected( $args['operation'], 'catalog' ); ?>><?php esc_html_e( 'Catalog', 'schrack-woocommerce-sync' ); ?></option>
 				<option value="price" <?php selected( $args['operation'], 'price' ); ?>><?php esc_html_e( 'Price', 'schrack-woocommerce-sync' ); ?></option>
 				<option value="stock" <?php selected( $args['operation'], 'stock' ); ?>><?php esc_html_e( 'Stock', 'schrack-woocommerce-sync' ); ?></option>
+				<option value="images" <?php selected( $args['operation'], 'images' ); ?>><?php esc_html_e( 'Images', 'schrack-woocommerce-sync' ); ?></option>
 				<option value="soap" <?php selected( $args['operation'], 'soap' ); ?>><?php esc_html_e( 'SOAP', 'schrack-woocommerce-sync' ); ?></option>
 				<option value="admin" <?php selected( $args['operation'], 'admin' ); ?>><?php esc_html_e( 'Admin', 'schrack-woocommerce-sync' ); ?></option>
 			</select>

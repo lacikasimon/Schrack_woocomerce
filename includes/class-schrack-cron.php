@@ -16,6 +16,7 @@ class Schrack_Cron {
 	public const HOOK_STOCK   = 'schrack_wc_sync_stock';
 	public const HOOK_FULL    = 'schrack_wc_sync_full';
 	public const HOOK_IMAGES  = 'schrack_wc_sync_images';
+	public const HOOK_IMAGE_WORKER = 'schrack_wc_sync_image_worker';
 
 	/**
 	 * Settings.
@@ -49,6 +50,7 @@ class Schrack_Cron {
 		add_action( self::HOOK_PRICES, array( $this, 'run_price_sync' ) );
 		add_action( self::HOOK_STOCK, array( $this, 'run_stock_sync' ) );
 		add_action( self::HOOK_IMAGES, array( $this, 'run_image_sync' ) );
+		add_action( self::HOOK_IMAGE_WORKER, array( $this, 'run_image_worker' ), 10, 3 );
 		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
 	}
 
@@ -245,9 +247,20 @@ class Schrack_Cron {
 
 		foreach ( $this->task_definitions() as $task => $definition ) {
 			$hook     = (string) $definition['hook'];
-			$pending  = $this->scheduled_action_count( $hook, 'pending' );
-			$running  = $this->scheduled_action_count( $hook, 'in-progress' );
-			$next_run = $this->next_scheduled_timestamp( $hook );
+			$pending  = 0;
+			$running  = 0;
+			$next_run = null;
+
+			foreach ( $this->definition_hooks( $definition ) as $definition_hook ) {
+				$pending += $this->scheduled_action_count( $definition_hook, 'pending' );
+				$running += $this->scheduled_action_count( $definition_hook, 'in-progress' );
+				$hook_next_run = $this->next_scheduled_timestamp( $definition_hook );
+
+				if ( null !== $hook_next_run && ( null === $next_run || $hook_next_run < $next_run ) ) {
+					$next_run = $hook_next_run;
+				}
+			}
+
 			$state    = 'idle';
 
 			if ( $running > 0 ) {
@@ -323,10 +336,11 @@ class Schrack_Cron {
 				return $this->handle_stopped_sync( 'catalog', 0, 0 );
 			}
 
-			$result          = array();
-			$total_processed = 0;
-			$total_errors    = 0;
-			$batches         = 0;
+			$result           = array();
+			$total_processed  = 0;
+			$total_errors     = 0;
+			$total_image_urls = 0;
+			$batches          = 0;
 
 			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
 				if ( $this->settings->is_stop_requested() ) {
@@ -336,8 +350,9 @@ class Schrack_Cron {
 				$result = $importer->import_from_soap( 'CSV', $limit );
 				++$batches;
 
-				$total_processed += (int) ( $result['processed'] ?? 0 );
-				$total_errors    += (int) ( $result['errors'] ?? 0 );
+				$total_processed  += (int) ( $result['processed'] ?? 0 );
+				$total_errors     += (int) ( $result['errors'] ?? 0 );
+				$total_image_urls += (int) ( $result['image_urls_stored'] ?? 0 );
 
 				if ( $this->is_stopped_result( $result ) ) {
 					return $this->handle_stopped_sync( 'catalog', $total_processed, $total_errors );
@@ -355,10 +370,11 @@ class Schrack_Cron {
 			$result = array_merge(
 				$result,
 				array(
-					'processed'              => $total_processed,
-					'errors'                 => $total_errors,
-					'batches_processed'      => $batches,
-					'catalog_batches_per_run'=> $max_batches,
+					'processed'               => $total_processed,
+					'errors'                  => $total_errors,
+					'image_urls_stored'       => $total_image_urls,
+					'batches_processed'       => $batches,
+					'catalog_batches_per_run' => $max_batches,
 				)
 			);
 
@@ -551,8 +567,14 @@ class Schrack_Cron {
 	 * Runs an image import batch.
 	 */
 	public function run_image_sync( bool $queue_continuation = true ): array {
-		$sync  = new Schrack_Image_Sync( $this->settings, $this->logger );
-		$limit = (int) $this->settings->get( 'sync_batch_size', 25 );
+		$sync             = new Schrack_Image_Sync( $this->settings, $this->logger );
+		$limit            = (int) $this->settings->get( 'sync_batch_size', 25 );
+		$parallel_workers = $this->image_parallel_workers();
+
+		if ( $parallel_workers > 1 && $this->can_queue_parallel_image_workers() ) {
+			return $this->queue_parallel_image_sync( $sync, $limit, $parallel_workers, $queue_continuation );
+		}
+
 		$max_batches = max( 1, (int) $this->settings->get( 'sync_batches_per_run', 3 ) );
 		$started_at  = time();
 
@@ -599,7 +621,7 @@ class Schrack_Cron {
 					'imported'            => $total_imported,
 					'errors'              => $total_errors,
 					'batches_processed'   => $batches,
-					'sync_batches_per_run'=> $max_batches,
+					'sync_batches_per_run' => $max_batches,
 				)
 			);
 
@@ -616,6 +638,158 @@ class Schrack_Cron {
 				'processed'       => 0,
 				'errors'          => 1,
 				'completed_cycle' => 'yes',
+			);
+		}
+	}
+
+	/**
+	 * Dispatches one wave of parallel image import workers.
+	 */
+	private function queue_parallel_image_sync( Schrack_Image_Sync $sync, int $limit, int $workers, bool $queue_continuation ): array {
+		try {
+			if ( $this->settings->is_stop_requested() ) {
+				return $this->handle_stopped_sync( 'images', 0, 0 );
+			}
+
+			$claimed        = $sync->claim_parallel_batches( $limit, $workers );
+			$chunks         = isset( $claimed['chunks'] ) && is_array( $claimed['chunks'] ) ? $claimed['chunks'] : array();
+			$run_id         = (string) ( $claimed['run_id'] ?? '' );
+			$queued_workers  = 0;
+			$queued_products = 0;
+			$stopped         = false;
+
+			foreach ( $chunks as $index => $product_ids ) {
+				if ( $this->settings->is_stop_requested() ) {
+					$stopped = true;
+					foreach ( array_slice( $chunks, $index ) as $remaining_product_ids ) {
+						$sync->release_product_claims( is_array( $remaining_product_ids ) ? $remaining_product_ids : array(), $run_id );
+					}
+					break;
+				}
+
+				if ( ! is_array( $product_ids ) || empty( $product_ids ) ) {
+					continue;
+				}
+
+				$this->queue_sync_batch(
+					self::HOOK_IMAGE_WORKER,
+					'images',
+					array( array_values( array_map( 'absint', $product_ids ) ), $run_id, $index + 1 ),
+					array(
+						'run_id'       => $run_id,
+						'worker_index' => $index + 1,
+						'products'     => count( $product_ids ),
+					),
+					0
+				);
+				++$queued_workers;
+				$queued_products += count( $product_ids );
+			}
+
+			$total_products   = absint( $claimed['total_products'] ?? 0 );
+			$completed_cycle  = $stopped ? 'no' : (string) ( $claimed['completed_cycle'] ?? 'yes' );
+			$result           = array(
+				'processed'        => 0,
+				'imported'         => 0,
+				'attached'         => 0,
+				'skipped'          => 0,
+				'errors'           => 0,
+				'cursor'           => 0,
+				'total_products'   => $total_products,
+				'batch_start'      => 0,
+				'batch_count'      => $queued_products,
+				'batch_limit'      => max( 1, $limit ),
+				'completed_cycle'  => $completed_cycle,
+				'parallel'         => 'yes',
+				'run_id'           => $run_id,
+				'workers_requested' => $workers,
+				'workers_queued'   => $queued_workers,
+				'queued_products'  => $queued_products,
+			);
+
+			if ( $stopped ) {
+				$result['stopped'] = 'yes';
+			}
+
+			$this->settings->update_status( 'images', $result );
+			$this->logger->info( 'images', 'Queued parallel Schrack image sync workers.', null, $result );
+
+			if ( ! $stopped && $queue_continuation && 'no' === $completed_cycle && $queued_workers > 0 ) {
+				$this->queue_sync_batch(
+					self::HOOK_IMAGES,
+					'images',
+					array(),
+					array(
+						'source'          => 'parallel_image_continuation',
+						'run_id'          => $run_id,
+						'queued_products' => $queued_products,
+					),
+					$this->image_parallel_followup_delay()
+				);
+			}
+
+			return $result;
+		} catch ( Throwable $exception ) {
+			$this->logger->error( 'images', 'Failed to queue parallel Schrack image sync workers.', null, array( 'error' => $exception->getMessage() ) );
+			$this->settings->update_status( 'images', array( 'processed' => 0, 'errors' => 1 ) );
+
+			return array(
+				'processed'       => 0,
+				'errors'          => 1,
+				'completed_cycle' => 'yes',
+			);
+		}
+	}
+
+	/**
+	 * Runs one explicit parallel image worker batch.
+	 *
+	 * @param mixed  $product_ids Product IDs passed by Action Scheduler.
+	 * @param string $run_id Parallel run ID.
+	 * @return array<string,mixed>
+	 */
+	public function run_image_worker( mixed $product_ids = array(), string $run_id = '', int $worker_index = 0 ): array {
+		$sync        = new Schrack_Image_Sync( $this->settings, $this->logger );
+		$product_ids = is_array( $product_ids ) ? array_values( array_map( 'absint', $product_ids ) ) : array();
+
+		try {
+			$result = $sync->sync_product_ids( $product_ids, $run_id );
+			$result = array_merge(
+				$result,
+				array(
+					'cursor'          => 0,
+					'batch_start'     => 0,
+					'batch_limit'     => count( $product_ids ),
+					'completed_cycle' => 'yes' === (string) ( $result['stopped'] ?? 'no' ) ? 'no' : 'yes',
+					'parallel'        => 'yes',
+					'worker_index'    => absint( $worker_index ),
+				)
+			);
+
+			$this->settings->update_status( 'images', $result );
+			$this->logger->info( 'images', 'Finished Schrack image sync worker.', null, $result );
+
+			return $result;
+		} catch ( Throwable $exception ) {
+			$sync->release_product_claims( $product_ids, $run_id );
+			$this->logger->error(
+				'images',
+				'Schrack image sync worker failed.',
+				null,
+				array(
+					'run_id'       => $run_id,
+					'worker_index' => $worker_index,
+					'error'        => $exception->getMessage(),
+				)
+			);
+			$this->settings->update_status( 'images', array( 'processed' => 0, 'errors' => 1, 'parallel' => 'yes', 'run_id' => $run_id ) );
+
+			return array(
+				'processed'       => 0,
+				'errors'          => 1,
+				'completed_cycle' => 'yes',
+				'parallel'        => 'yes',
+				'run_id'          => $run_id,
 			);
 		}
 	}
@@ -704,12 +878,7 @@ class Schrack_Cron {
 		}
 
 		if ( 'images' === $stage && $this->should_import_images() ) {
-			$result = $this->run_image_sync( false );
-			if ( $this->is_stopped_result( $result ) ) {
-				return;
-			}
-
-			$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'images' ) );
+			$this->run_image_sync( true );
 		}
 	}
 
@@ -717,7 +886,7 @@ class Schrack_Cron {
 	 * Clears scheduled actions.
 	 */
 	public static function clear_scheduled_actions(): void {
-		foreach ( array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES ) as $hook ) {
+		foreach ( array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER ) as $hook ) {
 			if ( function_exists( 'as_unschedule_all_actions' ) ) {
 				as_unschedule_all_actions( $hook, null, self::GROUP );
 			}
@@ -1154,8 +1323,27 @@ class Schrack_Cron {
 			'images'  => array(
 				'hook'  => self::HOOK_IMAGES,
 				'label' => __( 'Images', 'schrack-woocommerce-sync' ),
+				'extra_hooks' => array( self::HOOK_IMAGE_WORKER ),
 			),
 		);
+	}
+
+	/**
+	 * Returns all hooks that belong to a queue status definition.
+	 *
+	 * @param array<string,mixed> $definition Task definition.
+	 * @return array<int,string>
+	 */
+	private function definition_hooks( array $definition ): array {
+		$hooks = array( (string) $definition['hook'] );
+
+		foreach ( (array) ( $definition['extra_hooks'] ?? array() ) as $hook ) {
+			if ( is_string( $hook ) && '' !== $hook ) {
+				$hooks[] = $hook;
+			}
+		}
+
+		return array_values( array_unique( $hooks ) );
 	}
 
 	/**
@@ -1163,5 +1351,26 @@ class Schrack_Cron {
 	 */
 	private function should_import_images(): bool {
 		return 'yes' === $this->settings->get( 'image_import_enabled', 'yes' );
+	}
+
+	/**
+	 * Returns how many Action Scheduler workers image sync may dispatch at once.
+	 */
+	private function image_parallel_workers(): int {
+		return max( 1, min( 10, (int) $this->settings->get( 'image_parallel_workers', 4 ) ) );
+	}
+
+	/**
+	 * Returns whether Action Scheduler can run worker batches independently.
+	 */
+	private function can_queue_parallel_image_workers(): bool {
+		return function_exists( 'as_enqueue_async_action' ) || function_exists( 'as_schedule_single_action' );
+	}
+
+	/**
+	 * Delay before the next image dispatcher wave checks for more pending products.
+	 */
+	private function image_parallel_followup_delay(): int {
+		return max( 10, min( 300, (int) $this->settings->get( 'image_parallel_followup_delay', 30 ) ) );
 	}
 }
