@@ -44,6 +44,8 @@ class Schrack_Elementor {
 		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::AJAX_ACTION, array( $this, 'ajax_filter_products' ) );
 		add_action( 'wp_ajax_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
+		add_action( 'wp_ajax_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
+		add_action( 'wp_ajax_nopriv_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 	}
 
 	/**
@@ -70,6 +72,21 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-product-page.css',
 			array(),
 			SCHRACK_WC_SYNC_VERSION
+		);
+
+		wp_register_style(
+			'schrack-wc-header-search',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-header-search.css',
+			array(),
+			SCHRACK_WC_SYNC_VERSION
+		);
+
+		wp_register_script(
+			'schrack-wc-header-search',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-header-search.js',
+			array(),
+			SCHRACK_WC_SYNC_VERSION,
+			true
 		);
 	}
 
@@ -103,10 +120,12 @@ class Schrack_Elementor {
 		}
 
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-filter-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-header-search-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 
 		$widgets = array(
 			new Schrack_Elementor_Product_Filter_Widget(),
+			new Schrack_Elementor_Header_Search_Widget(),
 			new Schrack_Elementor_Product_Page_Widget(),
 		);
 
@@ -130,10 +149,12 @@ class Schrack_Elementor {
 		}
 
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-filter-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-header-search-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 
 		if ( is_object( $widgets_manager ) && method_exists( $widgets_manager, 'register_widget_type' ) ) {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Filter_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Header_Search_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Page_Widget() );
 			$this->widgets_registered = true;
 		}
@@ -148,7 +169,7 @@ class Schrack_Elementor {
 		if ( ! class_exists( 'WooCommerce' ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'WooCommerce is not available.', 'schrack-woocommerce-sync' ),
+					'message' => __( 'WooCommerce nu este disponibil.', 'schrack-woocommerce-sync' ),
 				),
 				400
 			);
@@ -185,5 +206,33 @@ class Schrack_Elementor {
 		$limit    = isset( $_POST['limit'] ) ? absint( wp_unslash( (string) $_POST['limit'] ) ) : 30;
 
 		wp_send_json_success( $this->renderer->render_category_results( $search, $selected, $limit ) );
+	}
+
+	/**
+	 * Handles AJAX header product search.
+	 */
+	public function ajax_header_search(): void {
+		check_ajax_referer( Schrack_Header_Search_Renderer::NONCE_ACTION, 'nonce' );
+
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'WooCommerce nu este disponibil.', 'schrack-woocommerce-sync' ),
+				),
+				400
+			);
+		}
+
+		$config_raw = isset( $_POST['config'] ) ? wp_unslash( (string) $_POST['config'] ) : '{}';
+		$config     = json_decode( $config_raw, true );
+
+		if ( ! is_array( $config ) ) {
+			$config = array();
+		}
+
+		$search   = isset( $_POST['search'] ) ? wp_unslash( (string) $_POST['search'] ) : '';
+		$renderer = new Schrack_Header_Search_Renderer();
+
+		wp_send_json_success( $renderer->render_results( $search, $config ) );
 	}
 }
