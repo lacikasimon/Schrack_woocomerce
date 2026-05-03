@@ -182,6 +182,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 							}
 						}
 					}
+
+					if ( isset( $row['memory_peak_mb'] ) ) {
+						$memory_detail = sprintf(
+							/* translators: %s: peak memory in MB. */
+							__( 'Memory peak: %s MB', 'schrack-woocommerce-sync' ),
+							(string) $row['memory_peak_mb']
+						);
+
+						if ( isset( $row['memory_limit_mb'] ) ) {
+							$memory_detail .= ' / ' . (string) $row['memory_limit_mb'] . ' MB';
+						}
+
+						$details[] = $memory_detail;
+					}
+
+					foreach ( array( 'memory_safe_mode', 'rate_limited', 'queue_failed', 'waiting_workers' ) as $detail_key ) {
+						if ( 'yes' === (string) ( $row[ $detail_key ] ?? 'no' ) ) {
+							$details[] = ucwords( str_replace( '_', ' ', $detail_key ) ) . ': yes';
+						}
+					}
 					?>
 					<tr>
 						<td><?php echo esc_html( ucfirst( $operation ) ); ?></td>

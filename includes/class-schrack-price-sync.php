@@ -380,6 +380,9 @@ class Schrack_Price_Sync {
 				'fields'         => 'ids',
 				'orderby'        => 'ID',
 				'order'          => 'ASC',
+				'cache_results'          => false,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
 				'meta_query'     => array(
 					array(
 						'key'     => '_schrack_item_number',

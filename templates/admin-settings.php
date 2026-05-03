@@ -67,19 +67,31 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_catalog_batch_size"><?php esc_html_e( 'Catalog batch size', 'schrack-woocommerce-sync' ); ?></label></th>
-				<td><input id="schrack_catalog_batch_size" type="number" min="1" max="5000" step="1" name="schrack_settings[catalog_batch_size]" value="<?php echo esc_attr( $settings['catalog_batch_size'] ); ?>"></td>
+				<td>
+					<input id="schrack_catalog_batch_size" type="number" min="1" max="1000" step="1" name="schrack_settings[catalog_batch_size]" value="<?php echo esc_attr( min( 1000, max( 1, absint( $settings['catalog_batch_size'] ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'For 2 GB cPanel hosting, 500 is the recommended value. Runtime protection caps this automatically on low-memory hosts.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_catalog_batches_per_run"><?php esc_html_e( 'Catalog batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
-				<td><input id="schrack_catalog_batches_per_run" type="number" min="1" max="20" step="1" name="schrack_settings[catalog_batches_per_run]" value="<?php echo esc_attr( $settings['catalog_batches_per_run'] ); ?>"></td>
+				<td>
+					<input id="schrack_catalog_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[catalog_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['catalog_batches_per_run'] ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'Use 1 on shared hosting so each batch releases memory before the next queued run.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_batch_size"><?php esc_html_e( 'Price/stock/image batch size', 'schrack-woocommerce-sync' ); ?></label></th>
-				<td><input id="schrack_batch_size" type="number" min="1" max="500" step="1" name="schrack_settings[sync_batch_size]" value="<?php echo esc_attr( $settings['sync_batch_size'] ); ?>"></td>
+				<td>
+					<input id="schrack_batch_size" type="number" min="1" max="500" step="1" name="schrack_settings[sync_batch_size]" value="<?php echo esc_attr( $settings['sync_batch_size'] ); ?>">
+					<p class="description"><?php esc_html_e( 'On low-memory hosting, price/stock batches are capped to 50 and image batches to 15 at runtime.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_sync_batches_per_run"><?php esc_html_e( 'Price/stock/image batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
-				<td><input id="schrack_sync_batches_per_run" type="number" min="1" max="20" step="1" name="schrack_settings[sync_batches_per_run]" value="<?php echo esc_attr( $settings['sync_batches_per_run'] ); ?>"></td>
+				<td>
+					<input id="schrack_sync_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[sync_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['sync_batches_per_run'] ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'Use 1 on 2 GB hosting. Follow-up batches are queued instead of being chained in one PHP request.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_price_request_size"><?php esc_html_e( 'Price items per SOAP request', 'schrack-woocommerce-sync' ); ?></label></th>
@@ -126,7 +138,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_image_parallel_workers"><?php esc_html_e( 'Parallel image workers', 'schrack-woocommerce-sync' ); ?></label></th>
-				<td><input id="schrack_image_parallel_workers" type="number" min="1" max="10" step="1" name="schrack_settings[image_parallel_workers]" value="<?php echo esc_attr( $settings['image_parallel_workers'] ); ?>"></td>
+				<td>
+					<input id="schrack_image_parallel_workers" type="number" min="1" max="4" step="1" name="schrack_settings[image_parallel_workers]" value="<?php echo esc_attr( min( 4, max( 1, absint( $settings['image_parallel_workers'] ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'For 2 GB cPanel hosting, use 1 or 2. Runtime protection caps this to 2 on low-memory hosts.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><?php esc_html_e( 'Stock handling', 'schrack-woocommerce-sync' ); ?></th>
