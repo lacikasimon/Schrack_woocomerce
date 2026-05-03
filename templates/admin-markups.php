@@ -128,39 +128,62 @@ $render_bulk_category_nodes = static function ( int $parent_id ) use ( &$render_
 
 			<div class="schrack-markups-bulk__grid">
 				<div class="schrack-markups-bulk__values">
-					<label class="schrack-markups-bulk__field" for="schrack_bulk_markup">
-						<span><?php esc_html_e( 'Markup %', 'schrack-woocommerce-sync' ); ?></span>
-						<input id="schrack_bulk_markup" type="number" step="0.01" min="0" max="500" name="schrack_bulk[markup]" data-bulk-markup>
-					</label>
-
-					<label class="schrack-markups-bulk__field" for="schrack_bulk_rounding">
-						<span><?php esc_html_e( 'Rounding', 'schrack-woocommerce-sync' ); ?></span>
-						<select id="schrack_bulk_rounding" name="schrack_bulk[rounding]" data-bulk-rounding>
-							<option value=""><?php esc_html_e( 'Leave rounding unchanged', 'schrack-woocommerce-sync' ); ?></option>
-							<option value="none"><?php esc_html_e( 'None', 'schrack-woocommerce-sync' ); ?></option>
-							<option value="ending_99"><?php esc_html_e( 'Round to .99', 'schrack-woocommerce-sync' ); ?></option>
-							<option value="integer_ron"><?php esc_html_e( 'Round to whole RON', 'schrack-woocommerce-sync' ); ?></option>
-							<option value="five_ron"><?php esc_html_e( 'Round to 5 RON', 'schrack-woocommerce-sync' ); ?></option>
-						</select>
-					</label>
-
-					<fieldset class="schrack-markups-bulk__mode">
-						<legend><?php esc_html_e( 'Bulk mode', 'schrack-woocommerce-sync' ); ?></legend>
-						<label>
-							<input type="radio" name="schrack_bulk[mode]" value="empty" checked data-bulk-mode>
-							<?php esc_html_e( 'Only categories with no configured markup or rounding', 'schrack-woocommerce-sync' ); ?>
-						</label>
-						<label>
-							<input type="radio" name="schrack_bulk[mode]" value="overwrite" data-bulk-mode>
-							<?php esc_html_e( 'Overwrite selected categories', 'schrack-woocommerce-sync' ); ?>
-						</label>
-					</fieldset>
-
-					<div class="schrack-markups-bulk__apply">
-						<button type="button" class="button button-secondary" data-bulk-apply><?php esc_html_e( 'Apply to selected rows', 'schrack-woocommerce-sync' ); ?></button>
-						<button type="submit" class="button" name="schrack_bulk_submit" value="1"><?php esc_html_e( 'Apply selected and save', 'schrack-woocommerce-sync' ); ?></button>
-					</div>
-					<p class="description" data-bulk-result></p>
+					<table class="widefat schrack-bulk-settings-table">
+						<tbody>
+							<tr>
+								<th scope="row"><label for="schrack_bulk_markup"><?php esc_html_e( 'Markup %', 'schrack-woocommerce-sync' ); ?></label></th>
+								<td>
+									<input id="schrack_bulk_markup" type="number" step="0.01" min="0" max="500" name="schrack_bulk[markup]" data-bulk-markup>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="schrack_bulk_rounding"><?php esc_html_e( 'Rounding', 'schrack-woocommerce-sync' ); ?></label></th>
+								<td>
+									<select id="schrack_bulk_rounding" name="schrack_bulk[rounding]" data-bulk-rounding>
+										<option value=""><?php esc_html_e( 'Leave rounding unchanged', 'schrack-woocommerce-sync' ); ?></option>
+										<option value="none"><?php esc_html_e( 'None', 'schrack-woocommerce-sync' ); ?></option>
+										<option value="ending_99"><?php esc_html_e( 'Round to .99', 'schrack-woocommerce-sync' ); ?></option>
+										<option value="integer_ron"><?php esc_html_e( 'Round to whole RON', 'schrack-woocommerce-sync' ); ?></option>
+										<option value="five_ron"><?php esc_html_e( 'Round to 5 RON', 'schrack-woocommerce-sync' ); ?></option>
+									</select>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Bulk mode', 'schrack-woocommerce-sync' ); ?></th>
+								<td>
+									<fieldset class="schrack-markups-bulk__mode">
+										<legend class="screen-reader-text"><?php esc_html_e( 'Bulk mode', 'schrack-woocommerce-sync' ); ?></legend>
+										<div class="schrack-bulk-mode-grid">
+											<label class="schrack-bulk-mode-card">
+												<input type="radio" name="schrack_bulk[mode]" value="empty" checked data-bulk-mode>
+												<span class="schrack-bulk-mode-card__content">
+													<span class="schrack-bulk-mode-card__title"><?php esc_html_e( 'Fill only empty', 'schrack-woocommerce-sync' ); ?></span>
+													<span class="schrack-bulk-mode-card__text"><?php esc_html_e( 'Skips categories that already have markup, margin, or rounding.', 'schrack-woocommerce-sync' ); ?></span>
+												</span>
+											</label>
+											<label class="schrack-bulk-mode-card">
+												<input type="radio" name="schrack_bulk[mode]" value="overwrite" data-bulk-mode>
+												<span class="schrack-bulk-mode-card__content">
+													<span class="schrack-bulk-mode-card__title"><?php esc_html_e( 'Overwrite selected', 'schrack-woocommerce-sync' ); ?></span>
+													<span class="schrack-bulk-mode-card__text"><?php esc_html_e( 'Replaces the selected categories with the bulk values.', 'schrack-woocommerce-sync' ); ?></span>
+												</span>
+											</label>
+										</div>
+									</fieldset>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e( 'Actions', 'schrack-woocommerce-sync' ); ?></th>
+								<td>
+									<div class="schrack-markups-bulk__apply">
+										<button type="button" class="button button-secondary" data-bulk-apply><?php esc_html_e( 'Apply to selected rows', 'schrack-woocommerce-sync' ); ?></button>
+										<button type="submit" class="button" name="schrack_bulk_submit" value="1"><?php esc_html_e( 'Apply selected and save', 'schrack-woocommerce-sync' ); ?></button>
+									</div>
+									<p class="description" data-bulk-result></p>
+								</td>
+							</tr>
+						</tbody>
+					</table>
 				</div>
 
 				<div class="schrack-markups-bulk__picker">
@@ -183,6 +206,12 @@ $render_bulk_category_nodes = static function ( int $parent_id ) use ( &$render_
 						<?php if ( empty( $ordered_terms ) ) : ?>
 							<p class="schrack-bulk-tree__empty"><?php esc_html_e( 'No WooCommerce product categories found.', 'schrack-woocommerce-sync' ); ?></p>
 						<?php else : ?>
+							<div class="schrack-bulk-tree__head" aria-hidden="true">
+								<span></span>
+								<span><?php esc_html_e( 'Category', 'schrack-woocommerce-sync' ); ?></span>
+								<span><?php esc_html_e( 'Path', 'schrack-woocommerce-sync' ); ?></span>
+								<span><?php esc_html_e( 'Status', 'schrack-woocommerce-sync' ); ?></span>
+							</div>
 							<?php $render_bulk_category_nodes( 0 ); ?>
 						<?php endif; ?>
 					</div>
