@@ -21,7 +21,7 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	public function render( array $settings, string $instance_id = '' ): string {
 		if ( ! class_exists( 'WooCommerce' ) ) {
-			return '<div class="schrack-product-filter"><p>' . esc_html__( 'WooCommerce is required for this product filter.', 'schrack-woocommerce-sync' ) . '</p></div>';
+			return '<div class="schrack-product-filter"><p>' . esc_html__( 'WooCommerce este necesar pentru acest filtru de produse.', 'schrack-woocommerce-sync' ) . '</p></div>';
 		}
 
 		wp_enqueue_style( 'schrack-wc-product-filter' );
@@ -55,14 +55,14 @@ class Schrack_Product_Filter_Renderer {
 				<aside class="schrack-product-filter__sidebar">
 					<form class="schrack-product-filter__form" method="get">
 						<div class="schrack-product-filter__sidebar-head">
-							<span><?php esc_html_e( 'Filters', 'schrack-woocommerce-sync' ); ?></span>
+							<span><?php esc_html_e( 'Filtre', 'schrack-woocommerce-sync' ); ?></span>
 						</div>
 
 						<div class="schrack-product-filter__controls">
 							<?php if ( $settings['show_search'] ) : ?>
 							<label class="schrack-product-filter__field">
-								<span><?php esc_html_e( 'Search products', 'schrack-woocommerce-sync' ); ?></span>
-								<input type="search" name="search" placeholder="<?php esc_attr_e( 'Name, SKU, item number', 'schrack-woocommerce-sync' ); ?>">
+								<span><?php esc_html_e( 'Cauta produse', 'schrack-woocommerce-sync' ); ?></span>
+								<input type="search" name="search" placeholder="<?php esc_attr_e( 'Nume, SKU, cod produs', 'schrack-woocommerce-sync' ); ?>">
 							</label>
 							<?php endif; ?>
 
@@ -75,14 +75,14 @@ class Schrack_Product_Filter_Renderer {
 							>
 								<?php if ( $settings['show_category_search'] ) : ?>
 									<label class="schrack-product-filter__field">
-										<span><?php esc_html_e( 'Category', 'schrack-woocommerce-sync' ); ?></span>
+										<span><?php esc_html_e( 'Categorie', 'schrack-woocommerce-sync' ); ?></span>
 										<input
 											type="search"
 											name="category_search"
 											value="<?php echo esc_attr( $category['label'] ); ?>"
 											data-category-search
 											autocomplete="off"
-											placeholder="<?php esc_attr_e( 'Search category', 'schrack-woocommerce-sync' ); ?>"
+											placeholder="<?php esc_attr_e( 'Cauta categorie', 'schrack-woocommerce-sync' ); ?>"
 											aria-expanded="false"
 										>
 									</label>
@@ -90,7 +90,7 @@ class Schrack_Product_Filter_Renderer {
 								<input type="hidden" name="category" value="<?php echo esc_attr( (string) $category['id'] ); ?>" data-category-id>
 								<div class="schrack-category-picker__selected" data-category-selected <?php echo $category['id'] > 0 ? '' : 'hidden'; ?>>
 									<span data-category-selected-label><?php echo esc_html( $category['label'] ); ?></span>
-									<button type="button" data-category-clear aria-label="<?php esc_attr_e( 'Clear category', 'schrack-woocommerce-sync' ); ?>">&times;</button>
+									<button type="button" data-category-clear aria-label="<?php esc_attr_e( 'Sterge categoria', 'schrack-woocommerce-sync' ); ?>">&times;</button>
 								</div>
 								<div class="schrack-category-picker__results" data-category-results role="listbox" hidden></div>
 							</div>
@@ -99,11 +99,11 @@ class Schrack_Product_Filter_Renderer {
 							<?php if ( $settings['show_price_filter'] ) : ?>
 							<div class="schrack-product-filter__price-row">
 								<label class="schrack-product-filter__field schrack-product-filter__field--price">
-									<span><?php esc_html_e( 'Min price', 'schrack-woocommerce-sync' ); ?></span>
+									<span><?php esc_html_e( 'Pret minim', 'schrack-woocommerce-sync' ); ?></span>
 									<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" placeholder="0">
 								</label>
 								<label class="schrack-product-filter__field schrack-product-filter__field--price">
-									<span><?php esc_html_e( 'Max price', 'schrack-woocommerce-sync' ); ?></span>
+									<span><?php esc_html_e( 'Pret maxim', 'schrack-woocommerce-sync' ); ?></span>
 									<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal">
 								</label>
 							</div>
@@ -111,7 +111,7 @@ class Schrack_Product_Filter_Renderer {
 
 							<?php if ( $settings['show_sort'] ) : ?>
 							<label class="schrack-product-filter__field">
-								<span><?php esc_html_e( 'Sort by', 'schrack-woocommerce-sync' ); ?></span>
+								<span><?php esc_html_e( 'Sorteaza dupa', 'schrack-woocommerce-sync' ); ?></span>
 								<select name="orderby">
 									<?php foreach ( $this->orderby_options() as $value => $label ) : ?>
 										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $settings['default_orderby'], $value ); ?>>
@@ -541,7 +541,7 @@ class Schrack_Product_Filter_Renderer {
 					<div class="schrack-product-card__price"><?php echo wp_kses_post( $product->get_price_html() ); ?></div>
 					<?php if ( $settings['show_stock'] ) : ?>
 						<span class="schrack-product-card__stock <?php echo $product->is_in_stock() ? 'is-in-stock' : 'is-out-of-stock'; ?>">
-							<?php echo $product->is_in_stock() ? esc_html__( 'In stock', 'schrack-woocommerce-sync' ) : esc_html__( 'Out of stock', 'schrack-woocommerce-sync' ); ?>
+							<?php echo $product->is_in_stock() ? esc_html__( 'In stoc', 'schrack-woocommerce-sync' ) : esc_html__( 'Stoc epuizat', 'schrack-woocommerce-sync' ); ?>
 						</span>
 					<?php endif; ?>
 				</div>
@@ -581,7 +581,7 @@ class Schrack_Product_Filter_Renderer {
 
 			ob_start();
 			?>
-			<nav class="schrack-product-filter__pagination" aria-label="<?php esc_attr_e( 'Product pagination', 'schrack-woocommerce-sync' ); ?>">
+			<nav class="schrack-product-filter__pagination" aria-label="<?php esc_attr_e( 'Paginare produse', 'schrack-woocommerce-sync' ); ?>">
 				<button type="button" data-page="<?php echo esc_attr( (string) ( $current_page + 1 ) ); ?>" data-load-more="yes">
 					<?php echo esc_html( $settings['load_more_text'] ); ?>
 				</button>
@@ -602,9 +602,9 @@ class Schrack_Product_Filter_Renderer {
 
 		ob_start();
 		?>
-		<nav class="schrack-product-filter__pagination" aria-label="<?php esc_attr_e( 'Product pagination', 'schrack-woocommerce-sync' ); ?>">
+		<nav class="schrack-product-filter__pagination" aria-label="<?php esc_attr_e( 'Paginare produse', 'schrack-woocommerce-sync' ); ?>">
 			<button type="button" data-page="<?php echo esc_attr( (string) max( 1, $current_page - 1 ) ); ?>" <?php disabled( $current_page <= 1 ); ?>>
-				<?php esc_html_e( 'Previous', 'schrack-woocommerce-sync' ); ?>
+				<?php esc_html_e( 'Inapoi', 'schrack-woocommerce-sync' ); ?>
 			</button>
 			<?php for ( $page = $start; $page <= $end; ++$page ) : ?>
 				<button type="button" data-page="<?php echo esc_attr( (string) $page ); ?>" <?php echo $page === $current_page ? 'aria-current="page"' : ''; ?>>
@@ -612,7 +612,7 @@ class Schrack_Product_Filter_Renderer {
 				</button>
 			<?php endfor; ?>
 			<button type="button" data-page="<?php echo esc_attr( (string) min( $total_pages, $current_page + 1 ) ); ?>" <?php disabled( $current_page >= $total_pages ); ?>>
-				<?php esc_html_e( 'Next', 'schrack-woocommerce-sync' ); ?>
+				<?php esc_html_e( 'Inainte', 'schrack-woocommerce-sync' ); ?>
 			</button>
 		</nav>
 		<?php
@@ -630,13 +630,13 @@ class Schrack_Product_Filter_Renderer {
 		if ( $this->search_is_too_short( $settings, $filters ) ) {
 			return sprintf(
 				/* translators: %d: minimum search length. */
-				__( 'Type at least %d characters to search products.', 'schrack-woocommerce-sync' ),
+				__( 'Introdu cel putin %d caractere pentru cautarea produselor.', 'schrack-woocommerce-sync' ),
 				(int) $settings['min_search_chars']
 			);
 		}
 
 		if ( 0 === $visible_count ) {
-			return __( 'No matching products.', 'schrack-woocommerce-sync' );
+			return __( 'Nu exista produse potrivite.', 'schrack-woocommerce-sync' );
 		}
 
 		$total = (int) $query->found_posts;
@@ -647,7 +647,7 @@ class Schrack_Product_Filter_Renderer {
 			if ( ! $this->uses_fast_load_more( $settings ) ) {
 				return sprintf(
 					/* translators: 1: visible product count, 2: total product count. */
-					__( 'Showing 1-%1$d of %2$d products.', 'schrack-woocommerce-sync' ),
+					__( 'Se afiseaza 1-%1$d din %2$d produse.', 'schrack-woocommerce-sync' ),
 					$to,
 					$total
 				);
@@ -656,12 +656,12 @@ class Schrack_Product_Filter_Renderer {
 			return $has_more
 				? sprintf(
 					/* translators: %d: visible product count. */
-					__( 'Showing 1-%d products. More results are available.', 'schrack-woocommerce-sync' ),
+					__( 'Se afiseaza 1-%d produse. Sunt disponibile mai multe rezultate.', 'schrack-woocommerce-sync' ),
 					$to
 				)
 				: sprintf(
 					/* translators: %d: visible product count. */
-					__( 'Showing %d products.', 'schrack-woocommerce-sync' ),
+					__( 'Se afiseaza %d produse.', 'schrack-woocommerce-sync' ),
 					$to
 				);
 		}
@@ -671,7 +671,7 @@ class Schrack_Product_Filter_Renderer {
 
 		return sprintf(
 			/* translators: 1: first product index, 2: last product index, 3: total product count. */
-			__( 'Showing %1$d-%2$d of %3$d products.', 'schrack-woocommerce-sync' ),
+			__( 'Se afiseaza %1$d-%2$d din %3$d produse.', 'schrack-woocommerce-sync' ),
 			$from,
 			$to,
 			$total
@@ -737,10 +737,10 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function empty_title( array $settings, array $filters ): string {
 		if ( $this->search_is_too_short( $settings, $filters ) ) {
-			return __( 'Search term is too short.', 'schrack-woocommerce-sync' );
+			return __( 'Termenul de cautare este prea scurt.', 'schrack-woocommerce-sync' );
 		}
 
-		return __( 'No products found.', 'schrack-woocommerce-sync' );
+		return __( 'Nu s-au gasit produse.', 'schrack-woocommerce-sync' );
 	}
 
 	/**
@@ -753,12 +753,12 @@ class Schrack_Product_Filter_Renderer {
 		if ( $this->search_is_too_short( $settings, $filters ) ) {
 			return sprintf(
 				/* translators: %d: minimum search length. */
-				__( 'Type at least %d characters before product search runs on the large catalog.', 'schrack-woocommerce-sync' ),
+				__( 'Introdu cel putin %d caractere inainte de cautarea in catalogul mare.', 'schrack-woocommerce-sync' ),
 				(int) $settings['min_search_chars']
 			);
 		}
 
-		return __( 'Try another category, search term, or price range.', 'schrack-woocommerce-sync' );
+		return __( 'Incearca alta categorie, alt termen de cautare sau alt interval de pret.', 'schrack-woocommerce-sync' );
 	}
 
 	/**
@@ -776,7 +776,7 @@ class Schrack_Product_Filter_Renderer {
 		<div class="schrack-category-picker__list">
 			<?php if ( empty( $terms ) ) : ?>
 				<div class="schrack-category-picker__empty">
-					<?php esc_html_e( 'No categories found.', 'schrack-woocommerce-sync' ); ?>
+					<?php esc_html_e( 'Nu s-au gasit categorii.', 'schrack-woocommerce-sync' ); ?>
 				</div>
 			<?php else : ?>
 				<?php foreach ( $terms as $term ) : ?>
@@ -914,12 +914,12 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function orderby_options(): array {
 		return array(
-			'menu_order' => __( 'Default', 'schrack-woocommerce-sync' ),
-			'title'      => __( 'Name A-Z', 'schrack-woocommerce-sync' ),
-			'price'      => __( 'Price low to high', 'schrack-woocommerce-sync' ),
-			'price-desc' => __( 'Price high to low', 'schrack-woocommerce-sync' ),
-			'date'       => __( 'Newest', 'schrack-woocommerce-sync' ),
-			'popularity' => __( 'Popularity', 'schrack-woocommerce-sync' ),
+			'menu_order' => __( 'Implicit', 'schrack-woocommerce-sync' ),
+			'title'      => __( 'Nume A-Z', 'schrack-woocommerce-sync' ),
+			'price'      => __( 'Pret crescator', 'schrack-woocommerce-sync' ),
+			'price-desc' => __( 'Pret descrescator', 'schrack-woocommerce-sync' ),
+			'date'       => __( 'Cele mai noi', 'schrack-woocommerce-sync' ),
+			'popularity' => __( 'Popularitate', 'schrack-woocommerce-sync' ),
 		);
 	}
 
@@ -930,7 +930,7 @@ class Schrack_Product_Filter_Renderer {
 	 * @return array<string,mixed>
 	 */
 	private function sanitize_settings( array $settings ): array {
-		$columns           = max( 1, min( 5, absint( $settings['columns'] ?? 3 ) ) );
+		$columns           = max( 5, min( 6, absint( $settings['columns'] ?? 5 ) ) );
 		$products_per_page = max( 1, min( 60, absint( $settings['products_per_page'] ?? 12 ) ) );
 		$orderby           = sanitize_key( (string) ( $settings['default_orderby'] ?? 'menu_order' ) );
 		$pagination_mode   = sanitize_key( (string) ( $settings['pagination_mode'] ?? 'load_more' ) );
@@ -963,14 +963,14 @@ class Schrack_Product_Filter_Renderer {
 			'show_stock'          => $this->truthy( $settings['show_stock'] ?? 'yes' ),
 			'show_add_to_cart'    => $this->truthy( $settings['show_add_to_cart'] ?? 'yes' ),
 			'hide_out_of_stock'   => $this->truthy( $settings['hide_out_of_stock'] ?? 'no' ),
-			'button_text'         => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Apply filters', 'schrack-woocommerce-sync' ) ) ),
-			'reset_text'          => sanitize_text_field( (string) ( $settings['reset_text'] ?? __( 'Reset', 'schrack-woocommerce-sync' ) ) ),
-			'load_more_text'      => sanitize_text_field( (string) ( $settings['load_more_text'] ?? __( 'Load more', 'schrack-woocommerce-sync' ) ) ),
-			'details_button_text' => sanitize_text_field( (string) ( $settings['details_button_text'] ?? __( 'Details', 'schrack-woocommerce-sync' ) ) ),
+			'button_text'         => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Aplica filtrele', 'schrack-woocommerce-sync' ) ) ),
+			'reset_text'          => sanitize_text_field( (string) ( $settings['reset_text'] ?? __( 'Reseteaza', 'schrack-woocommerce-sync' ) ) ),
+			'load_more_text'      => sanitize_text_field( (string) ( $settings['load_more_text'] ?? __( 'Incarca mai multe', 'schrack-woocommerce-sync' ) ) ),
+			'details_button_text' => sanitize_text_field( (string) ( $settings['details_button_text'] ?? __( 'Detalii', 'schrack-woocommerce-sync' ) ) ),
 			'accent_color'        => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
 			'action_color'        => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
 			'card_radius'         => $this->slider_size( $settings['card_radius'] ?? 8, 0, 8 ),
-			'sidebar_width'       => $this->slider_size( $settings['sidebar_width'] ?? 320, 260, 420 ),
+			'sidebar_width'       => $this->slider_size( $settings['sidebar_width'] ?? 300, 260, 420 ),
 		);
 	}
 

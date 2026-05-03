@@ -110,7 +110,7 @@
 				results.innerHTML = payload.data.html;
 			}
 		}).catch(function () {
-			results.innerHTML = '<div class="schrack-product-filter__empty"><strong>Filter failed.</strong><span>Please refresh the page and try again.</span></div>';
+			results.innerHTML = '<div class="schrack-product-filter__empty"><strong>Filtrarea a esuat.</strong><span>Reincarca pagina si incearca din nou.</span></div>';
 		}).finally(function () {
 			setLoading(root, false);
 		});
@@ -211,7 +211,7 @@
 		body.set('selected', picker.hidden ? picker.hidden.value : '');
 		body.set('limit', String(config.category_results_limit || 30));
 
-		picker.results.innerHTML = '<div class="schrack-category-picker__empty">Searching...</div>';
+		picker.results.innerHTML = '<div class="schrack-category-picker__empty">Se cauta...</div>';
 		picker.results.hidden = false;
 
 		window.fetch(ajaxUrl, {
@@ -230,7 +230,7 @@
 
 			setCategoryResults(root, payload.data.html);
 		}).catch(function () {
-			setCategoryResults(root, '<div class="schrack-category-picker__empty">Category search failed.</div>');
+			setCategoryResults(root, '<div class="schrack-category-picker__empty">Cautarea categoriilor a esuat.</div>');
 		});
 	}
 

@@ -21,7 +21,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 	 * Widget title.
 	 */
 	public function get_title(): string {
-		return __( 'Schrack Product Filter', 'schrack-woocommerce-sync' );
+		return __( 'Filtru produse Schrack', 'schrack-woocommerce-sync' );
 	}
 
 	/**
@@ -65,7 +65,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->start_controls_section(
 			'section_products',
 			array(
-				'label' => __( 'Products', 'schrack-woocommerce-sync' ),
+				'label' => __( 'Produse', 'schrack-woocommerce-sync' ),
 				'tab'   => \Elementor\Controls_Manager::TAB_CONTENT,
 			)
 		);
@@ -73,7 +73,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'products_per_page',
 			array(
-				'label'   => __( 'Products per page', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Produse pe pagina', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::NUMBER,
 				'default' => 12,
 				'min'     => 1,
@@ -85,15 +85,12 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'columns',
 			array(
-				'label'   => __( 'Columns', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Coloane', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::SELECT,
-				'default' => '3',
+				'default' => '5',
 				'options' => array(
-					'1' => __( '1 column', 'schrack-woocommerce-sync' ),
-					'2' => __( '2 columns', 'schrack-woocommerce-sync' ),
-					'3' => __( '3 columns', 'schrack-woocommerce-sync' ),
-					'4' => __( '4 columns', 'schrack-woocommerce-sync' ),
-					'5' => __( '5 columns', 'schrack-woocommerce-sync' ),
+					'5' => __( '5 coloane', 'schrack-woocommerce-sync' ),
+					'6' => __( '6 coloane', 'schrack-woocommerce-sync' ),
 				),
 			)
 		);
@@ -101,7 +98,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'default_category',
 			array(
-				'label'       => __( 'Default category', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Categorie implicita', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT2,
 				'default'     => '',
 				'label_block' => true,
@@ -112,16 +109,16 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'default_orderby',
 			array(
-				'label'   => __( 'Default sorting', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Sortare implicita', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::SELECT,
 				'default' => 'menu_order',
 				'options' => array(
-					'menu_order' => __( 'Default', 'schrack-woocommerce-sync' ),
-					'title'      => __( 'Name A-Z', 'schrack-woocommerce-sync' ),
-					'price'      => __( 'Price low to high', 'schrack-woocommerce-sync' ),
-					'price-desc' => __( 'Price high to low', 'schrack-woocommerce-sync' ),
-					'date'       => __( 'Newest', 'schrack-woocommerce-sync' ),
-					'popularity' => __( 'Popularity', 'schrack-woocommerce-sync' ),
+					'menu_order' => __( 'Implicit', 'schrack-woocommerce-sync' ),
+					'title'      => __( 'Nume A-Z', 'schrack-woocommerce-sync' ),
+					'price'      => __( 'Pret crescator', 'schrack-woocommerce-sync' ),
+					'price-desc' => __( 'Pret descrescator', 'schrack-woocommerce-sync' ),
+					'date'       => __( 'Cele mai noi', 'schrack-woocommerce-sync' ),
+					'popularity' => __( 'Popularitate', 'schrack-woocommerce-sync' ),
 				),
 			)
 		);
@@ -129,10 +126,10 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'hide_out_of_stock',
 			array(
-				'label'        => __( 'Hide out-of-stock products', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'Ascunde produsele fara stoc', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
-				'label_on'     => __( 'Yes', 'schrack-woocommerce-sync' ),
-				'label_off'    => __( 'No', 'schrack-woocommerce-sync' ),
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
 				'return_value' => 'yes',
 				'default'      => 'no',
 			)
@@ -141,13 +138,13 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'pagination_mode',
 			array(
-				'label'       => __( 'Pagination mode', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Mod paginare', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT,
 				'default'     => 'load_more',
-				'description' => __( 'Load more is recommended for large catalogs because it avoids expensive numbered-page counts.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Incarca mai multe este recomandat pentru cataloage mari, deoarece evita numararea costisitoare a paginilor.', 'schrack-woocommerce-sync' ),
 				'options'     => array(
-					'load_more' => __( 'Load more', 'schrack-woocommerce-sync' ),
-					'numbered'  => __( 'Numbered pages', 'schrack-woocommerce-sync' ),
+					'load_more' => __( 'Incarca mai multe', 'schrack-woocommerce-sync' ),
+					'numbered'  => __( 'Pagini numerotate', 'schrack-woocommerce-sync' ),
 				),
 			)
 		);
@@ -155,13 +152,13 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'exact_totals',
 			array(
-				'label'        => __( 'Exact product totals', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'Total exact produse', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
-				'label_on'     => __( 'Yes', 'schrack-woocommerce-sync' ),
-				'label_off'    => __( 'No', 'schrack-woocommerce-sync' ),
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
 				'return_value' => 'yes',
 				'default'      => 'no',
-				'description'  => __( 'Leave off for 40000-product catalogs unless you really need exact result counts.', 'schrack-woocommerce-sync' ),
+				'description'  => __( 'Lasa dezactivat pentru cataloage cu 40000 de produse, daca nu ai nevoie de totaluri exacte.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -170,7 +167,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->start_controls_section(
 			'section_filters',
 			array(
-				'label' => __( 'Filters', 'schrack-woocommerce-sync' ),
+				'label' => __( 'Filtre', 'schrack-woocommerce-sync' ),
 				'tab'   => \Elementor\Controls_Manager::TAB_CONTENT,
 			)
 		);
@@ -181,8 +178,8 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 				array(
 					'label'        => $label,
 					'type'         => \Elementor\Controls_Manager::SWITCHER,
-					'label_on'     => __( 'Show', 'schrack-woocommerce-sync' ),
-					'label_off'    => __( 'Hide', 'schrack-woocommerce-sync' ),
+					'label_on'     => __( 'Afiseaza', 'schrack-woocommerce-sync' ),
+					'label_off'    => __( 'Ascunde', 'schrack-woocommerce-sync' ),
 					'return_value' => 'yes',
 					'default'      => 'yes',
 				)
@@ -192,53 +189,53 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'button_text',
 			array(
-				'label'   => __( 'Filter button text', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Text buton filtrare', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Apply filters', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Aplica filtrele', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'reset_text',
 			array(
-				'label'   => __( 'Reset button text', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Text buton resetare', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Reset', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Reseteaza', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'load_more_text',
 			array(
-				'label'   => __( 'Load more button text', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Text buton incarcare', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Load more', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Incarca mai multe', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'min_search_chars',
 			array(
-				'label'       => __( 'Minimum search characters', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Numar minim caractere cautare', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::NUMBER,
 				'default'     => 2,
 				'min'         => 1,
 				'max'         => 5,
 				'step'        => 1,
-				'description' => __( 'Prevents one-character searches from scanning the entire large catalog.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Previne cautarile dintr-un singur caracter in intreg catalogul mare.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'category_results_limit',
 			array(
-				'label'       => __( 'Category search results', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Rezultate cautare categorii', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::NUMBER,
 				'default'     => 30,
 				'min'         => 10,
 				'max'         => 80,
 				'step'        => 5,
-				'description' => __( 'Limits each async category search response for very large category trees.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Limiteaza fiecare raspuns async pentru arbori de categorii foarte mari.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -247,7 +244,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->start_controls_section(
 			'section_cards',
 			array(
-				'label' => __( 'Product Cards', 'schrack-woocommerce-sync' ),
+				'label' => __( 'Carduri produse', 'schrack-woocommerce-sync' ),
 				'tab'   => \Elementor\Controls_Manager::TAB_CONTENT,
 			)
 		);
@@ -258,8 +255,8 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 				array(
 					'label'        => $label,
 					'type'         => \Elementor\Controls_Manager::SWITCHER,
-					'label_on'     => __( 'Show', 'schrack-woocommerce-sync' ),
-					'label_off'    => __( 'Hide', 'schrack-woocommerce-sync' ),
+					'label_on'     => __( 'Afiseaza', 'schrack-woocommerce-sync' ),
+					'label_off'    => __( 'Ascunde', 'schrack-woocommerce-sync' ),
 					'return_value' => 'yes',
 					'default'      => 'yes',
 				)
@@ -269,9 +266,9 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'details_button_text',
 			array(
-				'label'   => __( 'Details button text', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Text buton detalii', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Details', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Detalii', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -280,7 +277,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->start_controls_section(
 			'section_style',
 			array(
-				'label' => __( 'Style', 'schrack-woocommerce-sync' ),
+				'label' => __( 'Stil', 'schrack-woocommerce-sync' ),
 				'tab'   => \Elementor\Controls_Manager::TAB_STYLE,
 			)
 		);
@@ -288,7 +285,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'accent_color',
 			array(
-				'label'   => __( 'Accent color', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Culoare accent', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::COLOR,
 				'default' => '#135e96',
 			)
@@ -297,7 +294,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'action_color',
 			array(
-				'label'   => __( 'Action color', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Culoare actiune', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::COLOR,
 				'default' => '#b32d2e',
 			)
@@ -306,7 +303,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'card_radius',
 			array(
-				'label'      => __( 'Card radius', 'schrack-woocommerce-sync' ),
+				'label'      => __( 'Rotunjire card', 'schrack-woocommerce-sync' ),
 				'type'       => \Elementor\Controls_Manager::SLIDER,
 				'size_units' => array( 'px' ),
 				'range'      => array(
@@ -326,7 +323,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'sidebar_width',
 			array(
-				'label'      => __( 'Desktop sidebar width', 'schrack-woocommerce-sync' ),
+				'label'      => __( 'Latime sidebar desktop', 'schrack-woocommerce-sync' ),
 				'type'       => \Elementor\Controls_Manager::SLIDER,
 				'size_units' => array( 'px' ),
 				'range'      => array(
@@ -338,7 +335,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 				),
 				'default'    => array(
 					'unit' => 'px',
-					'size' => 320,
+					'size' => 300,
 				),
 			)
 		);
@@ -362,7 +359,7 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 	 */
 	private function category_options(): array {
 		$options = array(
-			'' => __( 'All categories', 'schrack-woocommerce-sync' ),
+			'' => __( 'Toate categoriile', 'schrack-woocommerce-sync' ),
 		);
 
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
@@ -398,11 +395,11 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 	 */
 	private function filter_switches(): array {
 		return array(
-			'show_search'          => __( 'Product search', 'schrack-woocommerce-sync' ),
-			'show_category_filter' => __( 'Category dropdown', 'schrack-woocommerce-sync' ),
-			'show_category_search' => __( 'Category search', 'schrack-woocommerce-sync' ),
-			'show_price_filter'    => __( 'Price range', 'schrack-woocommerce-sync' ),
-			'show_sort'            => __( 'Sorting', 'schrack-woocommerce-sync' ),
+			'show_search'          => __( 'Cautare produse', 'schrack-woocommerce-sync' ),
+			'show_category_filter' => __( 'Selector categorie', 'schrack-woocommerce-sync' ),
+			'show_category_search' => __( 'Cautare categorie', 'schrack-woocommerce-sync' ),
+			'show_price_filter'    => __( 'Interval pret', 'schrack-woocommerce-sync' ),
+			'show_sort'            => __( 'Sortare', 'schrack-woocommerce-sync' ),
 		);
 	}
 
@@ -413,11 +410,11 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 	 */
 	private function card_switches(): array {
 		return array(
-			'show_images'      => __( 'Images', 'schrack-woocommerce-sync' ),
-			'show_categories'  => __( 'Categories', 'schrack-woocommerce-sync' ),
-			'show_excerpt'     => __( 'Excerpt', 'schrack-woocommerce-sync' ),
-			'show_stock'       => __( 'Stock label', 'schrack-woocommerce-sync' ),
-			'show_add_to_cart' => __( 'Add to cart', 'schrack-woocommerce-sync' ),
+			'show_images'      => __( 'Imagini', 'schrack-woocommerce-sync' ),
+			'show_categories'  => __( 'Categorii', 'schrack-woocommerce-sync' ),
+			'show_excerpt'     => __( 'Descriere scurta', 'schrack-woocommerce-sync' ),
+			'show_stock'       => __( 'Eticheta stoc', 'schrack-woocommerce-sync' ),
+			'show_add_to_cart' => __( 'Adauga in cos', 'schrack-woocommerce-sync' ),
 		);
 	}
 }
