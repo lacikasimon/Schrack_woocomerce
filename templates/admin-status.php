@@ -154,43 +154,43 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<tr>
 					<th><?php esc_html_e( 'Operation', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Last run', 'schrack-woocommerce-sync' ); ?></th>
-						<th><?php esc_html_e( 'Processed', 'schrack-woocommerce-sync' ); ?></th>
-						<th><?php esc_html_e( 'Batches', 'schrack-woocommerce-sync' ); ?></th>
-						<th><?php esc_html_e( 'Errors', 'schrack-woocommerce-sync' ); ?></th>
-						<th><?php esc_html_e( 'Details', 'schrack-woocommerce-sync' ); ?></th>
-						<th><?php esc_html_e( 'Batch cursor', 'schrack-woocommerce-sync' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ( array( 'catalog', 'price', 'stock', 'images' ) as $operation ) : ?>
-						<?php
-						$row     = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
-						$details = array();
+					<th><?php esc_html_e( 'Processed', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Batches', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Errors', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Details', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Batch cursor', 'schrack-woocommerce-sync' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( array( 'catalog', 'price', 'stock', 'images' ) as $operation ) : ?>
+					<?php
+					$row     = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
+					$details = array();
 
-						if ( 'catalog' === $operation && isset( $row['image_urls_stored'] ) ) {
-							$details[] = sprintf(
-								/* translators: %d: image URL count. */
-								__( 'Image URLs: %d', 'schrack-woocommerce-sync' ),
-								absint( $row['image_urls_stored'] )
-							);
-						}
+					if ( 'catalog' === $operation && isset( $row['image_urls_stored'] ) ) {
+						$details[] = sprintf(
+							/* translators: %d: image URL count. */
+							__( 'Image URLs: %d', 'schrack-woocommerce-sync' ),
+							absint( $row['image_urls_stored'] )
+						);
+					}
 
-						if ( 'images' === $operation ) {
-							foreach ( array( 'queued_products', 'workers_queued', 'imported', 'attached', 'skipped' ) as $detail_key ) {
-								if ( isset( $row[ $detail_key ] ) ) {
-									$details[] = ucwords( str_replace( '_', ' ', $detail_key ) ) . ': ' . absint( $row[ $detail_key ] );
-								}
+					if ( 'images' === $operation ) {
+						foreach ( array( 'queued_products', 'workers_queued', 'imported', 'attached', 'skipped' ) as $detail_key ) {
+							if ( isset( $row[ $detail_key ] ) ) {
+								$details[] = ucwords( str_replace( '_', ' ', $detail_key ) ) . ': ' . absint( $row[ $detail_key ] );
 							}
 						}
-						?>
-						<tr>
-							<td><?php echo esc_html( ucfirst( $operation ) ); ?></td>
-							<td><?php echo esc_html( (string) ( $row['last_run'] ?? '-' ) ); ?></td>
-							<td><?php echo esc_html( (string) ( $row['processed'] ?? 0 ) ); ?></td>
-							<td><?php echo esc_html( (string) ( $row['batches_processed'] ?? '-' ) ); ?></td>
-							<td><?php echo esc_html( (string) ( $row['errors'] ?? 0 ) ); ?></td>
-							<td><?php echo ! empty( $details ) ? esc_html( implode( ', ', $details ) ) : esc_html__( '-', 'schrack-woocommerce-sync' ); ?></td>
-							<td>
+					}
+					?>
+					<tr>
+						<td><?php echo esc_html( ucfirst( $operation ) ); ?></td>
+						<td><?php echo esc_html( (string) ( $row['last_run'] ?? '-' ) ); ?></td>
+						<td><?php echo esc_html( (string) ( $row['processed'] ?? 0 ) ); ?></td>
+						<td><?php echo esc_html( (string) ( $row['batches_processed'] ?? '-' ) ); ?></td>
+						<td><?php echo esc_html( (string) ( $row['errors'] ?? 0 ) ); ?></td>
+						<td><?php echo ! empty( $details ) ? esc_html( implode( ', ', $details ) ) : esc_html__( '-', 'schrack-woocommerce-sync' ); ?></td>
+						<td>
 							<?php
 							$total = $row['total_items'] ?? ( $row['total_products'] ?? 0 );
 

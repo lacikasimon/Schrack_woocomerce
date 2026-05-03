@@ -157,6 +157,13 @@ class Schrack_Admin {
 			? wp_unslash( $_POST['schrack_markups'] )
 			: array();
 
+		if ( isset( $_POST['schrack_bulk_submit'] ) ) {
+			$bulk = isset( $_POST['schrack_bulk'] ) && is_array( $_POST['schrack_bulk'] )
+				? wp_unslash( $_POST['schrack_bulk'] )
+				: array();
+			$input = $this->markups->merge_bulk_input( $input, $bulk );
+		}
+
 		$this->markups->update( $input );
 		$this->logger->info( 'admin', 'Schrack category markup rules were updated.' );
 		$this->set_notice( 'success', __( 'Category markups saved.', 'schrack-woocommerce-sync' ) );

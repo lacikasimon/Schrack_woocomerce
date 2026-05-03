@@ -54,7 +54,7 @@ class Schrack_Category_Markup {
 			$min_margin = isset( $rule['min_margin'] ) ? $this->sanitize_float( $rule['min_margin'], 0, 1000000 ) : '';
 			$rounding  = isset( $rule['rounding'] ) ? sanitize_key( (string) $rule['rounding'] ) : 'none';
 
-			if ( ! in_array( $rounding, array( 'none', 'ending_99', 'integer_ron', 'five_ron' ), true ) ) {
+			if ( ! $this->is_valid_rounding( $rounding ) ) {
 				$rounding = 'none';
 			}
 
@@ -70,6 +70,57 @@ class Schrack_Category_Markup {
 		}
 
 		update_option( Schrack_Settings::MARKUPS_OPTION_NAME, $rules, false );
+	}
+
+	/**
+	 * Applies a bulk rule payload to category markup input before saving.
+	 *
+	 * @param array<string,mixed> $input Unsanitized markup input.
+	 * @param array<string,mixed> $bulk Unsanitized bulk input.
+	 * @return array<string,mixed>
+	 */
+	public function merge_bulk_input( array $input, array $bulk ): array {
+		$term_ids = isset( $bulk['category_ids'] ) && is_array( $bulk['category_ids'] )
+			? array_values( array_unique( array_filter( array_map( 'absint', $bulk['category_ids'] ) ) ) )
+			: array();
+
+		$markup   = array_key_exists( 'markup', $bulk ) ? $this->sanitize_float( $bulk['markup'], 0, 500 ) : '';
+		$rounding = array_key_exists( 'rounding', $bulk ) ? sanitize_key( (string) $bulk['rounding'] ) : '';
+		$mode     = isset( $bulk['mode'] ) ? sanitize_key( (string) $bulk['mode'] ) : 'empty';
+
+		if ( '' !== $rounding && ! $this->is_valid_rounding( $rounding ) ) {
+			$rounding = '';
+		}
+
+		if ( 'overwrite' !== $mode ) {
+			$mode = 'empty';
+		}
+
+		if ( empty( $term_ids ) || ( '' === $markup && '' === $rounding ) ) {
+			return $input;
+		}
+
+		foreach ( $term_ids as $term_id ) {
+			$rule = isset( $input[ $term_id ] ) && is_array( $input[ $term_id ] )
+				? $input[ $term_id ]
+				: array();
+
+			if ( 'empty' === $mode && $this->raw_rule_has_values( $rule ) ) {
+				continue;
+			}
+
+			if ( '' !== $markup ) {
+				$rule['markup'] = $markup;
+			}
+
+			if ( '' !== $rounding ) {
+				$rule['rounding'] = $rounding;
+			}
+
+			$input[ $term_id ] = $rule;
+		}
+
+		return $input;
 	}
 
 	/**
@@ -162,5 +213,27 @@ class Schrack_Category_Markup {
 		$float = (float) $value;
 
 		return max( $min, min( $max, $float ) );
+	}
+
+	/**
+	 * Returns whether a raw rule contains any configured value.
+	 */
+	private function raw_rule_has_values( array $rule ): bool {
+		$markup     = isset( $rule['markup'] ) ? $this->sanitize_float( $rule['markup'], 0, 500 ) : '';
+		$min_margin = isset( $rule['min_margin'] ) ? $this->sanitize_float( $rule['min_margin'], 0, 1000000 ) : '';
+		$rounding   = isset( $rule['rounding'] ) ? sanitize_key( (string) $rule['rounding'] ) : 'none';
+
+		if ( ! $this->is_valid_rounding( $rounding ) ) {
+			$rounding = 'none';
+		}
+
+		return '' !== $markup || '' !== $min_margin || 'none' !== $rounding;
+	}
+
+	/**
+	 * Checks supported rounding keys.
+	 */
+	private function is_valid_rounding( string $rounding ): bool {
+		return in_array( $rounding, array( 'none', 'ending_99', 'integer_ron', 'five_ron' ), true );
 	}
 }
