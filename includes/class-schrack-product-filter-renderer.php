@@ -138,7 +138,9 @@ class Schrack_Product_Filter_Renderer {
 		$settings = $this->sanitize_settings( $settings );
 		$filters  = $this->sanitize_filters( $filters );
 		$query    = $this->query_products( $settings, $filters );
-		$summary  = $this->result_summary( $query, $settings, $filters );
+		$posts    = $this->visible_posts( $query, $settings );
+		$has_more = $this->has_more_results( $query, $settings, $filters );
+		$summary  = $this->result_summary( $query, $settings, $filters, count( $posts ), $has_more );
 
 		ob_start();
 		?>
@@ -146,36 +148,35 @@ class Schrack_Product_Filter_Renderer {
 			<?php echo esc_html( $summary ); ?>
 		</div>
 
-		<?php if ( $query->have_posts() ) : ?>
+		<?php if ( ! empty( $posts ) ) : ?>
 			<div class="schrack-product-filter__grid" style="<?php echo esc_attr( '--schrack-filter-columns:' . $settings['columns'] ); ?>">
 				<?php
-				while ( $query->have_posts() ) :
-					$query->the_post();
-					$product = wc_get_product( get_the_ID() );
+				foreach ( $posts as $post ) :
+					$product_id = $post instanceof WP_Post ? (int) $post->ID : absint( $post );
+					$product    = wc_get_product( $product_id );
 
 					if ( $product instanceof WC_Product ) {
 						echo $this->product_card( $product, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 					}
-				endwhile;
+				endforeach;
 				?>
 			</div>
-			<?php echo $this->pagination( $query, $filters['paged'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<?php echo $this->pagination( $query, $filters['paged'], $settings, $has_more ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 		<?php else : ?>
 			<div class="schrack-product-filter__empty">
-				<strong><?php esc_html_e( 'No products found.', 'schrack-woocommerce-sync' ); ?></strong>
-				<span><?php esc_html_e( 'Try another category, search term, or price range.', 'schrack-woocommerce-sync' ); ?></span>
+				<strong><?php echo esc_html( $this->empty_title( $settings, $filters ) ); ?></strong>
+				<span><?php echo esc_html( $this->empty_message( $settings, $filters ) ); ?></span>
 			</div>
 		<?php endif; ?>
 		<?php
-
-		wp_reset_postdata();
 
 		return array(
 			'html'        => (string) ob_get_clean(),
 			'summary'     => $summary,
 			'page'        => $filters['paged'],
-			'total_pages' => max( 1, (int) $query->max_num_pages ),
-			'total'       => (int) $query->found_posts,
+			'has_more'    => $has_more ? 'yes' : 'no',
+			'total_pages' => $this->uses_fast_load_more( $settings ) ? null : max( 1, (int) $query->max_num_pages ),
+			'total'       => $this->uses_fast_load_more( $settings ) ? null : (int) $query->found_posts,
 		);
 	}
 
@@ -193,6 +194,9 @@ class Schrack_Product_Filter_Renderer {
 			'columns'             => $settings['columns'],
 			'default_category'    => $settings['default_category'],
 			'default_orderby'     => $settings['default_orderby'],
+			'pagination_mode'     => $settings['pagination_mode'],
+			'exact_totals'        => $settings['exact_totals'] ? 'yes' : 'no',
+			'min_search_chars'    => $settings['min_search_chars'],
 			'show_images'         => $settings['show_images'] ? 'yes' : 'no',
 			'show_categories'     => $settings['show_categories'] ? 'yes' : 'no',
 			'show_excerpt'        => $settings['show_excerpt'] ? 'yes' : 'no',
@@ -200,61 +204,115 @@ class Schrack_Product_Filter_Renderer {
 			'show_add_to_cart'    => $settings['show_add_to_cart'] ? 'yes' : 'no',
 			'hide_out_of_stock'   => $settings['hide_out_of_stock'] ? 'yes' : 'no',
 			'button_text'         => $settings['button_text'],
+			'load_more_text'      => $settings['load_more_text'],
 			'details_button_text' => $settings['details_button_text'],
 		);
 	}
 
 	/**
-	 * Filters the WP query join clause for product text/SKU search.
+	 * Filters the WP query join clause for product search and WooCommerce lookup values.
 	 */
-	public function search_join( string $join, WP_Query $query ): string {
+	public function query_join( string $join, WP_Query $query ): string {
 		global $wpdb;
 
-		if ( '' === (string) $query->get( 'schrack_product_filter_search' ) ) {
+		if ( ! $this->uses_lookup_join( $query ) && ! $this->uses_item_number_join( $query ) ) {
 			return $join;
 		}
 
-		$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_sku_meta ON ({$wpdb->posts}.ID = schrack_filter_sku_meta.post_id AND schrack_filter_sku_meta.meta_key = '_sku')";
-		$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_item_meta ON ({$wpdb->posts}.ID = schrack_filter_item_meta.post_id AND schrack_filter_item_meta.meta_key = '_schrack_item_number')";
+		if ( $this->uses_lookup_join( $query ) ) {
+			$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+			$join        .= " LEFT JOIN {$lookup_table} AS schrack_filter_lookup ON ({$wpdb->posts}.ID = schrack_filter_lookup.product_id)";
+		}
+
+		if ( $this->uses_item_number_join( $query ) ) {
+			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_item_meta ON ({$wpdb->posts}.ID = schrack_filter_item_meta.post_id AND schrack_filter_item_meta.meta_key = '_schrack_item_number')";
+		}
 
 		return $join;
 	}
 
 	/**
-	 * Filters the WP query where clause for product text/SKU search.
+	 * Filters the WP query where clause for product text/SKU search and catalog filters.
 	 */
-	public function search_where( string $where, WP_Query $query ): string {
+	public function query_where( string $where, WP_Query $query ): string {
 		global $wpdb;
 
 		$search = trim( (string) $query->get( 'schrack_product_filter_search' ) );
 
-		if ( '' === $search ) {
-			return $where;
+		if ( '' !== $search ) {
+			$like = '%' . $wpdb->esc_like( $search ) . '%';
+
+			$where .= $wpdb->prepare(
+				" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_filter_lookup.sku LIKE %s OR schrack_filter_item_meta.meta_value LIKE %s)",
+				$like,
+				$like,
+				$like,
+				$like,
+				$like
+			);
 		}
 
-		$like = '%' . $wpdb->esc_like( $search ) . '%';
+		$min_price = $query->get( 'schrack_product_filter_min_price' );
+		$max_price = $query->get( 'schrack_product_filter_max_price' );
 
-		$where .= $wpdb->prepare(
-			" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_filter_sku_meta.meta_value LIKE %s OR schrack_filter_item_meta.meta_value LIKE %s)",
-			$like,
-			$like,
-			$like,
-			$like,
-			$like
-		);
+		if ( is_numeric( $min_price ) ) {
+			$where .= $wpdb->prepare( ' AND schrack_filter_lookup.max_price >= %f', (float) $min_price );
+		}
+
+		if ( is_numeric( $max_price ) ) {
+			$where .= $wpdb->prepare( ' AND schrack_filter_lookup.min_price <= %f', (float) $max_price );
+		}
+
+		if ( $query->get( 'schrack_product_filter_hide_out_of_stock' ) ) {
+			$where .= " AND schrack_filter_lookup.stock_status <> 'outofstock'";
+		}
 
 		return $where;
 	}
 
 	/**
-	 * Keeps SKU joins from duplicating products.
+	 * Sorts lookup-based product result sets efficiently.
 	 */
-	public function search_distinct( string $distinct, WP_Query $query ): string {
-		if ( '' === (string) $query->get( 'schrack_product_filter_search' ) ) {
+	public function query_orderby( string $orderby, WP_Query $query ): string {
+		global $wpdb;
+
+		$filter_orderby = (string) $query->get( 'schrack_product_filter_orderby' );
+
+		return match ( $filter_orderby ) {
+			'price'      => 'schrack_filter_lookup.min_price ASC, ' . $wpdb->posts . '.post_title ASC',
+			'price-desc' => 'schrack_filter_lookup.min_price DESC, ' . $wpdb->posts . '.post_title ASC',
+			'popularity' => 'schrack_filter_lookup.total_sales DESC, ' . $wpdb->posts . '.post_title ASC',
+			default      => $orderby,
+		};
+	}
+
+	/**
+	 * Keeps lookup and item-number joins from duplicating products.
+	 */
+	public function query_distinct( string $distinct, WP_Query $query ): string {
+		if ( ! $this->uses_lookup_join( $query ) && ! $this->uses_item_number_join( $query ) ) {
 			return $distinct;
 		}
 
 		return 'DISTINCT';
+	}
+
+	/**
+	 * Returns whether the WooCommerce product lookup table is needed.
+	 */
+	private function uses_lookup_join( WP_Query $query ): bool {
+		return '' !== (string) $query->get( 'schrack_product_filter_search' )
+			|| is_numeric( $query->get( 'schrack_product_filter_min_price' ) )
+			|| is_numeric( $query->get( 'schrack_product_filter_max_price' ) )
+			|| (bool) $query->get( 'schrack_product_filter_hide_out_of_stock' )
+			|| in_array( (string) $query->get( 'schrack_product_filter_orderby' ), array( 'price', 'price-desc', 'popularity' ), true );
+	}
+
+	/**
+	 * Returns whether the Schrack item-number postmeta join is needed.
+	 */
+	private function uses_item_number_join( WP_Query $query ): bool {
+		return '' !== (string) $query->get( 'schrack_product_filter_search' );
 	}
 
 	/**
@@ -264,13 +322,24 @@ class Schrack_Product_Filter_Renderer {
 	 * @param array<string,mixed> $filters Filters.
 	 */
 	private function query_products( array $settings, array $filters ): WP_Query {
+		$fast_load_more = $this->uses_fast_load_more( $settings );
+		$search         = $this->search_is_too_short( $settings, $filters ) ? '' : $filters['search'];
+
 		$args = array(
 			'post_type'              => 'product',
 			'post_status'            => 'publish',
 			'ignore_sticky_posts'    => true,
-			'posts_per_page'         => $settings['products_per_page'],
+			'posts_per_page'         => $settings['products_per_page'] + ( $fast_load_more ? 1 : 0 ),
 			'paged'                  => $filters['paged'],
-			'schrack_product_filter_search' => $filters['search'],
+			'no_found_rows'          => $fast_load_more,
+			'cache_results'          => true,
+			'update_post_meta_cache' => true,
+			'update_post_term_cache' => $settings['show_categories'],
+			'schrack_product_filter_search' => $search,
+			'schrack_product_filter_min_price' => $filters['min_price'],
+			'schrack_product_filter_max_price' => $filters['max_price'],
+			'schrack_product_filter_hide_out_of_stock' => $settings['hide_out_of_stock'] || 'yes' === get_option( 'woocommerce_hide_out_of_stock_items' ),
+			'schrack_product_filter_orderby' => $filters['orderby'],
 		);
 
 		$tax_query  = array( 'relation' => 'AND' );
@@ -278,7 +347,9 @@ class Schrack_Product_Filter_Renderer {
 
 		$category_ids = $this->category_filter_ids( $filters );
 
-		if ( ! empty( $category_ids ) ) {
+		if ( $this->search_is_too_short( $settings, $filters ) ) {
+			$args['post__in'] = array( 0 );
+		} elseif ( ! empty( $category_ids ) ) {
 			$tax_query[] = array(
 				'taxonomy' => 'product_cat',
 				'field'    => 'term_id',
@@ -300,34 +371,6 @@ class Schrack_Product_Filter_Renderer {
 			);
 		}
 
-		if ( null !== $filters['min_price'] || null !== $filters['max_price'] ) {
-			$price_filter = array(
-				'key'  => '_price',
-				'type' => 'DECIMAL(10,2)',
-			);
-
-			if ( null !== $filters['min_price'] && null !== $filters['max_price'] ) {
-				$price_filter['value']   = array( $filters['min_price'], $filters['max_price'] );
-				$price_filter['compare'] = 'BETWEEN';
-			} elseif ( null !== $filters['min_price'] ) {
-				$price_filter['value']   = $filters['min_price'];
-				$price_filter['compare'] = '>=';
-			} else {
-				$price_filter['value']   = $filters['max_price'];
-				$price_filter['compare'] = '<=';
-			}
-
-			$meta_query[] = $price_filter;
-		}
-
-		if ( $settings['hide_out_of_stock'] || 'yes' === get_option( 'woocommerce_hide_out_of_stock_items' ) ) {
-			$meta_query[] = array(
-				'key'     => '_stock_status',
-				'value'   => 'outofstock',
-				'compare' => '!=',
-			);
-		}
-
 		if ( count( $tax_query ) > 1 ) {
 			$args['tax_query'] = $tax_query;
 		}
@@ -338,15 +381,17 @@ class Schrack_Product_Filter_Renderer {
 
 		$args = $this->apply_orderby( $args, $filters['orderby'] );
 
-		add_filter( 'posts_join', array( $this, 'search_join' ), 10, 2 );
-		add_filter( 'posts_where', array( $this, 'search_where' ), 10, 2 );
-		add_filter( 'posts_distinct', array( $this, 'search_distinct' ), 10, 2 );
+		add_filter( 'posts_join', array( $this, 'query_join' ), 10, 2 );
+		add_filter( 'posts_where', array( $this, 'query_where' ), 10, 2 );
+		add_filter( 'posts_orderby', array( $this, 'query_orderby' ), 10, 2 );
+		add_filter( 'posts_distinct', array( $this, 'query_distinct' ), 10, 2 );
 
 		$query = new WP_Query( $args );
 
-		remove_filter( 'posts_join', array( $this, 'search_join' ), 10 );
-		remove_filter( 'posts_where', array( $this, 'search_where' ), 10 );
-		remove_filter( 'posts_distinct', array( $this, 'search_distinct' ), 10 );
+		remove_filter( 'posts_join', array( $this, 'query_join' ), 10 );
+		remove_filter( 'posts_where', array( $this, 'query_where' ), 10 );
+		remove_filter( 'posts_orderby', array( $this, 'query_orderby' ), 10 );
+		remove_filter( 'posts_distinct', array( $this, 'query_distinct' ), 10 );
 
 		return $query;
 	}
@@ -360,14 +405,12 @@ class Schrack_Product_Filter_Renderer {
 	private function apply_orderby( array $args, string $orderby ): array {
 		switch ( $orderby ) {
 			case 'price':
-				$args['meta_key'] = '_price';
-				$args['orderby']  = 'meta_value_num';
+				$args['orderby']  = 'none';
 				$args['order']    = 'ASC';
 				break;
 
 			case 'price-desc':
-				$args['meta_key'] = '_price';
-				$args['orderby']  = 'meta_value_num';
+				$args['orderby']  = 'none';
 				$args['order']    = 'DESC';
 				break;
 
@@ -377,8 +420,7 @@ class Schrack_Product_Filter_Renderer {
 				break;
 
 			case 'popularity':
-				$args['meta_key'] = 'total_sales';
-				$args['orderby']  = 'meta_value_num';
+				$args['orderby']  = 'none';
 				$args['order']    = 'DESC';
 				break;
 
@@ -511,7 +553,24 @@ class Schrack_Product_Filter_Renderer {
 	/**
 	 * Renders result pagination.
 	 */
-	private function pagination( WP_Query $query, int $current_page ): string {
+	private function pagination( WP_Query $query, int $current_page, array $settings, bool $has_more ): string {
+		if ( 'load_more' === $settings['pagination_mode'] ) {
+			if ( ! $has_more ) {
+				return '';
+			}
+
+			ob_start();
+			?>
+			<nav class="schrack-product-filter__pagination" aria-label="<?php esc_attr_e( 'Product pagination', 'schrack-woocommerce-sync' ); ?>">
+				<button type="button" data-page="<?php echo esc_attr( (string) ( $current_page + 1 ) ); ?>" data-load-more="yes">
+					<?php echo esc_html( $settings['load_more_text'] ); ?>
+				</button>
+			</nav>
+			<?php
+
+			return (string) ob_get_clean();
+		}
+
 		$total_pages = max( 1, (int) $query->max_num_pages );
 
 		if ( $total_pages <= 1 ) {
@@ -547,15 +606,48 @@ class Schrack_Product_Filter_Renderer {
 	 * @param array<string,mixed> $settings Settings.
 	 * @param array<string,mixed> $filters Filters.
 	 */
-	private function result_summary( WP_Query $query, array $settings, array $filters ): string {
-		$total = (int) $query->found_posts;
+	private function result_summary( WP_Query $query, array $settings, array $filters, int $visible_count, bool $has_more ): string {
+		if ( $this->search_is_too_short( $settings, $filters ) ) {
+			return sprintf(
+				/* translators: %d: minimum search length. */
+				__( 'Type at least %d characters to search products.', 'schrack-woocommerce-sync' ),
+				(int) $settings['min_search_chars']
+			);
+		}
 
-		if ( 0 === $total ) {
+		if ( 0 === $visible_count ) {
 			return __( 'No matching products.', 'schrack-woocommerce-sync' );
 		}
 
+		$total = (int) $query->found_posts;
+
+		if ( 'load_more' === $settings['pagination_mode'] ) {
+			$to = ( ( $filters['paged'] - 1 ) * $settings['products_per_page'] ) + $visible_count;
+
+			if ( ! $this->uses_fast_load_more( $settings ) ) {
+				return sprintf(
+					/* translators: 1: visible product count, 2: total product count. */
+					__( 'Showing 1-%1$d of %2$d products.', 'schrack-woocommerce-sync' ),
+					$to,
+					$total
+				);
+			}
+
+			return $has_more
+				? sprintf(
+					/* translators: %d: visible product count. */
+					__( 'Showing 1-%d products. More results are available.', 'schrack-woocommerce-sync' ),
+					$to
+				)
+				: sprintf(
+					/* translators: %d: visible product count. */
+					__( 'Showing %d products.', 'schrack-woocommerce-sync' ),
+					$to
+				);
+		}
+
 		$from = ( ( $filters['paged'] - 1 ) * $settings['products_per_page'] ) + 1;
-		$to   = min( $total, $from + (int) $query->post_count - 1 );
+		$to   = min( $total, $from + $visible_count - 1 );
 
 		return sprintf(
 			/* translators: 1: first product index, 2: last product index, 3: total product count. */
@@ -564,6 +656,88 @@ class Schrack_Product_Filter_Renderer {
 			$to,
 			$total
 		);
+	}
+
+	/**
+	 * Returns the posts that should be rendered from the current query.
+	 *
+	 * @return array<int,WP_Post>
+	 */
+	private function visible_posts( WP_Query $query, array $settings ): array {
+		$posts = is_array( $query->posts ) ? $query->posts : array();
+
+		if ( $this->uses_fast_load_more( $settings ) ) {
+			$posts = array_slice( $posts, 0, (int) $settings['products_per_page'] );
+		}
+
+		return array_values( array_filter( $posts, static fn ( mixed $post ): bool => $post instanceof WP_Post ) );
+	}
+
+	/**
+	 * Returns whether another result page is available.
+	 *
+	 * @param array<string,mixed> $settings Settings.
+	 * @param array<string,mixed> $filters Filters.
+	 */
+	private function has_more_results( WP_Query $query, array $settings, array $filters ): bool {
+		if ( $this->uses_fast_load_more( $settings ) ) {
+			return count( is_array( $query->posts ) ? $query->posts : array() ) > (int) $settings['products_per_page'];
+		}
+
+		return $filters['paged'] < max( 1, (int) $query->max_num_pages );
+	}
+
+	/**
+	 * Returns whether the widget should avoid expensive total counts.
+	 *
+	 * @param array<string,mixed> $settings Settings.
+	 */
+	private function uses_fast_load_more( array $settings ): bool {
+		return 'load_more' === (string) ( $settings['pagination_mode'] ?? 'load_more' ) && empty( $settings['exact_totals'] );
+	}
+
+	/**
+	 * Returns whether product search should wait for more characters.
+	 *
+	 * @param array<string,mixed> $settings Settings.
+	 * @param array<string,mixed> $filters Filters.
+	 */
+	private function search_is_too_short( array $settings, array $filters ): bool {
+		$search = trim( (string) ( $filters['search'] ?? '' ) );
+
+		return '' !== $search && strlen( $search ) < (int) $settings['min_search_chars'];
+	}
+
+	/**
+	 * Returns the empty state heading.
+	 *
+	 * @param array<string,mixed> $settings Settings.
+	 * @param array<string,mixed> $filters Filters.
+	 */
+	private function empty_title( array $settings, array $filters ): string {
+		if ( $this->search_is_too_short( $settings, $filters ) ) {
+			return __( 'Search term is too short.', 'schrack-woocommerce-sync' );
+		}
+
+		return __( 'No products found.', 'schrack-woocommerce-sync' );
+	}
+
+	/**
+	 * Returns the empty state message.
+	 *
+	 * @param array<string,mixed> $settings Settings.
+	 * @param array<string,mixed> $filters Filters.
+	 */
+	private function empty_message( array $settings, array $filters ): string {
+		if ( $this->search_is_too_short( $settings, $filters ) ) {
+			return sprintf(
+				/* translators: %d: minimum search length. */
+				__( 'Type at least %d characters before product search runs on the large catalog.', 'schrack-woocommerce-sync' ),
+				(int) $settings['min_search_chars']
+			);
+		}
+
+		return __( 'Try another category, search term, or price range.', 'schrack-woocommerce-sync' );
 	}
 
 	/**
@@ -626,9 +800,14 @@ class Schrack_Product_Filter_Renderer {
 		$columns           = max( 1, min( 5, absint( $settings['columns'] ?? 3 ) ) );
 		$products_per_page = max( 1, min( 60, absint( $settings['products_per_page'] ?? 12 ) ) );
 		$orderby           = sanitize_key( (string) ( $settings['default_orderby'] ?? 'menu_order' ) );
+		$pagination_mode   = sanitize_key( (string) ( $settings['pagination_mode'] ?? 'load_more' ) );
 
 		if ( ! array_key_exists( $orderby, $this->orderby_options() ) ) {
 			$orderby = 'menu_order';
+		}
+
+		if ( ! in_array( $pagination_mode, array( 'load_more', 'numbered' ), true ) ) {
+			$pagination_mode = 'load_more';
 		}
 
 		return array(
@@ -636,6 +815,9 @@ class Schrack_Product_Filter_Renderer {
 			'columns'             => $columns,
 			'default_category'    => absint( $settings['default_category'] ?? 0 ),
 			'default_orderby'     => $orderby,
+			'pagination_mode'     => $pagination_mode,
+			'exact_totals'        => $this->truthy( $settings['exact_totals'] ?? 'no' ),
+			'min_search_chars'    => max( 1, min( 5, absint( $settings['min_search_chars'] ?? 2 ) ) ),
 			'show_search'         => $this->truthy( $settings['show_search'] ?? 'yes' ),
 			'show_category_filter'=> $this->truthy( $settings['show_category_filter'] ?? 'yes' ),
 			'show_category_search'=> $this->truthy( $settings['show_category_search'] ?? 'yes' ),
@@ -649,6 +831,7 @@ class Schrack_Product_Filter_Renderer {
 			'hide_out_of_stock'   => $this->truthy( $settings['hide_out_of_stock'] ?? 'no' ),
 			'button_text'         => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Apply filters', 'schrack-woocommerce-sync' ) ) ),
 			'reset_text'          => sanitize_text_field( (string) ( $settings['reset_text'] ?? __( 'Reset', 'schrack-woocommerce-sync' ) ) ),
+			'load_more_text'      => sanitize_text_field( (string) ( $settings['load_more_text'] ?? __( 'Load more', 'schrack-woocommerce-sync' ) ) ),
 			'details_button_text' => sanitize_text_field( (string) ( $settings['details_button_text'] ?? __( 'Details', 'schrack-woocommerce-sync' ) ) ),
 			'accent_color'        => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
 			'action_color'        => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',

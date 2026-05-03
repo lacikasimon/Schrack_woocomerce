@@ -138,6 +138,33 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 			)
 		);
 
+		$this->add_control(
+			'pagination_mode',
+			array(
+				'label'       => __( 'Pagination mode', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::SELECT,
+				'default'     => 'load_more',
+				'description' => __( 'Load more is recommended for large catalogs because it avoids expensive numbered-page counts.', 'schrack-woocommerce-sync' ),
+				'options'     => array(
+					'load_more' => __( 'Load more', 'schrack-woocommerce-sync' ),
+					'numbered'  => __( 'Numbered pages', 'schrack-woocommerce-sync' ),
+				),
+			)
+		);
+
+		$this->add_control(
+			'exact_totals',
+			array(
+				'label'        => __( 'Exact product totals', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Yes', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'No', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'no',
+				'description'  => __( 'Leave off for 40000-product catalogs unless you really need exact result counts.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
 		$this->end_controls_section();
 
 		$this->start_controls_section(
@@ -177,6 +204,28 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 				'label'   => __( 'Reset button text', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
 				'default' => __( 'Reset', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'load_more_text',
+			array(
+				'label'   => __( 'Load more button text', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::TEXT,
+				'default' => __( 'Load more', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'min_search_chars',
+			array(
+				'label'       => __( 'Minimum search characters', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::NUMBER,
+				'default'     => 2,
+				'min'         => 1,
+				'max'         => 5,
+				'step'        => 1,
+				'description' => __( 'Prevents one-character searches from scanning the entire large catalog.', 'schrack-woocommerce-sync' ),
 			)
 		);
 

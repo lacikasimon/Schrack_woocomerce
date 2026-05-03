@@ -36,13 +36,50 @@
 		}
 	}
 
-	function requestProducts(root, page) {
+	function appendResults(results, html) {
+		var wrapper = document.createElement('div');
+		var currentGrid = results.querySelector('.schrack-product-filter__grid');
+		var currentSummary = results.querySelector('.schrack-product-filter__summary');
+		var currentPagination = results.querySelector('.schrack-product-filter__pagination');
+		var incomingGrid;
+		var incomingSummary;
+		var incomingPagination;
+
+		wrapper.innerHTML = html;
+		incomingGrid = wrapper.querySelector('.schrack-product-filter__grid');
+		incomingSummary = wrapper.querySelector('.schrack-product-filter__summary');
+		incomingPagination = wrapper.querySelector('.schrack-product-filter__pagination');
+
+		if (!currentGrid || !incomingGrid) {
+			results.innerHTML = html;
+			return;
+		}
+
+		Array.prototype.forEach.call(incomingGrid.children, function (card) {
+			currentGrid.appendChild(card);
+		});
+
+		if (currentSummary && incomingSummary) {
+			currentSummary.replaceWith(incomingSummary);
+		}
+
+		if (currentPagination && incomingPagination) {
+			currentPagination.replaceWith(incomingPagination);
+		} else if (currentPagination) {
+			currentPagination.remove();
+		} else if (incomingPagination) {
+			results.appendChild(incomingPagination);
+		}
+	}
+
+	function requestProducts(root, page, options) {
 		var form = root.querySelector('.schrack-product-filter__form');
 		var results = root.querySelector('.schrack-product-filter__results');
 		var ajaxUrl = root.getAttribute('data-ajax-url');
 		var action = root.getAttribute('data-action');
 		var nonce = root.getAttribute('data-nonce');
 		var config = parseConfig(root);
+		var append = options && options.append;
 		var body;
 
 		if (!form || !results || !ajaxUrl || !action || !nonce) {
@@ -71,7 +108,11 @@
 				throw new Error('Invalid filter response');
 			}
 
-			results.innerHTML = payload.data.html;
+			if (append) {
+				appendResults(results, payload.data.html);
+			} else {
+				results.innerHTML = payload.data.html;
+			}
 		}).catch(function () {
 			results.innerHTML = '<div class="schrack-product-filter__empty"><strong>Filter failed.</strong><span>Please refresh the page and try again.</span></div>';
 		}).finally(function () {
@@ -146,7 +187,11 @@
 				event.preventDefault();
 
 				if (!pageButton.disabled) {
-					requestProducts(root, parseInt(pageButton.getAttribute('data-page'), 10) || 1);
+					requestProducts(
+						root,
+						parseInt(pageButton.getAttribute('data-page'), 10) || 1,
+						{ append: pageButton.getAttribute('data-load-more') === 'yes' }
+					);
 				}
 			}
 
