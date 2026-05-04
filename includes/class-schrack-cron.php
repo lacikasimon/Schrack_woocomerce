@@ -350,6 +350,10 @@ class Schrack_Cron {
 					return $this->handle_stopped_sync( 'catalog', $total_processed, $total_errors );
 				}
 
+				if ( $batch_index > 0 && $this->should_pause_batch_run( $started_at, 'catalog' ) ) {
+					break;
+				}
+
 				$result = $importer->import_from_soap( 'CSV', $limit );
 				++$batches;
 
@@ -1158,7 +1162,11 @@ class Schrack_Cron {
 		$action_id    = 0;
 		$queue_runner = '';
 
-		if ( function_exists( 'as_schedule_single_action' ) ) {
+		if ( 0 === $sleep && function_exists( 'as_enqueue_async_action' ) ) {
+			$action_id    = absint( as_enqueue_async_action( $hook, $args, self::GROUP ) );
+			$queued       = $action_id > 0;
+			$queue_runner = 'action_scheduler_async';
+		} elseif ( function_exists( 'as_schedule_single_action' ) ) {
 			$action_id    = absint( as_schedule_single_action( time() + max( 1, $sleep ), $hook, $args, self::GROUP ) );
 			$queued       = $action_id > 0;
 			$queue_runner = 'action_scheduler_single';
@@ -1429,7 +1437,8 @@ class Schrack_Cron {
 	private function catalog_batches_per_run(): int {
 		$max_batches = max( 1, min( 20, (int) $this->settings->get( 'catalog_batches_per_run', 1 ) ) );
 
-		return $this->is_low_memory_host() ? min( $max_batches, 1 ) : $max_batches;
+		// Catalog import is now streamed and cache-backed, so 2 GB hosts can safely chain a few batches.
+		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 5 ) : $max_batches;
 	}
 
 	/**

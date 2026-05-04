@@ -55,7 +55,7 @@ class Schrack_Settings {
 			'provider_code'          => '',
 			'default_markup'         => 20,
 			'catalog_batch_size'     => 500,
-			'catalog_batches_per_run'=> 1,
+			'catalog_batches_per_run'=> 3,
 			'sync_batch_size'        => 25,
 			'sync_batches_per_run'   => 1,
 			'price_request_size'     => 10,

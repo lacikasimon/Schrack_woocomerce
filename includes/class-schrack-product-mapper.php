@@ -32,6 +32,27 @@ class Schrack_Product_Mapper {
 	private Schrack_Category_Markup $markup;
 
 	/**
+	 * Per-request SKU to product ID cache.
+	 *
+	 * @var array<string,int>
+	 */
+	private array $sku_product_id_cache = array();
+
+	/**
+	 * Per-request category lookup cache.
+	 *
+	 * @var array<string,int>
+	 */
+	private array $category_term_cache = array();
+
+	/**
+	 * Per-request category path assignment cache.
+	 *
+	 * @var array<string,array<int,int>>
+	 */
+	private array $category_path_cache = array();
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct( Schrack_Settings $settings, Schrack_Logger $logger, ?Schrack_Category_Markup $markup = null ) {
@@ -44,11 +65,91 @@ class Schrack_Product_Mapper {
 	 * Finds a product by SKU.
 	 */
 	public function find_product_by_sku( string $sku ): int {
-		if ( ! function_exists( 'wc_get_product_id_by_sku' ) ) {
+		$sku = sanitize_text_field( $sku );
+
+		if ( '' === $sku ) {
 			return 0;
 		}
 
-		return (int) wc_get_product_id_by_sku( sanitize_text_field( $sku ) );
+		if ( array_key_exists( $sku, $this->sku_product_id_cache ) ) {
+			return $this->sku_product_id_cache[ $sku ];
+		}
+
+		if ( ! function_exists( 'wc_get_product_id_by_sku' ) ) {
+			$this->sku_product_id_cache[ $sku ] = 0;
+			return 0;
+		}
+
+		$product_id = (int) wc_get_product_id_by_sku( $sku );
+
+		$this->sku_product_id_cache[ $sku ] = $product_id;
+
+		return $product_id;
+	}
+
+	/**
+	 * Primes product IDs for a catalog batch so each row does not run its own SKU query.
+	 *
+	 * @param array<int,string> $skus Product SKUs.
+	 */
+	public function prime_product_ids_by_skus( array $skus ): void {
+		global $wpdb;
+
+		$skus = array_values(
+			array_unique(
+				array_filter(
+					array_map(
+						static fn( mixed $sku ): string => is_scalar( $sku ) ? sanitize_text_field( trim( (string) $sku ) ) : '',
+						$skus
+					)
+				)
+			)
+		);
+
+		$missing = array();
+
+		foreach ( $skus as $sku ) {
+			if ( ! array_key_exists( $sku, $this->sku_product_id_cache ) ) {
+				$missing[] = $sku;
+			}
+		}
+
+		if ( empty( $missing ) ) {
+			return;
+		}
+
+		foreach ( array_chunk( $missing, 500 ) as $chunk ) {
+			$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%s' ) );
+			$sql          = "
+				SELECT sku_meta.meta_value AS sku, sku_meta.post_id AS product_id
+				FROM {$wpdb->postmeta} AS sku_meta
+				INNER JOIN {$wpdb->posts} AS products
+					ON products.ID = sku_meta.post_id
+				WHERE sku_meta.meta_key = '_sku'
+					AND sku_meta.meta_value IN ({$placeholders})
+					AND products.post_type IN ('product', 'product_variation')
+					AND products.post_status NOT IN ('trash', 'auto-draft')
+				ORDER BY sku_meta.post_id ASC
+			";
+			$rows         = $wpdb->get_results( $wpdb->prepare( $sql, $chunk ), ARRAY_A );
+
+			if ( is_array( $rows ) ) {
+				foreach ( $rows as $row ) {
+					$sku        = isset( $row['sku'] ) ? sanitize_text_field( (string) $row['sku'] ) : '';
+					$product_id = absint( $row['product_id'] ?? 0 );
+
+					if ( '' !== $sku && $product_id > 0 && ! array_key_exists( $sku, $this->sku_product_id_cache ) ) {
+						$this->sku_product_id_cache[ $sku ] = $product_id;
+					}
+				}
+			}
+
+			foreach ( $chunk as $sku ) {
+				if ( ! array_key_exists( $sku, $this->sku_product_id_cache ) ) {
+					$this->sku_product_id_cache[ $sku ] = 0;
+				}
+			}
+		}
 	}
 
 	/**
@@ -85,8 +186,9 @@ class Schrack_Product_Mapper {
 		$product = new WC_Product_Simple();
 		$this->apply_product_data( $product, $data, true );
 		$product_id = $product->save();
+		$this->sku_product_id_cache[ sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) ) ] = (int) $product_id;
 
-		$this->logger->info( 'catalog', 'Created Schrack product.', $this->string_value( $data['sku'] ?? '' ), array( 'product_id' => $product_id ) );
+		$this->logger->debug( 'catalog', 'Created Schrack product.', $this->string_value( $data['sku'] ?? '' ), array( 'product_id' => $product_id ) );
 
 		return (int) $product_id;
 	}
@@ -106,8 +208,9 @@ class Schrack_Product_Mapper {
 
 		$this->apply_product_data( $product, $data, false );
 		$product->save();
+		$this->sku_product_id_cache[ sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) ) ] = $product_id;
 
-		$this->logger->info( 'catalog', 'Updated Schrack product.', $this->string_value( $data['sku'] ?? '' ), array( 'product_id' => $product_id ) );
+		$this->logger->debug( 'catalog', 'Updated Schrack product.', $this->string_value( $data['sku'] ?? '' ), array( 'product_id' => $product_id ) );
 
 		return $product_id;
 	}
@@ -133,7 +236,7 @@ class Schrack_Product_Mapper {
 		$product->update_meta_data( '_schrack_last_price_sync', current_time( 'mysql' ) );
 		$product->save();
 
-		$this->logger->info(
+		$this->logger->debug(
 			'price',
 			'Updated WooCommerce price from Schrack purchase price.',
 			$product->get_sku(),
@@ -174,7 +277,7 @@ class Schrack_Product_Mapper {
 		$product->update_meta_data( '_schrack_stock_breakdown', wp_json_encode( $stock_data['warehouses'] ?? array() ) );
 		$product->save();
 
-		$this->logger->info(
+		$this->logger->debug(
 			'stock',
 			'Updated WooCommerce stock from Schrack quantities.',
 			$product->get_sku(),
@@ -209,10 +312,25 @@ class Schrack_Product_Mapper {
 			return array();
 		}
 
+		$path_key = implode( ' > ', array_map( array( $this, 'category_cache_name' ), $parts ) );
+
+		if ( isset( $this->category_path_cache[ $path_key ] ) ) {
+			return $this->category_path_cache[ $path_key ];
+		}
+
 		$parent = 0;
 		$ids    = array();
 
 		foreach ( $parts as $name ) {
+			$cache_key = $this->category_cache_key( $parent, $name );
+
+			if ( isset( $this->category_term_cache[ $cache_key ] ) ) {
+				$term_id = $this->category_term_cache[ $cache_key ];
+				$ids[]   = $term_id;
+				$parent  = $term_id;
+				continue;
+			}
+
 			$existing = term_exists( $name, 'product_cat', $parent );
 
 			if ( is_wp_error( $existing ) ) {
@@ -233,9 +351,12 @@ class Schrack_Product_Mapper {
 				$term_id = (int) $existing;
 			}
 
+			$this->category_term_cache[ $cache_key ] = $term_id;
 			$ids[]  = $term_id;
 			$parent = $term_id;
 		}
+
+		$this->category_path_cache[ $path_key ] = $ids;
 
 		return $ids;
 	}
@@ -461,7 +582,7 @@ class Schrack_Product_Mapper {
 		$this->mark_product_image_sync( $product, $status, $image_url, $attachment_id );
 		$product->save();
 
-		$this->logger->info(
+		$this->logger->debug(
 			'images',
 			'Reused existing Schrack product image attachment.',
 			$product->get_sku(),
@@ -661,7 +782,7 @@ class Schrack_Product_Mapper {
 			return $attachment_id;
 		}
 
-		$this->logger->info(
+		$this->logger->debug(
 			'images',
 			'Imported Schrack product image.',
 			$product->get_sku(),
@@ -742,6 +863,29 @@ class Schrack_Product_Mapper {
 		}
 
 		return sanitize_text_field( $this->string_value( $category_path ) );
+	}
+
+	/**
+	 * Builds a cache key for one category level.
+	 */
+	private function category_cache_key( int $parent_id, string $name ): string {
+		return $parent_id . '|' . $this->category_cache_name( $name );
+	}
+
+	/**
+	 * Normalizes category names for per-request cache keys.
+	 */
+	private function category_cache_name( string $name ): string {
+		$name = trim( $name );
+
+		if ( function_exists( 'remove_accents' ) ) {
+			$name = remove_accents( $name );
+		}
+
+		$name = strtolower( $name );
+		$name = preg_replace( '/\s+/', ' ', $name );
+
+		return null === $name ? '' : $name;
 	}
 
 	/**

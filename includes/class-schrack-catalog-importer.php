@@ -97,6 +97,8 @@ class Schrack_Catalog_Importer {
 		$image_urls_backfilled = 0;
 		$image_url_meta_errors = 0;
 
+		$this->mapper->prime_product_ids_by_skus( $this->item_skus( $items ) );
+
 		foreach ( $items as $item ) {
 			try {
 				$product_id = $this->mapper->upsert( $item );
@@ -642,6 +644,26 @@ class Schrack_Catalog_Importer {
 		$sku = trim( (string) $item['sku'] );
 
 		return '' !== $sku ? $sku : null;
+	}
+
+	/**
+	 * Extracts SKUs from a normalized item batch for lookup priming.
+	 *
+	 * @param array<int,array<string,mixed>> $items Normalized items.
+	 * @return array<int,string>
+	 */
+	private function item_skus( array $items ): array {
+		$skus = array();
+
+		foreach ( $items as $item ) {
+			$sku = $this->item_sku( $item );
+
+			if ( null !== $sku ) {
+				$skus[] = $sku;
+			}
+		}
+
+		return $skus;
 	}
 
 	/**

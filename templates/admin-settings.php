@@ -76,7 +76,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<th scope="row"><label for="schrack_catalog_batches_per_run"><?php esc_html_e( 'Catalog batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
 					<input id="schrack_catalog_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[catalog_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['catalog_batches_per_run'] ) ) ) ); ?>">
-					<p class="description"><?php esc_html_e( 'Use 1 on shared hosting so each batch releases memory before the next queued run.', 'schrack-woocommerce-sync' ); ?></p>
+					<p class="description"><?php esc_html_e( 'For 2 GB cPanel hosting, 3 is now the recommended value. Runtime protection stops before memory or execution time gets risky.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>
