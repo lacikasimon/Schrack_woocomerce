@@ -37,6 +37,8 @@ class Schrack_Elementor {
 	public function init(): void {
 		add_action( 'init', array( $this, 'register_assets' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
+		add_action( 'admin_post_' . Schrack_Registration_Renderer::ACTION, array( $this, 'handle_registration' ) );
+		add_action( 'admin_post_nopriv_' . Schrack_Registration_Renderer::ACTION, array( $this, 'handle_registration' ) );
 		add_action( 'elementor/elements/categories_registered', array( $this, 'register_elementor_category' ) );
 		add_action( 'elementor/widgets/register', array( $this, 'register_widgets' ) );
 		add_action( 'elementor/widgets/widgets_registered', array( $this, 'register_legacy_widgets' ) );
@@ -88,6 +90,13 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_VERSION,
 			true
 		);
+
+		wp_register_style(
+			'schrack-wc-registration',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-registration.css',
+			array(),
+			SCHRACK_WC_SYNC_VERSION
+		);
 	}
 
 	/**
@@ -122,11 +131,14 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-filter-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-header-search-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
 
 		$widgets = array(
 			new Schrack_Elementor_Product_Filter_Widget(),
 			new Schrack_Elementor_Header_Search_Widget(),
 			new Schrack_Elementor_Product_Page_Widget(),
+			new Schrack_Elementor_Customer_Register_Widget(),
+			new Schrack_Elementor_B2B_Register_Widget(),
 		);
 
 		if ( is_object( $widgets_manager ) && method_exists( $widgets_manager, 'register' ) ) {
@@ -151,13 +163,24 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-filter-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-header-search-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
 
 		if ( is_object( $widgets_manager ) && method_exists( $widgets_manager, 'register_widget_type' ) ) {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Filter_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Header_Search_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Page_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Customer_Register_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_B2B_Register_Widget() );
 			$this->widgets_registered = true;
 		}
+	}
+
+	/**
+	 * Handles frontend registration form posts.
+	 */
+	public function handle_registration(): void {
+		$renderer = new Schrack_Registration_Renderer();
+		$renderer->handle_registration();
 	}
 
 	/**
