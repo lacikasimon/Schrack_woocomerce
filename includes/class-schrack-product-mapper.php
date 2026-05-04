@@ -53,6 +53,13 @@ class Schrack_Product_Mapper {
 	private array $category_path_cache = array();
 
 	/**
+	 * Per-request normalized image URL to attachment ID cache.
+	 *
+	 * @var array<string,int>
+	 */
+	private array $image_attachment_cache = array();
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct( Schrack_Settings $settings, Schrack_Logger $logger, ?Schrack_Category_Markup $markup = null ) {
@@ -712,7 +719,7 @@ class Schrack_Product_Mapper {
 	 *
 	 * @return array<string,mixed>
 	 */
-	public function import_product_image_with_result( int $product_id ): array {
+	public function import_product_image_with_result( int $product_id, array $prefetched_meta = array() ): array {
 		if ( 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
 			return array(
 				'status'        => 'skipped_disabled',
@@ -720,9 +727,7 @@ class Schrack_Product_Mapper {
 			);
 		}
 
-		$product = wc_get_product( $product_id );
-
-		if ( ! $product instanceof WC_Product ) {
+		if ( ! in_array( get_post_type( $product_id ), array( 'product', 'product_variation' ), true ) ) {
 			return array(
 				'status'        => 'missing_product',
 				'attachment_id' => 0,
@@ -730,13 +735,18 @@ class Schrack_Product_Mapper {
 			);
 		}
 
-		$image_url    = $this->normalize_image_url( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) );
-		$imported_url = $this->normalize_image_url( $this->string_value( $product->get_meta( '_schrack_imported_image_url', true ) ) );
-		$stored_attachment_id = absint( $product->get_meta( '_schrack_image_attachment_id', true ) );
+		$image_url            = $this->normalize_image_url( $this->prefetched_meta_value( $prefetched_meta, '_schrack_image_url', $product_id ) );
+		$imported_url         = $this->normalize_image_url( $this->prefetched_meta_value( $prefetched_meta, '_schrack_imported_image_url', $product_id ) );
+		$stored_attachment_id = absint( $this->prefetched_meta_value( $prefetched_meta, '_schrack_image_attachment_id', $product_id ) );
+		$thumbnail_id         = absint( $this->prefetched_meta_value( $prefetched_meta, '_thumbnail_id', $product_id ) );
+		$sku                  = sanitize_text_field( $this->prefetched_meta_value( $prefetched_meta, '_sku', $product_id ) );
+
+		if ( '' === $sku ) {
+			$sku = sanitize_text_field( $this->prefetched_meta_value( $prefetched_meta, '_schrack_item_number', $product_id ) );
+		}
 
 		if ( '' === $image_url ) {
-			$this->mark_product_image_sync( $product, 'missing_url', '', 0 );
-			$product->save();
+			$this->mark_product_image_sync_meta( $product_id, 'missing_url', '', 0 );
 
 			return array(
 				'status'        => 'missing_url',
@@ -744,11 +754,10 @@ class Schrack_Product_Mapper {
 			);
 		}
 
-		if ( $imported_url === $image_url && $this->is_valid_image_attachment( (int) $product->get_image_id() ) ) {
-			$attachment_id = (int) $product->get_image_id();
+		if ( $imported_url === $image_url && $this->is_valid_image_attachment( $thumbnail_id ) ) {
+			$attachment_id = $thumbnail_id;
 			$this->mark_attachment_image_source( $attachment_id, $image_url );
-			$this->mark_product_image_sync( $product, 'already_imported', $image_url, $attachment_id );
-			$product->save();
+			$this->mark_product_image_sync_meta( $product_id, 'already_imported', $image_url, $attachment_id );
 
 			return array(
 				'status'        => 'already_imported',
@@ -758,7 +767,7 @@ class Schrack_Product_Mapper {
 		}
 
 		if ( $imported_url === $image_url && $this->is_valid_image_attachment( $stored_attachment_id ) ) {
-			$this->attach_existing_product_image( $product, $stored_attachment_id, $image_url, 'reused_existing' );
+			$this->attach_existing_product_image_meta( $product_id, $stored_attachment_id, $image_url, 'reused_existing', $sku );
 
 			return array(
 				'status'        => 'reused_existing',
@@ -770,12 +779,22 @@ class Schrack_Product_Mapper {
 		$existing_attachment_id = $this->find_existing_image_attachment( $image_url );
 
 		if ( $existing_attachment_id > 0 ) {
-			$this->attach_existing_product_image( $product, $existing_attachment_id, $image_url, 'reused_existing' );
+			$this->attach_existing_product_image_meta( $product_id, $existing_attachment_id, $image_url, 'reused_existing', $sku );
 
 			return array(
 				'status'        => 'reused_existing',
 				'attachment_id' => $existing_attachment_id,
 				'image_url'     => $image_url,
+			);
+		}
+
+		$product = wc_get_product( $product_id );
+
+		if ( ! $product instanceof WC_Product ) {
+			return array(
+				'status'        => 'missing_product',
+				'attachment_id' => 0,
+				'error'         => 'WooCommerce product was not found.',
 			);
 		}
 
@@ -832,48 +851,86 @@ class Schrack_Product_Mapper {
 	}
 
 	/**
+	 * Reuses an existing image attachment without loading and saving a product object.
+	 */
+	private function attach_existing_product_image_meta( int $product_id, int $attachment_id, string $image_url, string $status, string $sku = '' ): void {
+		update_post_meta( $product_id, '_thumbnail_id', $attachment_id );
+		update_post_meta( $product_id, '_schrack_image_attachment_id', $attachment_id );
+		update_post_meta( $product_id, '_schrack_imported_image_url', $image_url );
+		$this->mark_attachment_image_source( $attachment_id, $image_url );
+		$this->mark_product_image_sync_meta( $product_id, $status, $image_url, $attachment_id );
+		$this->clean_product_runtime_cache( $product_id );
+
+		$this->logger->debug(
+			'images',
+			'Reused existing Schrack product image attachment.',
+			'' !== $sku ? $sku : null,
+			array(
+				'image_url'     => $image_url,
+				'attachment_id' => $attachment_id,
+				'product_id'    => $product_id,
+				'update_mode'   => 'fast_meta',
+			)
+		);
+	}
+
+	/**
 	 * Finds an existing media-library attachment for a normalized Schrack image URL.
 	 */
 	private function find_existing_image_attachment( string $image_url ): int {
+		$image_url = $this->normalize_image_url( $image_url );
+
+		if ( '' === $image_url ) {
+			return 0;
+		}
+
+		if ( array_key_exists( $image_url, $this->image_attachment_cache ) ) {
+			return $this->image_attachment_cache[ $image_url ];
+		}
+
 		$attachment_id = $this->find_attachment_by_source_hash( $image_url );
 
 		if ( $attachment_id > 0 ) {
+			$this->image_attachment_cache[ $image_url ] = $attachment_id;
 			return $attachment_id;
 		}
 
-		return $this->find_legacy_product_attachment_by_url( $image_url );
+		$attachment_id = $this->find_legacy_product_attachment_by_url( $image_url );
+
+		$this->image_attachment_cache[ $image_url ] = $attachment_id;
+
+		return $attachment_id;
 	}
 
 	/**
 	 * Finds attachments imported by current plugin versions.
 	 */
 	private function find_attachment_by_source_hash( string $image_url ): int {
+		global $wpdb;
+
 		$hash = $this->image_source_hash( $image_url );
 
 		if ( '' === $hash ) {
 			return 0;
 		}
 
-		$query = new WP_Query(
-			array(
-				'post_type'              => 'attachment',
-				'post_status'            => 'inherit',
-				'posts_per_page'         => 5,
-				'fields'                 => 'ids',
-				'no_found_rows'          => true,
-				'cache_results'          => false,
-				'update_post_meta_cache' => false,
-				'update_post_term_cache' => false,
-				'meta_query'             => array(
-					array(
-						'key'   => '_schrack_image_source_hash',
-						'value' => $hash,
-					),
-				),
+		$attachment_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT source_meta.post_id
+				FROM {$wpdb->postmeta} AS source_meta
+				INNER JOIN {$wpdb->posts} AS attachments
+					ON attachments.ID = source_meta.post_id
+				WHERE source_meta.meta_key = '_schrack_image_source_hash'
+					AND source_meta.meta_value = %s
+					AND attachments.post_type = 'attachment'
+					AND attachments.post_status = 'inherit'
+				ORDER BY source_meta.post_id ASC
+				LIMIT 5",
+				$hash
 			)
 		);
 
-		foreach ( $query->posts as $attachment_id ) {
+		foreach ( $attachment_ids as $attachment_id ) {
 			$attachment_id = absint( $attachment_id );
 
 			if ( $this->attachment_matches_image_url( $attachment_id, $image_url ) ) {
@@ -926,12 +983,16 @@ class Schrack_Product_Mapper {
 	 * Tags an imported attachment so future products can reuse it by URL.
 	 */
 	private function mark_attachment_image_source( int $attachment_id, string $image_url ): void {
+		$image_url = $this->normalize_image_url( $image_url );
+
 		if ( ! $this->is_valid_image_attachment( $attachment_id ) || '' === $image_url ) {
 			return;
 		}
 
 		update_post_meta( $attachment_id, '_schrack_image_source_url', $image_url );
 		update_post_meta( $attachment_id, '_schrack_image_source_hash', $this->image_source_hash( $image_url ) );
+
+		$this->image_attachment_cache[ $image_url ] = $attachment_id;
 	}
 
 	/**
@@ -982,7 +1043,7 @@ class Schrack_Product_Mapper {
 			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
 
-		$timeout   = max( 5, min( 60, (int) apply_filters( 'schrack_wc_sync_image_download_timeout', 45, $image_url, $product ) ) );
+		$timeout   = max( 5, min( 60, (int) apply_filters( 'schrack_wc_sync_image_download_timeout', 30, $image_url, $product ) ) );
 		$temp_file = download_url( $image_url, $timeout );
 
 		if ( is_wp_error( $temp_file ) ) {
@@ -1003,7 +1064,19 @@ class Schrack_Product_Mapper {
 			'tmp_name' => $temp_file,
 		);
 
-		$attachment_id = media_handle_sideload( $file, (int) $product->get_id(), $product->get_name() );
+		$limit_sizes = 'yes' === (string) apply_filters( 'schrack_wc_sync_limit_generated_image_sizes', 'yes', $image_url, $product );
+
+		if ( $limit_sizes ) {
+			add_filter( 'intermediate_image_sizes_advanced', array( $this, 'limit_generated_image_sizes' ), 10, 2 );
+		}
+
+		try {
+			$attachment_id = media_handle_sideload( $file, (int) $product->get_id(), $product->get_name() );
+		} finally {
+			if ( $limit_sizes ) {
+				remove_filter( 'intermediate_image_sizes_advanced', array( $this, 'limit_generated_image_sizes' ), 10 );
+			}
+		}
 
 		if ( is_wp_error( $attachment_id ) ) {
 			@unlink( $temp_file );
@@ -1033,6 +1106,28 @@ class Schrack_Product_Mapper {
 	}
 
 	/**
+	 * Limits generated image sizes during Schrack imports to the sizes used by product UI.
+	 *
+	 * @param array<string,array<string,mixed>> $sizes Registered intermediate sizes.
+	 * @return array<string,array<string,mixed>>
+	 */
+	public function limit_generated_image_sizes( array $sizes ): array {
+		$allowed = array(
+			'thumbnail',
+			'medium',
+			'woocommerce_thumbnail',
+			'woocommerce_single',
+			'woocommerce_gallery_thumbnail',
+			'shop_catalog',
+			'shop_single',
+			'shop_thumbnail',
+		);
+		$limited = array_intersect_key( $sizes, array_flip( $allowed ) );
+
+		return empty( $limited ) ? $sizes : $limited;
+	}
+
+	/**
 	 * Stores image sync bookkeeping on the product.
 	 */
 	private function mark_product_image_sync( WC_Product $product, string $status, string $image_url, int $attachment_id = 0, string $error = '' ): void {
@@ -1053,6 +1148,44 @@ class Schrack_Product_Mapper {
 		} else {
 			$product->delete_meta_data( '_schrack_image_error' );
 		}
+	}
+
+	/**
+	 * Stores image sync bookkeeping directly on product meta.
+	 */
+	private function mark_product_image_sync_meta( int $product_id, string $status, string $image_url, int $attachment_id = 0, string $error = '' ): void {
+		update_post_meta( $product_id, '_schrack_last_image_sync', current_time( 'mysql' ) );
+		update_post_meta( $product_id, '_schrack_last_image_attempt_ts', time() );
+		update_post_meta( $product_id, '_schrack_image_status', sanitize_key( $status ) );
+
+		if ( '' !== $image_url ) {
+			update_post_meta( $product_id, '_schrack_image_url', $image_url );
+		}
+
+		if ( $attachment_id > 0 ) {
+			update_post_meta( $product_id, '_schrack_image_attachment_id', $attachment_id );
+		}
+
+		if ( '' !== $error ) {
+			update_post_meta( $product_id, '_schrack_image_error', sanitize_text_field( $error ) );
+		} else {
+			delete_post_meta( $product_id, '_schrack_image_error' );
+		}
+
+		$this->clean_product_runtime_cache( $product_id );
+	}
+
+	/**
+	 * Reads a prefetched product meta value, falling back to get_post_meta when needed.
+	 *
+	 * @param array<string,mixed> $prefetched_meta Prefetched meta values.
+	 */
+	private function prefetched_meta_value( array $prefetched_meta, string $key, int $product_id ): string {
+		if ( array_key_exists( $key, $prefetched_meta ) && is_scalar( $prefetched_meta[ $key ] ) ) {
+			return (string) $prefetched_meta[ $key ];
+		}
+
+		return $this->string_value( get_post_meta( $product_id, $key, true ) );
 	}
 
 	/**

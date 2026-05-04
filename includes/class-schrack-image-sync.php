@@ -153,6 +153,7 @@ class Schrack_Image_Sync {
 		$skipped   = 0;
 		$reused    = 0;
 		$stopped   = false;
+		$prefetched_meta = $this->prefetch_product_image_meta( $product_ids );
 
 		try {
 			foreach ( $product_ids as $product_id ) {
@@ -162,7 +163,7 @@ class Schrack_Image_Sync {
 				}
 
 				try {
-					$image_result  = $this->mapper->import_product_image_with_result( $product_id );
+					$image_result  = $this->mapper->import_product_image_with_result( $product_id, $prefetched_meta[ $product_id ] ?? array() );
 					$status        = (string) ( $image_result['status'] ?? '' );
 					$attachment_id = absint( $image_result['attachment_id'] ?? 0 );
 					++$processed;
@@ -214,6 +215,62 @@ class Schrack_Image_Sync {
 
 		if ( $stopped ) {
 			$result['stopped'] = 'yes';
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Prefetches the product meta needed for image import decisions in one query.
+	 *
+	 * @param array<int,int> $product_ids Product IDs.
+	 * @return array<int,array<string,string>>
+	 */
+	private function prefetch_product_image_meta( array $product_ids ): array {
+		global $wpdb;
+
+		$product_ids = array_values( array_unique( array_filter( array_map( 'absint', $product_ids ) ) ) );
+
+		if ( empty( $product_ids ) ) {
+			return array();
+		}
+
+		$meta_keys = array(
+			self::IMAGE_META_KEY,
+			self::IMPORTED_META_KEY,
+			'_schrack_image_attachment_id',
+			'_thumbnail_id',
+			'_sku',
+			'_schrack_item_number',
+		);
+		$result = array_fill_keys( $product_ids, array() );
+
+		foreach ( array_chunk( $product_ids, 500 ) as $chunk ) {
+			$id_placeholders   = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
+			$key_placeholders  = implode( ',', array_fill( 0, count( $meta_keys ), '%s' ) );
+			$query_parameters = array_merge( $chunk, $meta_keys );
+			$sql = "
+				SELECT post_id, meta_key, meta_value
+				FROM {$wpdb->postmeta}
+				WHERE post_id IN ({$id_placeholders})
+					AND meta_key IN ({$key_placeholders})
+			";
+			$rows = $wpdb->get_results( $wpdb->prepare( $sql, $query_parameters ), ARRAY_A );
+
+			if ( ! is_array( $rows ) ) {
+				continue;
+			}
+
+			foreach ( $rows as $row ) {
+				$product_id = absint( $row['post_id'] ?? 0 );
+				$meta_key   = isset( $row['meta_key'] ) ? (string) $row['meta_key'] : '';
+
+				if ( $product_id <= 0 || '' === $meta_key || ! array_key_exists( $product_id, $result ) ) {
+					continue;
+				}
+
+				$result[ $product_id ][ $meta_key ] = is_scalar( $row['meta_value'] ?? null ) ? (string) $row['meta_value'] : '';
+			}
 		}
 
 		return $result;

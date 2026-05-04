@@ -1428,7 +1428,7 @@ class Schrack_Cron {
 	private function image_batch_limit(): int {
 		$limit = max( 1, min( 500, (int) $this->settings->get( 'sync_batch_size', 25 ) ) );
 
-		return $this->is_low_memory_host() ? min( $limit, 15 ) : $limit;
+		return $this->is_low_memory_host() ? 25 : $limit;
 	}
 
 	/**
@@ -1861,6 +1861,6 @@ class Schrack_Cron {
 	private function image_parallel_followup_delay(): int {
 		$delay = max( 10, min( 300, (int) $this->settings->get( 'image_parallel_followup_delay', 30 ) ) );
 
-		return $this->is_low_memory_host() ? max( $delay, 120 ) : $delay;
+		return $this->is_low_memory_host() ? max( $delay, 30 ) : $delay;
 	}
 }
