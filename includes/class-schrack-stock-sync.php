@@ -120,6 +120,7 @@ class Schrack_Stock_Sync {
 		$errors    = 0;
 		$stopped   = false;
 		$product_skus = array();
+		$skus_by_product_id = $this->mapper->schrack_skus_by_product_ids( $product_ids );
 
 		foreach ( $product_ids as $product_id ) {
 			if ( $this->settings->is_stop_requested() ) {
@@ -127,14 +128,7 @@ class Schrack_Stock_Sync {
 				break;
 			}
 
-			$product = wc_get_product( $product_id );
-
-			if ( ! $product instanceof WC_Product ) {
-				++$processed;
-				continue;
-			}
-
-			$sku = $this->product_schrack_sku( $product );
+			$sku = $skus_by_product_id[ $product_id ] ?? '';
 
 			if ( '' === $sku ) {
 				++$processed;
@@ -145,7 +139,7 @@ class Schrack_Stock_Sync {
 			$product_skus[ $product_id ] = $sku;
 		}
 
-		$request_size = max( 1, min( $limit, (int) $this->settings->get( 'stock_request_size', 25 ) ) );
+		$request_size = $this->stock_request_size( $limit );
 
 		foreach ( array_chunk( $product_skus, $request_size, true ) as $sku_by_product_id ) {
 			if ( $this->settings->is_stop_requested() ) {
@@ -164,7 +158,7 @@ class Schrack_Stock_Sync {
 						continue;
 					}
 
-					$this->mapper->update_stock( (int) $product_id, $stocks[ $sku ] );
+					$this->mapper->update_stock_fast( (int) $product_id, $stocks[ $sku ] );
 					++$processed;
 				}
 			} catch ( Schrack_Rate_Limit_Exception $exception ) {
@@ -208,6 +202,8 @@ class Schrack_Stock_Sync {
 			'batch_start'     => $batch['batch_start'],
 			'batch_count'     => $batch_count,
 			'batch_limit'     => $limit,
+			'request_size'    => $request_size,
+			'fast_updates'    => 'yes',
 			'completed_cycle' => $completed_cycle ? 'yes' : 'no',
 		);
 
@@ -425,32 +421,7 @@ class Schrack_Stock_Sync {
 	 * @return array{product_ids:array<int,int>,total_products:int,batch_start:int}
 	 */
 	private function get_schrack_product_batch( int $limit, int $offset ): array {
-		$query = new WP_Query(
-			array(
-				'post_type'      => 'product',
-				'post_status'    => array( 'publish', 'draft', 'private' ),
-				'posts_per_page' => max( 1, $limit ),
-				'offset'         => max( 0, $offset ),
-				'fields'         => 'ids',
-				'orderby'        => 'ID',
-				'order'          => 'ASC',
-				'cache_results'          => false,
-				'update_post_meta_cache' => false,
-				'update_post_term_cache' => false,
-				'meta_query'     => array(
-					array(
-						'key'     => '_schrack_item_number',
-						'compare' => 'EXISTS',
-					),
-				),
-			)
-		);
-
-		return array(
-			'product_ids'    => array_map( 'absint', $query->posts ),
-			'total_products' => (int) $query->found_posts,
-			'batch_start'    => max( 0, $offset ),
-		);
+		return $this->mapper->schrack_product_batch( $limit, $offset );
 	}
 
 	/**
@@ -509,6 +480,17 @@ class Schrack_Stock_Sync {
 		}
 
 		return sanitize_text_field( trim( (string) $sku ) );
+	}
+
+	/**
+	 * Returns an efficient SOAP request chunk size for stock sync.
+	 */
+	private function stock_request_size( int $limit ): int {
+		$limit      = max( 1, $limit );
+		$configured = max( 1, min( 100, (int) $this->settings->get( 'stock_request_size', 100 ) ) );
+		$floor      = min( $limit, 100 );
+
+		return max( 1, min( $limit, 100, max( $configured, $floor ) ) );
 	}
 
 	/**

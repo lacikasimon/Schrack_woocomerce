@@ -153,6 +153,102 @@ class Schrack_Product_Mapper {
 	}
 
 	/**
+	 * Reads Schrack SKUs for a product batch without loading WooCommerce product objects.
+	 *
+	 * @param array<int,int> $product_ids Product IDs.
+	 * @return array<int,string>
+	 */
+	public function schrack_skus_by_product_ids( array $product_ids ): array {
+		global $wpdb;
+
+		$product_ids = array_values( array_unique( array_filter( array_map( 'absint', $product_ids ) ) ) );
+
+		if ( empty( $product_ids ) ) {
+			return array();
+		}
+
+		$skus = array();
+
+		foreach ( array_chunk( $product_ids, 500 ) as $chunk ) {
+			$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
+			$sql          = "
+				SELECT products.ID AS product_id,
+					MAX(CASE WHEN meta.meta_key = '_schrack_item_number' THEN meta.meta_value ELSE '' END) AS schrack_sku,
+					MAX(CASE WHEN meta.meta_key = '_sku' THEN meta.meta_value ELSE '' END) AS product_sku
+				FROM {$wpdb->posts} AS products
+				LEFT JOIN {$wpdb->postmeta} AS meta
+					ON meta.post_id = products.ID
+					AND meta.meta_key IN ('_schrack_item_number', '_sku')
+				WHERE products.ID IN ({$placeholders})
+					AND products.post_type IN ('product', 'product_variation')
+					AND products.post_status NOT IN ('trash', 'auto-draft')
+				GROUP BY products.ID
+			";
+			$rows         = $wpdb->get_results( $wpdb->prepare( $sql, $chunk ), ARRAY_A );
+
+			if ( ! is_array( $rows ) ) {
+				continue;
+			}
+
+			foreach ( $rows as $row ) {
+				$product_id = absint( $row['product_id'] ?? 0 );
+				$sku        = isset( $row['schrack_sku'] ) && '' !== trim( (string) $row['schrack_sku'] )
+					? (string) $row['schrack_sku']
+					: (string) ( $row['product_sku'] ?? '' );
+				$sku        = sanitize_text_field( trim( $sku ) );
+
+				if ( $product_id > 0 && '' !== $sku ) {
+					$skus[ $product_id ] = $sku;
+				}
+			}
+		}
+
+		return $skus;
+	}
+
+	/**
+	 * Returns a stable batch of products that have a Schrack item number.
+	 *
+	 * @return array{product_ids:array<int,int>,total_products:int,batch_start:int}
+	 */
+	public function schrack_product_batch( int $limit, int $offset ): array {
+		global $wpdb;
+
+		$limit  = max( 1, $limit );
+		$offset = max( 0, $offset );
+		$sql    = "
+			SELECT products.ID
+			FROM {$wpdb->posts} AS products
+			INNER JOIN {$wpdb->postmeta} AS item_meta
+				ON item_meta.post_id = products.ID
+				AND item_meta.meta_key = '_schrack_item_number'
+				AND item_meta.meta_value <> ''
+			WHERE products.post_type = 'product'
+				AND products.post_status IN ('publish', 'draft', 'private')
+			GROUP BY products.ID
+			ORDER BY products.ID ASC
+			LIMIT %d OFFSET %d
+		";
+		$product_ids = $wpdb->get_col( $wpdb->prepare( $sql, $limit, $offset ) );
+		$total_sql   = "
+			SELECT COUNT(DISTINCT products.ID)
+			FROM {$wpdb->posts} AS products
+			INNER JOIN {$wpdb->postmeta} AS item_meta
+				ON item_meta.post_id = products.ID
+				AND item_meta.meta_key = '_schrack_item_number'
+				AND item_meta.meta_value <> ''
+			WHERE products.post_type = 'product'
+				AND products.post_status IN ('publish', 'draft', 'private')
+		";
+
+		return array(
+			'product_ids'    => array_map( 'absint', is_array( $product_ids ) ? $product_ids : array() ),
+			'total_products' => (int) $wpdb->get_var( $total_sql ),
+			'batch_start'    => $offset,
+		);
+	}
+
+	/**
 	 * Creates or updates a product by SKU.
 	 *
 	 * @param array<string,mixed> $data Normalized product data.
@@ -251,6 +347,38 @@ class Schrack_Product_Mapper {
 	}
 
 	/**
+	 * Updates price metadata and WooCommerce lookup rows without loading the product object.
+	 */
+	public function update_price_fast( int $product_id, float $purchase_price ): float {
+		$purchase_price = max( 0.0, $purchase_price );
+		$sale_price     = $this->markup->calculate_sale_price( $purchase_price, $product_id );
+		$decimals       = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
+		$price          = function_exists( 'wc_format_decimal' ) ? wc_format_decimal( $sale_price, $decimals ) : number_format( $sale_price, $decimals, '.', '' );
+
+		update_post_meta( $product_id, '_regular_price', $price );
+		update_post_meta( $product_id, '_price', $price );
+		update_post_meta( $product_id, '_schrack_purchase_price', $purchase_price );
+		update_post_meta( $product_id, '_schrack_last_price_sync', current_time( 'mysql' ) );
+
+		$this->update_price_lookup( $product_id, (float) $price );
+		$this->clean_product_runtime_cache( $product_id );
+
+		$this->logger->debug(
+			'price',
+			'Updated WooCommerce price from Schrack purchase price.',
+			null,
+			array(
+				'product_id'         => $product_id,
+				'purchase_price'     => $purchase_price,
+				'woocommerce_price'  => $sale_price,
+				'update_mode'        => 'fast_meta',
+			)
+		);
+
+		return $sale_price;
+	}
+
+	/**
 	 * Updates WooCommerce stock fields.
 	 *
 	 * @param int                 $product_id Product ID.
@@ -285,6 +413,47 @@ class Schrack_Product_Mapper {
 				'product_id'   => $product_id,
 				'total_stock'  => $total_stock,
 				'stock_source' => $this->settings->get( 'stock_source', 'all' ),
+			)
+		);
+
+		return $total_stock;
+	}
+
+	/**
+	 * Updates stock metadata and WooCommerce lookup rows without loading the product object.
+	 *
+	 * @param int                 $product_id Product ID.
+	 * @param array<string,mixed> $stock_data Stock data.
+	 */
+	public function update_stock_fast( int $product_id, array $stock_data ): float {
+		if ( 'yes' !== $this->settings->get( 'stock_handling_enabled', 'yes' ) ) {
+			$this->logger->debug( 'stock', 'Skipped stock update because stock handling is disabled.', null, array( 'product_id' => $product_id ) );
+			return 0.0;
+		}
+
+		$total_stock    = isset( $stock_data['total_stock'] ) ? max( 0, (float) $stock_data['total_stock'] ) : 0.0;
+		$stock_quantity = function_exists( 'wc_stock_amount' ) ? wc_stock_amount( $total_stock ) : $total_stock;
+		$stock_status   = $total_stock > 0 ? 'instock' : 'outofstock';
+
+		update_post_meta( $product_id, '_manage_stock', 'yes' );
+		update_post_meta( $product_id, '_stock', $stock_quantity );
+		update_post_meta( $product_id, '_stock_status', $stock_status );
+		update_post_meta( $product_id, '_schrack_last_stock_sync', current_time( 'mysql' ) );
+		update_post_meta( $product_id, '_schrack_stock_breakdown', wp_json_encode( $stock_data['warehouses'] ?? array() ) );
+
+		$this->update_stock_lookup( $product_id, (float) $stock_quantity, $stock_status );
+		$this->update_stock_visibility_term( $product_id, $stock_status );
+		$this->clean_product_runtime_cache( $product_id );
+
+		$this->logger->debug(
+			'stock',
+			'Updated WooCommerce stock from Schrack quantities.',
+			null,
+			array(
+				'product_id'   => $product_id,
+				'total_stock'  => $total_stock,
+				'stock_source' => $this->settings->get( 'stock_source', 'all' ),
+				'update_mode'  => 'fast_meta',
 			)
 		);
 
@@ -414,6 +583,74 @@ class Schrack_Product_Mapper {
 
 		if ( ! empty( $data['technical_attributes'] ) ) {
 			$product->update_meta_data( '_schrack_technical_attributes', wp_json_encode( $data['technical_attributes'] ) );
+		}
+	}
+
+	/**
+	 * Keeps WooCommerce price lookup data in sync for fast direct price updates.
+	 */
+	private function update_price_lookup( int $product_id, float $price ): void {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'wc_product_meta_lookup';
+
+		$wpdb->query(
+			$wpdb->prepare(
+				"INSERT INTO {$table} (product_id, min_price, max_price)
+				VALUES (%d, %f, %f)
+				ON DUPLICATE KEY UPDATE min_price = VALUES(min_price), max_price = VALUES(max_price)",
+				$product_id,
+				$price,
+				$price
+			)
+		);
+	}
+
+	/**
+	 * Keeps WooCommerce stock lookup data in sync for fast direct stock updates.
+	 */
+	private function update_stock_lookup( int $product_id, float $stock_quantity, string $stock_status ): void {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'wc_product_meta_lookup';
+
+		$wpdb->query(
+			$wpdb->prepare(
+				"INSERT INTO {$table} (product_id, stock_quantity, stock_status)
+				VALUES (%d, %f, %s)
+				ON DUPLICATE KEY UPDATE stock_quantity = VALUES(stock_quantity), stock_status = VALUES(stock_status)",
+				$product_id,
+				$stock_quantity,
+				$stock_status
+			)
+		);
+	}
+
+	/**
+	 * Mirrors WooCommerce's out-of-stock visibility term without a full product save.
+	 */
+	private function update_stock_visibility_term( int $product_id, string $stock_status ): void {
+		if ( ! taxonomy_exists( 'product_visibility' ) ) {
+			return;
+		}
+
+		if ( 'outofstock' === $stock_status ) {
+			wp_set_object_terms( $product_id, 'outofstock', 'product_visibility', true );
+			return;
+		}
+
+		wp_remove_object_terms( $product_id, 'outofstock', 'product_visibility' );
+	}
+
+	/**
+	 * Clears the lightweight runtime caches affected by direct product metadata writes.
+	 */
+	private function clean_product_runtime_cache( int $product_id ): void {
+		wp_cache_delete( $product_id, 'post_meta' );
+		clean_post_cache( $product_id );
+
+		if ( function_exists( 'wc_delete_product_transients' ) ) {
+			wc_delete_product_transients( $product_id );
 		}
 	}
 

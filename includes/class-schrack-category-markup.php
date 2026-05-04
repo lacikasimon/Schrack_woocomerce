@@ -18,6 +18,20 @@ class Schrack_Category_Markup {
 	private Schrack_Settings $settings;
 
 	/**
+	 * Per-request cached markup rules.
+	 *
+	 * @var array<int,array<string,mixed>>|null
+	 */
+	private ?array $rules_cache = null;
+
+	/**
+	 * Per-request cached effective product rules.
+	 *
+	 * @var array<int,array{markup:float|string,min_margin:float|string,rounding:string}>
+	 */
+	private array $product_rule_cache = array();
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct( Schrack_Settings $settings ) {
@@ -30,9 +44,15 @@ class Schrack_Category_Markup {
 	 * @return array<int,array<string,mixed>>
 	 */
 	public function all(): array {
+		if ( null !== $this->rules_cache ) {
+			return $this->rules_cache;
+		}
+
 		$rules = get_option( Schrack_Settings::MARKUPS_OPTION_NAME, array() );
 
-		return is_array( $rules ) ? $rules : array();
+		$this->rules_cache = is_array( $rules ) ? $rules : array();
+
+		return $this->rules_cache;
 	}
 
 	/**
@@ -70,6 +90,9 @@ class Schrack_Category_Markup {
 		}
 
 		update_option( Schrack_Settings::MARKUPS_OPTION_NAME, $rules, false );
+
+		$this->rules_cache        = $rules;
+		$this->product_rule_cache = array();
 	}
 
 	/**
@@ -158,26 +181,41 @@ class Schrack_Category_Markup {
 			return $default;
 		}
 
+		if ( isset( $this->product_rule_cache[ $product_id ] ) ) {
+			return $this->product_rule_cache[ $product_id ];
+		}
+
 		$rules = $this->all();
+
+		if ( empty( $rules ) ) {
+			$this->product_rule_cache[ $product_id ] = $default;
+			return $default;
+		}
+
 		$terms = get_the_terms( $product_id, 'product_cat' );
 
 		if ( empty( $terms ) || is_wp_error( $terms ) ) {
+			$this->product_rule_cache[ $product_id ] = $default;
 			return $default;
 		}
 
 		foreach ( $terms as $term ) {
 			if ( isset( $rules[ $term->term_id ] ) ) {
-				return wp_parse_args( $rules[ $term->term_id ], $default );
+				$this->product_rule_cache[ $product_id ] = wp_parse_args( $rules[ $term->term_id ], $default );
+				return $this->product_rule_cache[ $product_id ];
 			}
 
 			$ancestors = get_ancestors( $term->term_id, 'product_cat', 'taxonomy' );
 
 			foreach ( $ancestors as $ancestor_id ) {
 				if ( isset( $rules[ $ancestor_id ] ) ) {
-					return wp_parse_args( $rules[ $ancestor_id ], $default );
+					$this->product_rule_cache[ $product_id ] = wp_parse_args( $rules[ $ancestor_id ], $default );
+					return $this->product_rule_cache[ $product_id ];
 				}
 			}
 		}
+
+		$this->product_rule_cache[ $product_id ] = $default;
 
 		return $default;
 	}

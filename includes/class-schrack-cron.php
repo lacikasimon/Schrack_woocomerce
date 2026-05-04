@@ -1417,9 +1417,9 @@ class Schrack_Cron {
 	 * Returns the effective SOAP-backed product batch size.
 	 */
 	private function sync_batch_limit(): int {
-		$limit = max( 1, min( 500, (int) $this->settings->get( 'sync_batch_size', 25 ) ) );
+		$limit = max( 1, min( 500, (int) $this->settings->get( 'sync_batch_size', 100 ) ) );
 
-		return $this->is_low_memory_host() ? min( $limit, 50 ) : $limit;
+		return $this->is_low_memory_host() ? 100 : $limit;
 	}
 
 	/**

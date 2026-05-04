@@ -83,7 +83,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<th scope="row"><label for="schrack_batch_size"><?php esc_html_e( 'Price/stock/image batch size', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
 					<input id="schrack_batch_size" type="number" min="1" max="500" step="1" name="schrack_settings[sync_batch_size]" value="<?php echo esc_attr( $settings['sync_batch_size'] ); ?>">
-					<p class="description"><?php esc_html_e( 'On low-memory hosting, price/stock batches are capped to 50 and image batches to 15 at runtime.', 'schrack-woocommerce-sync' ); ?></p>
+					<p class="description"><?php esc_html_e( 'On 2 GB hosting, price/stock batches use 100 products at runtime while image batches stay capped to 15.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>
@@ -95,11 +95,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_price_request_size"><?php esc_html_e( 'Price items per SOAP request', 'schrack-woocommerce-sync' ); ?></label></th>
-				<td><input id="schrack_price_request_size" type="number" min="1" max="100" step="1" name="schrack_settings[price_request_size]" value="<?php echo esc_attr( $settings['price_request_size'] ); ?>"></td>
+				<td>
+					<input id="schrack_price_request_size" type="number" min="1" max="100" step="1" name="schrack_settings[price_request_size]" value="<?php echo esc_attr( $settings['price_request_size'] ); ?>">
+					<p class="description"><?php esc_html_e( '100 is recommended because it reduces Schrack SOAP message count.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_stock_request_size"><?php esc_html_e( 'Stock items per SOAP request', 'schrack-woocommerce-sync' ); ?></label></th>
-				<td><input id="schrack_stock_request_size" type="number" min="1" max="100" step="1" name="schrack_settings[stock_request_size]" value="<?php echo esc_attr( $settings['stock_request_size'] ); ?>"></td>
+				<td>
+					<input id="schrack_stock_request_size" type="number" min="1" max="100" step="1" name="schrack_settings[stock_request_size]" value="<?php echo esc_attr( $settings['stock_request_size'] ); ?>">
+					<p class="description"><?php esc_html_e( '100 is recommended because it reduces Schrack SOAP message count.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_rate_limit_sleep"><?php esc_html_e( 'Batch sleep seconds', 'schrack-woocommerce-sync' ); ?></label></th>
