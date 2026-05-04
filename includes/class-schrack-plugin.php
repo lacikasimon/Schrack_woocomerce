@@ -53,6 +53,13 @@ class Schrack_Plugin {
 	private ?Schrack_Elementor $elementor = null;
 
 	/**
+	 * Frontend image loader.
+	 *
+	 * @var Schrack_Frontend_Image_Loader|null
+	 */
+	private ?Schrack_Frontend_Image_Loader $frontend_image_loader = null;
+
+	/**
 	 * Returns the singleton instance.
 	 */
 	public static function instance(): Schrack_Plugin {
@@ -73,6 +80,8 @@ class Schrack_Plugin {
 		$this->logger   = new Schrack_Logger( $this->settings );
 		$this->cron     = new Schrack_Cron( $this->settings, $this->logger );
 		$this->cron->init();
+		$this->frontend_image_loader = new Schrack_Frontend_Image_Loader( $this->settings, $this->logger );
+		$this->frontend_image_loader->init();
 		$this->elementor = new Schrack_Elementor();
 		$this->elementor->init();
 
@@ -98,6 +107,7 @@ class Schrack_Plugin {
 			'class-schrack-category-markup.php',
 			'class-schrack-soap-client.php',
 			'class-schrack-product-mapper.php',
+			'class-schrack-frontend-image-loader.php',
 			'class-schrack-catalog-importer.php',
 			'class-schrack-image-sync.php',
 			'class-schrack-price-sync.php',

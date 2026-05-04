@@ -15,6 +15,13 @@ class Schrack_Product_Filter_Renderer {
 	public const NONCE_ACTION = 'schrack_wc_product_filter';
 
 	/**
+	 * Frontend image loader.
+	 *
+	 * @var Schrack_Frontend_Image_Loader|null
+	 */
+	private ?Schrack_Frontend_Image_Loader $image_loader = null;
+
+	/**
 	 * Renders the full filter widget shell and the initial product results.
 	 *
 	 * @param array<string,mixed> $settings Widget settings.
@@ -584,6 +591,11 @@ class Schrack_Product_Filter_Renderer {
 		$product_id = (int) $product->get_id();
 		$permalink  = get_permalink( $product_id );
 		$sku        = $product->get_sku();
+
+		if ( $settings['show_images'] ) {
+			$product = $this->frontend_image_loader()->ensure_product_image( $product, 3 );
+		}
+
 		$image      = $settings['show_images'] ? $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) : '';
 		$cart_class = 'schrack-product-card__cart button add_to_cart_button';
 
@@ -1355,6 +1367,23 @@ class Schrack_Product_Filter_Renderer {
 		}
 
 		return max( $min, min( $max, absint( $value ) ) );
+	}
+
+	/**
+	 * Returns the on-demand frontend image loader.
+	 */
+	private function frontend_image_loader(): Schrack_Frontend_Image_Loader {
+		if ( $this->image_loader instanceof Schrack_Frontend_Image_Loader ) {
+			return $this->image_loader;
+		}
+
+		$plugin   = class_exists( 'Schrack_Plugin' ) ? Schrack_Plugin::instance() : null;
+		$settings = $plugin instanceof Schrack_Plugin && $plugin->settings() instanceof Schrack_Settings ? $plugin->settings() : new Schrack_Settings();
+		$logger   = $plugin instanceof Schrack_Plugin && $plugin->logger() instanceof Schrack_Logger ? $plugin->logger() : new Schrack_Logger( $settings );
+
+		$this->image_loader = new Schrack_Frontend_Image_Loader( $settings, $logger );
+
+		return $this->image_loader;
 	}
 
 	/**

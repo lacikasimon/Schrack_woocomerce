@@ -624,7 +624,8 @@ class Schrack_Product_Mapper {
 			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
 
-		$temp_file = download_url( $image_url, 45 );
+		$timeout   = max( 5, min( 60, (int) apply_filters( 'schrack_wc_sync_image_download_timeout', 45, $image_url, $product ) ) );
+		$temp_file = download_url( $image_url, $timeout );
 
 		if ( is_wp_error( $temp_file ) ) {
 			$this->logger->warning(

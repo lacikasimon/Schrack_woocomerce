@@ -11,6 +11,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Product_Page_Renderer {
 	/**
+	 * Frontend image loader.
+	 *
+	 * @var Schrack_Frontend_Image_Loader|null
+	 */
+	private ?Schrack_Frontend_Image_Loader $image_loader = null;
+
+	/**
 	 * Renders the product page module.
 	 *
 	 * @param array<string,mixed> $settings Widget settings.
@@ -31,6 +38,10 @@ class Schrack_Product_Page_Renderer {
 
 		if ( $product->is_type( 'variable' ) ) {
 			wp_enqueue_script( 'wc-add-to-cart-variation' );
+		}
+
+		if ( $settings['show_gallery'] ) {
+			$product = $this->frontend_image_loader()->ensure_product_image( $product, 1 );
 		}
 
 		$product_id = $product->get_id();
@@ -576,6 +587,23 @@ class Schrack_Product_Page_Renderer {
 		}
 
 		return max( $min, min( $max, absint( $value ) ) );
+	}
+
+	/**
+	 * Returns the on-demand frontend image loader.
+	 */
+	private function frontend_image_loader(): Schrack_Frontend_Image_Loader {
+		if ( $this->image_loader instanceof Schrack_Frontend_Image_Loader ) {
+			return $this->image_loader;
+		}
+
+		$plugin   = class_exists( 'Schrack_Plugin' ) ? Schrack_Plugin::instance() : null;
+		$settings = $plugin instanceof Schrack_Plugin && $plugin->settings() instanceof Schrack_Settings ? $plugin->settings() : new Schrack_Settings();
+		$logger   = $plugin instanceof Schrack_Plugin && $plugin->logger() instanceof Schrack_Logger ? $plugin->logger() : new Schrack_Logger( $settings );
+
+		$this->image_loader = new Schrack_Frontend_Image_Loader( $settings, $logger );
+
+		return $this->image_loader;
 	}
 
 	/**
