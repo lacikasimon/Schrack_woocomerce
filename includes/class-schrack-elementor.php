@@ -115,6 +115,28 @@ class Schrack_Elementor {
 		);
 
 		wp_register_style(
+			'schrack-wc-cart-checkout',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-cart-checkout.css',
+			array(),
+			$this->asset_version( 'assets/elementor-cart-checkout.css' )
+		);
+
+		wp_register_style(
+			'schrack-wc-support',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-support.css',
+			array(),
+			$this->asset_version( 'assets/elementor-support.css' )
+		);
+
+		wp_register_script(
+			'schrack-wc-support',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-support.js',
+			array(),
+			$this->asset_version( 'assets/elementor-support.js' ),
+			true
+		);
+
+		wp_register_style(
 			'schrack-wc-homepage',
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-homepage.css',
 			array(),
@@ -184,8 +206,10 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-header-search-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-cart-checkout-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-support-widget.php';
 
 		$widgets = array(
 			new Schrack_Elementor_Header_Widget(),
@@ -196,6 +220,8 @@ class Schrack_Elementor {
 			new Schrack_Elementor_Product_Page_Widget(),
 			new Schrack_Elementor_Customer_Register_Widget(),
 			new Schrack_Elementor_B2B_Register_Widget(),
+			new Schrack_Elementor_Cart_Checkout_Widget(),
+			new Schrack_Elementor_Support_Widget(),
 		);
 
 		if ( is_object( $widgets_manager ) && method_exists( $widgets_manager, 'register' ) ) {
@@ -222,8 +248,10 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-header-search-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-cart-checkout-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-support-widget.php';
 
 		if ( is_object( $widgets_manager ) && method_exists( $widgets_manager, 'register_widget_type' ) ) {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Header_Widget() );
@@ -234,6 +262,8 @@ class Schrack_Elementor {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Page_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Customer_Register_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_B2B_Register_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Cart_Checkout_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Support_Widget() );
 			$this->widgets_registered = true;
 		}
 	}

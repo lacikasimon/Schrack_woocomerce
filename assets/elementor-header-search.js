@@ -22,9 +22,22 @@
 		};
 	}
 
+	function minChars(root) {
+		var config = parseConfig(root);
+
+		return parseInt(config.min_chars, 10) || 3;
+	}
+
+	function setLoading(root, loading) {
+		root.classList.toggle('is-loading', loading);
+		root.setAttribute('aria-busy', loading ? 'true' : 'false');
+	}
+
 	function closeResults(root) {
 		var input = root.querySelector('[data-header-search-input]');
 		var results = root.querySelector('[data-header-search-results]');
+
+		setLoading(root, false);
 
 		if (results) {
 			results.hidden = true;
@@ -55,11 +68,12 @@
 		var action = root.getAttribute('data-action');
 		var nonce = root.getAttribute('data-nonce');
 		var config = parseConfig(root);
-		var minChars = parseInt(config.min_chars, 10) || 3;
+		var minimum = minChars(root);
 		var search = input ? input.value.trim() : '';
 		var body;
 
 		if (!input || !ajaxUrl || !action || !nonce) {
+			setLoading(root, false);
 			return;
 		}
 
@@ -74,13 +88,13 @@
 		body.set('search', search);
 		body.set('config', JSON.stringify(config));
 
-		if (search.length < minChars) {
-			setResults(root, '<div class="schrack-header-search__panel"><div class="schrack-header-search__empty">Introdu cel putin ' + String(minChars) + ' caractere.</div></div>');
+		if (search.length < minimum) {
+			setLoading(root, false);
+			setResults(root, '<div class="schrack-header-search__panel"><div class="schrack-header-search__empty">Introdu cel putin ' + String(minimum) + ' caractere.</div></div>');
 			return;
 		}
 
-		root.classList.add('is-loading');
-		root.setAttribute('aria-busy', 'true');
+		setLoading(root, true);
 
 		window.fetch(ajaxUrl, {
 			method: 'POST',
@@ -96,12 +110,21 @@
 				throw new Error('Invalid header search response');
 			}
 
+			if (input.value.trim() !== search) {
+				return;
+			}
+
 			setResults(root, payload.data.html);
 		}).catch(function () {
+			if (input.value.trim() !== search) {
+				return;
+			}
+
 			setResults(root, '<div class="schrack-header-search__panel"><div class="schrack-header-search__empty">Cautarea a esuat.</div></div>');
 		}).finally(function () {
-			root.classList.remove('is-loading');
-			root.setAttribute('aria-busy', 'false');
+			if (input.value.trim() === search || input.value.trim().length < minimum) {
+				setLoading(root, false);
+			}
 		});
 	}
 
@@ -117,7 +140,18 @@
 
 		root.setAttribute('data-header-search-ready', 'yes');
 
-		input.addEventListener('input', delayedRequest);
+		input.addEventListener('input', function () {
+			var search = input.value.trim();
+
+			if (search.length >= minChars(root)) {
+				setLoading(root, true);
+				delayedRequest();
+				return;
+			}
+
+			setLoading(root, false);
+			delayedRequest();
+		});
 		input.addEventListener('focus', function () {
 			if (input.value.trim()) {
 				requestResults(root);
@@ -141,6 +175,30 @@
 	function initAll(context) {
 		Array.prototype.forEach.call((context || document).querySelectorAll('.schrack-header-search'), initSearch);
 	}
+
+	document.addEventListener('input', function (event) {
+		var target = event.target;
+		var root;
+
+		if (!target || !target.matches || !target.matches('[data-header-search-input]')) {
+			return;
+		}
+
+		root = target.closest('.schrack-header-search');
+
+		if (!root || root.getAttribute('data-header-search-ready') === 'yes') {
+			return;
+		}
+
+		initSearch(root);
+
+		if (target.value.trim().length >= minChars(root)) {
+			setLoading(root, true);
+			window.setTimeout(function () {
+				requestResults(root);
+			}, 0);
+		}
+	});
 
 	if (document.readyState === 'loading') {
 		document.addEventListener('DOMContentLoaded', function () {
