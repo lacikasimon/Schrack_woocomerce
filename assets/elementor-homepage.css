@@ -1551,13 +1551,15 @@
 		height: auto !important;
 		margin-bottom: 0 !important;
 		margin-top: 0 !important;
+		max-width: 100% !important;
 		min-height: 0 !important;
 		padding-bottom: 0 !important;
 		padding-top: 0 !important;
+		width: 100% !important;
 	}
 
 	.elementor-widget-schrack_homepage {
-		align-self: flex-start !important;
+		align-self: stretch !important;
 	}
 
 	.elementor-section:has(.schrack-home),
@@ -1567,13 +1569,16 @@
 	.e-con:has(.schrack-home) {
 		height: auto !important;
 		margin-bottom: 0 !important;
+		max-width: 100% !important;
 		min-height: 0 !important;
 		padding-bottom: 0 !important;
+		width: 100% !important;
 	}
 
 	.schrack-home {
 		height: auto !important;
 		margin-bottom: 0 !important;
+		max-width: 100% !important;
 		min-height: 0 !important;
 		padding-bottom: 0 !important;
 	}
@@ -1741,13 +1746,15 @@
 		height: auto !important;
 		margin-bottom: 0 !important;
 		margin-top: 0 !important;
+		max-width: 100% !important;
 		min-height: 0 !important;
 		padding-bottom: 0 !important;
 		padding-top: 0 !important;
+		width: 100% !important;
 	}
 
 	.elementor-widget-schrack_homepage {
-		align-self: flex-start !important;
+		align-self: stretch !important;
 	}
 
 	.elementor-section:has(.schrack-home),
@@ -1757,13 +1764,16 @@
 	.e-con:has(.schrack-home) {
 		height: auto !important;
 		margin-bottom: 0 !important;
+		max-width: 100% !important;
 		min-height: 0 !important;
 		padding-bottom: 0 !important;
+		width: 100% !important;
 	}
 
 	.schrack-home {
 		height: auto !important;
 		margin-bottom: 0 !important;
+		max-width: 100% !important;
 		min-height: 0 !important;
 		padding-bottom: 0 !important;
 	}
