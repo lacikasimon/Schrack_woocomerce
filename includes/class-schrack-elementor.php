@@ -105,6 +105,13 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_VERSION
 		);
 
+		wp_register_style(
+			'schrack-wc-footer',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-footer.css',
+			array(),
+			SCHRACK_WC_SYNC_VERSION
+		);
+
 		wp_register_script(
 			'schrack-wc-homepage',
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-homepage.js',
@@ -148,9 +155,11 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
 
 		$widgets = array(
 			new Schrack_Elementor_Homepage_Widget(),
+			new Schrack_Elementor_Footer_Widget(),
 			new Schrack_Elementor_Product_Filter_Widget(),
 			new Schrack_Elementor_Header_Search_Widget(),
 			new Schrack_Elementor_Product_Page_Widget(),
@@ -182,9 +191,11 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
 
 		if ( is_object( $widgets_manager ) && method_exists( $widgets_manager, 'register_widget_type' ) ) {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Homepage_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Footer_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Filter_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Header_Search_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Page_Widget() );

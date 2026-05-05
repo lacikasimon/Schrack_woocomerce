@@ -117,6 +117,7 @@ class Schrack_Plugin {
 			'class-schrack-product-page-renderer.php',
 			'class-schrack-registration-renderer.php',
 			'class-schrack-homepage-renderer.php',
+			'class-schrack-footer-renderer.php',
 			'class-schrack-elementor.php',
 			'class-schrack-cron.php',
 			'class-schrack-admin.php',
