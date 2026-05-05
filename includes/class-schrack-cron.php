@@ -777,7 +777,7 @@ class Schrack_Cron {
 			$this->settings->update_status( 'images', $result );
 			$this->logger->info( 'images', 'Queued parallel Schrack image sync workers.', null, $result );
 
-			if ( ! $stopped && $queue_continuation && 'no' === $completed_cycle && $queued_workers > 0 ) {
+			if ( ! $stopped && $queue_continuation && $queued_workers > 0 ) {
 				if ( ! $this->queue_sync_batch(
 					self::HOOK_IMAGES,
 					'images',
@@ -786,6 +786,7 @@ class Schrack_Cron {
 						'source'          => 'parallel_image_continuation',
 						'run_id'          => $run_id,
 						'queued_products' => $queued_products,
+						'claimed_completed_cycle' => $completed_cycle,
 					),
 					$this->image_parallel_followup_delay()
 				) ) {
@@ -825,7 +826,10 @@ class Schrack_Cron {
 					'cursor'          => 0,
 					'batch_start'     => 0,
 					'batch_limit'     => count( $product_ids ),
-					'completed_cycle' => 'yes' === (string) ( $result['stopped'] ?? 'no' ) ? 'no' : 'yes',
+					'completed_cycle' => (
+						'yes' === (string) ( $result['stopped'] ?? 'no' )
+						|| 'yes' === (string) ( $result['time_limited'] ?? 'no' )
+					) ? 'no' : 'yes',
 					'parallel'        => 'yes',
 					'worker_index'    => absint( $worker_index ),
 				),
@@ -1426,9 +1430,9 @@ class Schrack_Cron {
 	 * Returns the effective image batch size.
 	 */
 	private function image_batch_limit(): int {
-		$limit = max( 1, min( 500, (int) $this->settings->get( 'sync_batch_size', 25 ) ) );
+		$limit = max( 1, min( 250, (int) $this->settings->get( 'image_batch_size', 50 ) ) );
 
-		return $this->is_low_memory_host() ? 25 : $limit;
+		return $this->is_low_memory_host() ? min( $limit, 100 ) : $limit;
 	}
 
 	/**
@@ -1835,9 +1839,9 @@ class Schrack_Cron {
 	 * Returns how many Action Scheduler workers image sync may dispatch at once.
 	 */
 	private function image_parallel_workers(): int {
-		$workers = max( 1, min( 10, (int) $this->settings->get( 'image_parallel_workers', 2 ) ) );
+		$workers = max( 1, min( 8, (int) $this->settings->get( 'image_parallel_workers', 2 ) ) );
 
-		return $this->is_low_memory_host() ? min( $workers, 2 ) : $workers;
+		return $this->is_low_memory_host() ? min( $workers, 4 ) : $workers;
 	}
 
 	/**
@@ -1859,8 +1863,8 @@ class Schrack_Cron {
 	 * Delay before the next image dispatcher wave checks for more pending products.
 	 */
 	private function image_parallel_followup_delay(): int {
-		$delay = max( 10, min( 300, (int) $this->settings->get( 'image_parallel_followup_delay', 30 ) ) );
+		$delay = max( 5, min( 300, (int) $this->settings->get( 'image_parallel_followup_delay', 10 ) ) );
 
-		return $this->is_low_memory_host() ? max( $delay, 30 ) : $delay;
+		return $this->is_low_memory_host() ? max( $delay, 10 ) : $delay;
 	}
 }

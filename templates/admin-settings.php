@@ -80,14 +80,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</td>
 			</tr>
 			<tr>
-				<th scope="row"><label for="schrack_batch_size"><?php esc_html_e( 'Price/stock/image batch size', 'schrack-woocommerce-sync' ); ?></label></th>
+				<th scope="row"><label for="schrack_batch_size"><?php esc_html_e( 'Price/stock batch size', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
 					<input id="schrack_batch_size" type="number" min="1" max="500" step="1" name="schrack_settings[sync_batch_size]" value="<?php echo esc_attr( $settings['sync_batch_size'] ); ?>">
-					<p class="description"><?php esc_html_e( 'On 2 GB hosting, price/stock batches use 100 products at runtime while image batches use 25.', 'schrack-woocommerce-sync' ); ?></p>
+					<p class="description"><?php esc_html_e( 'On 2 GB hosting, price and stock batches use 100 products at runtime.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>
-				<th scope="row"><label for="schrack_sync_batches_per_run"><?php esc_html_e( 'Price/stock/image batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
+				<th scope="row"><label for="schrack_sync_batches_per_run"><?php esc_html_e( 'Price/stock batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
 					<input id="schrack_sync_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[sync_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['sync_batches_per_run'] ) ) ) ); ?>">
 					<p class="description"><?php esc_html_e( 'Use 1 on 2 GB hosting. Follow-up batches are queued instead of being chained in one PHP request.', 'schrack-woocommerce-sync' ); ?></p>
@@ -143,10 +143,38 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<td><label><input type="checkbox" name="schrack_settings[image_import_enabled]" value="yes" <?php checked( $settings['image_import_enabled'], 'yes' ); ?>> <?php esc_html_e( 'Import images from the Schrack Foto/Fotografie catalog column', 'schrack-woocommerce-sync' ); ?></label></td>
 			</tr>
 			<tr>
+				<th scope="row"><label for="schrack_image_batch_size"><?php esc_html_e( 'Image batch size', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<input id="schrack_image_batch_size" type="number" min="1" max="250" step="1" name="schrack_settings[image_batch_size]" value="<?php echo esc_attr( min( 250, max( 1, absint( $settings['image_batch_size'] ?? 50 ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'Products claimed per image worker. Workers stop safely before PHP timeout and continue in the next wave.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="schrack_image_parallel_workers"><?php esc_html_e( 'Parallel image workers', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
-					<input id="schrack_image_parallel_workers" type="number" min="1" max="4" step="1" name="schrack_settings[image_parallel_workers]" value="<?php echo esc_attr( min( 4, max( 1, absint( $settings['image_parallel_workers'] ) ) ) ); ?>">
-					<p class="description"><?php esc_html_e( 'For 2 GB cPanel hosting, use 1 or 2. Runtime protection caps this to 2 on low-memory hosts.', 'schrack-woocommerce-sync' ); ?></p>
+					<input id="schrack_image_parallel_workers" type="number" min="1" max="8" step="1" name="schrack_settings[image_parallel_workers]" value="<?php echo esc_attr( min( 8, max( 1, absint( $settings['image_parallel_workers'] ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'For shared hosting, start with 2 to 4. Runtime protection caps this to 4 on low-memory hosts.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_image_followup_delay"><?php esc_html_e( 'Image follow-up delay seconds', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<input id="schrack_image_followup_delay" type="number" min="5" max="300" step="1" name="schrack_settings[image_parallel_followup_delay]" value="<?php echo esc_attr( min( 300, max( 5, absint( $settings['image_parallel_followup_delay'] ?? 10 ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'How soon the dispatcher checks for the next image worker wave.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_image_download_timeout"><?php esc_html_e( 'Image download timeout seconds', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<input id="schrack_image_download_timeout" type="number" min="5" max="60" step="1" name="schrack_settings[image_download_timeout]" value="<?php echo esc_attr( min( 60, max( 5, absint( $settings['image_download_timeout'] ?? 15 ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'Lower values prevent broken remote image URLs from blocking the queue for too long.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_image_retry_cooldown"><?php esc_html_e( 'Image retry cooldown seconds', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<input id="schrack_image_retry_cooldown" type="number" min="60" max="86400" step="60" name="schrack_settings[image_retry_cooldown]" value="<?php echo esc_attr( min( 86400, max( 60, absint( $settings['image_retry_cooldown'] ?? HOUR_IN_SECONDS ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'Failed image URLs are skipped until this cooldown expires.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>

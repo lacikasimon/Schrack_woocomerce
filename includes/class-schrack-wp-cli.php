@@ -75,10 +75,55 @@ class Schrack_WP_CLI {
 
 	/**
 	 * Imports an image batch.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--drain]
+	 * : Keep processing image batches in this WP-CLI process until there is no pending work.
+	 *
+	 * [--batch-size=<count>]
+	 * : Products to claim per batch in drain mode. Defaults to the image batch size setting.
+	 *
+	 * [--max-batches=<count>]
+	 * : Stop drain mode after this many batches. Omit or pass 0 for no batch limit.
+	 *
+	 * [--time-limit=<seconds>]
+	 * : Stop drain mode after this many seconds. Omit or pass 0 for no time limit.
 	 */
-	public function images(): void {
-		$this->cron->run_image_sync();
-		WP_CLI::success( 'Schrack image sync batch finished.' );
+	public function images( array $args = array(), array $assoc_args = array() ): void {
+		if ( isset( $assoc_args['drain'] ) ) {
+			$batch_size = isset( $assoc_args['batch-size'] )
+				? absint( $assoc_args['batch-size'] )
+				: absint( $this->settings->get( 'image_batch_size', 50 ) );
+			$max_batches = isset( $assoc_args['max-batches'] ) ? absint( $assoc_args['max-batches'] ) : 0;
+			$time_limit  = isset( $assoc_args['time-limit'] ) ? absint( $assoc_args['time-limit'] ) : 0;
+			$sync        = new Schrack_Image_Sync( $this->settings, $this->logger );
+			$result      = $sync->sync_until_idle( $batch_size, $max_batches, $time_limit );
+
+			WP_CLI::success(
+				sprintf(
+					'Schrack image drain finished. Batches: %d, processed: %d, imported: %d, reused: %d, errors: %d, complete: %s.',
+					absint( $result['batches_processed'] ?? 0 ),
+					absint( $result['processed'] ?? 0 ),
+					absint( $result['imported'] ?? 0 ),
+					absint( $result['reused'] ?? 0 ),
+					absint( $result['errors'] ?? 0 ),
+					(string) ( $result['completed_cycle'] ?? 'no' )
+				)
+			);
+			return;
+		}
+
+		$result = $this->cron->run_image_sync();
+		WP_CLI::success(
+			sprintf(
+				'Schrack image sync batch finished. Queued products: %d, processed: %d, imported: %d, errors: %d.',
+				absint( $result['queued_products'] ?? ( $result['batch_count'] ?? 0 ) ),
+				absint( $result['processed'] ?? 0 ),
+				absint( $result['imported'] ?? 0 ),
+				absint( $result['errors'] ?? 0 )
+			)
+		);
 	}
 
 	/**

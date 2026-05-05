@@ -667,6 +667,7 @@ class Schrack_Product_Filter_Renderer {
 
 		$image      = $settings['show_images'] ? $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) : '';
 		$cart_class = 'schrack-product-card__cart button add_to_cart_button';
+		$show_cart_button = $settings['show_add_to_cart'] && $product->is_purchasable() && $product->is_in_stock();
 
 		if ( $product->supports( 'ajax_add_to_cart' ) ) {
 			$cart_class .= ' ajax_add_to_cart';
@@ -712,11 +713,11 @@ class Schrack_Product_Filter_Renderer {
 				</div>
 			</div>
 
-			<div class="schrack-product-card__actions">
+			<div class="schrack-product-card__actions <?php echo $show_cart_button ? 'has-cart' : ''; ?>">
 				<a class="schrack-product-card__details" href="<?php echo esc_url( $permalink ); ?>">
 					<?php echo esc_html( $settings['details_button_text'] ); ?>
 				</a>
-				<?php if ( $settings['show_add_to_cart'] && $product->is_purchasable() && $product->is_in_stock() ) : ?>
+				<?php if ( $show_cart_button ) : ?>
 					<a
 						href="<?php echo esc_url( $product->add_to_cart_url() ); ?>"
 						data-quantity="1"

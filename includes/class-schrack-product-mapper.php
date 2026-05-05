@@ -788,22 +788,13 @@ class Schrack_Product_Mapper {
 			);
 		}
 
-		$product = wc_get_product( $product_id );
-
-		if ( ! $product instanceof WC_Product ) {
-			return array(
-				'status'        => 'missing_product',
-				'attachment_id' => 0,
-				'error'         => 'WooCommerce product was not found.',
-			);
-		}
-
-		$attachment_id = $this->sideload_product_image( $image_url, $product );
+		$product_name  = trim( sanitize_text_field( (string) get_post_field( 'post_title', $product_id ) ) );
+		$product_name  = '' !== $product_name ? $product_name : ( '' !== $sku ? 'Schrack ' . $sku : 'Schrack product ' . $product_id );
+		$attachment_id = $this->sideload_product_image( $image_url, $product_id, $product_name, $sku );
 
 		if ( is_wp_error( $attachment_id ) ) {
 			$error = $attachment_id->get_error_message();
-			$this->mark_product_image_sync( $product, 'failed', $image_url, 0, $error );
-			$product->save();
+			$this->mark_product_image_sync_meta( $product_id, 'failed', $image_url, 0, $error );
 
 			return array(
 				'status'        => 'failed',
@@ -813,12 +804,23 @@ class Schrack_Product_Mapper {
 			);
 		}
 
-		$product->set_image_id( $attachment_id );
-		$product->update_meta_data( '_schrack_image_attachment_id', $attachment_id );
-		$product->update_meta_data( '_schrack_imported_image_url', $image_url );
+		update_post_meta( $product_id, '_thumbnail_id', $attachment_id );
+		update_post_meta( $product_id, '_schrack_image_attachment_id', $attachment_id );
+		update_post_meta( $product_id, '_schrack_imported_image_url', $image_url );
 		$this->mark_attachment_image_source( $attachment_id, $image_url );
-		$this->mark_product_image_sync( $product, 'imported', $image_url, $attachment_id );
-		$product->save();
+		$this->mark_product_image_sync_meta( $product_id, 'imported', $image_url, $attachment_id );
+
+		$this->logger->debug(
+			'images',
+			'Imported Schrack product image.',
+			'' !== $sku ? $sku : null,
+			array(
+				'image_url'     => $image_url,
+				'attachment_id' => $attachment_id,
+				'product_id'    => $product_id,
+				'update_mode'   => 'fast_meta',
+			)
+		);
 
 		return array(
 			'status'        => 'imported',
@@ -1033,7 +1035,7 @@ class Schrack_Product_Mapper {
 	/**
 	 * Downloads one remote catalog image into the WordPress media library.
 	 */
-	private function sideload_product_image( string $image_url, WC_Product $product ): int|WP_Error {
+	private function sideload_product_image( string $image_url, int $product_id, string $product_name, string $sku = '' ): int|WP_Error {
 		if ( ! function_exists( 'download_url' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
 		}
@@ -1043,17 +1045,19 @@ class Schrack_Product_Mapper {
 			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
 
-		$timeout   = max( 5, min( 60, (int) apply_filters( 'schrack_wc_sync_image_download_timeout', 30, $image_url, $product ) ) );
+		$default_timeout = max( 5, min( 60, (int) $this->settings->get( 'image_download_timeout', 15 ) ) );
+		$timeout         = max( 5, min( 60, (int) apply_filters( 'schrack_wc_sync_image_download_timeout', $default_timeout, $image_url, $product_id ) ) );
 		$temp_file = download_url( $image_url, $timeout );
 
 		if ( is_wp_error( $temp_file ) ) {
 			$this->logger->warning(
 				'images',
 				'Failed to download Schrack product image.',
-				$product->get_sku(),
+				'' !== $sku ? $sku : null,
 				array(
 					'image_url' => $image_url,
 					'error'     => $temp_file->get_error_message(),
+					'product_id' => $product_id,
 				)
 			);
 			return $temp_file;
@@ -1064,14 +1068,14 @@ class Schrack_Product_Mapper {
 			'tmp_name' => $temp_file,
 		);
 
-		$limit_sizes = 'yes' === (string) apply_filters( 'schrack_wc_sync_limit_generated_image_sizes', 'yes', $image_url, $product );
+		$limit_sizes = 'yes' === (string) apply_filters( 'schrack_wc_sync_limit_generated_image_sizes', 'yes', $image_url, $product_id );
 
 		if ( $limit_sizes ) {
 			add_filter( 'intermediate_image_sizes_advanced', array( $this, 'limit_generated_image_sizes' ), 10, 2 );
 		}
 
 		try {
-			$attachment_id = media_handle_sideload( $file, (int) $product->get_id(), $product->get_name() );
+			$attachment_id = media_handle_sideload( $file, $product_id, $product_name );
 		} finally {
 			if ( $limit_sizes ) {
 				remove_filter( 'intermediate_image_sizes_advanced', array( $this, 'limit_generated_image_sizes' ), 10 );
@@ -1083,24 +1087,15 @@ class Schrack_Product_Mapper {
 			$this->logger->warning(
 				'images',
 				'Failed to attach Schrack product image.',
-				$product->get_sku(),
+				'' !== $sku ? $sku : null,
 				array(
 					'image_url' => $image_url,
 					'error'     => $attachment_id->get_error_message(),
+					'product_id' => $product_id,
 				)
 			);
 			return $attachment_id;
 		}
-
-		$this->logger->debug(
-			'images',
-			'Imported Schrack product image.',
-			$product->get_sku(),
-			array(
-				'image_url'     => $image_url,
-				'attachment_id' => (int) $attachment_id,
-			)
-		);
 
 		return (int) $attachment_id;
 	}
@@ -1112,15 +1107,25 @@ class Schrack_Product_Mapper {
 	 * @return array<string,array<string,mixed>>
 	 */
 	public function limit_generated_image_sizes( array $sizes ): array {
-		$allowed = array(
+		$preferred = array(
 			'thumbnail',
-			'medium',
 			'woocommerce_thumbnail',
 			'woocommerce_single',
 			'woocommerce_gallery_thumbnail',
-			'shop_catalog',
-			'shop_single',
-			'shop_thumbnail',
+		);
+		$limited = array_intersect_key( $sizes, array_flip( $preferred ) );
+
+		if ( count( $limited ) > 1 ) {
+			return $limited;
+		}
+
+		$allowed = array_merge(
+			$preferred,
+			array(
+				'shop_catalog',
+				'shop_single',
+				'shop_thumbnail',
+			)
 		);
 		$limited = array_intersect_key( $sizes, array_flip( $allowed ) );
 

@@ -78,6 +78,10 @@ class Schrack_Image_Sync {
 			$completed_cycle = false;
 		}
 
+		if ( 'yes' === (string) ( $result['time_limited'] ?? 'no' ) ) {
+			$completed_cycle = false;
+		}
+
 		$result = array_merge(
 			$result,
 			array(
@@ -88,6 +92,71 @@ class Schrack_Image_Sync {
 				'batch_limit'     => $limit,
 				'completed_cycle' => $completed_cycle ? 'yes' : 'no',
 				'run_id'          => $run_id,
+			)
+		);
+
+		$this->settings->update_status( 'images', $result );
+
+		return $result;
+	}
+
+	/**
+	 * Keeps importing image batches until no pending images remain or a caller limit is reached.
+	 *
+	 * This is mainly useful for WP-CLI, where waiting for Action Scheduler follow-up
+	 * waves is unnecessary overhead.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function sync_until_idle( int $batch_size, int $max_batches = 0, int $time_limit = 0 ): array {
+		$batch_size  = max( 1, min( 250, $batch_size ) );
+		$max_batches = max( 0, $max_batches );
+		$time_limit  = max( 0, $time_limit );
+		$deadline    = $time_limit > 0 ? time() + $time_limit : 0;
+		$batches     = 0;
+		$last_result = array();
+		$totals      = array(
+			'processed' => 0,
+			'imported'  => 0,
+			'attached'  => 0,
+			'skipped'   => 0,
+			'reused'    => 0,
+			'errors'    => 0,
+		);
+
+		while ( 0 === $max_batches || $batches < $max_batches ) {
+			if ( $this->settings->is_stop_requested() ) {
+				$last_result['stopped'] = 'yes';
+				break;
+			}
+
+			if ( $deadline > 0 && time() >= $deadline ) {
+				$last_result['time_limited'] = 'yes';
+				break;
+			}
+
+			$last_result = $this->sync_batch( $batch_size );
+			++$batches;
+
+			foreach ( array_keys( $totals ) as $key ) {
+				$totals[ $key ] += (int) ( $last_result[ $key ] ?? 0 );
+			}
+
+			if (
+				'yes' === (string) ( $last_result['completed_cycle'] ?? 'yes' )
+				|| 0 === (int) ( $last_result['batch_count'] ?? 0 )
+				|| 'yes' === (string) ( $last_result['stopped'] ?? 'no' )
+			) {
+				break;
+			}
+		}
+
+		$result = array_merge(
+			$last_result,
+			$totals,
+			array(
+				'batches_processed' => $batches,
+				'cli_drain'         => 'yes',
 			)
 		);
 
@@ -146,19 +215,26 @@ class Schrack_Image_Sync {
 	 */
 	public function sync_product_ids( array $product_ids, string $run_id = '' ): array {
 		$product_ids = array_values( array_unique( array_filter( array_map( 'absint', $product_ids ) ) ) );
-		$processed = 0;
-		$errors    = 0;
-		$imported  = 0;
-		$attached  = 0;
-		$skipped   = 0;
-		$reused    = 0;
-		$stopped   = false;
+		$processed    = 0;
+		$errors       = 0;
+		$imported     = 0;
+		$attached     = 0;
+		$skipped      = 0;
+		$reused       = 0;
+		$stopped      = false;
+		$time_limited = false;
+		$started_at   = time();
 		$prefetched_meta = $this->prefetch_product_image_meta( $product_ids );
 
 		try {
 			foreach ( $product_ids as $product_id ) {
 				if ( $this->settings->is_stop_requested() ) {
 					$stopped = true;
+					break;
+				}
+
+				if ( $this->should_pause_processing( $started_at, $processed ) ) {
+					$time_limited = true;
 					break;
 				}
 
@@ -215,6 +291,10 @@ class Schrack_Image_Sync {
 
 		if ( $stopped ) {
 			$result['stopped'] = 'yes';
+		}
+
+		if ( $time_limited ) {
+			$result['time_limited'] = 'yes';
 		}
 
 		return $result;
@@ -446,6 +526,77 @@ class Schrack_Image_Sync {
 	 */
 	private function retry_cooldown(): int {
 		return max( MINUTE_IN_SECONDS, min( DAY_IN_SECONDS, (int) $this->settings->get( 'image_retry_cooldown', HOUR_IN_SECONDS ) ) );
+	}
+
+	/**
+	 * Stops a worker before PHP reaches the hosting execution or memory limit.
+	 */
+	private function should_pause_processing( int $started_at, int $processed ): bool {
+		if ( $processed <= 0 ) {
+			return false;
+		}
+
+		if ( $this->is_memory_pressure_high() ) {
+			return true;
+		}
+
+		$max_execution_time = (int) ini_get( 'max_execution_time' );
+
+		if ( $max_execution_time <= 0 ) {
+			return false;
+		}
+
+		return time() - $started_at >= max( 10, $max_execution_time - 8 );
+	}
+
+	/**
+	 * Detects whether this worker is too close to PHP memory_limit.
+	 */
+	private function is_memory_pressure_high(): bool {
+		$limit = $this->memory_limit_bytes();
+
+		if ( $limit <= 0 ) {
+			return false;
+		}
+
+		return memory_get_usage( true ) >= (int) floor( $limit * 0.75 );
+	}
+
+	/**
+	 * Parses PHP shorthand memory_limit values.
+	 */
+	private function memory_limit_bytes(): int {
+		$raw = trim( (string) ini_get( 'memory_limit' ) );
+
+		if ( '' === $raw || str_starts_with( $raw, '-' ) ) {
+			return 0;
+		}
+
+		if ( function_exists( 'wp_convert_hr_to_bytes' ) ) {
+			$bytes = (int) wp_convert_hr_to_bytes( $raw );
+
+			if ( $bytes > 0 ) {
+				return $bytes;
+			}
+		}
+
+		if ( is_numeric( $raw ) ) {
+			return max( 0, (int) $raw );
+		}
+
+		$unit   = strtolower( substr( $raw, -1 ) );
+		$number = (float) substr( $raw, 0, -1 );
+
+		if ( $number <= 0 ) {
+			return 0;
+		}
+
+		return (int) match ( $unit ) {
+			'g'     => $number * 1024 * 1024 * 1024,
+			'm'     => $number * 1024 * 1024,
+			'k'     => $number * 1024,
+			default => (float) $raw,
+		};
 	}
 
 	/**

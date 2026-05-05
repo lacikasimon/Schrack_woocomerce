@@ -70,7 +70,11 @@ The admin settings page stores values through the WordPress Options API:
 - Batch sleep seconds
 - Import mode
 - Product publish status
+- Image batch size
 - Parallel image workers
+- Image follow-up delay
+- Image download timeout
+- Image retry cooldown
 - Stock handling
 - Stock source
 - Delete missing products
@@ -178,7 +182,7 @@ If Action Scheduler is unavailable, WP-Cron is used as a fallback.
 
 Catalog, price, and stock batches persist cursors in the status option. Each batch continues from the previous offset and wraps to the beginning after a full pass. Catalog imports also reset when the parsed SKU sequence changes.
 
-Catalog sync stores product image URLs in `_schrack_image_url`. Image sync then claims existing products with pending image URLs and dispatches parallel Action Scheduler workers, controlled by the `Parallel image workers` setting. Failed image downloads are marked in product meta and retried after a cooldown.
+Catalog sync stores product image URLs in `_schrack_image_url`. Image sync then claims existing products with pending image URLs and dispatches parallel Action Scheduler workers, controlled by the image batch size, follow-up delay, download timeout, retry cooldown, and `Parallel image workers` settings. Image workers stop before PHP timeout/memory pressure and release unfinished claims for the next wave. Failed image downloads are marked in product meta and retried after a cooldown.
 
 ## WP-CLI
 
@@ -189,8 +193,11 @@ wp schrack-sync catalog
 wp schrack-sync prices
 wp schrack-sync stock
 wp schrack-sync images
+wp schrack-sync images --drain --batch-size=50 --time-limit=1800
 wp schrack-sync full
 ```
+
+Use `wp schrack-sync images --drain` for a large initial media backlog when SSH/WP-CLI is available. It bypasses Action Scheduler follow-up latency and keeps processing image batches in the same CLI process until the backlog is clear or the optional batch/time limit is reached.
 
 ## Logging
 
