@@ -1578,9 +1578,51 @@
 		grid-template-rows: auto;
 	}
 
+	.schrack-home .schrack-home__path-card {
+		gap: 10px;
+		grid-template-rows: auto;
+		min-height: 0;
+		padding: 14px !important;
+	}
+
+	.schrack-home__pathways {
+		padding: 16px;
+	}
+
+	.schrack-home__path-tags {
+		margin-top: 0;
+	}
+
+	.schrack-home__path-actions {
+		margin-top: 0;
+	}
+
+	.schrack-home__category-card {
+		grid-template-rows: auto;
+	}
+
+	.schrack-home__category-image {
+		height: 120px;
+		min-height: 0;
+		padding: 12px;
+	}
+
+	.schrack-home__category-image img {
+		max-height: 96px;
+	}
+
 	.schrack-home__solution-media,
 	.schrack-home__service-visual {
-		min-height: 168px;
+		min-height: 0;
+	}
+
+	.schrack-home__solution-media {
+		height: 132px;
+		padding: 12px;
+	}
+
+	.schrack-home__service-visual {
+		height: 118px;
 	}
 
 	.schrack-home__commerce,
@@ -1673,8 +1715,10 @@
 	}
 
 	.schrack-home .schrack-home__path-card {
+		gap: 10px;
+		grid-template-rows: auto;
 		min-height: 0;
-		padding: 16px !important;
+		padding: 14px !important;
 	}
 
 	.schrack-home__path-head {
@@ -1691,6 +1735,10 @@
 		left: 11px;
 		top: 11px;
 		width: 22px;
+	}
+
+	.schrack-home__path-actions {
+		margin-top: 0;
 	}
 
 	.schrack-home__visual {
@@ -1716,13 +1764,33 @@
 	}
 
 	.schrack-home__solution-card,
-	.schrack-home__service-card {
+	.schrack-home__service-card,
+	.schrack-home__category-card {
 		grid-template-rows: auto;
+	}
+
+	.schrack-home__category-image {
+		height: 120px;
+		min-height: 0;
+		padding: 12px;
+	}
+
+	.schrack-home__category-image img {
+		max-height: 96px;
 	}
 
 	.schrack-home__solution-media,
 	.schrack-home__service-visual {
-		min-height: 168px;
+		min-height: 0;
+	}
+
+	.schrack-home__solution-media {
+		height: 132px;
+		padding: 12px;
+	}
+
+	.schrack-home__service-visual {
+		height: 118px;
 	}
 
 	.schrack-home__commerce,
