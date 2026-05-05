@@ -98,28 +98,41 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_VERSION
 		);
 
-		wp_register_style(
-			'schrack-wc-homepage',
-			SCHRACK_WC_SYNC_URL . 'assets/elementor-homepage.css',
-			array(),
-			SCHRACK_WC_SYNC_VERSION
-		);
+			wp_register_style(
+				'schrack-wc-homepage',
+				SCHRACK_WC_SYNC_URL . 'assets/elementor-homepage.css',
+				array(),
+				$this->asset_version( 'assets/elementor-homepage.css' )
+			);
 
-		wp_register_style(
-			'schrack-wc-footer',
-			SCHRACK_WC_SYNC_URL . 'assets/elementor-footer.css',
-			array(),
-			SCHRACK_WC_SYNC_VERSION
-		);
+			wp_register_style(
+				'schrack-wc-footer',
+				SCHRACK_WC_SYNC_URL . 'assets/elementor-footer.css',
+				array(),
+				$this->asset_version( 'assets/elementor-footer.css' )
+			);
 
-		wp_register_script(
-			'schrack-wc-homepage',
-			SCHRACK_WC_SYNC_URL . 'assets/elementor-homepage.js',
-			array(),
-			SCHRACK_WC_SYNC_VERSION,
-			true
-		);
-	}
+			wp_register_script(
+				'schrack-wc-homepage',
+				SCHRACK_WC_SYNC_URL . 'assets/elementor-homepage.js',
+				array(),
+				$this->asset_version( 'assets/elementor-homepage.js' ),
+				true
+			);
+		}
+
+		/**
+		 * Returns a cache-busting asset version while developing Elementor modules.
+		 */
+		private function asset_version( string $relative_path ): string {
+			$path = SCHRACK_WC_SYNC_PATH . ltrim( $relative_path, '/' );
+
+			if ( is_readable( $path ) ) {
+				return (string) filemtime( $path );
+			}
+
+			return SCHRACK_WC_SYNC_VERSION;
+		}
 
 	/**
 	 * Adds a Schrack widget category inside Elementor.

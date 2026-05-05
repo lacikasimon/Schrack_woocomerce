@@ -462,13 +462,15 @@ class Schrack_Homepage_Renderer {
 					$matched_terms = $this->matched_terms( $terms, $path['keywords'], 3 );
 					$product_url   = $this->term_collection_url( $matched_terms, $shop_url );
 					?>
-					<article class="schrack-home__path-card is-<?php echo esc_attr( $path['variant'] ); ?>">
-						<div class="schrack-home__path-icon" aria-hidden="true"></div>
-						<div class="schrack-home__path-copy">
-							<small><?php echo esc_html( $path['label'] ); ?></small>
-							<strong><?php echo esc_html( $path['title'] ); ?></strong>
-							<p><?php echo esc_html( $path['text'] ); ?></p>
+					<div class="schrack-home__path-card is-<?php echo esc_attr( $path['variant'] ); ?>" role="group" aria-label="<?php echo esc_attr( $path['label'] . ': ' . $path['title'] ); ?>">
+						<div class="schrack-home__path-head">
+							<div class="schrack-home__path-icon" aria-hidden="true"></div>
+							<div class="schrack-home__path-copy">
+								<small><?php echo esc_html( $path['label'] ); ?></small>
+								<strong><?php echo esc_html( $path['title'] ); ?></strong>
+							</div>
 						</div>
+						<p class="schrack-home__path-text"><?php echo esc_html( $path['text'] ); ?></p>
 						<?php if ( ! empty( $matched_terms ) ) : ?>
 							<div class="schrack-home__path-tags">
 								<?php foreach ( $matched_terms as $term ) : ?>
@@ -481,7 +483,7 @@ class Schrack_Homepage_Renderer {
 							<a class="schrack-home__mini-button" href="<?php echo esc_url( $product_url ); ?>"><?php esc_html_e( 'Vezi produse', 'schrack-woocommerce-sync' ); ?></a>
 							<a class="schrack-home__text-link" href="<?php echo esc_url( $path['service_url'] ); ?>"><?php esc_html_e( 'Serviciu Syshub', 'schrack-woocommerce-sync' ); ?></a>
 						</div>
-					</article>
+					</div>
 				<?php endforeach; ?>
 			</div>
 		</div>
