@@ -18,6 +18,9 @@
 	font-size: 14px;
 	text-rendering: optimizeLegibility;
 	-webkit-font-smoothing: antialiased;
+	display: block;
+	margin: 0;
+	padding: 0;
 	width: 100%;
 }
 
@@ -1541,6 +1544,32 @@
 }
 
 @container schrack-home (max-width: 620px) {
+	.elementor-widget-schrack_homepage,
+	.elementor-widget-schrack_homepage > .elementor-widget-container,
+	.elementor-widget-schrack_footer,
+	.elementor-widget-schrack_footer > .elementor-widget-container {
+		margin-bottom: 0 !important;
+		margin-top: 0 !important;
+		padding-bottom: 0 !important;
+		padding-top: 0 !important;
+	}
+
+	.elementor-section:has(.schrack-home),
+	.e-con:has(.schrack-home) {
+		margin-bottom: 0 !important;
+		padding-bottom: 0 !important;
+	}
+
+	.schrack-home {
+		margin-bottom: 0 !important;
+		padding-bottom: 0 !important;
+	}
+
+	.schrack-home__inner {
+		gap: 18px;
+		margin-bottom: 0;
+	}
+
 	.schrack-home__hero {
 		min-height: 0;
 		padding: 18px;
@@ -1630,6 +1659,10 @@
 		padding: 18px;
 	}
 
+	.schrack-home__final {
+		margin-bottom: 0;
+	}
+
 	.schrack-home__commerce-intro strong,
 	.schrack-home__final strong {
 		font-size: 22px;
@@ -1688,6 +1721,32 @@
 }
 
 @media (max-width: 620px) {
+	.elementor-widget-schrack_homepage,
+	.elementor-widget-schrack_homepage > .elementor-widget-container,
+	.elementor-widget-schrack_footer,
+	.elementor-widget-schrack_footer > .elementor-widget-container {
+		margin-bottom: 0 !important;
+		margin-top: 0 !important;
+		padding-bottom: 0 !important;
+		padding-top: 0 !important;
+	}
+
+	.elementor-section:has(.schrack-home),
+	.e-con:has(.schrack-home) {
+		margin-bottom: 0 !important;
+		padding-bottom: 0 !important;
+	}
+
+	.schrack-home {
+		margin-bottom: 0 !important;
+		padding-bottom: 0 !important;
+	}
+
+	.schrack-home__inner {
+		gap: 18px;
+		margin-bottom: 0;
+	}
+
 	.schrack-home__hero {
 		min-height: 0;
 		padding: 18px;
@@ -1796,6 +1855,10 @@
 	.schrack-home__commerce,
 	.schrack-home__final {
 		padding: 18px;
+	}
+
+	.schrack-home__final {
+		margin-bottom: 0;
 	}
 
 	.schrack-home__commerce-intro strong,
