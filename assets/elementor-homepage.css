@@ -1548,20 +1548,33 @@
 	.elementor-widget-schrack_homepage > .elementor-widget-container,
 	.elementor-widget-schrack_footer,
 	.elementor-widget-schrack_footer > .elementor-widget-container {
+		height: auto !important;
 		margin-bottom: 0 !important;
 		margin-top: 0 !important;
+		min-height: 0 !important;
 		padding-bottom: 0 !important;
 		padding-top: 0 !important;
 	}
 
+	.elementor-widget-schrack_homepage {
+		align-self: flex-start !important;
+	}
+
 	.elementor-section:has(.schrack-home),
+	.elementor-column:has(.schrack-home),
+	.elementor-widget-wrap:has(.schrack-home),
+	.e-con-inner:has(.schrack-home),
 	.e-con:has(.schrack-home) {
+		height: auto !important;
 		margin-bottom: 0 !important;
+		min-height: 0 !important;
 		padding-bottom: 0 !important;
 	}
 
 	.schrack-home {
+		height: auto !important;
 		margin-bottom: 0 !important;
+		min-height: 0 !important;
 		padding-bottom: 0 !important;
 	}
 
@@ -1725,20 +1738,33 @@
 	.elementor-widget-schrack_homepage > .elementor-widget-container,
 	.elementor-widget-schrack_footer,
 	.elementor-widget-schrack_footer > .elementor-widget-container {
+		height: auto !important;
 		margin-bottom: 0 !important;
 		margin-top: 0 !important;
+		min-height: 0 !important;
 		padding-bottom: 0 !important;
 		padding-top: 0 !important;
 	}
 
+	.elementor-widget-schrack_homepage {
+		align-self: flex-start !important;
+	}
+
 	.elementor-section:has(.schrack-home),
+	.elementor-column:has(.schrack-home),
+	.elementor-widget-wrap:has(.schrack-home),
+	.e-con-inner:has(.schrack-home),
 	.e-con:has(.schrack-home) {
+		height: auto !important;
 		margin-bottom: 0 !important;
+		min-height: 0 !important;
 		padding-bottom: 0 !important;
 	}
 
 	.schrack-home {
+		height: auto !important;
 		margin-bottom: 0 !important;
+		min-height: 0 !important;
 		padding-bottom: 0 !important;
 	}
 
