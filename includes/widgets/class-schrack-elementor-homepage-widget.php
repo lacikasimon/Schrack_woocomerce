@@ -94,7 +94,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'       => __( 'Titlu', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::TEXT,
-				'default'     => __( 'Catalog tehnic pentru instalatii electrice si securitate', 'schrack-woocommerce-sync' ),
+				'default'     => __( 'Magazin tehnic pentru proiecte electrice, fotovoltaice si securitate', 'schrack-woocommerce-sync' ),
 				'label_block' => true,
 			)
 		);
@@ -104,7 +104,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Descriere', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXTAREA,
-				'default' => __( 'Instalatii electrice, sisteme fotovoltaice, securitate si supraveghere pentru constructii civile si industriale.', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Alege produse pentru instalatii electrice, sisteme fotovoltaice, CCTV, detectie la efractie si mentenanta, cu repere clare pentru proiecte civile si industriale.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -113,7 +113,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Descriere suplimentara', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXTAREA,
-				'default' => __( 'Gasesti rapid componente potrivite pentru proiecte noi, modernizari si interventii, cu categorii clare, imagini de produs si directii de selectie pentru echipe tehnice.', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Syshub aduce contextul de proiectare, executie si documentatie; magazinul te ajuta sa pornesti rapid din categoriile potrivite, de la lista de materiale pana la ofertare.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -131,7 +131,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Text buton magazin', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Mergi la magazin', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Vezi catalogul de produse', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -205,9 +205,69 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		);
 
 		$this->add_control(
+			'show_project_paths',
+			array(
+				'label'        => __( 'Alegere tip proiect', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
+			'show_shop_bridge',
+			array(
+				'label'        => __( 'Serviciu catre produse', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
 			'show_solution_spotlight',
 			array(
 				'label'        => __( 'Bloc solutii cu imagini', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
+			'show_process',
+			array(
+				'label'        => __( 'Flux ofertare si receptie', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
+			'show_references',
+			array(
+				'label'        => __( 'Repere proiecte Syshub', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
+			'show_final_cta',
+			array(
+				'label'        => __( 'CTA catalog / oferta', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
