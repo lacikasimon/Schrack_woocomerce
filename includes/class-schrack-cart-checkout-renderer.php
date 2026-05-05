@@ -256,31 +256,226 @@ class Schrack_Cart_Checkout_Renderer {
 			return '';
 		}
 
-		$current_url = $this->current_url();
-		$url_filter  = static fn( string $url = '' ): string => $current_url;
-		$filters     = array();
+		$current_url           = $this->current_url();
+		$url_filter            = static fn( string $url = '' ): string => $current_url;
+		$gettext_filter        = fn( string $translation, string $text, string $domain ): string => $this->translate_woocommerce_text( $translation, $text, $domain );
+		$ngettext_filter       = fn( string $translation, string $single, string $plural, int $number, string $domain ): string => $this->translate_woocommerce_plural( $translation, $single, $plural, $number, $domain );
+		$checkout_fields_filter = fn( array $fields ): array => $this->romanian_checkout_fields( $fields );
+		$address_fields_filter  = fn( array $fields ): array => $this->romanian_default_address_fields( $fields );
+		$filters               = array(
+			array( 'gettext', $gettext_filter, 10, 3 ),
+			array( 'ngettext', $ngettext_filter, 10, 5 ),
+		);
 
 		if ( 'woocommerce_cart' === $shortcode ) {
-			$filters[] = array( 'woocommerce_get_cart_url', $url_filter );
+			$filters[] = array( 'woocommerce_get_cart_url', $url_filter, 10, 1 );
 		} elseif ( 'woocommerce_checkout' === $shortcode ) {
 			$order_button_text = $settings['order_button_text'] ?? __( 'Trimite comanda', 'schrack-woocommerce-sync' );
 			$order_filter      = static fn( string $button_text = '' ): string => $order_button_text;
 
-			$filters[] = array( 'woocommerce_get_checkout_url', $url_filter );
-			$filters[] = array( 'woocommerce_order_button_text', $order_filter );
+			$filters[] = array( 'woocommerce_get_checkout_url', $url_filter, 10, 1 );
+			$filters[] = array( 'woocommerce_order_button_text', $order_filter, 10, 1 );
+			$filters[] = array( 'woocommerce_checkout_fields', $checkout_fields_filter, 10, 1 );
+			$filters[] = array( 'woocommerce_default_address_fields', $address_fields_filter, 10, 1 );
 		}
 
 		foreach ( $filters as $filter ) {
-			add_filter( $filter[0], $filter[1] );
+			add_filter( $filter[0], $filter[1], $filter[2], $filter[3] );
 		}
 
 		try {
 			return do_shortcode( '[' . $shortcode . ']' );
 		} finally {
 			foreach ( $filters as $filter ) {
-				remove_filter( $filter[0], $filter[1] );
+				remove_filter( $filter[0], $filter[1], $filter[2] );
 			}
 		}
+	}
+
+	/**
+	 * Returns Romanian text for common WooCommerce cart and checkout strings.
+	 */
+	private function translate_woocommerce_text( string $translation, string $text, string $domain ): string {
+		if ( 'woocommerce' !== $domain ) {
+			return $translation;
+		}
+
+		$map = $this->woocommerce_text_map();
+
+		return $map[ $text ] ?? $translation;
+	}
+
+	/**
+	 * Returns Romanian plural strings for WooCommerce cart fragments.
+	 */
+	private function translate_woocommerce_plural( string $translation, string $single, string $plural, int $number, string $domain ): string {
+		if ( 'woocommerce' !== $domain ) {
+			return $translation;
+		}
+
+		if ( '%d product' === $single && '%d products' === $plural ) {
+			return sprintf( 1 === $number ? '%d produs' : '%d produse', $number );
+		}
+
+		if ( '%d item' === $single && '%d items' === $plural ) {
+			return sprintf( 1 === $number ? '%d articol' : '%d articole', $number );
+		}
+
+		return $translation;
+	}
+
+	/**
+	 * Returns common WooCommerce English to Romanian labels used by this widget.
+	 *
+	 * @return array<string,string>
+	 */
+	private function woocommerce_text_map(): array {
+		return array(
+			'Product' => 'Produs',
+			'Price' => 'Pret',
+			'Quantity' => 'Cantitate',
+			'Subtotal' => 'Subtotal',
+			'Total' => 'Total',
+			'Cart totals' => 'Total cos',
+			'Cart updated.' => 'Cosul a fost actualizat.',
+			'Coupon code' => 'Cod cupon',
+			'Coupon:' => 'Cupon:',
+			'Apply coupon' => 'Aplica cuponul',
+			'Update cart' => 'Actualizeaza cosul',
+			'Continue to checkout' => 'Continua cu finalizarea comenzii',
+			'Have a coupon?' => 'Ai un cupon?',
+			'Click here to enter your code' => 'Click aici pentru a introduce codul',
+			'If you have a coupon code, please apply it below.' => 'Daca ai un cod de cupon, introdu-l mai jos.',
+			'Billing details' => 'Detalii pentru facturare',
+			'Shipping details' => 'Detalii livrare',
+			'Additional information' => 'Informatii suplimentare',
+			'Your order' => 'Comanda ta',
+			'Payment' => 'Plata',
+			'Place order' => 'Trimite comanda',
+			'First name' => 'Prenume',
+			'Last name' => 'Nume',
+			'Company name' => 'Companie',
+			'Country / Region' => 'Tara / regiune',
+			'Street address' => 'Adresa',
+			'Town / City' => 'Oras',
+			'State / County' => 'Judet',
+			'Postcode / ZIP' => 'Cod postal',
+			'Phone' => 'Telefon',
+			'Email address' => 'Email',
+			'Order notes' => 'Note comanda',
+			'Order notes (optional)' => 'Note comanda (optional)',
+			'Ship to a different address?' => 'Livrezi la alta adresa?',
+			'Create an account?' => 'Creeaza un cont?',
+			'Returning customer?' => 'Ai deja cont?',
+			'Click here to login' => 'Click aici pentru autentificare',
+			'Username or email' => 'Utilizator sau email',
+			'Password' => 'Parola',
+			'Remember me' => 'Tine-ma minte',
+			'Login' => 'Autentificare',
+			'Lost your password?' => 'Ai uitat parola?',
+			'Remove this item' => 'Elimina acest produs',
+			'Shipping' => 'Livrare',
+			'No shipping options were found.' => 'Nu au fost gasite optiuni de livrare.',
+			'Invalid payment method.' => 'Metoda de plata nu este valida.',
+			'%s is a required field.' => 'Campul %s este obligatoriu.',
+			'Please enter a valid postcode / ZIP.' => 'Te rugam sa introduci un cod postal valid.',
+			'Please enter a valid phone number.' => 'Te rugam sa introduci un numar de telefon valid.',
+			'Please enter a valid email address.' => 'Te rugam sa introduci o adresa de email valida.',
+			'Apartment, suite, unit, etc. (optional)' => 'Apartament, scara, etaj etc. (optional)',
+			'House number and street name' => 'Strada si numar',
+		);
+	}
+
+	/**
+	 * Forces Romanian checkout labels and placeholders inside this widget.
+	 *
+	 * @param array<string,mixed> $fields Checkout fields.
+	 * @return array<string,mixed>
+	 */
+	private function romanian_checkout_fields( array $fields ): array {
+		foreach ( array( 'billing', 'shipping' ) as $group ) {
+			if ( isset( $fields[ $group ] ) && is_array( $fields[ $group ] ) ) {
+				$fields[ $group ] = $this->apply_romanian_field_texts( $fields[ $group ], $this->checkout_field_texts( $group ) );
+			}
+		}
+
+		if ( isset( $fields['order']['order_comments'] ) && is_array( $fields['order']['order_comments'] ) ) {
+			$fields['order']['order_comments']['label']       = 'Note comanda';
+			$fields['order']['order_comments']['placeholder'] = 'Observatii despre comanda, livrare sau facturare.';
+		}
+
+		if ( isset( $fields['account']['account_password'] ) && is_array( $fields['account']['account_password'] ) ) {
+			$fields['account']['account_password']['label']       = 'Parola';
+			$fields['account']['account_password']['placeholder'] = 'Alege o parola pentru cont';
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * Forces Romanian default address field labels before WooCommerce builds checkout fields.
+	 *
+	 * @param array<string,mixed> $fields Address fields.
+	 * @return array<string,mixed>
+	 */
+	private function romanian_default_address_fields( array $fields ): array {
+		return $this->apply_romanian_field_texts(
+			$fields,
+			array(
+				'first_name' => array( 'label' => 'Prenume', 'placeholder' => 'Prenume' ),
+				'last_name'  => array( 'label' => 'Nume', 'placeholder' => 'Nume' ),
+				'company'    => array( 'label' => 'Companie', 'placeholder' => 'Nume companie' ),
+				'country'    => array( 'label' => 'Tara / regiune', 'placeholder' => 'Tara / regiune' ),
+				'address_1'  => array( 'label' => 'Adresa', 'placeholder' => 'Strada si numar' ),
+				'address_2'  => array( 'label' => 'Apartament, scara, etaj', 'placeholder' => 'Apartament, scara, etaj etc. (optional)' ),
+				'city'       => array( 'label' => 'Oras', 'placeholder' => 'Oras' ),
+				'state'      => array( 'label' => 'Judet', 'placeholder' => 'Judet' ),
+				'postcode'   => array( 'label' => 'Cod postal', 'placeholder' => 'Cod postal' ),
+			)
+		);
+	}
+
+	/**
+	 * Returns checkout field label and placeholder text for one group.
+	 *
+	 * @return array<string,array<string,string>>
+	 */
+	private function checkout_field_texts( string $group ): array {
+		$prefix = 'shipping' === $group ? 'shipping_' : 'billing_';
+
+		return array(
+			$prefix . 'first_name' => array( 'label' => 'Prenume', 'placeholder' => 'Prenume' ),
+			$prefix . 'last_name'  => array( 'label' => 'Nume', 'placeholder' => 'Nume' ),
+			$prefix . 'company'    => array( 'label' => 'Companie', 'placeholder' => 'Nume companie' ),
+			$prefix . 'country'    => array( 'label' => 'Tara / regiune', 'placeholder' => 'Tara / regiune' ),
+			$prefix . 'address_1'  => array( 'label' => 'Adresa', 'placeholder' => 'Strada si numar' ),
+			$prefix . 'address_2'  => array( 'label' => 'Apartament, scara, etaj', 'placeholder' => 'Apartament, scara, etaj etc. (optional)' ),
+			$prefix . 'city'       => array( 'label' => 'Oras', 'placeholder' => 'Oras' ),
+			$prefix . 'state'      => array( 'label' => 'Judet', 'placeholder' => 'Judet' ),
+			$prefix . 'postcode'   => array( 'label' => 'Cod postal', 'placeholder' => 'Cod postal' ),
+			$prefix . 'phone'      => array( 'label' => 'Telefon', 'placeholder' => 'Telefon' ),
+			$prefix . 'email'      => array( 'label' => 'Email', 'placeholder' => 'Email' ),
+		);
+	}
+
+	/**
+	 * Applies label and placeholder overrides to a field group.
+	 *
+	 * @param array<string,mixed> $fields Field group.
+	 * @param array<string,array<string,string>> $texts Romanian labels.
+	 * @return array<string,mixed>
+	 */
+	private function apply_romanian_field_texts( array $fields, array $texts ): array {
+		foreach ( $texts as $key => $text ) {
+			if ( ! isset( $fields[ $key ] ) || ! is_array( $fields[ $key ] ) ) {
+				continue;
+			}
+
+			$fields[ $key ]['label']       = $text['label'];
+			$fields[ $key ]['placeholder'] = $text['placeholder'];
+		}
+
+		return $fields;
 	}
 
 	/**
