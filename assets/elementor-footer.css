@@ -271,23 +271,30 @@
 	border: 1px solid color-mix(in srgb, var(--schrack-footer-accent) 14%, #fff);
 	border-radius: var(--schrack-footer-radius);
 	display: grid;
-	gap: 16px;
-	grid-template-columns: auto minmax(0, 1fr);
+	gap: 20px;
 	margin-bottom: 32px;
 	padding: 22px;
 }
 
-.schrack-footer__eu-mark {
+.schrack-footer__eu-logos {
 	align-items: center;
-	background: var(--schrack-footer-accent);
-	border-radius: 8px;
-	color: #fff;
-	display: inline-flex;
-	font-size: 13px;
-	font-weight: 850;
-	height: 42px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px 32px;
 	justify-content: center;
-	width: 42px;
+	min-width: 0;
+}
+
+.schrack-footer__eu-logos img {
+	border: 0;
+	height: 56px;
+	max-width: 256px;
+	object-fit: contain;
+	width: auto;
+}
+
+.schrack-footer__eu-logos img:first-child {
+	height: 64px;
 }
 
 .schrack-footer__eu p {
@@ -433,12 +440,20 @@
 	}
 
 	.schrack-footer__eu {
-		grid-template-columns: 1fr;
 		text-align: center;
 	}
 
-	.schrack-footer__eu-mark {
-		margin: 0 auto;
+	.schrack-footer__eu-logos {
+		gap: 16px 20px;
+	}
+
+	.schrack-footer__eu-logos img {
+		height: 46px;
+		max-width: min(100%, 220px);
+	}
+
+	.schrack-footer__eu-logos img:first-child {
+		height: 54px;
 	}
 
 	.schrack-footer__bottom-row {

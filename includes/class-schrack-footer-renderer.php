@@ -116,7 +116,11 @@ class Schrack_Footer_Renderer {
 					<div class="schrack-footer__compliance">
 						<?php if ( 'yes' === $settings['show_eu_block'] ) : ?>
 							<div class="schrack-footer__eu">
-								<div class="schrack-footer__eu-mark" aria-hidden="true">UE</div>
+								<div class="schrack-footer__eu-logos" aria-label="<?php esc_attr_e( 'Logo-uri finantare europeana', 'schrack-woocommerce-sync' ); ?>">
+									<?php foreach ( $this->eu_logos() as $logo ) : ?>
+										<img src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="lazy">
+									<?php endforeach; ?>
+								</div>
 								<p>
 									<?php esc_html_e( 'Pentru informatii detaliate despre celelalte programe cofinantate de Uniunea Europeana, va invitam sa vizitati', 'schrack-woocommerce-sync' ); ?>
 									<a href="https://oportunitati-ue.gov.ro/" target="_blank" rel="noopener noreferrer">www.oportunitati-ue.gov.ro</a>.
@@ -304,6 +308,32 @@ class Schrack_Footer_Renderer {
 				'label' => __( 'Solutionarea online a litigiilor', 'schrack-woocommerce-sync' ),
 				'href'  => 'https://consumer-redress.ec.europa.eu/site-relocation_en',
 				'src'   => 'https://syshub.ro/assets/anpc-sol-vgITSumg.svg',
+			),
+		);
+	}
+
+	/**
+	 * Returns EU funding logos used by the Syshub footer.
+	 *
+	 * @return array<int,array{alt:string,src:string}>
+	 */
+	private function eu_logos(): array {
+		return array(
+			array(
+				'alt' => __( 'Cofinantat de Uniunea Europeana', 'schrack-woocommerce-sync' ),
+				'src' => 'https://syshub.ro/assets/uniunea-europeana-cofinantat-Subb6x4v.png',
+			),
+			array(
+				'alt' => __( 'Guvernul Romaniei', 'schrack-woocommerce-sync' ),
+				'src' => 'https://syshub.ro/assets/guvernul-romaniei-Yha6L_8V.png',
+			),
+			array(
+				'alt' => 'REGIO Nord-Vest',
+				'src' => 'https://syshub.ro/assets/regio-nord-vest-DcT-iwjj.png',
+			),
+			array(
+				'alt' => __( 'Agentia de Dezvoltare Regionala Nord-Vest', 'schrack-woocommerce-sync' ),
+				'src' => 'https://syshub.ro/assets/adr-nord-vest-bTPLxXrD.svg',
 			),
 		);
 	}
