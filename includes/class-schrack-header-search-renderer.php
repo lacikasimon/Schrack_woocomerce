@@ -39,6 +39,8 @@ class Schrack_Header_Search_Renderer {
 			'show_price'   => $settings['show_price'] ? 'yes' : 'no',
 			'show_sku'     => $settings['show_sku'] ? 'yes' : 'no',
 			'show_stock'   => $settings['show_stock'] ? 'yes' : 'no',
+			'enable_fuzzy' => $settings['enable_fuzzy'] ? 'yes' : 'no',
+			'fuzzy_pool'   => $settings['fuzzy_pool'],
 		);
 		$classes    = array( 'schrack-header-search' );
 
@@ -115,22 +117,16 @@ class Schrack_Header_Search_Renderer {
 			);
 		}
 
-		$query = $this->query_products( $search, $settings );
+		$products = $this->search_products( $search, $settings );
 
 		ob_start();
 		?>
 		<div class="schrack-header-search__panel" role="listbox">
-			<?php if ( ! $query->have_posts() ) : ?>
+			<?php if ( empty( $products ) ) : ?>
 				<?php echo $this->empty_message( __( 'Nu s-au gasit produse.', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php else : ?>
 				<div class="schrack-header-search__items">
-					<?php foreach ( $query->posts as $post ) : ?>
-						<?php
-						$product = wc_get_product( $post );
-						if ( ! $product instanceof WC_Product ) {
-							continue;
-						}
-						?>
+					<?php foreach ( $products as $product ) : ?>
 						<?php echo $this->result_item( $product, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<?php endforeach; ?>
 				</div>
@@ -143,7 +139,7 @@ class Schrack_Header_Search_Renderer {
 
 		return array(
 			'html' => (string) ob_get_clean(),
-			'count' => count( $query->posts ),
+			'count' => count( $products ),
 		);
 	}
 
@@ -208,6 +204,44 @@ class Schrack_Header_Search_Renderer {
 	}
 
 	/**
+	 * Searches products with exact matching first, then fuzzy-ranked suggestions.
+	 *
+	 * @param array<string,mixed> $settings Settings.
+	 * @return array<int,WC_Product>
+	 */
+	private function search_products( string $search, array $settings ): array {
+		$limit       = (int) $settings['max_results'];
+		$query       = $this->query_products( $search, $settings );
+		$products    = $this->products_from_posts( $query->posts );
+		$product_ids = array();
+
+		foreach ( $products as $product ) {
+			$product_ids[ $product->get_id() ] = true;
+		}
+
+		if ( count( $products ) >= $limit || ! $settings['enable_fuzzy'] ) {
+			return array_slice( $products, 0, $limit );
+		}
+
+		foreach ( $this->fuzzy_products( $search, $settings, $product_ids ) as $product ) {
+			$product_id = $product->get_id();
+
+			if ( isset( $product_ids[ $product_id ] ) ) {
+				continue;
+			}
+
+			$products[] = $product;
+			$product_ids[ $product_id ] = true;
+
+			if ( count( $products ) >= $limit ) {
+				break;
+			}
+		}
+
+		return $products;
+	}
+
+	/**
 	 * Runs the product query.
 	 *
 	 * @param array<string,mixed> $settings Settings.
@@ -254,6 +288,309 @@ class Schrack_Header_Search_Renderer {
 		remove_filter( 'posts_distinct', array( $this, 'query_distinct' ), 10 );
 
 		return $query;
+	}
+
+	/**
+	 * Converts queried posts to visible WooCommerce products.
+	 *
+	 * @param array<int,WP_Post|int> $posts Posts or IDs.
+	 * @return array<int,WC_Product>
+	 */
+	private function products_from_posts( array $posts ): array {
+		$products = array();
+
+		foreach ( $posts as $post ) {
+			$product = wc_get_product( $post );
+
+			if ( $product instanceof WC_Product && $this->is_product_search_visible( $product ) ) {
+				$products[] = $product;
+			}
+		}
+
+		return $products;
+	}
+
+	/**
+	 * Finds fuzzy-ranked products from a broader candidate pool.
+	 *
+	 * @param array<string,mixed> $settings Settings.
+	 * @param array<int,bool>    $excluded_ids Product IDs already returned by exact search.
+	 * @return array<int,WC_Product>
+	 */
+	private function fuzzy_products( string $search, array $settings, array $excluded_ids ): array {
+		$ranked = array();
+
+		foreach ( $this->fuzzy_candidate_ids( $search, $settings ) as $product_id ) {
+			if ( isset( $excluded_ids[ $product_id ] ) ) {
+				continue;
+			}
+
+			$product = wc_get_product( $product_id );
+
+			if ( ! $product instanceof WC_Product || ! $this->is_product_search_visible( $product ) ) {
+				continue;
+			}
+
+			$score = $this->fuzzy_score( $search, $product );
+
+			if ( $score <= 0 ) {
+				continue;
+			}
+
+			$ranked[] = array(
+				'product' => $product,
+				'score'   => $score,
+				'name'    => $product->get_name(),
+			);
+		}
+
+		usort(
+			$ranked,
+			static function ( array $left, array $right ): int {
+				if ( $left['score'] === $right['score'] ) {
+					return strcasecmp( (string) $left['name'], (string) $right['name'] );
+				}
+
+				return (int) $right['score'] <=> (int) $left['score'];
+			}
+		);
+
+		return array_values(
+			array_map(
+				static fn( array $item ): WC_Product => $item['product'],
+				array_slice( $ranked, 0, (int) $settings['max_results'] )
+			)
+		);
+	}
+
+	/**
+	 * Loads fuzzy candidate product IDs with broad prefix matching.
+	 *
+	 * @param array<string,mixed> $settings Settings.
+	 * @return array<int,int>
+	 */
+	private function fuzzy_candidate_ids( string $search, array $settings ): array {
+		global $wpdb;
+
+		$prefixes = $this->fuzzy_prefixes( $search );
+
+		if ( empty( $prefixes ) ) {
+			return array();
+		}
+
+		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+		$where_parts  = array();
+		$params       = array();
+
+		foreach ( $prefixes as $prefix ) {
+			$like = '%' . $wpdb->esc_like( $prefix ) . '%';
+			$where_parts[] = "({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_fuzzy_lookup.sku LIKE %s OR schrack_fuzzy_item_meta.meta_value LIKE %s OR schrack_fuzzy_ean_meta.meta_value LIKE %s)";
+
+			for ( $i = 0; $i < 6; ++$i ) {
+				$params[] = $like;
+			}
+		}
+
+		$params[] = (int) $settings['fuzzy_pool'];
+		$sql      = "
+			SELECT DISTINCT {$wpdb->posts}.ID
+			FROM {$wpdb->posts}
+			LEFT JOIN {$lookup_table} AS schrack_fuzzy_lookup ON ({$wpdb->posts}.ID = schrack_fuzzy_lookup.product_id)
+			LEFT JOIN {$wpdb->postmeta} AS schrack_fuzzy_item_meta ON ({$wpdb->posts}.ID = schrack_fuzzy_item_meta.post_id AND schrack_fuzzy_item_meta.meta_key = '_schrack_item_number')
+			LEFT JOIN {$wpdb->postmeta} AS schrack_fuzzy_ean_meta ON ({$wpdb->posts}.ID = schrack_fuzzy_ean_meta.post_id AND schrack_fuzzy_ean_meta.meta_key = '_schrack_ean')
+			WHERE {$wpdb->posts}.post_type = 'product'
+				AND {$wpdb->posts}.post_status = 'publish'
+				AND (" . implode( ' OR ', $where_parts ) . ")
+			ORDER BY {$wpdb->posts}.menu_order ASC, {$wpdb->posts}.post_title ASC
+			LIMIT %d
+		";
+
+		$prepared = $wpdb->prepare( $sql, $params );
+
+		if ( ! is_string( $prepared ) ) {
+			return array();
+		}
+
+		return array_values( array_filter( array_map( 'absint', $wpdb->get_col( $prepared ) ) ) );
+	}
+
+	/**
+	 * Builds candidate prefixes for the fuzzy pool query.
+	 *
+	 * @return array<int,string>
+	 */
+	private function fuzzy_prefixes( string $search ): array {
+		$prefixes = array();
+
+		foreach ( $this->search_tokens( $search ) as $token ) {
+			$length = strlen( $token );
+
+			if ( $length >= 4 ) {
+				$prefixes[] = substr( $token, 0, 4 );
+
+				for ( $index = 0; $index <= $length - 3; ++$index ) {
+					$prefixes[] = substr( $token, $index, 3 );
+				}
+			} elseif ( $length >= 3 ) {
+				$prefixes[] = $token;
+			}
+
+			if ( $length >= 2 ) {
+				$prefixes[] = $token;
+			}
+		}
+
+		return array_slice( array_values( array_unique( array_filter( $prefixes ) ) ), 0, 8 );
+	}
+
+	/**
+	 * Calculates a fuzzy score for one product.
+	 */
+	private function fuzzy_score( string $search, WC_Product $product ): int {
+		$needle = $this->normalize_search_text( $search );
+		$fields = $this->product_search_fields( $product );
+		$haystack = $this->normalize_search_text( implode( ' ', $fields ) );
+
+		if ( '' === $needle || '' === $haystack ) {
+			return 0;
+		}
+
+		$position = strpos( $haystack, $needle );
+
+		if ( false !== $position ) {
+			return 900 - min( 250, (int) $position );
+		}
+
+		$needle_tokens = $this->search_tokens( $needle );
+		$hay_tokens    = $this->search_tokens( $haystack );
+		$score         = 0;
+
+		foreach ( $needle_tokens as $needle_token ) {
+			$best = 0;
+
+			foreach ( $hay_tokens as $hay_token ) {
+				$best = max( $best, $this->token_score( $needle_token, $hay_token ) );
+			}
+
+			$score += $best;
+		}
+
+		return $score;
+	}
+
+	/**
+	 * Scores two normalized tokens.
+	 */
+	private function token_score( string $needle, string $candidate ): int {
+		$needle_length    = strlen( $needle );
+		$candidate_length = strlen( $candidate );
+
+		if ( $needle === $candidate ) {
+			return 260;
+		}
+
+		if ( $needle_length < 2 || $candidate_length < 2 ) {
+			return 0;
+		}
+
+		if ( 0 === strpos( $candidate, $needle ) ) {
+			return max( 130, 220 - abs( $candidate_length - $needle_length ) * 5 );
+		}
+
+		if ( false !== strpos( $candidate, $needle ) ) {
+			return 180;
+		}
+
+		if ( $needle_length < 3 || $candidate_length < 3 ) {
+			return 0;
+		}
+
+		$max_length = max( $needle_length, $candidate_length );
+		$distance   = levenshtein( $needle, $candidate );
+		$allowed    = max( 1, (int) floor( $max_length * 0.34 ) );
+
+		if ( $distance <= $allowed ) {
+			return max( 40, 160 - $distance * 22 + min( 35, $max_length ) );
+		}
+
+		similar_text( $needle, $candidate, $percent );
+
+		if ( $percent >= 72 ) {
+			return (int) $percent;
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Returns searchable product text fields.
+	 *
+	 * @return array<int,string>
+	 */
+	private function product_search_fields( WC_Product $product ): array {
+		return array_filter(
+			array(
+				$product->get_name(),
+				$product->get_sku(),
+				$this->meta_text( $product, '_schrack_item_number' ),
+				$this->meta_text( $product, '_schrack_ean' ),
+			),
+			static fn( string $value ): bool => '' !== $value
+		);
+	}
+
+	/**
+	 * Returns whether a product should appear in search suggestions.
+	 */
+	private function is_product_search_visible( WC_Product $product ): bool {
+		if ( method_exists( $product, 'get_status' ) && 'publish' !== $product->get_status() ) {
+			return false;
+		}
+
+		if ( method_exists( $product, 'get_catalog_visibility' ) && 'hidden' === $product->get_catalog_visibility() ) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Normalizes text for fuzzy comparisons.
+	 */
+	private function normalize_search_text( string $text ): string {
+		$text = wp_strip_all_tags( $text );
+
+		if ( function_exists( 'remove_accents' ) ) {
+			$text = remove_accents( $text );
+		}
+
+		$text = function_exists( 'mb_strtolower' ) ? mb_strtolower( $text, 'UTF-8' ) : strtolower( $text );
+		$text = preg_replace( '/[^a-z0-9]+/i', ' ', $text );
+
+		return trim( is_string( $text ) ? $text : '' );
+	}
+
+	/**
+	 * Splits normalized search text into unique tokens.
+	 *
+	 * @return array<int,string>
+	 */
+	private function search_tokens( string $text ): array {
+		$text  = $this->normalize_search_text( $text );
+		$parts = preg_split( '/\s+/', $text );
+
+		if ( ! is_array( $parts ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_unique(
+				array_filter(
+					$parts,
+					static fn( string $part ): bool => strlen( $part ) >= 2
+				)
+			)
+		);
 	}
 
 	/**
@@ -345,6 +682,8 @@ class Schrack_Header_Search_Renderer {
 			'show_price'   => $this->truthy( $settings['show_price'] ?? 'yes' ),
 			'show_sku'     => $this->truthy( $settings['show_sku'] ?? 'yes' ),
 			'show_stock'   => $this->truthy( $settings['show_stock'] ?? 'yes' ),
+			'enable_fuzzy' => $this->truthy( $settings['enable_fuzzy'] ?? 'yes' ),
+			'fuzzy_pool'   => max( 40, min( 240, absint( $settings['fuzzy_pool'] ?? 120 ) ) ),
 			'accent_color' => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
 			'action_color' => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
 			'radius'       => $this->slider_size( $settings['radius'] ?? 8, 0, 12 ),

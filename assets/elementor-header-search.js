@@ -140,9 +140,13 @@
 		Array.prototype.forEach.call((context || document).querySelectorAll('.schrack-header-search'), initSearch);
 	}
 
-	document.addEventListener('DOMContentLoaded', function () {
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', function () {
+			initAll(document);
+		});
+	} else {
 		initAll(document);
-	});
+	}
 
 	window.addEventListener('elementor/frontend/init', function () {
 		if (!window.elementorFrontend || !window.elementorFrontend.hooks) {
@@ -150,6 +154,11 @@
 		}
 
 		window.elementorFrontend.hooks.addAction('frontend/element_ready/schrack_header_search.default', function ($scope) {
+			var root = $scope && $scope[0] ? $scope[0] : document;
+			initAll(root);
+		});
+
+		window.elementorFrontend.hooks.addAction('frontend/element_ready/schrack_header.default', function ($scope) {
 			var root = $scope && $scope[0] ? $scope[0] : document;
 			initAll(root);
 		});

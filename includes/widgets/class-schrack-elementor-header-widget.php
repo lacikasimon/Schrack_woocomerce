@@ -46,7 +46,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 	 * @return array<int,string>
 	 */
 	public function get_style_depends(): array {
-		return array( 'schrack-wc-header' );
+		return array( 'schrack-wc-header', 'schrack-wc-header-search' );
 	}
 
 	/**
@@ -55,7 +55,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 	 * @return array<int,string>
 	 */
 	public function get_script_depends(): array {
-		return array( 'schrack-wc-header' );
+		return array( 'schrack-wc-header', 'schrack-wc-header-search' );
 	}
 
 	/**
@@ -133,6 +133,115 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 				'default'      => 'yes',
 			)
 		);
+
+		$this->end_controls_section();
+
+		$this->start_controls_section(
+			'section_search',
+			array(
+				'label' => __( 'Cautare produse', 'schrack-woocommerce-sync' ),
+				'tab'   => \Elementor\Controls_Manager::TAB_CONTENT,
+			)
+		);
+
+		$this->add_control(
+			'show_search',
+			array(
+				'label'        => __( 'Afiseaza cautarea', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
+			'search_placeholder',
+			array(
+				'label'   => __( 'Placeholder', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::TEXT,
+				'default' => __( 'Cauta produse, coduri, SKU...', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'search_button_text',
+			array(
+				'label'   => __( 'Text buton', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::TEXT,
+				'default' => __( 'Cauta', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'search_min_chars',
+			array(
+				'label'   => __( 'Numar minim caractere', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::NUMBER,
+				'default' => 2,
+				'min'     => 1,
+				'max'     => 5,
+				'step'    => 1,
+			)
+		);
+
+		$this->add_control(
+			'search_max_results',
+			array(
+				'label'   => __( 'Sugestii afisate', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::NUMBER,
+				'default' => 8,
+				'min'     => 3,
+				'max'     => 12,
+				'step'    => 1,
+			)
+		);
+
+		$this->add_control(
+			'search_enable_fuzzy',
+			array(
+				'label'        => __( 'Fuzzy match', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
+			'search_fuzzy_pool',
+			array(
+				'label'   => __( 'Produse analizate fuzzy', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::NUMBER,
+				'default' => 120,
+				'min'     => 40,
+				'max'     => 240,
+				'step'    => 20,
+			)
+		);
+
+		foreach (
+			array(
+				'show_search_images' => __( 'Imagini in sugestii', 'schrack-woocommerce-sync' ),
+				'show_search_price'  => __( 'Pret in sugestii', 'schrack-woocommerce-sync' ),
+				'show_search_sku'    => __( 'SKU / cod Schrack', 'schrack-woocommerce-sync' ),
+				'show_search_stock'  => __( 'Stoc in sugestii', 'schrack-woocommerce-sync' ),
+			) as $key => $label
+		) {
+			$this->add_control(
+				$key,
+				array(
+					'label'        => $label,
+					'type'         => \Elementor\Controls_Manager::SWITCHER,
+					'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+					'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+					'return_value' => 'yes',
+					'default'      => 'yes',
+				)
+			);
+		}
 
 		$this->end_controls_section();
 

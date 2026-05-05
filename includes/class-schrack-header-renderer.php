@@ -63,6 +63,8 @@ class Schrack_Header_Renderer {
 					<?php endif; ?>
 				</a>
 
+				<?php echo $this->search_module( $settings, $instance_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+
 				<div class="schrack-header__actions">
 					<?php echo $this->account_link( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<?php echo $this->cart_link( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -133,50 +135,95 @@ class Schrack_Header_Renderer {
 	 */
 	private function sanitize_settings( array $settings ): array {
 		$defaults = array(
-			'company_name'    => 'GENE SYS SECURITY SRL',
-			'brand_name'      => 'GENE SYS SECURITY',
-			'brand_suffix'    => 'SHOP',
-			'logo_url'        => $this->default_logo_url(),
-			'site_url'        => home_url( '/' ),
-			'menu_id'         => 0,
-			'show_brand_text' => 'yes',
-			'show_account'    => 'yes',
-			'show_cart'       => 'yes',
-			'show_cart_total' => 'yes',
-			'is_sticky'       => 'no',
-			'cart_label'      => __( 'Cos', 'schrack-woocommerce-sync' ),
-			'account_label'   => __( 'Contul meu', 'schrack-woocommerce-sync' ),
-			'login_label'     => __( 'Autentificare', 'schrack-woocommerce-sync' ),
-			'menu_label'      => __( 'Meniu', 'schrack-woocommerce-sync' ),
-			'accent_color'    => '#135e96',
-			'action_color'    => '#b32d2e',
-			'max_width'       => 1280,
-			'radius'          => 8,
+			'company_name'        => 'GENE SYS SECURITY SRL',
+			'brand_name'          => 'GENE SYS SECURITY',
+			'brand_suffix'        => 'SHOP',
+			'logo_url'            => $this->default_logo_url(),
+			'site_url'            => home_url( '/' ),
+			'menu_id'             => 0,
+			'show_brand_text'     => 'yes',
+			'show_account'        => 'yes',
+			'show_cart'           => 'yes',
+			'show_cart_total'     => 'yes',
+			'show_search'         => 'yes',
+			'show_search_images'  => 'yes',
+			'show_search_price'   => 'yes',
+			'show_search_sku'     => 'yes',
+			'show_search_stock'   => 'yes',
+			'search_placeholder'  => __( 'Cauta produse, coduri, SKU...', 'schrack-woocommerce-sync' ),
+			'search_button_text'  => __( 'Cauta', 'schrack-woocommerce-sync' ),
+			'search_min_chars'    => 2,
+			'search_max_results'  => 8,
+			'search_enable_fuzzy' => 'yes',
+			'search_fuzzy_pool'   => 120,
+			'is_sticky'           => 'no',
+			'cart_label'          => __( 'Cos', 'schrack-woocommerce-sync' ),
+			'account_label'       => __( 'Contul meu', 'schrack-woocommerce-sync' ),
+			'login_label'         => __( 'Autentificare', 'schrack-woocommerce-sync' ),
+			'menu_label'          => __( 'Meniu', 'schrack-woocommerce-sync' ),
+			'accent_color'        => '#135e96',
+			'action_color'        => '#b32d2e',
+			'max_width'           => 1280,
+			'radius'              => 8,
 		);
 
 		$settings = wp_parse_args( $settings, $defaults );
 
-		foreach ( array( 'company_name', 'brand_name', 'brand_suffix', 'cart_label', 'account_label', 'login_label', 'menu_label' ) as $key ) {
+		foreach ( array( 'company_name', 'brand_name', 'brand_suffix', 'cart_label', 'account_label', 'login_label', 'menu_label', 'search_placeholder', 'search_button_text' ) as $key ) {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
-		foreach ( array( 'show_brand_text', 'show_account', 'show_cart', 'show_cart_total', 'is_sticky' ) as $key ) {
+		foreach ( array( 'show_brand_text', 'show_account', 'show_cart', 'show_cart_total', 'show_search', 'show_search_images', 'show_search_price', 'show_search_sku', 'show_search_stock', 'search_enable_fuzzy', 'is_sticky' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
 		}
 
-		$settings['logo_url']     = esc_url_raw( (string) $settings['logo_url'] );
-		$settings['site_url']     = esc_url_raw( (string) $settings['site_url'] );
-		$settings['menu_id']      = absint( $settings['menu_id'] );
-		$settings['accent_color'] = sanitize_hex_color( (string) $settings['accent_color'] ) ?: $defaults['accent_color'];
-		$settings['action_color'] = sanitize_hex_color( (string) $settings['action_color'] ) ?: $defaults['action_color'];
-		$settings['max_width']    = $this->slider_size( $settings['max_width'], 960, 1440 );
-		$settings['radius']       = $this->slider_size( $settings['radius'], 0, 8 );
+		$settings['logo_url']           = esc_url_raw( (string) $settings['logo_url'] );
+		$settings['site_url']           = esc_url_raw( (string) $settings['site_url'] );
+		$settings['menu_id']            = absint( $settings['menu_id'] );
+		$settings['accent_color']       = sanitize_hex_color( (string) $settings['accent_color'] ) ?: $defaults['accent_color'];
+		$settings['action_color']       = sanitize_hex_color( (string) $settings['action_color'] ) ?: $defaults['action_color'];
+		$settings['max_width']          = $this->slider_size( $settings['max_width'], 960, 1440 );
+		$settings['radius']             = $this->slider_size( $settings['radius'], 0, 8 );
+		$settings['search_min_chars']   = max( 1, min( 5, absint( $settings['search_min_chars'] ) ) );
+		$settings['search_max_results'] = max( 3, min( 12, absint( $settings['search_max_results'] ) ) );
+		$settings['search_fuzzy_pool']  = max( 40, min( 240, absint( $settings['search_fuzzy_pool'] ) ) );
 
 		if ( '' === $settings['site_url'] ) {
 			$settings['site_url'] = home_url( '/' );
 		}
 
 		return $settings;
+	}
+
+	/**
+	 * Renders the embedded product search.
+	 *
+	 * @param array<string,string|int> $settings Sanitized settings.
+	 */
+	private function search_module( array $settings, string $instance_id ): string {
+		if ( 'yes' !== $settings['show_search'] || ! class_exists( 'WooCommerce' ) ) {
+			return '';
+		}
+
+		$renderer = new Schrack_Header_Search_Renderer();
+		$search_settings = array(
+			'placeholder'  => $settings['search_placeholder'],
+			'button_text'  => $settings['search_button_text'],
+			'min_chars'    => $settings['search_min_chars'],
+			'max_results'  => $settings['search_max_results'],
+			'max_width'    => 620,
+			'show_images'  => $settings['show_search_images'],
+			'show_price'   => $settings['show_search_price'],
+			'show_sku'     => $settings['show_search_sku'],
+			'show_stock'   => $settings['show_search_stock'],
+			'enable_fuzzy' => $settings['search_enable_fuzzy'],
+			'fuzzy_pool'   => $settings['search_fuzzy_pool'],
+			'accent_color' => $settings['accent_color'],
+			'action_color' => $settings['action_color'],
+			'radius'       => $settings['radius'],
+		);
+
+		return '<div class="schrack-header__search">' . $renderer->render( $search_settings, $instance_id . '-search' ) . '</div>';
 	}
 
 	/**
