@@ -207,6 +207,7 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-cart-checkout-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-pay-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-support-widget.php';
@@ -221,6 +222,7 @@ class Schrack_Elementor {
 			new Schrack_Elementor_Customer_Register_Widget(),
 			new Schrack_Elementor_B2B_Register_Widget(),
 			new Schrack_Elementor_Cart_Checkout_Widget(),
+			new Schrack_Elementor_Order_Pay_Widget(),
 			new Schrack_Elementor_Support_Widget(),
 		);
 
@@ -249,6 +251,7 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-cart-checkout-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-pay-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-support-widget.php';
@@ -263,6 +266,7 @@ class Schrack_Elementor {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Customer_Register_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_B2B_Register_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Cart_Checkout_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Order_Pay_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Support_Widget() );
 			$this->widgets_registered = true;
 		}

@@ -32,9 +32,12 @@ class Schrack_Cart_Checkout_Renderer {
 
 		$this->ensure_cart();
 
-		$classes = array( 'schrack-cart-checkout' );
+		$is_order_pay = 'order_pay' === $settings['render_mode'] || $this->is_order_pay_request();
+		$classes      = array( 'schrack-cart-checkout' );
 
-		if ( $this->is_cart_empty() ) {
+		if ( $is_order_pay ) {
+			$classes[] = 'is-order-pay';
+		} elseif ( $this->is_cart_empty() ) {
 			$classes[] = 'is-empty';
 		}
 
@@ -75,24 +78,34 @@ class Schrack_Cart_Checkout_Renderer {
 						</div>
 
 						<?php if ( 'yes' === $settings['show_steps'] ) : ?>
-							<?php echo $this->steps(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<?php echo $this->steps( $is_order_pay ? 'order_pay' : 'cart_checkout' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 						<?php endif; ?>
 					</div>
 				<?php endif; ?>
 
-				<?php if ( $this->is_cart_empty() ) : ?>
+				<?php if ( $is_order_pay ) : ?>
+					<?php echo $this->order_pay_panel( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php elseif ( $this->is_cart_empty() ) : ?>
 					<?php echo $this->empty_cart_panel( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php else : ?>
 					<div class="schrack-cart-checkout__layout">
-						<div class="schrack-cart-checkout__panel schrack-cart-checkout__panel--cart">
-							<div class="schrack-cart-checkout__panel-head">
-								<h2><?php echo esc_html( $settings['cart_heading'] ); ?></h2>
-								<span><?php echo esc_html( $this->cart_count_label() ); ?></span>
+						<div class="schrack-cart-checkout__cart-column">
+							<div class="schrack-cart-checkout__panel schrack-cart-checkout__panel--cart">
+								<div class="schrack-cart-checkout__panel-head">
+									<h2><?php echo esc_html( $settings['cart_heading'] ); ?></h2>
+									<span><?php echo esc_html( $this->cart_count_label() ); ?></span>
+								</div>
+
+								<div class="schrack-cart-checkout__woocommerce-cart">
+									<?php echo $this->render_shortcode( 'woocommerce_cart', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+								</div>
 							</div>
 
-							<div class="schrack-cart-checkout__woocommerce-cart">
-								<?php echo $this->render_shortcode( 'woocommerce_cart', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-							</div>
+							<?php if ( 'yes' === $settings['show_continue_shopping'] ) : ?>
+								<div class="schrack-cart-checkout__continue">
+									<a href="<?php echo esc_url( $this->continue_shopping_url( $settings ) ); ?>"><?php echo esc_html( $settings['continue_shopping_text'] ); ?></a>
+								</div>
+							<?php endif; ?>
 						</div>
 
 						<div class="schrack-cart-checkout__panel schrack-cart-checkout__panel--checkout">
@@ -106,12 +119,6 @@ class Schrack_Cart_Checkout_Renderer {
 							</div>
 						</div>
 					</div>
-
-					<?php if ( 'yes' === $settings['show_continue_shopping'] ) : ?>
-						<div class="schrack-cart-checkout__continue">
-							<a href="<?php echo esc_url( $this->continue_shopping_url( $settings ) ); ?>"><?php echo esc_html( $settings['continue_shopping_text'] ); ?></a>
-						</div>
-					<?php endif; ?>
 				<?php endif; ?>
 			</div>
 		</section>
@@ -134,12 +141,16 @@ class Schrack_Cart_Checkout_Renderer {
 			'cart_heading'           => __( 'Produsele din cos', 'schrack-woocommerce-sync' ),
 			'checkout_heading'       => __( 'Date facturare si livrare', 'schrack-woocommerce-sync' ),
 			'order_button_text'      => __( 'Trimite comanda', 'schrack-woocommerce-sync' ),
+			'order_pay_heading'      => __( 'Finalizeaza plata', 'schrack-woocommerce-sync' ),
+			'order_pay_badge'        => __( 'Plata securizata', 'schrack-woocommerce-sync' ),
+			'order_pay_button_text'  => __( 'Plateste comanda', 'schrack-woocommerce-sync' ),
 			'continue_shopping_text' => __( 'Continua cumparaturile', 'schrack-woocommerce-sync' ),
 			'continue_shopping_url'  => '',
 			'empty_title'            => __( 'Cosul tau este gol', 'schrack-woocommerce-sync' ),
 			'empty_text'             => __( 'Adauga produse in cos pentru a putea trimite comanda.', 'schrack-woocommerce-sync' ),
 			'shop_button_text'       => __( 'Mergi la magazin', 'schrack-woocommerce-sync' ),
 			'shop_url'               => '',
+			'render_mode'            => 'cart_checkout',
 			'show_header'            => 'yes',
 			'show_steps'             => 'yes',
 			'show_continue_shopping' => 'yes',
@@ -154,9 +165,11 @@ class Schrack_Cart_Checkout_Renderer {
 
 		$settings = wp_parse_args( $settings, $defaults );
 
-		foreach ( array( 'eyebrow', 'title', 'subtitle', 'cart_heading', 'checkout_heading', 'order_button_text', 'continue_shopping_text', 'empty_title', 'empty_text', 'shop_button_text' ) as $key ) {
+		foreach ( array( 'eyebrow', 'title', 'subtitle', 'cart_heading', 'checkout_heading', 'order_button_text', 'order_pay_heading', 'order_pay_badge', 'order_pay_button_text', 'continue_shopping_text', 'empty_title', 'empty_text', 'shop_button_text' ) as $key ) {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
+
+		$settings['render_mode'] = 'order_pay' === (string) $settings['render_mode'] ? 'order_pay' : 'cart_checkout';
 
 		foreach ( array( 'show_header', 'show_steps', 'show_continue_shopping', 'show_coupon', 'show_cross_sells', 'show_cart_totals' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
@@ -256,25 +269,34 @@ class Schrack_Cart_Checkout_Renderer {
 			return '';
 		}
 
-		$current_url           = $this->current_url();
-		$url_filter            = static fn( string $url = '' ): string => $current_url;
-		$gettext_filter        = fn( string $translation, string $text, string $domain ): string => $this->translate_woocommerce_text( $translation, $text, $domain );
-		$ngettext_filter       = fn( string $translation, string $single, string $plural, int $number, string $domain ): string => $this->translate_woocommerce_plural( $translation, $single, $plural, $number, $domain );
+		$current_url            = $this->current_url();
+		$url_filter             = static fn( string $url = '' ): string => $current_url;
+		$gettext_filter         = fn( string $translation, string $text, string $domain ): string => $this->translate_woocommerce_text( $translation, $text, $domain );
+		$ngettext_filter        = fn( string $translation, string $single, string $plural, int $number, string $domain ): string => $this->translate_woocommerce_plural( $translation, $single, $plural, $number, $domain );
 		$checkout_fields_filter = fn( array $fields ): array => $this->romanian_checkout_fields( $fields );
 		$address_fields_filter  = fn( array $fields ): array => $this->romanian_default_address_fields( $fields );
-		$filters               = array(
+		$filters                = array(
 			array( 'gettext', $gettext_filter, 10, 3 ),
 			array( 'ngettext', $ngettext_filter, 10, 5 ),
 		);
+		$proceed_button_priority = false;
 
 		if ( 'woocommerce_cart' === $shortcode ) {
 			$filters[] = array( 'woocommerce_get_cart_url', $url_filter, 10, 1 );
+			$proceed_button_priority = has_action( 'woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout' );
+
+			if ( false !== $proceed_button_priority ) {
+				remove_action( 'woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout', $proceed_button_priority );
+			}
 		} elseif ( 'woocommerce_checkout' === $shortcode ) {
-			$order_button_text = $settings['order_button_text'] ?? __( 'Trimite comanda', 'schrack-woocommerce-sync' );
-			$order_filter      = static fn( string $button_text = '' ): string => $order_button_text;
+			$order_button_text     = $settings['order_button_text'] ?? __( 'Trimite comanda', 'schrack-woocommerce-sync' );
+			$order_pay_button_text = $settings['order_pay_button_text'] ?? __( 'Plateste comanda', 'schrack-woocommerce-sync' );
+			$order_filter          = static fn( string $button_text = '' ): string => $order_button_text;
+			$order_pay_filter      = static fn( string $button_text = '' ): string => $order_pay_button_text;
 
 			$filters[] = array( 'woocommerce_get_checkout_url', $url_filter, 10, 1 );
 			$filters[] = array( 'woocommerce_order_button_text', $order_filter, 10, 1 );
+			$filters[] = array( 'woocommerce_pay_order_button_text', $order_pay_filter, 10, 1 );
 			$filters[] = array( 'woocommerce_checkout_fields', $checkout_fields_filter, 10, 1 );
 			$filters[] = array( 'woocommerce_default_address_fields', $address_fields_filter, 10, 1 );
 		}
@@ -286,6 +308,10 @@ class Schrack_Cart_Checkout_Renderer {
 		try {
 			return do_shortcode( '[' . $shortcode . ']' );
 		} finally {
+			if ( false !== $proceed_button_priority ) {
+				add_action( 'woocommerce_proceed_to_checkout', 'woocommerce_button_proceed_to_checkout', $proceed_button_priority );
+			}
+
 			foreach ( $filters as $filter ) {
 				remove_filter( $filter[0], $filter[1], $filter[2] );
 			}
@@ -353,6 +379,12 @@ class Schrack_Cart_Checkout_Renderer {
 			'Your order' => 'Comanda ta',
 			'Payment' => 'Plata',
 			'Place order' => 'Trimite comanda',
+			'Pay for order' => 'Plateste comanda',
+			'Order details' => 'Detalii comanda',
+			'Order number:' => 'Numar comanda:',
+			'Date:' => 'Data:',
+			'Email:' => 'Email:',
+			'Payment method:' => 'Metoda de plata:',
 			'First name' => 'Prenume',
 			'Last name' => 'Nume',
 			'Company name' => 'Companie',
@@ -482,12 +514,18 @@ class Schrack_Cart_Checkout_Renderer {
 	/**
 	 * Renders the checkout progress labels.
 	 */
-	private function steps(): string {
-		$steps = array(
-			__( 'Cos', 'schrack-woocommerce-sync' ),
-			__( 'Date comanda', 'schrack-woocommerce-sync' ),
-			__( 'Plata', 'schrack-woocommerce-sync' ),
-		);
+	private function steps( string $mode = 'cart_checkout' ): string {
+		$steps = 'order_pay' === $mode
+			? array(
+				__( 'Comanda', 'schrack-woocommerce-sync' ),
+				__( 'Verificare', 'schrack-woocommerce-sync' ),
+				__( 'Plata', 'schrack-woocommerce-sync' ),
+			)
+			: array(
+				__( 'Cos', 'schrack-woocommerce-sync' ),
+				__( 'Date comanda', 'schrack-woocommerce-sync' ),
+				__( 'Plata', 'schrack-woocommerce-sync' ),
+			);
 
 		ob_start();
 		?>
@@ -499,6 +537,37 @@ class Schrack_Cart_Checkout_Renderer {
 				</li>
 			<?php endforeach; ?>
 		</ol>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the WooCommerce order payment module.
+	 *
+	 * @param array<string,string> $settings Settings.
+	 */
+	private function order_pay_panel( array $settings ): string {
+		ob_start();
+		?>
+		<div class="schrack-cart-checkout__order-pay">
+			<div class="schrack-cart-checkout__panel schrack-cart-checkout__panel--order-pay">
+				<div class="schrack-cart-checkout__panel-head">
+					<h2><?php echo esc_html( $settings['order_pay_heading'] ); ?></h2>
+					<span><?php echo esc_html( $settings['order_pay_badge'] ); ?></span>
+				</div>
+
+				<div class="schrack-cart-checkout__woocommerce-order-pay">
+					<?php echo $this->render_shortcode( 'woocommerce_checkout', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				</div>
+			</div>
+
+			<?php if ( 'yes' === $settings['show_continue_shopping'] ) : ?>
+				<div class="schrack-cart-checkout__continue">
+					<a href="<?php echo esc_url( $this->continue_shopping_url( $settings ) ); ?>"><?php echo esc_html( $settings['continue_shopping_text'] ); ?></a>
+				</div>
+			<?php endif; ?>
+		</div>
 		<?php
 
 		return (string) ob_get_clean();
@@ -554,6 +623,30 @@ class Schrack_Cart_Checkout_Renderer {
 		}
 
 		return home_url( '/shop/' );
+	}
+
+	/**
+	 * Detects WooCommerce order payment endpoints.
+	 */
+	private function is_order_pay_request(): bool {
+		if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url( 'order-pay' ) ) {
+			return true;
+		}
+
+		global $wp;
+
+		if ( isset( $wp ) && is_object( $wp ) && isset( $wp->query_vars['order-pay'] ) ) {
+			return true;
+		}
+
+		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) ) : '';
+		$path        = wp_parse_url( $request_uri, PHP_URL_PATH );
+
+		if ( ! is_string( $path ) ) {
+			return false;
+		}
+
+		return false !== strpos( '/' . trim( $path, '/' ) . '/', '/order-pay/' );
 	}
 
 	/**
