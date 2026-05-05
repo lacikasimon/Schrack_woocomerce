@@ -40,6 +40,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		'provider_code'    => __( 'Provider code', 'schrack-woocommerce-sync' ),
 	);
 	?>
+	<?php include SCHRACK_WC_SYNC_PATH . 'templates/admin-sync-dashboard.php'; ?>
 
 	<div class="schrack-grid">
 		<div class="schrack-panel">

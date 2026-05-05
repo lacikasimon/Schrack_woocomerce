@@ -355,9 +355,10 @@ class Schrack_Admin {
 	public function render_manual_page(): void {
 		$this->assert_can_manage();
 
-		$notice       = $this->get_notice();
-		$queue_status = $this->cron->queue_status();
-		$stop_request = $this->active_stop_request( $this->settings->stop_request(), $queue_status );
+		$notice         = $this->get_notice();
+		$queue_status   = $this->cron->queue_status();
+		$stop_request   = $this->active_stop_request( $this->settings->stop_request(), $queue_status );
+		$sync_dashboard = $this->sync_dashboard_stats();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-sync.php';
 	}
@@ -386,13 +387,129 @@ class Schrack_Admin {
 	public function render_status_page(): void {
 		$this->assert_can_manage();
 
-		$status   = $this->settings->get_status();
-		$settings = $this->settings->all();
-		$notice   = $this->get_notice();
-		$queue_status = $this->cron->queue_status();
-		$stop_request = $this->active_stop_request( $this->settings->stop_request(), $queue_status );
+		$status         = $this->settings->get_status();
+		$settings       = $this->settings->all();
+		$notice         = $this->get_notice();
+		$queue_status   = $this->cron->queue_status();
+		$stop_request   = $this->active_stop_request( $this->settings->stop_request(), $queue_status );
+		$sync_dashboard = $this->sync_dashboard_stats();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-status.php';
+	}
+
+	/**
+	 * Returns sync coverage counters for the admin dashboard.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function sync_dashboard_stats(): array {
+		global $wpdb;
+
+		$sql = "
+			SELECT
+				COUNT(*) AS imported_products,
+				SUM(CASE WHEN sync_meta.image_url <> '' THEN 1 ELSE 0 END) AS image_url_products,
+				SUM(
+					CASE
+						WHEN sync_meta.image_url <> ''
+							AND sync_meta.imported_image_url = sync_meta.image_url
+							AND (
+								thumbnail_attachment.ID IS NOT NULL
+								OR stored_attachment.ID IS NOT NULL
+							)
+						THEN 1
+						ELSE 0
+					END
+				) AS image_synced_products,
+				SUM(
+					CASE
+						WHEN sync_meta.image_url <> ''
+							AND NOT (
+								sync_meta.imported_image_url = sync_meta.image_url
+								AND (
+									thumbnail_attachment.ID IS NOT NULL
+									OR stored_attachment.ID IS NOT NULL
+								)
+							)
+						THEN 1
+						ELSE 0
+					END
+				) AS image_url_only_products,
+				SUM(CASE WHEN sync_meta.last_price_sync <> '' THEN 1 ELSE 0 END) AS price_synced_products,
+				SUM(CASE WHEN sync_meta.last_stock_sync <> '' THEN 1 ELSE 0 END) AS stock_synced_products
+			FROM (
+				SELECT
+					products.ID AS product_id,
+					MAX(CASE WHEN product_meta.meta_key = '_schrack_image_url' THEN product_meta.meta_value ELSE '' END) AS image_url,
+					MAX(CASE WHEN product_meta.meta_key = '_schrack_imported_image_url' THEN product_meta.meta_value ELSE '' END) AS imported_image_url,
+					MAX(CASE WHEN product_meta.meta_key = '_thumbnail_id' THEN product_meta.meta_value ELSE '' END) AS thumbnail_id,
+					MAX(CASE WHEN product_meta.meta_key = '_schrack_image_attachment_id' THEN product_meta.meta_value ELSE '' END) AS image_attachment_id,
+					MAX(CASE WHEN product_meta.meta_key = '_schrack_last_price_sync' THEN product_meta.meta_value ELSE '' END) AS last_price_sync,
+					MAX(CASE WHEN product_meta.meta_key = '_schrack_last_stock_sync' THEN product_meta.meta_value ELSE '' END) AS last_stock_sync
+				FROM {$wpdb->posts} AS products
+				INNER JOIN {$wpdb->postmeta} AS item_meta
+					ON item_meta.post_id = products.ID
+					AND item_meta.meta_key = '_schrack_item_number'
+					AND item_meta.meta_value <> ''
+				LEFT JOIN {$wpdb->postmeta} AS product_meta
+					ON product_meta.post_id = products.ID
+					AND product_meta.meta_key IN (
+						'_schrack_image_url',
+						'_schrack_imported_image_url',
+						'_thumbnail_id',
+						'_schrack_image_attachment_id',
+						'_schrack_last_price_sync',
+						'_schrack_last_stock_sync'
+					)
+				WHERE products.post_type = 'product'
+					AND products.post_status IN ('publish', 'draft', 'private')
+				GROUP BY products.ID
+			) AS sync_meta
+			LEFT JOIN {$wpdb->posts} AS thumbnail_attachment
+				ON thumbnail_attachment.ID = CAST(sync_meta.thumbnail_id AS UNSIGNED)
+				AND thumbnail_attachment.post_type = 'attachment'
+				AND thumbnail_attachment.post_status = 'inherit'
+			LEFT JOIN {$wpdb->posts} AS stored_attachment
+				ON stored_attachment.ID = CAST(sync_meta.image_attachment_id AS UNSIGNED)
+				AND stored_attachment.post_type = 'attachment'
+				AND stored_attachment.post_status = 'inherit'
+		";
+		$row = $wpdb->get_row( $sql, ARRAY_A );
+		$row = is_array( $row ) ? $row : array();
+
+		$imported_products       = absint( $row['imported_products'] ?? 0 );
+		$image_url_products      = absint( $row['image_url_products'] ?? 0 );
+		$image_synced_products   = absint( $row['image_synced_products'] ?? 0 );
+		$image_url_only_products = absint( $row['image_url_only_products'] ?? 0 );
+		$price_synced_products   = absint( $row['price_synced_products'] ?? 0 );
+		$stock_synced_products   = absint( $row['stock_synced_products'] ?? 0 );
+
+		return array(
+			'imported_products'       => $imported_products,
+			'image_url_products'      => $image_url_products,
+			'image_synced_products'   => $image_synced_products,
+			'image_url_only_products' => $image_url_only_products,
+			'image_missing_url_products' => max( 0, $imported_products - $image_url_products ),
+			'price_synced_products'   => $price_synced_products,
+			'stock_synced_products'   => $stock_synced_products,
+			'image_synced_pct'        => $this->sync_dashboard_percentage( $image_synced_products, $imported_products ),
+			'image_url_only_pct'      => $this->sync_dashboard_percentage( $image_url_only_products, $imported_products ),
+			'price_synced_pct'        => $this->sync_dashboard_percentage( $price_synced_products, $imported_products ),
+			'stock_synced_pct'        => $this->sync_dashboard_percentage( $stock_synced_products, $imported_products ),
+			'calculated_at'           => current_time( 'mysql' ),
+			'query_error'             => (string) $wpdb->last_error,
+		);
+	}
+
+	/**
+	 * Calculates a dashboard percentage.
+	 */
+	private function sync_dashboard_percentage( int $value, int $total ): float {
+		if ( $total <= 0 ) {
+			return 0.0;
+		}
+
+		return round( ( $value / $total ) * 100, 1 );
 	}
 
 	/**

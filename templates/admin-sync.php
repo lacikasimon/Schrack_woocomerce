@@ -16,6 +16,7 @@ $stop_request = isset( $stop_request ) && is_array( $stop_request ) ? $stop_requ
 	<h1><?php esc_html_e( 'Schrack Manual Sync', 'schrack-woocommerce-sync' ); ?></h1>
 	<?php $this->render_tabs( 'manual' ); ?>
 	<?php $this->render_notice( $notice ); ?>
+	<?php include SCHRACK_WC_SYNC_PATH . 'templates/admin-sync-dashboard.php'; ?>
 
 	<div class="schrack-grid">
 		<div class="schrack-panel">
