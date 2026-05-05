@@ -66,6 +66,12 @@ class Schrack_Homepage_Renderer {
 							<p class="schrack-home__subtitle"><?php echo esc_html( $settings['subtitle'] ); ?></p>
 						<?php endif; ?>
 
+						<?php if ( '' !== $settings['support_text'] ) : ?>
+							<p class="schrack-home__support"><?php echo esc_html( $settings['support_text'] ); ?></p>
+						<?php endif; ?>
+
+						<?php echo $this->hero_benefits(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+
 						<div class="schrack-home__actions">
 							<a class="schrack-home__button" href="<?php echo esc_url( $settings['shop_url'] ); ?>">
 								<?php echo esc_html( $settings['button_text'] ); ?>
@@ -87,6 +93,10 @@ class Schrack_Homepage_Renderer {
 						</div>
 					<?php endforeach; ?>
 				</div>
+
+				<?php if ( 'yes' === $settings['show_solution_spotlight'] ) : ?>
+					<?php echo $this->solution_spotlight( $featured_terms, $settings['show_counts'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php endif; ?>
 
 				<div class="schrack-home__catalog">
 					<div class="schrack-home__tree-panel">
@@ -136,6 +146,7 @@ class Schrack_Homepage_Renderer {
 			'eyebrow'                 => __( 'GENE SYS SECURITY SRL', 'schrack-woocommerce-sync' ),
 			'title'                   => __( 'Catalog tehnic pentru instalatii electrice si securitate', 'schrack-woocommerce-sync' ),
 			'subtitle'                => __( 'Instalatii electrice, sisteme fotovoltaice, securitate si supraveghere pentru constructii civile si industriale.', 'schrack-woocommerce-sync' ),
+			'support_text'            => __( 'Gasesti rapid componente potrivite pentru proiecte noi, modernizari si interventii, cu categorii clare, imagini de produs si directii de selectie pentru echipe tehnice.', 'schrack-woocommerce-sync' ),
 			'company_meta'            => __( 'Satu Mare - CUI RO 38322763', 'schrack-woocommerce-sync' ),
 			'button_text'             => __( 'Mergi la magazin', 'schrack-woocommerce-sync' ),
 			'shop_url'                => $this->default_shop_url(),
@@ -143,6 +154,7 @@ class Schrack_Homepage_Renderer {
 			'featured_category_count' => 6,
 			'show_counts'              => 'yes',
 			'show_services'            => 'yes',
+			'show_solution_spotlight'  => 'yes',
 			'show_featured_categories' => 'yes',
 			'accent_color'             => '#135e96',
 			'action_color'             => '#b32d2e',
@@ -152,11 +164,11 @@ class Schrack_Homepage_Renderer {
 
 		$settings = wp_parse_args( $settings, $defaults );
 
-		foreach ( array( 'eyebrow', 'title', 'subtitle', 'company_meta', 'button_text' ) as $key ) {
+		foreach ( array( 'eyebrow', 'title', 'subtitle', 'support_text', 'company_meta', 'button_text' ) as $key ) {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
-		foreach ( array( 'show_counts', 'show_services', 'show_featured_categories' ) as $key ) {
+		foreach ( array( 'show_counts', 'show_services', 'show_solution_spotlight', 'show_featured_categories' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
 		}
 
@@ -291,6 +303,40 @@ class Schrack_Homepage_Renderer {
 	}
 
 	/**
+	 * Renders short hero benefit descriptions.
+	 */
+	private function hero_benefits(): string {
+		$benefits = array(
+			array(
+				'label' => __( 'Selectie rapida', 'schrack-woocommerce-sync' ),
+				'text'  => __( 'Arbore de categorii filtrabil pentru gasirea rapida a produselor potrivite.', 'schrack-woocommerce-sync' ),
+			),
+			array(
+				'label' => __( 'Imagini relevante', 'schrack-woocommerce-sync' ),
+				'text'  => __( 'Cardurile folosesc imagini de categorie sau produs pentru orientare vizuala imediata.', 'schrack-woocommerce-sync' ),
+			),
+			array(
+				'label' => __( 'Context tehnic', 'schrack-woocommerce-sync' ),
+				'text'  => __( 'Descrieri scurte pentru instalatii, fotovoltaice, securitate si proiecte industriale.', 'schrack-woocommerce-sync' ),
+			),
+		);
+
+		ob_start();
+		?>
+		<div class="schrack-home__benefits" aria-label="<?php esc_attr_e( 'Avantaje catalog', 'schrack-woocommerce-sync' ); ?>">
+			<?php foreach ( $benefits as $benefit ) : ?>
+				<div class="schrack-home__benefit">
+					<strong><?php echo esc_html( $benefit['label'] ); ?></strong>
+					<span><?php echo esc_html( $benefit['text'] ); ?></span>
+				</div>
+			<?php endforeach; ?>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * Renders the hero product/category visual gallery.
 	 *
 	 * @param array<int,WP_Term> $terms Featured terms.
@@ -306,9 +352,62 @@ class Schrack_Homepage_Renderer {
 			<?php foreach ( array_slice( $terms, 0, 4 ) as $index => $term ) : ?>
 				<figure class="schrack-home__visual-card <?php echo 0 === $index ? 'is-large' : ''; ?>">
 					<?php echo $this->term_image( $term, 'woocommerce_thumbnail' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-					<figcaption><?php echo esc_html( $term->name ); ?></figcaption>
+					<figcaption>
+						<strong><?php echo esc_html( $term->name ); ?></strong>
+						<span><?php echo esc_html( sprintf( __( '%d produse in catalog', 'schrack-woocommerce-sync' ), (int) $term->count ) ); ?></span>
+					</figcaption>
 				</figure>
 			<?php endforeach; ?>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders a richer image-led category story.
+	 *
+	 * @param array<int,WP_Term> $terms Featured terms.
+	 */
+	private function solution_spotlight( array $terms, string $show_counts ): string {
+		if ( empty( $terms ) ) {
+			return '';
+		}
+
+		$labels = array(
+			__( 'Pentru proiectare', 'schrack-woocommerce-sync' ),
+			__( 'Pentru santier', 'schrack-woocommerce-sync' ),
+			__( 'Pentru mentenanta', 'schrack-woocommerce-sync' ),
+		);
+
+		ob_start();
+		?>
+		<div class="schrack-home__solutions">
+			<div class="schrack-home__section-head is-wide">
+				<div>
+					<span><?php esc_html_e( 'Solutii complete pentru proiecte moderne', 'schrack-woocommerce-sync' ); ?></span>
+					<p><?php esc_html_e( 'O selectie vizuala din catalog, gandita pentru echipe care aleg rapid produse, compara zone de instalare si pornesc direct catre categoria potrivita.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
+			</div>
+
+			<div class="schrack-home__solution-grid">
+				<?php foreach ( array_slice( $terms, 0, 3 ) as $index => $term ) : ?>
+					<?php $link = get_term_link( $term ); ?>
+					<a class="schrack-home__solution-card" href="<?php echo esc_url( is_wp_error( $link ) ? '#' : $link ); ?>">
+						<span class="schrack-home__solution-media">
+							<?php echo $this->term_image( $term, 'woocommerce_thumbnail' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<span class="schrack-home__solution-badge"><?php echo esc_html( $labels[ $index ] ?? $labels[0] ); ?></span>
+						</span>
+						<span class="schrack-home__solution-copy">
+							<strong><?php echo esc_html( $term->name ); ?></strong>
+							<span><?php echo esc_html( $this->term_marketing_text( $term, $index ) ); ?></span>
+							<?php if ( 'yes' === $show_counts ) : ?>
+								<em><?php echo esc_html( sprintf( __( '%d produse disponibile', 'schrack-woocommerce-sync' ), (int) $term->count ) ); ?></em>
+							<?php endif; ?>
+						</span>
+					</a>
+				<?php endforeach; ?>
+			</div>
 		</div>
 		<?php
 
@@ -438,6 +537,10 @@ class Schrack_Homepage_Renderer {
 				'url'     => 'https://syshub.ro/servicii/instalatii-electrice',
 				'image'   => 'https://syshub.ro/assets/electrical-installation-MhzlRr5w.jpg',
 				'variant' => 'electric',
+				'points'  => array(
+					__( 'Planificare pe zone si consumatori', 'schrack-woocommerce-sync' ),
+					__( 'Executie pentru cladiri civile si industriale', 'schrack-woocommerce-sync' ),
+				),
 			),
 			array(
 				'name'    => __( 'Sisteme fotovoltaice', 'schrack-woocommerce-sync' ),
@@ -445,6 +548,10 @@ class Schrack_Homepage_Renderer {
 				'url'     => 'https://syshub.ro/servicii/fotovoltaice',
 				'image'   => 'https://syshub.ro/assets/photovoltaic-panels-cA7PyFUI.jpg',
 				'variant' => 'solar',
+				'points'  => array(
+					__( 'Dimensionare dupa profilul de consum', 'schrack-woocommerce-sync' ),
+					__( 'Monitorizare si mentenanta dupa instalare', 'schrack-woocommerce-sync' ),
+				),
 			),
 			array(
 				'name'    => __( 'Securitate si CCTV', 'schrack-woocommerce-sync' ),
@@ -452,6 +559,10 @@ class Schrack_Homepage_Renderer {
 				'url'     => 'https://syshub.ro/servicii/securitate-cctv',
 				'image'   => 'https://syshub.ro/assets/security-cctv-B6nSZA5n.jpg',
 				'variant' => 'security',
+				'points'  => array(
+					__( 'Supraveghere video si control acces', 'schrack-woocommerce-sync' ),
+					__( 'Configurare pentru acces remote securizat', 'schrack-woocommerce-sync' ),
+				),
 			),
 		);
 
@@ -470,14 +581,39 @@ class Schrack_Homepage_Renderer {
 					<span class="schrack-home__service-visual">
 						<img src="<?php echo esc_url( $service['image'] ); ?>" alt="<?php echo esc_attr( $service['name'] ); ?>" loading="lazy">
 					</span>
-					<strong><?php echo esc_html( $service['name'] ); ?></strong>
-					<p><?php echo esc_html( $service['text'] ); ?></p>
+					<div class="schrack-home__service-copy">
+						<strong><?php echo esc_html( $service['name'] ); ?></strong>
+						<p><?php echo esc_html( $service['text'] ); ?></p>
+						<ul class="schrack-home__service-points">
+							<?php foreach ( $service['points'] as $point ) : ?>
+								<li><?php echo esc_html( $point ); ?></li>
+							<?php endforeach; ?>
+						</ul>
+						<span class="schrack-home__service-link"><?php esc_html_e( 'Vezi detalii', 'schrack-woocommerce-sync' ); ?></span>
+					</div>
 				</a>
 			<?php endforeach; ?>
 		</div>
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Builds concise fallback copy for category cards.
+	 */
+	private function term_marketing_text( WP_Term $term, int $index ): string {
+		if ( '' !== $term->description ) {
+			return wp_trim_words( wp_strip_all_tags( $term->description ), 24, '...' );
+		}
+
+		$fallbacks = array(
+			__( 'Produse selectate pentru tablouri, distributie si instalatii care trebuie sa ramana usor de verificat in exploatare.', 'schrack-woocommerce-sync' ),
+			__( 'Repere utile pentru executie rapida, interventii curate si completarea listelor de materiale pentru santier.', 'schrack-woocommerce-sync' ),
+			__( 'Componente potrivite pentru modernizari, mentenanta si extinderea instalatiilor existente fara cautari inutile.', 'schrack-woocommerce-sync' ),
+		);
+
+		return $fallbacks[ $index % count( $fallbacks ) ];
 	}
 
 	/**

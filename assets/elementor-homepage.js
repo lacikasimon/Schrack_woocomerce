@@ -15,7 +15,7 @@
 		empty = root.querySelector('[data-home-category-empty]');
 		nodes = Array.prototype.slice.call(root.querySelectorAll('[data-home-category-node]'));
 
-		Array.prototype.forEach.call(root.querySelectorAll('.schrack-home__service-visual img'), function (image) {
+		Array.prototype.forEach.call(root.querySelectorAll('.schrack-home__service-visual img, .schrack-home__solution-media img'), function (image) {
 			image.addEventListener('error', function () {
 				if (image.parentElement) {
 					image.parentElement.classList.add('is-image-missing');

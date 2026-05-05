@@ -109,6 +109,15 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		);
 
 		$this->add_control(
+			'support_text',
+			array(
+				'label'   => __( 'Descriere suplimentara', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::TEXTAREA,
+				'default' => __( 'Gasesti rapid componente potrivite pentru proiecte noi, modernizari si interventii, cu categorii clare, imagini de produs si directii de selectie pentru echipe tehnice.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
 			'company_meta',
 			array(
 				'label'   => __( 'Meta companie', 'schrack-woocommerce-sync' ),
@@ -187,6 +196,18 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 			'show_featured_categories',
 			array(
 				'label'        => __( 'Carduri categorii populare', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
+			'show_solution_spotlight',
+			array(
+				'label'        => __( 'Bloc solutii cu imagini', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
