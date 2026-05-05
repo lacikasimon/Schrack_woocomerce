@@ -411,11 +411,12 @@
 .schrack-product-filter__reset,
 .schrack-product-filter__pagination button,
 .schrack-product-card__details,
-.schrack-product-card__cart {
+.schrack-product-card__cart,
+.schrack-product-card__actions .added_to_cart {
 	align-items: center;
 	border-radius: 6px;
 	cursor: pointer;
-	display: inline-flex;
+	display: inline-flex !important;
 	font-weight: 700;
 	justify-content: center;
 	line-height: 1.2;
@@ -432,7 +433,8 @@
 }
 
 .schrack-product-filter__button,
-.schrack-product-card__cart {
+.schrack-product-card__cart,
+.schrack-product-card__actions .added_to_cart {
 	background: var(--schrack-filter-action);
 	border: 1px solid var(--schrack-filter-action);
 	color: #fff;
@@ -441,7 +443,9 @@
 .schrack-product-filter__button:hover,
 .schrack-product-filter__button:focus,
 .schrack-product-card__cart:hover,
-.schrack-product-card__cart:focus {
+.schrack-product-card__cart:focus,
+.schrack-product-card__actions .added_to_cart:hover,
+.schrack-product-card__actions .added_to_cart:focus {
 	background: #8f2527;
 	border-color: #8f2527;
 	color: #fff;
@@ -643,7 +647,8 @@
 }
 
 .schrack-product-card__details,
-.schrack-product-card__cart {
+.schrack-product-card__cart,
+.schrack-product-card__actions .added_to_cart {
 	margin: 0 !important;
 	min-width: 0;
 	overflow-wrap: anywhere;
@@ -653,7 +658,8 @@
 	word-break: normal;
 }
 
-.schrack-product-card__cart {
+.schrack-product-card__cart,
+.schrack-product-card__actions .added_to_cart {
 	font-size: 12px;
 	min-height: 40px;
 	overflow-wrap: normal;
@@ -661,6 +667,10 @@
 	padding-right: 8px;
 	text-transform: uppercase;
 	white-space: nowrap;
+}
+
+.schrack-product-card__cart.added {
+	display: none !important;
 }
 
 @container (max-width: 250px) {
