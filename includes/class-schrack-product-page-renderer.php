@@ -354,20 +354,30 @@ class Schrack_Product_Page_Renderer {
 	 * @param array<string,mixed> $settings Settings.
 	 */
 	private function specifications( WC_Product $product, array $settings ): string {
+		$stock_html = wc_get_stock_html( $product );
 		$items = array_filter(
 			array(
 				$this->meta_item( __( 'Cod Schrack', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_item_number' ) ),
-				$this->meta_item( __( 'SKU WooCommerce', 'schrack-woocommerce-sync' ), $product->get_sku() ),
-				$this->meta_item( __( 'Categorie importata', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_raw_category' ) ),
+				$this->meta_item( __( 'SKU', 'schrack-woocommerce-sync' ), $product->get_sku() ),
+				$this->meta_item( __( 'Categorii', 'schrack-woocommerce-sync' ), $this->term_names( $product, 'product_cat' ) ),
+				$this->meta_item( __( 'Etichete', 'schrack-woocommerce-sync' ), $this->term_names( $product, 'product_tag' ) ),
 				$this->meta_item( __( 'EAN', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_ean' ) ),
 				$this->meta_item( __( 'Producator', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_manufacturer' ) ),
 				$this->meta_item( __( 'Unitate', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_unit' ) ),
+				$this->meta_item( __( 'Status catalog', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_catalog_status' ) ),
+				$this->meta_item( __( 'Greutate', 'schrack-woocommerce-sync' ), $this->product_weight( $product ) ),
+				$this->meta_item( __( 'Dimensiuni', 'schrack-woocommerce-sync' ), $this->product_dimensions( $product ) ),
+				$this->meta_item( __( 'Disponibilitate', 'schrack-woocommerce-sync' ), '' !== $stock_html ? wp_strip_all_tags( $stock_html ) : '' ),
 			)
 		);
+
+		$items = array_merge( $items, $this->product_attribute_items( $product ) );
 
 		if ( $settings['show_technical_attributes'] ) {
 			$items = array_merge( $items, $this->technical_attributes( $product, (int) $settings['technical_limit'] ) );
 		}
+
+		$items = $this->unique_meta_items( $items );
 
 		if ( empty( $items ) ) {
 			return '';
@@ -384,7 +394,7 @@ class Schrack_Product_Page_Renderer {
 				<?php foreach ( $items as $item ) : ?>
 					<div>
 						<span><?php echo esc_html( $item['label'] ); ?></span>
-						<strong><?php echo esc_html( $item['value'] ); ?></strong>
+						<strong><?php echo $this->spec_value_html( $item['value'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></strong>
 					</div>
 				<?php endforeach; ?>
 			</div>
@@ -392,6 +402,89 @@ class Schrack_Product_Page_Renderer {
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Returns comma-separated product term names.
+	 */
+	private function term_names( WC_Product $product, string $taxonomy ): string {
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			return '';
+		}
+
+		$terms = get_the_terms( $product->get_id(), $taxonomy );
+
+		if ( is_wp_error( $terms ) || ! is_array( $terms ) || empty( $terms ) ) {
+			return '';
+		}
+
+		return implode( ', ', wp_list_pluck( $terms, 'name' ) );
+	}
+
+	/**
+	 * Returns formatted product weight when available.
+	 */
+	private function product_weight( WC_Product $product ): string {
+		$weight = $product->get_weight();
+
+		if ( '' === $weight ) {
+			return '';
+		}
+
+		return function_exists( 'wc_format_weight' ) ? wp_strip_all_tags( wc_format_weight( $weight ) ) : (string) $weight;
+	}
+
+	/**
+	 * Returns formatted product dimensions when available.
+	 */
+	private function product_dimensions( WC_Product $product ): string {
+		$dimensions = $product->get_dimensions( false );
+
+		if ( empty( array_filter( $dimensions ) ) ) {
+			return '';
+		}
+
+		return function_exists( 'wc_format_dimensions' ) ? wp_strip_all_tags( wc_format_dimensions( $dimensions ) ) : implode( ' x ', array_filter( $dimensions ) );
+	}
+
+	/**
+	 * Returns visible WooCommerce product attributes.
+	 *
+	 * @return array<int,array{label:string,value:string}>
+	 */
+	private function product_attribute_items( WC_Product $product ): array {
+		$items = array();
+
+		foreach ( $product->get_attributes() as $attribute ) {
+			if ( ! $attribute instanceof WC_Product_Attribute || ! $attribute->get_visible() ) {
+				continue;
+			}
+
+			$label = wc_attribute_label( $attribute->get_name(), $product );
+			$value = '';
+
+			if ( $attribute->is_taxonomy() ) {
+				$terms = wc_get_product_terms(
+					$product->get_id(),
+					$attribute->get_name(),
+					array(
+						'fields' => 'names',
+					)
+				);
+
+				$value = is_array( $terms ) ? implode( ', ', $terms ) : '';
+			} else {
+				$value = implode( ', ', array_map( 'wc_clean', $attribute->get_options() ) );
+			}
+
+			$item = $this->meta_item( $label, $value );
+
+			if ( null !== $item ) {
+				$items[] = $item;
+			}
+		}
+
+		return $items;
 	}
 
 	/**
@@ -415,7 +508,7 @@ class Schrack_Product_Page_Renderer {
 		$items = array();
 
 		foreach ( $decoded as $key => $value ) {
-			if ( count( $items ) >= $limit ) {
+			if ( $limit > 0 && count( $items ) >= $limit ) {
 				break;
 			}
 
@@ -427,6 +520,58 @@ class Schrack_Product_Page_Renderer {
 		}
 
 		return $items;
+	}
+
+	/**
+	 * Removes repeated label/value pairs while preserving order.
+	 *
+	 * @param array<int,array{label:string,value:string}> $items Metadata items.
+	 * @return array<int,array{label:string,value:string}>
+	 */
+	private function unique_meta_items( array $items ): array {
+		$unique = array();
+		$seen   = array();
+
+		foreach ( $items as $item ) {
+			$key = strtolower( $item['label'] . ':' . $item['value'] );
+
+			if ( isset( $seen[ $key ] ) ) {
+				continue;
+			}
+
+			$seen[ $key ] = true;
+			$unique[] = $item;
+		}
+
+		return $unique;
+	}
+
+	/**
+	 * Renders a specification value, turning standalone URLs into links.
+	 */
+	private function spec_value_html( string $value ): string {
+		$value = trim( $value );
+
+		if ( $this->is_standalone_url( $value ) ) {
+			return sprintf(
+				'<a href="%1$s" target="_blank" rel="noopener noreferrer">%2$s</a>',
+				esc_url( $value ),
+				esc_html( $value )
+			);
+		}
+
+		return esc_html( $value );
+	}
+
+	/**
+	 * Returns whether a value is a single URL.
+	 */
+	private function is_standalone_url( string $value ): bool {
+		if ( '' === $value || preg_match( '/\s/', $value ) ) {
+			return false;
+		}
+
+		return (bool) wp_http_validate_url( $value );
 	}
 
 	/**
@@ -448,11 +593,71 @@ class Schrack_Product_Page_Renderer {
 		$label = sanitize_text_field( '' !== $label ? $label : __( 'Atribut', 'schrack-woocommerce-sync' ) );
 		$text  = sanitize_text_field( $text );
 
-		if ( '' === $text ) {
+		if ( '' === $text || ! $this->is_public_spec_label( $label ) ) {
 			return null;
 		}
 
 		return $this->meta_item( $label, $text );
+	}
+
+	/**
+	 * Keeps import, sync, commercial, and internal labels out of public specs.
+	 */
+	private function is_public_spec_label( string $label ): bool {
+		if ( function_exists( 'remove_accents' ) ) {
+			$label = remove_accents( $label );
+		}
+
+		$key = strtolower( $label );
+		$key = preg_replace( '/[^a-z0-9]+/', '', $key );
+
+		if ( null === $key || '' === $key ) {
+			return false;
+		}
+
+		$blocked = array(
+			'cache',
+			'cost',
+			'cursor',
+			'discount',
+			'downloadurl',
+			'endpoint',
+			'grossprice',
+			'imageerror',
+			'imagestatus',
+			'import',
+			'imported',
+			'internal',
+			'lastsync',
+			'lastupdate',
+			'lastupdated',
+			'netprice',
+			'password',
+			'pretnet',
+			'pret',
+			'price',
+			'private',
+			'purchaseprice',
+			'purchasingprice',
+			'rabatt',
+			'resulttype',
+			'secret',
+			'session',
+			'soap',
+			'stockbreakdown',
+			'sync',
+			'token',
+			'warehouse',
+			'wsdl',
+		);
+
+		foreach ( $blocked as $blocked_key ) {
+			if ( str_contains( $key, $blocked_key ) ) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -543,7 +748,7 @@ class Schrack_Product_Page_Renderer {
 			'show_cart'                => $this->truthy( $settings['show_cart'] ?? 'yes' ),
 			'show_specs'               => $this->truthy( $settings['show_specs'] ?? 'yes' ),
 			'show_technical_attributes' => $this->truthy( $settings['show_technical_attributes'] ?? 'yes' ),
-			'technical_limit'          => max( 4, min( 30, absint( $settings['technical_limit'] ?? 12 ) ) ),
+			'technical_limit'          => max( 0, min( 250, absint( $settings['technical_limit'] ?? 0 ) ) ),
 			'cart_button_text'         => sanitize_text_field( (string) ( $settings['cart_button_text'] ?? __( 'Adauga in cos', 'schrack-woocommerce-sync' ) ) ),
 			'accent_color'             => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
 			'action_color'             => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',

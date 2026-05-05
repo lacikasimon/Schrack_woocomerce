@@ -284,13 +284,15 @@ class Schrack_Elementor {
 		}
 
 		$filters = array(
-			'search'          => isset( $_POST['search'] ) ? wp_unslash( (string) $_POST['search'] ) : '',
-			'category'        => isset( $_POST['category'] ) ? wp_unslash( (string) $_POST['category'] ) : '',
-			'category_search' => isset( $_POST['category_search'] ) ? wp_unslash( (string) $_POST['category_search'] ) : '',
-			'min_price'       => isset( $_POST['min_price'] ) ? wp_unslash( (string) $_POST['min_price'] ) : '',
-			'max_price'       => isset( $_POST['max_price'] ) ? wp_unslash( (string) $_POST['max_price'] ) : '',
-			'orderby'         => isset( $_POST['orderby'] ) ? wp_unslash( (string) $_POST['orderby'] ) : '',
-			'paged'           => isset( $_POST['paged'] ) ? wp_unslash( (string) $_POST['paged'] ) : 1,
+			'search'               => isset( $_POST['search'] ) ? wp_unslash( (string) $_POST['search'] ) : '',
+			'category'             => isset( $_POST['category'] ) ? wp_unslash( (string) $_POST['category'] ) : '',
+			'category_search'      => isset( $_POST['category_search'] ) ? wp_unslash( (string) $_POST['category_search'] ) : '',
+			'min_price'            => isset( $_POST['min_price'] ) ? wp_unslash( (string) $_POST['min_price'] ) : '',
+			'max_price'            => isset( $_POST['max_price'] ) ? wp_unslash( (string) $_POST['max_price'] ) : '',
+			'include_out_of_stock' => isset( $_POST['include_out_of_stock'] ) ? wp_unslash( (string) $_POST['include_out_of_stock'] ) : '',
+			'manufacturer'         => isset( $_POST['manufacturer'] ) ? wp_unslash( (string) $_POST['manufacturer'] ) : '',
+			'orderby'              => isset( $_POST['orderby'] ) ? wp_unslash( (string) $_POST['orderby'] ) : '',
+			'paged'                => isset( $_POST['paged'] ) ? wp_unslash( (string) $_POST['paged'] ) : 1,
 		);
 
 		wp_send_json_success( $this->renderer->render_results( $config, $filters ) );

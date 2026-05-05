@@ -259,6 +259,14 @@
 	word-break: normal;
 }
 
+.schrack-product-page__spec-grid a {
+	color: var(--schrack-page-accent);
+	overflow-wrap: anywhere;
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 2px;
+}
+
 .schrack-product-page__buybox {
 	background: var(--schrack-page-panel);
 	border: 1px solid var(--schrack-page-border);

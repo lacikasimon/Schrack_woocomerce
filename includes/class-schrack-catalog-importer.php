@@ -1690,7 +1690,7 @@ class Schrack_Catalog_Importer {
 		$get           = fn ( array $keys ): string => $this->find_catalog_value( $row, $keys );
 		$category_path = $this->catalog_category_path( $row );
 
-		return array(
+		$item = array(
 			'sku'               => sanitize_text_field( $get( array( 'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_id', 'articleid', 'article_number', 'articlenumber', 'artikel', 'artikelnummer', 'artikelnr', 'artnr', 'artno', 'bestellnummer', 'ordernumber', 'materialnumber', 'materialnr', 'productid', 'productnumber', 'partnumber', 'produs', 'schrackarticlenumber', 'schrackartikelnummer', 'schrackartikel', 'edsarticleid', 'edsartikelnummer' ) ) ),
 			'name'              => sanitize_text_field( $get( array( 'name', 'title', 'productname', 'itemname', 'produsname', 'textprodus', 'description_short', 'descriptionshort', 'shorttext', 'kurztext', 'bezeichnung', 'bezeichnung1', 'artikelbezeichnung' ) ) ),
 			'short_description' => wp_kses_post( $get( array( 'short_description', 'shortdescription', 'description_short', 'descriptionshort', 'textprodus', 'shorttext', 'kurztext' ) ) ),
@@ -1702,6 +1702,282 @@ class Schrack_Catalog_Importer {
 			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit' ) ) ),
 			'catalog_status'    => sanitize_text_field( $get( array( 'catalog_status', 'status' ) ) ),
 		);
+
+		$item['technical_attributes'] = $this->catalog_technical_attributes( $row, $item );
+
+		return $item;
+	}
+
+	/**
+	 * Extracts all public, non-core catalog fields for the product detail table.
+	 *
+	 * @param array<int|string,mixed> $row  Raw parser row.
+	 * @param array<string,mixed>     $item Normalized mapper data.
+	 * @return array<int,array{label:string,value:string}>
+	 */
+	private function catalog_technical_attributes( array $row, array $item ): array {
+		$items          = array();
+		$seen           = array();
+		$core_values    = $this->catalog_core_values( $item );
+		$excluded_keys  = $this->catalog_excluded_technical_keys();
+		$sensitive_keys = $this->catalog_sensitive_technical_keys();
+
+		$this->collect_catalog_technical_attributes( $row, '', $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
+
+		return $items;
+	}
+
+	/**
+	 * Walks nested parser data and collects scalar technical values.
+	 *
+	 * @param array<int|string,mixed>              $data           Parser fragment.
+	 * @param string                              $prefix         Label prefix for nested data.
+	 * @param array<int,array{label:string,value:string}> $items  Collected items.
+	 * @param array<string,bool>                  $seen           Duplicate guard.
+	 * @param array<string,bool>                  $core_values    Normalized core values.
+	 * @param array<string,bool>                  $excluded_keys  Core/public-duplicate keys.
+	 * @param array<string,bool>                  $sensitive_keys Internal/commercial keys.
+	 */
+	private function collect_catalog_technical_attributes( array $data, string $prefix, array &$items, array &$seen, array $core_values, array $excluded_keys, array $sensitive_keys ): void {
+		foreach ( $data as $key => $value ) {
+			$label = $this->catalog_technical_label( (string) $key, $prefix );
+
+			if ( is_array( $value ) ) {
+				if ( $this->array_is_scalar_list( $value ) ) {
+					$this->add_catalog_technical_attribute( $label, $this->array_text_value( $value ), $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
+				} else {
+					$this->collect_catalog_technical_attributes( $value, $label, $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
+				}
+
+				continue;
+			}
+
+			$this->add_catalog_technical_attribute( $label, $value, $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
+		}
+	}
+
+	/**
+	 * Adds one technical attribute after duplicate and safety filtering.
+	 *
+	 * @param array<int,array{label:string,value:string}> $items Collected items.
+	 * @param array<string,bool>                         $seen  Duplicate guard.
+	 * @param array<string,bool>                         $core_values Normalized core values.
+	 * @param array<string,bool>                         $excluded_keys Core/public-duplicate keys.
+	 * @param array<string,bool>                         $sensitive_keys Internal/commercial keys.
+	 */
+	private function add_catalog_technical_attribute( string $label, mixed $value, array &$items, array &$seen, array $core_values, array $excluded_keys, array $sensitive_keys ): void {
+		if ( '' === $label || ! is_scalar( $value ) ) {
+			return;
+		}
+
+		$value = $this->technical_text_value( $value );
+
+		if ( '' === $value ) {
+			return;
+		}
+
+		$label_key = $this->catalog_key( $label );
+		$value_key = $this->catalog_key( $value );
+
+		if ( isset( $excluded_keys[ $label_key ] ) || $this->catalog_key_matches_any( $label_key, $sensitive_keys ) || isset( $core_values[ $value_key ] ) ) {
+			return;
+		}
+
+		$seen_key = $label_key . ':' . $value_key;
+
+		if ( isset( $seen[ $seen_key ] ) ) {
+			return;
+		}
+
+		$seen[ $seen_key ] = true;
+		$items[] = array(
+			'label' => sanitize_text_field( $label ),
+			'value' => sanitize_text_field( $value ),
+		);
+	}
+
+	/**
+	 * Returns normalized core values that are already mapped to first-class fields.
+	 *
+	 * @param array<string,mixed> $item Normalized mapper data.
+	 * @return array<string,bool>
+	 */
+	private function catalog_core_values( array $item ): array {
+		$values = array();
+
+		foreach ( array( 'sku', 'name', 'short_description', 'description', 'manufacturer', 'ean', 'image_url', 'category_path', 'unit', 'catalog_status' ) as $key ) {
+			if ( isset( $item[ $key ] ) && is_scalar( $item[ $key ] ) ) {
+				$value = $this->catalog_key( wp_strip_all_tags( (string) $item[ $key ] ) );
+
+				if ( '' !== $value ) {
+					$values[ $value ] = true;
+				}
+			}
+		}
+
+		return $values;
+	}
+
+	/**
+	 * Returns catalog keys that are displayed through dedicated fields already.
+	 *
+	 * @return array<string,bool>
+	 */
+	private function catalog_excluded_technical_keys(): array {
+		$keys = array(
+			'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_id', 'articleid', 'article_number', 'articlenumber', 'artikel', 'artikelnummer', 'artikelnr', 'artnr', 'artno', 'bestellnummer', 'ordernumber', 'materialnumber', 'materialnr', 'productid', 'productnumber', 'partnumber', 'produs', 'schrackarticlenumber', 'schrackartikelnummer', 'schrackartikel', 'edsarticleid', 'edsartikelnummer',
+			'name', 'title', 'productname', 'itemname', 'produsname', 'textprodus', 'description_short', 'descriptionshort', 'shorttext', 'kurztext', 'bezeichnung', 'bezeichnung1', 'artikelbezeichnung',
+			'short_description', 'shortdescription', 'description', 'long_description', 'longdescription', 'longtext', 'langtext', 'beschreibung',
+			'manufacturer', 'brand', 'hersteller', 'producer', 'supplier',
+			'ean', 'gtin', 'barcode', 'barcodeno',
+			'image_url', 'imageurl', 'imageurl1', 'photo_url', 'photourl', 'foto_url', 'fotourl', 'foto', 'fotografie', 'photo', 'photograph', 'picture', 'pictureurl', 'bild', 'bildurl', 'artikelbild', 'image', 'image1', 'mainimage', 'mainimageurl', 'thumbnail', 'thumbnailurl', 'productimage', 'productimageurl', 'product_image', 'product_image_url', 'mediaurl',
+			'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup', 'maingroup', 'group',
+			'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit',
+			'catalog_status', 'status',
+			'import', 'imported', 'importstatus', 'sync', 'syncstatus', 'lastsync', 'lastupdate', 'lastupdated', 'updated', 'updatedat', 'created', 'createdat', 'timestamp', 'cache', 'cursor',
+			'source', 'resulttype', 'download', 'downloadurl', 'file', 'filename', 'path',
+			'soap', 'wsdl', 'endpoint', 'token', 'password', 'username', 'userid', 'session',
+		);
+
+		return array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+	}
+
+	/**
+	 * Returns catalog keys that must not be exposed as public product attributes.
+	 *
+	 * @return array<string,bool>
+	 */
+	private function catalog_sensitive_technical_keys(): array {
+		$keys = array(
+			'cost',
+			'costprice',
+			'currency',
+			'customer',
+			'customernumber',
+			'discount',
+			'ekpreis',
+			'grossprice',
+			'netprice',
+			'price',
+			'pricegross',
+			'pricenet',
+			'pricespecial',
+			'pret',
+			'pretnet',
+			'pretspecial',
+			'purchaseprice',
+			'purchasingprice',
+			'rabatt',
+			'stock',
+			'warehouse',
+			'import',
+			'imported',
+			'importstatus',
+			'sync',
+			'syncstatus',
+			'lastsync',
+			'lastupdate',
+			'lastupdated',
+			'internal',
+			'private',
+			'secret',
+			'token',
+			'password',
+			'session',
+		);
+
+		return array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+	}
+
+	/**
+	 * Checks a normalized key against a lookup, allowing nested labels like Item Price.
+	 *
+	 * @param array<string,bool> $lookup Normalized key lookup.
+	 */
+	private function catalog_key_matches_any( string $key, array $lookup ): bool {
+		foreach ( $lookup as $lookup_key => $enabled ) {
+			if ( ! $enabled ) {
+				continue;
+			}
+
+			if ( $key === $lookup_key || str_contains( $key, $lookup_key ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Builds a readable technical label from a parser key.
+	 */
+	private function catalog_technical_label( string $key, string $prefix = '' ): string {
+		$key = trim( preg_replace( '/[_-]+/', ' ', $key ) ?? $key );
+
+		if ( '' === $key ) {
+			return $prefix;
+		}
+
+		$known = array(
+			'assortment'            => __( 'Sortiment', 'schrack-woocommerce-sync' ),
+			'businesslineid'        => __( 'ID linie business', 'schrack-woocommerce-sync' ),
+			'businesslinetext'      => __( 'Linie business', 'schrack-woocommerce-sync' ),
+			'datasheet'             => __( 'Fisa tehnica', 'schrack-woocommerce-sync' ),
+			'minorderquantity'      => __( 'Cantitate minima comanda', 'schrack-woocommerce-sync' ),
+			'productadditionaltext' => __( 'Text suplimentar produs', 'schrack-woocommerce-sync' ),
+			'validdela'             => __( 'Valabil de la', 'schrack-woocommerce-sync' ),
+			'validpanala'           => __( 'Valabil pana la', 'schrack-woocommerce-sync' ),
+		);
+
+		$normalized = $this->catalog_key( $key );
+		$label      = $known[ $normalized ] ?? ucwords( $key );
+
+		return '' === $prefix ? $label : $prefix . ' - ' . $label;
+	}
+
+	/**
+	 * Converts scalar catalog values to frontend-safe text.
+	 */
+	private function technical_text_value( mixed $value ): string {
+		if ( is_bool( $value ) ) {
+			return $value ? __( 'Da', 'schrack-woocommerce-sync' ) : __( 'Nu', 'schrack-woocommerce-sync' );
+		}
+
+		return trim( wp_strip_all_tags( html_entity_decode( (string) $value, ENT_QUOTES ) ) );
+	}
+
+	/**
+	 * Returns whether an array contains only scalar values.
+	 *
+	 * @param array<int|string,mixed> $value Value.
+	 */
+	private function array_is_scalar_list( array $value ): bool {
+		foreach ( $value as $part ) {
+			if ( is_array( $part ) || is_object( $part ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Converts a scalar array to display text.
+	 *
+	 * @param array<int|string,mixed> $value Value.
+	 */
+	private function array_text_value( array $value ): string {
+		$parts = array();
+
+		foreach ( $value as $part ) {
+			$text = is_scalar( $part ) ? $this->technical_text_value( $part ) : '';
+
+			if ( '' !== $text ) {
+				$parts[] = $text;
+			}
+		}
+
+		return implode( ', ', $parts );
 	}
 
 	/**

@@ -42,10 +42,11 @@ class Schrack_Product_Filter_Renderer {
 			'orderby'  => $settings['default_orderby'],
 			'paged'    => 1,
 		);
-		$results     = $this->render_results( $settings, $filters );
-		$config      = $this->public_settings( $settings );
-		$category    = $this->category_for_picker( $settings['default_category'] );
-		$style       = $this->inline_style( $settings );
+		$results       = $this->render_results( $settings, $filters );
+		$config        = $this->public_settings( $settings );
+		$category      = $this->category_for_picker( $settings['default_category'] );
+		$manufacturers = $settings['show_manufacturer_filter'] ? $this->manufacturer_options() : array();
+		$style         = $this->inline_style( $settings );
 
 		ob_start();
 		?>
@@ -71,6 +72,13 @@ class Schrack_Product_Filter_Renderer {
 							<label class="schrack-product-filter__field">
 								<span><?php esc_html_e( 'Cauta produse', 'schrack-woocommerce-sync' ); ?></span>
 								<input type="search" name="search" placeholder="<?php esc_attr_e( 'Nume, SKU, cod produs', 'schrack-woocommerce-sync' ); ?>">
+							</label>
+							<?php endif; ?>
+
+							<?php if ( $settings['show_stock_filter'] ) : ?>
+							<label class="schrack-product-filter__check">
+								<input type="checkbox" name="include_out_of_stock" value="yes">
+								<span><?php esc_html_e( 'Afiseaza si produsele fara stoc', 'schrack-woocommerce-sync' ); ?></span>
 							</label>
 							<?php endif; ?>
 
@@ -104,16 +112,59 @@ class Schrack_Product_Filter_Renderer {
 							</div>
 							<?php endif; ?>
 
+							<?php if ( $settings['show_manufacturer_filter'] && ! empty( $manufacturers ) ) : ?>
+							<label class="schrack-product-filter__field">
+								<span><?php esc_html_e( 'Producator', 'schrack-woocommerce-sync' ); ?></span>
+								<select name="manufacturer">
+									<option value=""><?php esc_html_e( 'Toti producatorii', 'schrack-woocommerce-sync' ); ?></option>
+									<?php foreach ( $manufacturers as $manufacturer ) : ?>
+										<option value="<?php echo esc_attr( $manufacturer['name'] ); ?>">
+											<?php
+											echo esc_html(
+												sprintf(
+													/* translators: 1: manufacturer name, 2: product count. */
+													__( '%1$s (%2$d)', 'schrack-woocommerce-sync' ),
+													$manufacturer['name'],
+													$manufacturer['count']
+												)
+											);
+											?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+							</label>
+							<?php endif; ?>
+
 							<?php if ( $settings['show_price_filter'] ) : ?>
-							<div class="schrack-product-filter__price-row">
-								<label class="schrack-product-filter__field schrack-product-filter__field--price">
-									<span><?php esc_html_e( 'Pret minim', 'schrack-woocommerce-sync' ); ?></span>
-									<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" placeholder="0">
-								</label>
-								<label class="schrack-product-filter__field schrack-product-filter__field--price">
-									<span><?php esc_html_e( 'Pret maxim', 'schrack-woocommerce-sync' ); ?></span>
-									<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal">
-								</label>
+							<div class="schrack-product-filter__price">
+								<div class="schrack-product-filter__price-row">
+									<label class="schrack-product-filter__field schrack-product-filter__field--price">
+										<span><?php esc_html_e( 'Pret minim', 'schrack-woocommerce-sync' ); ?></span>
+										<div class="schrack-product-filter__money-input">
+											<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" placeholder="0">
+											<b><?php esc_html_e( 'lei', 'schrack-woocommerce-sync' ); ?></b>
+										</div>
+									</label>
+									<label class="schrack-product-filter__field schrack-product-filter__field--price">
+										<span><?php esc_html_e( 'Pret maxim', 'schrack-woocommerce-sync' ); ?></span>
+										<div class="schrack-product-filter__money-input">
+											<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal">
+											<b><?php esc_html_e( 'lei', 'schrack-woocommerce-sync' ); ?></b>
+										</div>
+									</label>
+								</div>
+								<div class="schrack-product-filter__price-presets" aria-label="<?php esc_attr_e( 'Intervale pret in lei', 'schrack-woocommerce-sync' ); ?>">
+									<?php foreach ( $this->price_ranges() as $range ) : ?>
+										<button
+											type="button"
+											class="schrack-product-filter__price-preset"
+											data-price-min="<?php echo esc_attr( (string) $range['min'] ); ?>"
+											data-price-max="<?php echo esc_attr( (string) $range['max'] ); ?>"
+										>
+											<?php echo esc_html( $range['label'] ); ?>
+										</button>
+									<?php endforeach; ?>
+								</div>
 							</div>
 							<?php endif; ?>
 
@@ -232,12 +283,18 @@ class Schrack_Product_Filter_Renderer {
 			'exact_totals'             => $settings['exact_totals'] ? 'yes' : 'no',
 			'min_search_chars'         => $settings['min_search_chars'],
 			'category_results_limit'   => $settings['category_results_limit'],
+			'show_search'              => $settings['show_search'] ? 'yes' : 'no',
+			'show_category_filter'     => $settings['show_category_filter'] ? 'yes' : 'no',
+			'show_category_search'     => $settings['show_category_search'] ? 'yes' : 'no',
+			'show_price_filter'        => $settings['show_price_filter'] ? 'yes' : 'no',
+			'show_stock_filter'        => $settings['show_stock_filter'] ? 'yes' : 'no',
+			'show_manufacturer_filter' => $settings['show_manufacturer_filter'] ? 'yes' : 'no',
+			'show_sort'                => $settings['show_sort'] ? 'yes' : 'no',
 			'show_images'              => $settings['show_images'] ? 'yes' : 'no',
 			'show_categories'          => $settings['show_categories'] ? 'yes' : 'no',
 			'show_excerpt'             => $settings['show_excerpt'] ? 'yes' : 'no',
 			'show_stock'               => $settings['show_stock'] ? 'yes' : 'no',
 			'show_add_to_cart'         => $settings['show_add_to_cart'] ? 'yes' : 'no',
-			'hide_out_of_stock'        => $settings['hide_out_of_stock'] ? 'yes' : 'no',
 			'button_text'              => $settings['button_text'],
 			'load_more_text'           => $settings['load_more_text'],
 			'details_button_text'      => $settings['details_button_text'],
@@ -435,6 +492,10 @@ class Schrack_Product_Filter_Renderer {
 	private function query_products( array $settings, array $filters ): WP_Query {
 		$fast_load_more = $this->uses_fast_load_more( $settings );
 		$search         = $this->search_is_too_short( $settings, $filters ) ? '' : $filters['search'];
+		$min_price      = $settings['show_price_filter'] ? $filters['min_price'] : null;
+		$max_price      = $settings['show_price_filter'] ? $filters['max_price'] : null;
+		$include_out_of_stock = $settings['show_stock_filter'] && $filters['include_out_of_stock'];
+		$hide_out_of_stock    = ! $include_out_of_stock;
 
 		$args = array(
 			'post_type'              => 'product',
@@ -447,9 +508,9 @@ class Schrack_Product_Filter_Renderer {
 			'update_post_meta_cache' => true,
 			'update_post_term_cache' => $settings['show_categories'],
 			'schrack_product_filter_search' => $search,
-			'schrack_product_filter_min_price' => $filters['min_price'],
-			'schrack_product_filter_max_price' => $filters['max_price'],
-			'schrack_product_filter_hide_out_of_stock' => $settings['hide_out_of_stock'] || 'yes' === get_option( 'woocommerce_hide_out_of_stock_items' ),
+			'schrack_product_filter_min_price' => $min_price,
+			'schrack_product_filter_max_price' => $max_price,
+			'schrack_product_filter_hide_out_of_stock' => $hide_out_of_stock,
 			'schrack_product_filter_orderby' => $filters['orderby'],
 		);
 
@@ -469,6 +530,14 @@ class Schrack_Product_Filter_Renderer {
 			);
 		} elseif ( '' !== $filters['category_search'] ) {
 			$args['post__in'] = array( 0 );
+		}
+
+		if ( $settings['show_manufacturer_filter'] && '' !== $filters['manufacturer'] ) {
+			$meta_query[] = array(
+				'key'     => '_schrack_manufacturer',
+				'value'   => $filters['manufacturer'],
+				'compare' => '=',
+			);
 		}
 
 		$visibility_terms = function_exists( 'wc_get_product_visibility_term_ids' ) ? wc_get_product_visibility_term_ids() : array();
@@ -857,7 +926,7 @@ class Schrack_Product_Filter_Renderer {
 			);
 		}
 
-		return __( 'Incearca alta categorie, alt termen de cautare sau alt interval de pret.', 'schrack-woocommerce-sync' );
+		return __( 'Incearca alta categorie, alt producator, alta disponibilitate sau alt interval de pret.', 'schrack-woocommerce-sync' );
 	}
 
 	/**
@@ -1185,6 +1254,100 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
+	 * Returns preset price ranges for the lei price filter.
+	 *
+	 * @return array<int,array{min:string,max:string,label:string}>
+	 */
+	private function price_ranges(): array {
+		return array(
+			array(
+				'min'   => '0',
+				'max'   => '50',
+				'label' => __( '0-50 lei', 'schrack-woocommerce-sync' ),
+			),
+			array(
+				'min'   => '50',
+				'max'   => '100',
+				'label' => __( '50-100 lei', 'schrack-woocommerce-sync' ),
+			),
+			array(
+				'min'   => '100',
+				'max'   => '250',
+				'label' => __( '100-250 lei', 'schrack-woocommerce-sync' ),
+			),
+			array(
+				'min'   => '250',
+				'max'   => '500',
+				'label' => __( '250-500 lei', 'schrack-woocommerce-sync' ),
+			),
+			array(
+				'min'   => '500',
+				'max'   => '1000',
+				'label' => __( '500-1000 lei', 'schrack-woocommerce-sync' ),
+			),
+			array(
+				'min'   => '1000',
+				'max'   => '',
+				'label' => __( '1000+ lei', 'schrack-woocommerce-sync' ),
+			),
+		);
+	}
+
+	/**
+	 * Returns manufacturer options collected from imported Schrack product metadata.
+	 *
+	 * @return array<int,array{name:string,count:int}>
+	 */
+	private function manufacturer_options(): array {
+		global $wpdb;
+
+		static $options = null;
+
+		if ( null !== $options ) {
+			return $options;
+		}
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT manufacturer_meta.meta_value AS name, COUNT(DISTINCT manufacturer_meta.post_id) AS total
+				FROM {$wpdb->postmeta} AS manufacturer_meta
+				INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = manufacturer_meta.post_id
+				WHERE manufacturer_meta.meta_key = %s
+					AND manufacturer_meta.meta_value <> ''
+					AND product_posts.post_type = 'product'
+					AND product_posts.post_status = 'publish'
+				GROUP BY manufacturer_meta.meta_value
+				ORDER BY manufacturer_meta.meta_value ASC",
+				'_schrack_manufacturer'
+			),
+			ARRAY_A
+		);
+
+		if ( ! is_array( $rows ) ) {
+			$options = array();
+
+			return $options;
+		}
+
+		$options = array();
+
+		foreach ( $rows as $row ) {
+			$name = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
+
+			if ( '' === $name ) {
+				continue;
+			}
+
+			$options[] = array(
+				'name'  => $name,
+				'count' => max( 0, absint( $row['total'] ?? 0 ) ),
+			);
+		}
+
+		return $options;
+	}
+
+	/**
 	 * Sanitizes renderer settings.
 	 *
 	 * @param array<string,mixed> $settings Raw settings.
@@ -1224,13 +1387,14 @@ class Schrack_Product_Filter_Renderer {
 			'show_category_filter'     => $this->truthy( $settings['show_category_filter'] ?? 'yes' ),
 			'show_category_search'     => $this->truthy( $settings['show_category_search'] ?? 'yes' ),
 			'show_price_filter'        => $this->truthy( $settings['show_price_filter'] ?? 'yes' ),
+			'show_stock_filter'        => $this->truthy( $settings['show_stock_filter'] ?? 'yes' ),
+			'show_manufacturer_filter' => $this->truthy( $settings['show_manufacturer_filter'] ?? 'yes' ),
 			'show_sort'                => $this->truthy( $settings['show_sort'] ?? 'yes' ),
 			'show_images'              => $this->truthy( $settings['show_images'] ?? 'yes' ),
 			'show_categories'          => $this->truthy( $settings['show_categories'] ?? 'yes' ),
 			'show_excerpt'             => $this->truthy( $settings['show_excerpt'] ?? 'yes' ),
 			'show_stock'               => $this->truthy( $settings['show_stock'] ?? 'yes' ),
 			'show_add_to_cart'         => $this->truthy( $settings['show_add_to_cart'] ?? 'yes' ),
-			'hide_out_of_stock'        => $this->truthy( $settings['hide_out_of_stock'] ?? 'no' ),
 			'button_text'              => $this->localized_text_setting(
 				$settings['button_text'] ?? '',
 				__( 'Aplica filtrele', 'schrack-woocommerce-sync' ),
@@ -1328,13 +1492,15 @@ class Schrack_Product_Filter_Renderer {
 		}
 
 		return array(
-			'search'          => sanitize_text_field( (string) ( $filters['search'] ?? '' ) ),
-			'category'        => absint( $filters['category'] ?? 0 ),
-			'category_search' => sanitize_text_field( (string) ( $filters['category_search'] ?? '' ) ),
-			'min_price'       => $min_price,
-			'max_price'       => $max_price,
-			'paged'           => max( 1, absint( $filters['paged'] ?? 1 ) ),
-			'orderby'         => $orderby,
+			'search'               => sanitize_text_field( (string) ( $filters['search'] ?? '' ) ),
+			'category'             => absint( $filters['category'] ?? 0 ),
+			'category_search'      => sanitize_text_field( (string) ( $filters['category_search'] ?? '' ) ),
+			'min_price'            => $min_price,
+			'max_price'            => $max_price,
+			'include_out_of_stock' => $this->truthy( $filters['include_out_of_stock'] ?? 'no' ),
+			'manufacturer'         => sanitize_text_field( (string) ( $filters['manufacturer'] ?? '' ) ),
+			'paged'                => max( 1, absint( $filters['paged'] ?? 1 ) ),
+			'orderby'              => $orderby,
 		);
 	}
 

@@ -122,13 +122,13 @@ class Schrack_Elementor_Product_Page_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'technical_limit',
 			array(
-				'label'       => __( 'Numar atribute tehnice', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Limita atribute tehnice', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::NUMBER,
-				'default'     => 12,
-				'min'         => 4,
-				'max'         => 30,
+				'default'     => 0,
+				'min'         => 0,
+				'max'         => 250,
 				'step'        => 1,
-				'description' => __( 'Limiteaza lista de atribute tehnice pentru pagini rapide si curate.', 'schrack-woocommerce-sync' ),
+				'description' => __( '0 afiseaza toate atributele disponibile.', 'schrack-woocommerce-sync' ),
 				'condition'   => array(
 					'show_technical_attributes' => 'yes',
 				),

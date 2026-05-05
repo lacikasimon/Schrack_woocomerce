@@ -164,6 +164,8 @@ Stored meta fields:
 - `_schrack_stock_breakdown`
 - `_schrack_technical_attributes`
 
+The product page widget shows mapped product identity fields, visible WooCommerce attributes, and stored Schrack technical attributes that are relevant to customers. Catalog imports populate `_schrack_technical_attributes` from extra public catalog columns while excluding duplicate core fields plus commercial, import, sync, and internal values.
+
 ## Cron and Background Jobs
 
 Recurring jobs are registered through Action Scheduler when available:

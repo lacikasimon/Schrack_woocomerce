@@ -32,6 +32,40 @@
 		}
 	}
 
+	function priceInputs(root) {
+		return {
+			min: root.querySelector('input[name="min_price"]'),
+			max: root.querySelector('input[name="max_price"]')
+		};
+	}
+
+	function syncPricePresetState(root) {
+		var inputs = priceInputs(root);
+		var minValue = inputs.min ? inputs.min.value : '';
+		var maxValue = inputs.max ? inputs.max.value : '';
+
+		Array.prototype.forEach.call(root.querySelectorAll('[data-price-min]'), function (button) {
+			button.classList.toggle(
+				'is-active',
+				button.getAttribute('data-price-min') === minValue && button.getAttribute('data-price-max') === maxValue
+			);
+		});
+	}
+
+	function setPriceRange(root, button) {
+		var inputs = priceInputs(root);
+		var isActive = button.classList.contains('is-active');
+
+		if (!inputs.min || !inputs.max) {
+			return;
+		}
+
+		inputs.min.value = isActive ? '' : button.getAttribute('data-price-min') || '';
+		inputs.max.value = isActive ? '' : button.getAttribute('data-price-max') || '';
+		syncPricePresetState(root);
+		requestProducts(root, 1);
+	}
+
 	function appendResults(results, html) {
 		var wrapper = document.createElement('div');
 		var currentGrid = results.querySelector('.schrack-product-filter__grid');
@@ -266,6 +300,7 @@
 
 		root.setAttribute('data-filter-ready', 'yes');
 		syncSelectedCategory(root);
+		syncPricePresetState(root);
 
 		form.addEventListener('submit', function (event) {
 			event.preventDefault();
@@ -273,7 +308,7 @@
 		});
 
 		form.addEventListener('change', function (event) {
-			if (event.target && event.target.matches('select')) {
+			if (event.target && event.target.matches('select, input[type="checkbox"]')) {
 				requestProducts(root, 1);
 			}
 		});
@@ -289,6 +324,7 @@
 				return;
 			}
 
+			syncPricePresetState(root);
 			delayedRequest();
 		});
 
@@ -303,6 +339,13 @@
 			var resetButton = event.target.closest('[data-filter-reset]');
 			var categoryOption = event.target.closest('[data-category-option]');
 			var categoryClear = event.target.closest('[data-category-clear]');
+			var pricePreset = event.target.closest('[data-price-min]');
+
+			if (pricePreset) {
+				event.preventDefault();
+				setPriceRange(root, pricePreset);
+				return;
+			}
 
 			if (categoryOption) {
 				event.preventDefault();
@@ -334,6 +377,7 @@
 				event.preventDefault();
 				form.reset();
 				resetSelectedCategory(root);
+				syncPricePresetState(root);
 				requestProducts(root, 1);
 			}
 		});

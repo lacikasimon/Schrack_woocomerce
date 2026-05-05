@@ -137,18 +137,6 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		);
 
 		$this->add_control(
-			'hide_out_of_stock',
-			array(
-				'label'        => __( 'Ascunde produsele fara stoc', 'schrack-woocommerce-sync' ),
-				'type'         => \Elementor\Controls_Manager::SWITCHER,
-				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
-				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
-				'return_value' => 'yes',
-				'default'      => 'no',
-			)
-		);
-
-		$this->add_control(
 			'pagination_mode',
 			array(
 				'label'       => __( 'Mod paginare', 'schrack-woocommerce-sync' ),
@@ -424,11 +412,13 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 	 */
 	private function filter_switches(): array {
 		return array(
-			'show_search'          => __( 'Cautare produse', 'schrack-woocommerce-sync' ),
-			'show_category_filter' => __( 'Selector categorie', 'schrack-woocommerce-sync' ),
-			'show_category_search' => __( 'Cautare categorie', 'schrack-woocommerce-sync' ),
-			'show_price_filter'    => __( 'Interval pret', 'schrack-woocommerce-sync' ),
-			'show_sort'            => __( 'Sortare', 'schrack-woocommerce-sync' ),
+			'show_search'              => __( 'Cautare produse', 'schrack-woocommerce-sync' ),
+			'show_category_filter'     => __( 'Selector categorie', 'schrack-woocommerce-sync' ),
+			'show_category_search'     => __( 'Cautare categorie', 'schrack-woocommerce-sync' ),
+			'show_price_filter'        => __( 'Interval pret', 'schrack-woocommerce-sync' ),
+			'show_stock_filter'        => __( 'Comutator produse fara stoc', 'schrack-woocommerce-sync' ),
+			'show_manufacturer_filter' => __( 'Filtru producator', 'schrack-woocommerce-sync' ),
+			'show_sort'                => __( 'Sortare', 'schrack-woocommerce-sync' ),
 		);
 	}
 
