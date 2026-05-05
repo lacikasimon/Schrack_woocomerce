@@ -198,7 +198,7 @@ class Schrack_Elementor_Support_Widget extends \Elementor\Widget_Base {
 					'label' => __( 'Distanta jos', 'schrack-woocommerce-sync' ),
 					'min'   => 12,
 					'max'   => 220,
-					'value' => 24,
+					'value' => 104,
 				),
 				'right_offset'  => array(
 					'label' => __( 'Distanta dreapta', 'schrack-woocommerce-sync' ),

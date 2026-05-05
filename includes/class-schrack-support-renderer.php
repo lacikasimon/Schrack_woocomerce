@@ -122,7 +122,7 @@ class Schrack_Support_Renderer {
 			'accent_color'     => '#1e40af',
 			'deep_color'       => '#172554',
 			'action_color'     => '#16a34a',
-			'bottom_offset'    => 24,
+			'bottom_offset'    => 104,
 			'right_offset'     => 16,
 			'radius'           => 8,
 		);

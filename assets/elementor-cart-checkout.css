@@ -145,6 +145,12 @@
 
 .schrack-cart-checkout__panel--cart {
 	container-type: inline-size;
+	max-height: calc(100vh - 32px);
+	overflow: auto;
+	position: sticky;
+	scrollbar-gutter: stable;
+	top: 16px;
+	z-index: 3;
 }
 
 .schrack-cart-checkout__panel-head {
@@ -262,7 +268,7 @@
 .schrack-cart-checkout__woocommerce-cart .woocommerce table.shop_table.cart thead tr,
 .schrack-cart-checkout__woocommerce-cart .woocommerce table.shop_table.cart tbody tr.cart_item {
 	display: grid;
-	grid-template-columns: 32px 74px minmax(132px, 1fr) minmax(84px, 0.55fr) 118px minmax(96px, 0.62fr);
+	grid-template-columns: 30px 62px minmax(130px, 1fr) minmax(78px, 0.52fr) 102px minmax(88px, 0.56fr);
 	width: 100%;
 }
 
@@ -276,8 +282,8 @@
 	align-items: center;
 	display: flex;
 	min-width: 0;
-	padding-left: 8px;
-	padding-right: 8px;
+	padding-left: 6px;
+	padding-right: 6px;
 }
 
 .schrack-cart-checkout .woocommerce table.shop_table th,
@@ -285,7 +291,7 @@
 	border: 0;
 	border-top: 1px solid var(--schrack-cart-border);
 	line-height: 1.35;
-	padding: 12px;
+	padding: 9px;
 	vertical-align: middle;
 }
 
@@ -320,7 +326,7 @@
 }
 
 .schrack-cart-checkout .woocommerce table.shop_table .product-thumbnail {
-	width: 76px;
+	width: 62px;
 }
 
 .schrack-cart-checkout .woocommerce table.shop_table .product-remove {
@@ -329,15 +335,15 @@
 }
 
 .schrack-cart-checkout .woocommerce table.shop_table .product-price {
-	width: 92px;
+	width: 78px;
 }
 
 .schrack-cart-checkout .woocommerce table.shop_table .product-quantity {
-	width: 128px;
+	width: 102px;
 }
 
 .schrack-cart-checkout .woocommerce table.shop_table .product-subtotal {
-	width: 96px;
+	width: 88px;
 }
 
 .schrack-cart-checkout .woocommerce table.shop_table .product-price,
@@ -351,7 +357,7 @@
 .schrack-cart-checkout .woocommerce table.shop_table td.product-price,
 .schrack-cart-checkout .woocommerce table.shop_table td.product-subtotal {
 	color: #65707c;
-	font-size: 14px;
+	font-size: 13px;
 	font-weight: 700;
 	justify-content: flex-end;
 	line-height: 1.3;
@@ -366,10 +372,10 @@
 	border: 1px solid #e4e8ed;
 	border-radius: var(--schrack-cart-radius);
 	display: block;
-	height: 56px;
+	height: 48px;
 	object-fit: contain;
 	padding: 6px;
-	width: 56px;
+	width: 48px;
 }
 
 .schrack-cart-checkout .woocommerce a.remove {
@@ -379,13 +385,13 @@
 	border-radius: 999px;
 	color: #9f2426 !important;
 	display: inline-flex;
-	font-size: 20px;
+	font-size: 18px;
 	font-weight: 800;
-	height: 28px;
+	height: 24px;
 	justify-content: center;
 	line-height: 1;
 	text-decoration: none;
-	width: 28px;
+	width: 24px;
 }
 
 .schrack-cart-checkout .woocommerce a.remove:hover,
@@ -397,10 +403,10 @@
 .schrack-cart-checkout .woocommerce .quantity {
 	align-items: stretch;
 	display: grid !important;
-	grid-template-columns: 32px 52px 32px;
+	grid-template-columns: 28px 42px 28px;
 	margin: 0;
 	max-width: 100%;
-	width: 116px !important;
+	width: 98px !important;
 }
 
 .schrack-cart-checkout .woocommerce .quantity .qty,
@@ -413,7 +419,7 @@
 	border-radius: 6px;
 	color: var(--schrack-cart-text);
 	font: inherit;
-	min-height: 44px;
+	min-height: 40px;
 	outline: none;
 	padding: 9px 11px;
 	transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -423,9 +429,12 @@
 .schrack-cart-checkout .woocommerce .quantity .qty {
 	border-radius: 0;
 	flex: none;
-	max-width: 52px !important;
+	height: 38px !important;
+	max-width: 42px !important;
+	min-height: 38px !important;
 	min-width: 0;
-	width: 52px !important;
+	padding: 0 !important;
+	width: 42px !important;
 }
 
 .schrack-cart-checkout .woocommerce .quantity .minus,
@@ -439,9 +448,9 @@
 	display: inline-flex;
 	flex: none !important;
 	font: inherit;
-	font-size: 16px;
+	font-size: 14px;
 	font-weight: 800;
-	height: 44px;
+	height: 38px;
 	inset: auto !important;
 	justify-content: center;
 	line-height: 1;
@@ -450,9 +459,9 @@
 	position: static !important;
 	text-align: center;
 	transform: none !important;
-	max-width: 32px !important;
+	max-width: 28px !important;
 	min-width: 0 !important;
-	width: 32px !important;
+	width: 28px !important;
 }
 
 .schrack-cart-checkout .woocommerce .quantity .minus {
@@ -537,9 +546,9 @@
 	font-weight: 850;
 	justify-content: center;
 	line-height: 1.2;
-	min-height: 44px;
+	min-height: 40px;
 	min-width: 0;
-	padding: 10px 14px;
+	padding: 0 14px;
 	text-align: center;
 	text-decoration: none;
 	text-transform: uppercase;
@@ -582,29 +591,36 @@
 .schrack-cart-checkout .woocommerce .actions {
 	background: #fff;
 	display: grid !important;
-	gap: 12px;
-	grid-template-columns: minmax(0, 1fr) 170px;
-	padding: 16px !important;
+	gap: 10px;
+	grid-template-columns: minmax(0, 1fr) 154px 154px;
+	padding: 12px !important;
 	width: 100%;
 }
 
 .schrack-cart-checkout .woocommerce .actions .coupon {
 	align-items: stretch;
-	display: grid !important;
-	gap: 12px;
-	grid-template-columns: minmax(0, 1fr) 170px;
-	width: 100%;
+	display: contents !important;
 }
 
 .schrack-cart-checkout .woocommerce .actions .coupon .input-text {
+	height: 44px !important;
 	margin: 0;
+	min-height: 44px !important;
 	min-width: 0;
+	padding: 0 14px !important;
 	width: 100% !important;
+}
+
+.schrack-cart-checkout .woocommerce .actions .button {
+	font-size: 12px;
+	height: 44px !important;
+	min-height: 44px !important;
+	padding: 0 12px !important;
+	width: 100%;
 }
 
 .schrack-cart-checkout .woocommerce .actions > .button {
 	float: right;
-	width: 100%;
 }
 
 .schrack-cart-checkout .woocommerce .cart-collaterals {
@@ -629,8 +645,9 @@
 }
 
 .schrack-cart-checkout .woocommerce .wc-proceed-to-checkout,
-.schrack-cart-checkout__woocommerce-cart .checkout-button {
-	display: none;
+.schrack-cart-checkout__woocommerce-cart .checkout-button,
+.schrack-cart-checkout__woocommerce-cart .cart_totals {
+	display: none !important;
 }
 
 .schrack-cart-checkout.hide-cart-totals .schrack-cart-checkout__woocommerce-cart .cart-collaterals,
@@ -964,6 +981,14 @@
 	.schrack-cart-checkout__layout {
 		grid-template-columns: 1fr;
 	}
+
+	.schrack-cart-checkout__panel--cart {
+		max-height: none;
+		overflow: hidden;
+		position: static;
+		top: auto;
+		z-index: auto;
+	}
 }
 
 @media (max-width: 700px) {
@@ -1034,8 +1059,8 @@
 			"thumb name remove"
 			"thumb price remove"
 			"qty qty subtotal";
-		grid-template-columns: 64px minmax(0, 1fr) 30px;
-		padding: 12px;
+		grid-template-columns: 56px minmax(0, 1fr) 26px;
+		padding: 10px;
 		width: 100%;
 	}
 
@@ -1117,31 +1142,32 @@
 	}
 
 	.schrack-cart-checkout__woocommerce-cart .woocommerce table.shop_table.cart .product-thumbnail img {
-		height: 62px;
-		width: 62px;
+		height: 54px;
+		width: 54px;
 	}
 
 	.schrack-cart-checkout .woocommerce a.remove {
-		height: 26px;
-		width: 26px;
+		height: 24px;
+		width: 24px;
 	}
 
 	.schrack-cart-checkout__woocommerce-cart .woocommerce .quantity {
-		grid-template-columns: 30px 48px 30px;
-		width: 108px !important;
+		grid-template-columns: 28px 42px 28px;
+		width: 98px !important;
 	}
 
 	.schrack-cart-checkout__woocommerce-cart .woocommerce .quantity .qty {
-		max-width: 48px !important;
-		min-height: 40px;
-		width: 48px !important;
+		height: 38px !important;
+		max-width: 42px !important;
+		min-height: 38px !important;
+		width: 42px !important;
 	}
 
 	.schrack-cart-checkout__woocommerce-cart .woocommerce .quantity .minus,
 	.schrack-cart-checkout__woocommerce-cart .woocommerce .quantity .plus {
-		height: 40px;
-		max-width: 30px !important;
-		width: 30px !important;
+		height: 38px;
+		max-width: 28px !important;
+		width: 28px !important;
 	}
 
 	.schrack-cart-checkout .woocommerce table.shop_table_responsive tr,
@@ -1192,13 +1218,11 @@
 		display: grid !important;
 		gap: 10px;
 		grid-template-columns: 1fr;
-		padding: 12px 0 0 !important;
+		padding: 10px 0 0 !important;
 	}
 
 	.schrack-cart-checkout .woocommerce .actions .coupon {
-		display: grid !important;
-		gap: 10px;
-		grid-template-columns: 1fr;
+		display: contents !important;
 	}
 
 	.schrack-cart-checkout .woocommerce .actions .coupon,
@@ -1221,7 +1245,13 @@
 	.schrack-cart-checkout .woocommerce textarea,
 	.schrack-cart-checkout .woocommerce select,
 	.schrack-cart-checkout .woocommerce .select2-container .select2-selection--single {
-		min-height: 42px;
+		min-height: 40px;
+	}
+
+	.schrack-cart-checkout .woocommerce .actions .coupon .input-text,
+	.schrack-cart-checkout .woocommerce .actions .button {
+		height: 42px !important;
+		min-height: 42px !important;
 	}
 
 	.schrack-cart-checkout .woocommerce-checkout-review-order-table {
