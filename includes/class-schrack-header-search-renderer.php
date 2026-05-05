@@ -83,7 +83,8 @@ class Schrack_Header_Search_Renderer {
 				>
 				<input type="hidden" name="post_type" value="product">
 				<button class="schrack-header-search__button" type="submit">
-					<?php echo esc_html( $settings['button_text'] ); ?>
+					<span class="schrack-header-search__button-text"><?php echo esc_html( $settings['button_text'] ); ?></span>
+					<span class="schrack-header-search__spinner" aria-hidden="true"></span>
 				</button>
 			</form>
 			<div class="schrack-header-search__results" data-header-search-results hidden></div>
@@ -675,7 +676,7 @@ class Schrack_Header_Search_Renderer {
 		return array(
 			'placeholder'  => sanitize_text_field( (string) ( $settings['placeholder'] ?? __( 'Cauta produse...', 'schrack-woocommerce-sync' ) ) ),
 			'button_text'  => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Cauta', 'schrack-woocommerce-sync' ) ) ),
-			'min_chars'    => max( 1, min( 5, absint( $settings['min_chars'] ?? 2 ) ) ),
+			'min_chars'    => max( 3, min( 5, absint( $settings['min_chars'] ?? 3 ) ) ),
 			'max_results'  => max( 3, min( 12, absint( $settings['max_results'] ?? 6 ) ) ),
 			'max_width'    => max( 240, min( 720, $this->slider_size( $settings['max_width'] ?? 460, 240, 720 ) ) ),
 			'show_images'  => $this->truthy( $settings['show_images'] ?? 'yes' ),

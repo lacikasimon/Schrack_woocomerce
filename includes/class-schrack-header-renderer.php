@@ -152,7 +152,7 @@ class Schrack_Header_Renderer {
 			'show_search_stock'   => 'yes',
 			'search_placeholder'  => __( 'Cauta produse, coduri, SKU...', 'schrack-woocommerce-sync' ),
 			'search_button_text'  => __( 'Cauta', 'schrack-woocommerce-sync' ),
-			'search_min_chars'    => 2,
+			'search_min_chars'    => 3,
 			'search_max_results'  => 8,
 			'search_enable_fuzzy' => 'yes',
 			'search_fuzzy_pool'   => 120,
@@ -184,7 +184,7 @@ class Schrack_Header_Renderer {
 		$settings['action_color']       = sanitize_hex_color( (string) $settings['action_color'] ) ?: $defaults['action_color'];
 		$settings['max_width']          = $this->slider_size( $settings['max_width'], 960, 1440 );
 		$settings['radius']             = $this->slider_size( $settings['radius'], 0, 8 );
-		$settings['search_min_chars']   = max( 1, min( 5, absint( $settings['search_min_chars'] ) ) );
+		$settings['search_min_chars']   = max( 3, min( 5, absint( $settings['search_min_chars'] ) ) );
 		$settings['search_max_results'] = max( 3, min( 12, absint( $settings['search_max_results'] ) ) );
 		$settings['search_fuzzy_pool']  = max( 40, min( 240, absint( $settings['search_fuzzy_pool'] ) ) );
 

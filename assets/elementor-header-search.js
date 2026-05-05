@@ -55,7 +55,7 @@
 		var action = root.getAttribute('data-action');
 		var nonce = root.getAttribute('data-nonce');
 		var config = parseConfig(root);
-		var minChars = parseInt(config.min_chars, 10) || 2;
+		var minChars = parseInt(config.min_chars, 10) || 3;
 		var search = input ? input.value.trim() : '';
 		var body;
 
@@ -80,6 +80,7 @@
 		}
 
 		root.classList.add('is-loading');
+		root.setAttribute('aria-busy', 'true');
 
 		window.fetch(ajaxUrl, {
 			method: 'POST',
@@ -100,6 +101,7 @@
 			setResults(root, '<div class="schrack-header-search__panel"><div class="schrack-header-search__empty">Cautarea a esuat.</div></div>');
 		}).finally(function () {
 			root.classList.remove('is-loading');
+			root.setAttribute('aria-busy', 'false');
 		});
 	}
 

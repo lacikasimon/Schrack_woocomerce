@@ -70,6 +70,7 @@
 	flex: 0 0 auto;
 	font: inherit;
 	font-weight: 800;
+	gap: 8px;
 	justify-content: center;
 	line-height: 1.2;
 	min-height: 38px;
@@ -79,6 +80,39 @@
 	text-align: center;
 	white-space: normal;
 	word-break: normal;
+}
+
+.schrack-header-search__button-text {
+	min-width: 0;
+}
+
+.schrack-header-search__spinner {
+	animation: schrack-header-search-spin 720ms linear infinite;
+	border: 2px solid rgba(255, 255, 255, 0.42);
+	border-radius: 999px;
+	border-top-color: #fff;
+	display: inline-block;
+	flex: 0 0 auto;
+	height: 16px;
+	opacity: 0;
+	transform: scale(0.78);
+	transition: opacity 120ms ease, transform 120ms ease;
+	width: 16px;
+}
+
+.schrack-header-search.is-loading .schrack-header-search__spinner {
+	opacity: 1;
+	transform: scale(1);
+}
+
+.schrack-header-search.is-loading .schrack-header-search__button {
+	cursor: progress;
+}
+
+@keyframes schrack-header-search-spin {
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .schrack-header-search__button:hover,

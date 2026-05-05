@@ -179,8 +179,8 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Numar minim caractere', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::NUMBER,
-				'default' => 2,
-				'min'     => 1,
+				'default' => 3,
+				'min'     => 3,
 				'max'     => 5,
 				'step'    => 1,
 			)
