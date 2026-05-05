@@ -85,6 +85,9 @@ class Schrack_Plugin {
 		$this->elementor = new Schrack_Elementor();
 		$this->elementor->init();
 
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_support_widget_assets' ) );
+		add_action( 'wp_footer', array( $this, 'render_support_widget' ), 5 );
+
 		if ( is_admin() ) {
 			$this->admin = new Schrack_Admin( $this->settings, $this->logger, $this->cron );
 			$this->admin->init();
@@ -190,6 +193,38 @@ class Schrack_Plugin {
 				esc_html__( 'Schrack WooCommerce Sync requires the PHP SOAP extension.', 'schrack-woocommerce-sync' )
 			);
 		}
+	}
+
+	/**
+	 * Enqueues global frontend support widget assets when enabled.
+	 */
+	public function enqueue_support_widget_assets(): void {
+		if ( ! $this->is_support_widget_enabled() ) {
+			return;
+		}
+
+		wp_enqueue_style( 'schrack-wc-support' );
+		wp_enqueue_script( 'schrack-wc-support' );
+	}
+
+	/**
+	 * Renders the global frontend support widget when enabled.
+	 */
+	public function render_support_widget(): void {
+		if ( ! $this->is_support_widget_enabled() ) {
+			return;
+		}
+
+		$renderer = new Schrack_Support_Renderer();
+
+		echo $renderer->render( array(), 'global' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Checks whether the global support widget should be visible.
+	 */
+	private function is_support_widget_enabled(): bool {
+		return ! is_admin() && $this->settings instanceof Schrack_Settings && 'yes' === $this->settings->get( 'support_widget_enabled', 'no' );
 	}
 
 	/**

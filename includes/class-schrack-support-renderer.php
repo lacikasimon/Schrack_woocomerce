@@ -11,11 +11,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Support_Renderer {
 	/**
+	 * Prevents duplicate floating support widgets on the same page.
+	 *
+	 * @var bool
+	 */
+	private static bool $rendered = false;
+
+	/**
 	 * Renders the floating support widget.
 	 *
 	 * @param array<string,mixed> $settings Widget settings.
 	 */
 	public function render( array $settings, string $instance_id = '' ): string {
+		if ( self::$rendered ) {
+			return '';
+		}
+
+		self::$rendered = true;
+
 		$settings    = $this->sanitize_settings( $settings );
 		$instance_id = '' !== $instance_id ? 'schrack-support-' . sanitize_html_class( $instance_id ) : wp_unique_id( 'schrack-support-' );
 		$panel_id    = $instance_id . '-panel';

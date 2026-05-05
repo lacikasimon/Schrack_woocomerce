@@ -78,6 +78,7 @@ The admin settings page stores values through the WordPress Options API:
 - Stock handling
 - Stock source
 - Delete missing products
+- Floating Syshub support widget
 - Cron frequencies
 - Log level
 - Debug mode

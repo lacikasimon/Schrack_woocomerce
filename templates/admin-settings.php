@@ -197,6 +197,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</tr>
 		</table>
 
+		<h2><?php esc_html_e( 'Frontend modules', 'schrack-woocommerce-sync' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Floating chat module', 'schrack-woocommerce-sync' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="schrack_settings[support_widget_enabled]" value="yes" <?php checked( $settings['support_widget_enabled'], 'yes' ); ?>>
+						<?php esc_html_e( 'Enable the Syshub support widget on all frontend pages', 'schrack-woocommerce-sync' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'When enabled, the WhatsApp / phone / request panel appears as a floating module without adding an Elementor widget.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+		</table>
+
 		<h2><?php esc_html_e( 'Schedules and Logging', 'schrack-woocommerce-sync' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>

@@ -335,6 +335,7 @@ class Schrack_Cart_Checkout_Renderer {
 			'Price' => 'Pret',
 			'Quantity' => 'Cantitate',
 			'Subtotal' => 'Subtotal',
+			'Sub-total' => 'Subtotal',
 			'Total' => 'Total',
 			'Cart totals' => 'Total cos',
 			'Cart updated.' => 'Cosul a fost actualizat.',
