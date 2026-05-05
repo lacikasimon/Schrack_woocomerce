@@ -12,6 +12,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Schrack_Rate_Limit_Exception extends RuntimeException {}
 
 class Schrack_Soap_Client {
+	private const ALLOWED_SOAP_METHODS = array(
+		'GetCatalogAsCsvV34',
+		'GetCatalogAsCsvV33',
+		'GetCatalogAsCsvV32',
+		'GetCatalogAsCsvV31',
+		'GetCatalogAsCsvV30',
+		'GetCatalogAsXMLV32',
+		'GetCatalogAsXMLV31',
+		'GetCatalogAsXMLV30',
+		'GetItemPriceV31',
+		'GetStockItemQuantitiesV40',
+	);
+
 	/**
 	 * Settings service.
 	 *
@@ -555,15 +568,31 @@ class Schrack_Soap_Client {
 	}
 
 	/**
-	 * Blocks order sending or order mutation methods.
+	 * Allows only the read-only SOAP methods used for catalog, price, and stock syncs.
 	 */
 	private function guard_forbidden_method( string $method ): void {
+		$method     = trim( $method );
 		$normalized = strtolower( $method );
 
-		if ( str_contains( $normalized, 'order' ) ) {
-			$this->logger->error( 'soap', 'Blocked forbidden Schrack SOAP order method.', null, array( 'method' => $method ) );
-			throw new RuntimeException( 'Order-related SOAP methods are forbidden in Schrack WooCommerce Sync.' );
+		if ( in_array( $method, self::ALLOWED_SOAP_METHODS, true ) ) {
+			return;
 		}
+
+		$message = str_contains( $normalized, 'order' )
+			? 'Blocked forbidden Schrack SOAP order method.'
+			: 'Blocked non-allowlisted Schrack SOAP method.';
+
+		$this->logger->error(
+			'soap',
+			$message,
+			null,
+			array(
+				'method'          => $method,
+				'allowed_methods' => self::ALLOWED_SOAP_METHODS,
+			)
+		);
+
+		throw new RuntimeException( 'Schrack SOAP method is forbidden. Only read-only catalog, price, and stock methods are allowed; order-related or mutation methods are never sent.' );
 	}
 
 	/**
