@@ -32,10 +32,17 @@ class Schrack_Cart_Checkout_Renderer {
 
 		$this->ensure_cart();
 
-		$is_order_pay = 'order_pay' === $settings['render_mode'] || $this->is_order_pay_request();
-		$classes      = array( 'schrack-cart-checkout' );
+		$is_order_received = 'order_received' === $settings['render_mode'] || $this->is_order_received_request();
+		$is_order_pay      = ! $is_order_received && ( 'order_pay' === $settings['render_mode'] || $this->is_order_pay_request() );
+		$step_mode         = $is_order_received ? 'order_received' : ( $is_order_pay ? 'order_pay' : 'cart_checkout' );
+		$hero_eyebrow      = $is_order_received ? $settings['order_received_eyebrow'] : $settings['eyebrow'];
+		$hero_title        = $is_order_received ? $settings['order_received_title'] : $settings['title'];
+		$hero_subtitle     = $is_order_received ? $settings['order_received_subtitle'] : $settings['subtitle'];
+		$classes           = array( 'schrack-cart-checkout' );
 
-		if ( $is_order_pay ) {
+		if ( $is_order_received ) {
+			$classes[] = 'is-order-received';
+		} elseif ( $is_order_pay ) {
 			$classes[] = 'is-order-pay';
 		} elseif ( $this->is_cart_empty() ) {
 			$classes[] = 'is-empty';
@@ -64,26 +71,28 @@ class Schrack_Cart_Checkout_Renderer {
 				<?php if ( 'yes' === $settings['show_header'] ) : ?>
 					<div class="schrack-cart-checkout__hero">
 						<div class="schrack-cart-checkout__intro">
-							<?php if ( '' !== $settings['eyebrow'] ) : ?>
-								<div class="schrack-cart-checkout__eyebrow"><?php echo esc_html( $settings['eyebrow'] ); ?></div>
+							<?php if ( '' !== $hero_eyebrow ) : ?>
+								<div class="schrack-cart-checkout__eyebrow"><?php echo esc_html( $hero_eyebrow ); ?></div>
 							<?php endif; ?>
 
-							<?php if ( '' !== $settings['title'] ) : ?>
-								<h1 class="schrack-cart-checkout__title"><?php echo esc_html( $settings['title'] ); ?></h1>
+							<?php if ( '' !== $hero_title ) : ?>
+								<h1 class="schrack-cart-checkout__title"><?php echo esc_html( $hero_title ); ?></h1>
 							<?php endif; ?>
 
-							<?php if ( '' !== $settings['subtitle'] ) : ?>
-								<p class="schrack-cart-checkout__subtitle"><?php echo esc_html( $settings['subtitle'] ); ?></p>
+							<?php if ( '' !== $hero_subtitle ) : ?>
+								<p class="schrack-cart-checkout__subtitle"><?php echo esc_html( $hero_subtitle ); ?></p>
 							<?php endif; ?>
 						</div>
 
 						<?php if ( 'yes' === $settings['show_steps'] ) : ?>
-							<?php echo $this->steps( $is_order_pay ? 'order_pay' : 'cart_checkout' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<?php echo $this->steps( $step_mode ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 						<?php endif; ?>
 					</div>
 				<?php endif; ?>
 
-				<?php if ( $is_order_pay ) : ?>
+				<?php if ( $is_order_received ) : ?>
+					<?php echo $this->order_received_panel( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php elseif ( $is_order_pay ) : ?>
 					<?php echo $this->order_pay_panel( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php elseif ( $this->is_cart_empty() ) : ?>
 					<?php echo $this->empty_cart_panel( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -144,32 +153,59 @@ class Schrack_Cart_Checkout_Renderer {
 			'order_pay_heading'      => __( 'Finalizeaza plata', 'schrack-woocommerce-sync' ),
 			'order_pay_badge'        => __( 'Plata securizata', 'schrack-woocommerce-sync' ),
 			'order_pay_button_text'  => __( 'Plateste comanda', 'schrack-woocommerce-sync' ),
-			'continue_shopping_text' => __( 'Continua cumparaturile', 'schrack-woocommerce-sync' ),
-			'continue_shopping_url'  => '',
-			'empty_title'            => __( 'Cosul tau este gol', 'schrack-woocommerce-sync' ),
-			'empty_text'             => __( 'Adauga produse in cos pentru a putea trimite comanda.', 'schrack-woocommerce-sync' ),
-			'shop_button_text'       => __( 'Mergi la magazin', 'schrack-woocommerce-sync' ),
-			'shop_url'               => '',
-			'render_mode'            => 'cart_checkout',
-			'show_header'            => 'yes',
-			'show_steps'             => 'yes',
-			'show_continue_shopping' => 'yes',
-			'show_coupon'            => 'yes',
-			'show_cross_sells'       => 'no',
-			'show_cart_totals'       => 'no',
-			'accent_color'           => '#135e96',
-			'action_color'           => '#b32d2e',
-			'max_width'              => '1240',
-			'radius'                 => '8',
+			'order_received_eyebrow'  => __( 'Comanda primita', 'schrack-woocommerce-sync' ),
+			'order_received_title'    => __( 'Multumim pentru comanda', 'schrack-woocommerce-sync' ),
+			'order_received_subtitle' => __( 'Am primit comanda ta. Mai jos gasesti detaliile comenzii si informatiile pentru confirmare.', 'schrack-woocommerce-sync' ),
+			'order_received_heading'  => __( 'Detalii comanda', 'schrack-woocommerce-sync' ),
+			'order_received_badge'    => __( 'Confirmare trimisa', 'schrack-woocommerce-sync' ),
+			'continue_shopping_text'  => __( 'Continua cumparaturile', 'schrack-woocommerce-sync' ),
+			'continue_shopping_url'   => '',
+			'empty_title'             => __( 'Cosul tau este gol', 'schrack-woocommerce-sync' ),
+			'empty_text'              => __( 'Adauga produse in cos pentru a putea trimite comanda.', 'schrack-woocommerce-sync' ),
+			'shop_button_text'        => __( 'Mergi la magazin', 'schrack-woocommerce-sync' ),
+			'shop_url'                => '',
+			'render_mode'             => 'cart_checkout',
+			'show_header'             => 'yes',
+			'show_steps'              => 'yes',
+			'show_continue_shopping'  => 'yes',
+			'show_coupon'             => 'yes',
+			'show_cross_sells'        => 'no',
+			'show_cart_totals'        => 'no',
+			'accent_color'            => '#135e96',
+			'action_color'            => '#b32d2e',
+			'max_width'               => '1240',
+			'radius'                  => '8',
 		);
 
 		$settings = wp_parse_args( $settings, $defaults );
 
-		foreach ( array( 'eyebrow', 'title', 'subtitle', 'cart_heading', 'checkout_heading', 'order_button_text', 'order_pay_heading', 'order_pay_badge', 'order_pay_button_text', 'continue_shopping_text', 'empty_title', 'empty_text', 'shop_button_text' ) as $key ) {
+		foreach (
+			array(
+				'eyebrow',
+				'title',
+				'subtitle',
+				'cart_heading',
+				'checkout_heading',
+				'order_button_text',
+				'order_pay_heading',
+				'order_pay_badge',
+				'order_pay_button_text',
+				'order_received_eyebrow',
+				'order_received_title',
+				'order_received_subtitle',
+				'order_received_heading',
+				'order_received_badge',
+				'continue_shopping_text',
+				'empty_title',
+				'empty_text',
+				'shop_button_text',
+			) as $key
+		) {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
-		$settings['render_mode'] = 'order_pay' === (string) $settings['render_mode'] ? 'order_pay' : 'cart_checkout';
+		$render_mode = (string) $settings['render_mode'];
+		$settings['render_mode'] = in_array( $render_mode, array( 'cart_checkout', 'order_pay', 'order_received' ), true ) ? $render_mode : 'cart_checkout';
 
 		foreach ( array( 'show_header', 'show_steps', 'show_continue_shopping', 'show_coupon', 'show_cross_sells', 'show_cart_totals' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
@@ -380,11 +416,24 @@ class Schrack_Cart_Checkout_Renderer {
 			'Payment' => 'Plata',
 			'Place order' => 'Trimite comanda',
 			'Pay for order' => 'Plateste comanda',
+			'Order received' => 'Comanda primita',
+			'Thank you. Your order has been received.' => 'Iti multumim. Comanda ta a fost primita.',
 			'Order details' => 'Detalii comanda',
 			'Order number:' => 'Numar comanda:',
 			'Date:' => 'Data:',
 			'Email:' => 'Email:',
 			'Payment method:' => 'Metoda de plata:',
+			'Billing address' => 'Adresa de facturare',
+			'Shipping address' => 'Adresa de livrare',
+			'Customer details' => 'Detalii client',
+			'Note:' => 'Nota:',
+			'Order again' => 'Comanda din nou',
+			'Our bank details' => 'Detaliile noastre bancare',
+			'Bank:' => 'Banca:',
+			'Account number:' => 'Numar cont:',
+			'Sort code:' => 'Cod sortare:',
+			'IBAN:' => 'IBAN:',
+			'BIC:' => 'BIC:',
 			'First name' => 'Prenume',
 			'Last name' => 'Nume',
 			'Company name' => 'Companie',
@@ -515,17 +564,25 @@ class Schrack_Cart_Checkout_Renderer {
 	 * Renders the checkout progress labels.
 	 */
 	private function steps( string $mode = 'cart_checkout' ): string {
-		$steps = 'order_pay' === $mode
-			? array(
+		if ( 'order_pay' === $mode ) {
+			$steps = array(
 				__( 'Comanda', 'schrack-woocommerce-sync' ),
 				__( 'Verificare', 'schrack-woocommerce-sync' ),
 				__( 'Plata', 'schrack-woocommerce-sync' ),
-			)
-			: array(
+			);
+		} elseif ( 'order_received' === $mode ) {
+			$steps = array(
+				__( 'Cos', 'schrack-woocommerce-sync' ),
+				__( 'Comanda', 'schrack-woocommerce-sync' ),
+				__( 'Confirmare', 'schrack-woocommerce-sync' ),
+			);
+		} else {
+			$steps = array(
 				__( 'Cos', 'schrack-woocommerce-sync' ),
 				__( 'Date comanda', 'schrack-woocommerce-sync' ),
 				__( 'Plata', 'schrack-woocommerce-sync' ),
 			);
+		}
 
 		ob_start();
 		?>
@@ -558,6 +615,37 @@ class Schrack_Cart_Checkout_Renderer {
 				</div>
 
 				<div class="schrack-cart-checkout__woocommerce-order-pay">
+					<?php echo $this->render_shortcode( 'woocommerce_checkout', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				</div>
+			</div>
+
+			<?php if ( 'yes' === $settings['show_continue_shopping'] ) : ?>
+				<div class="schrack-cart-checkout__continue">
+					<a href="<?php echo esc_url( $this->continue_shopping_url( $settings ) ); ?>"><?php echo esc_html( $settings['continue_shopping_text'] ); ?></a>
+				</div>
+			<?php endif; ?>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the WooCommerce order received module.
+	 *
+	 * @param array<string,string> $settings Settings.
+	 */
+	private function order_received_panel( array $settings ): string {
+		ob_start();
+		?>
+		<div class="schrack-cart-checkout__order-received">
+			<div class="schrack-cart-checkout__panel schrack-cart-checkout__panel--order-received">
+				<div class="schrack-cart-checkout__panel-head">
+					<h2><?php echo esc_html( $settings['order_received_heading'] ); ?></h2>
+					<span><?php echo esc_html( $settings['order_received_badge'] ); ?></span>
+				</div>
+
+				<div class="schrack-cart-checkout__woocommerce-order-received">
 					<?php echo $this->render_shortcode( 'woocommerce_checkout', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</div>
 			</div>
@@ -647,6 +735,30 @@ class Schrack_Cart_Checkout_Renderer {
 		}
 
 		return false !== strpos( '/' . trim( $path, '/' ) . '/', '/order-pay/' );
+	}
+
+	/**
+	 * Detects WooCommerce order confirmation endpoints.
+	 */
+	private function is_order_received_request(): bool {
+		if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url( 'order-received' ) ) {
+			return true;
+		}
+
+		global $wp;
+
+		if ( isset( $wp ) && is_object( $wp ) && isset( $wp->query_vars['order-received'] ) ) {
+			return true;
+		}
+
+		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) ) : '';
+		$path        = wp_parse_url( $request_uri, PHP_URL_PATH );
+
+		if ( ! is_string( $path ) ) {
+			return false;
+		}
+
+		return false !== strpos( '/' . trim( $path, '/' ) . '/', '/order-received/' );
 	}
 
 	/**
