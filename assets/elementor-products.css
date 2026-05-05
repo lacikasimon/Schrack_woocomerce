@@ -660,13 +660,29 @@
 
 .schrack-product-card__cart,
 .schrack-product-card__actions .added_to_cart {
+	align-items: center !important;
 	font-size: 12px;
+	height: 40px;
+	justify-content: center !important;
+	line-height: 1 !important;
 	min-height: 40px;
 	overflow-wrap: normal;
-	padding-left: 8px;
-	padding-right: 8px;
+	padding: 0 8px !important;
+	place-content: center;
+	place-items: center;
+	text-align: center !important;
+	text-align-last: center;
+	text-indent: 0 !important;
 	text-transform: uppercase;
 	white-space: nowrap;
+}
+
+.schrack-product-card__cart::before,
+.schrack-product-card__cart::after,
+.schrack-product-card__actions .added_to_cart::before,
+.schrack-product-card__actions .added_to_cart::after {
+	content: none !important;
+	display: none !important;
 }
 
 .schrack-product-card__cart.added {

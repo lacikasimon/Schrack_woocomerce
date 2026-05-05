@@ -310,32 +310,53 @@
 
 .schrack-product-page .single_add_to_cart_button,
 .schrack-product-page__cart-button,
-.schrack-product-page .button {
-	align-items: center;
+.schrack-product-page .button,
+.schrack-product-page .added_to_cart {
+	align-items: center !important;
 	background: var(--schrack-page-action);
 	border: 1px solid var(--schrack-page-action);
 	border-radius: 6px;
 	color: #fff;
 	cursor: pointer;
-	display: inline-flex;
+	display: inline-flex !important;
 	flex: 1 1 180px;
 	font-weight: 800;
-	justify-content: center;
-	line-height: 1.2;
+	justify-content: center !important;
+	line-height: 1 !important;
+	height: 44px;
 	min-height: 44px;
 	min-width: 0;
-	overflow-wrap: anywhere;
-	padding: 10px 14px;
-	text-align: center;
+	overflow-wrap: normal;
+	padding: 0 14px !important;
+	place-content: center;
+	place-items: center;
+	text-align: center !important;
+	text-align-last: center;
 	text-decoration: none;
-	white-space: normal;
+	text-indent: 0 !important;
+	text-transform: uppercase;
+	white-space: nowrap;
 	word-break: normal;
+}
+
+.schrack-product-page .single_add_to_cart_button::before,
+.schrack-product-page .single_add_to_cart_button::after,
+.schrack-product-page__cart-button::before,
+.schrack-product-page__cart-button::after,
+.schrack-product-page .button::before,
+.schrack-product-page .button::after,
+.schrack-product-page .added_to_cart::before,
+.schrack-product-page .added_to_cart::after {
+	content: none !important;
+	display: none !important;
 }
 
 .schrack-product-page .single_add_to_cart_button:hover,
 .schrack-product-page .single_add_to_cart_button:focus,
 .schrack-product-page .button:hover,
-.schrack-product-page .button:focus {
+.schrack-product-page .button:focus,
+.schrack-product-page .added_to_cart:hover,
+.schrack-product-page .added_to_cart:focus {
 	background: #8f2527;
 	border-color: #8f2527;
 	color: #fff;
@@ -446,7 +467,8 @@
 	.schrack-product-page .quantity,
 	.schrack-product-page .single_add_to_cart_button,
 	.schrack-product-page__cart-button,
-	.schrack-product-page .button {
+	.schrack-product-page .button,
+	.schrack-product-page .added_to_cart {
 		flex-basis: 100%;
 		width: 100%;
 	}
