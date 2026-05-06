@@ -129,7 +129,7 @@ class Schrack_Account_Renderer {
 
 		if ( 'addresses' === $section ) {
 			$this->update_billing_address( $user_id );
-			$this->redirect_with_notice( $redirect, 'success', __( 'Datele de facturare au fost actualizate.', 'schrack-woocommerce-sync' ) );
+			$this->redirect_with_notice( $redirect, 'success', __( 'Adresele de facturare si livrare au fost actualizate.', 'schrack-woocommerce-sync' ) );
 		}
 
 		if ( 'account' === $section ) {
@@ -449,7 +449,7 @@ class Schrack_Account_Renderer {
 					<?php echo $this->b2b_panel( $user_id, $account_type, $status_config, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
-				<?php echo $this->billing_panel( $user_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->address_panels( $user_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			</div>
 		</div>
 		<?php
@@ -629,10 +629,10 @@ class Schrack_Account_Renderer {
 	}
 
 	/**
-	 * Renders the billing-address edit form.
+	 * Renders the billing and shipping address edit form.
 	 */
 	private function address_form_section( int $user_id ): string {
-		$fields = array(
+		$billing_fields = array(
 			array( 'billing_first_name', __( 'Prenume', 'schrack-woocommerce-sync' ), 'text', true, 'given-name' ),
 			array( 'billing_last_name', __( 'Nume', 'schrack-woocommerce-sync' ), 'text', true, 'family-name' ),
 			array( 'billing_company', __( 'Companie', 'schrack-woocommerce-sync' ), 'text', false, 'organization' ),
@@ -640,16 +640,31 @@ class Schrack_Account_Renderer {
 			array( 'billing_email', __( 'Email facturare', 'schrack-woocommerce-sync' ), 'email', true, 'email' ),
 			array( 'billing_phone', __( 'Telefon', 'schrack-woocommerce-sync' ), 'tel', false, 'tel' ),
 			array( 'billing_address_1', __( 'Adresa', 'schrack-woocommerce-sync' ), 'text', false, 'street-address', 'schrack-account__field--wide' ),
+			array( 'billing_address_2', __( 'Apartament, etaj, detalii', 'schrack-woocommerce-sync' ), 'text', false, 'address-line2', 'schrack-account__field--wide' ),
 			array( 'billing_city', __( 'Oras', 'schrack-woocommerce-sync' ), 'text', false, 'address-level2' ),
 			array( 'billing_state', __( 'Judet', 'schrack-woocommerce-sync' ), 'text', false, 'address-level1' ),
 			array( 'billing_postcode', __( 'Cod postal', 'schrack-woocommerce-sync' ), 'text', false, 'postal-code' ),
+		);
+		$shipping_fields = array(
+			array( 'shipping_first_name', __( 'Prenume', 'schrack-woocommerce-sync' ), 'text', false, 'given-name' ),
+			array( 'shipping_last_name', __( 'Nume', 'schrack-woocommerce-sync' ), 'text', false, 'family-name' ),
+			array( 'shipping_company', __( 'Companie', 'schrack-woocommerce-sync' ), 'text', false, 'organization' ),
+			array( 'shipping_phone', __( 'Telefon livrare', 'schrack-woocommerce-sync' ), 'tel', false, 'tel' ),
+			array( 'shipping_address_1', __( 'Adresa livrare', 'schrack-woocommerce-sync' ), 'text', false, 'street-address', 'schrack-account__field--wide' ),
+			array( 'shipping_address_2', __( 'Apartament, etaj, detalii', 'schrack-woocommerce-sync' ), 'text', false, 'address-line2', 'schrack-account__field--wide' ),
+			array( 'shipping_city', __( 'Oras', 'schrack-woocommerce-sync' ), 'text', false, 'address-level2' ),
+			array( 'shipping_state', __( 'Judet', 'schrack-woocommerce-sync' ), 'text', false, 'address-level1' ),
+			array( 'shipping_postcode', __( 'Cod postal', 'schrack-woocommerce-sync' ), 'text', false, 'postal-code' ),
 		);
 
 		ob_start();
 		?>
 		<div class="schrack-account__panel schrack-account__panel--wide schrack-account__section" id="schrack-account-addresses">
 			<div class="schrack-account__panel-head">
-				<h3><?php esc_html_e( 'Adrese facturare/livrare', 'schrack-woocommerce-sync' ); ?></h3>
+				<div>
+					<h3><?php esc_html_e( 'Adrese facturare si livrare', 'schrack-woocommerce-sync' ); ?></h3>
+					<p><?php esc_html_e( 'Pastreaza separat datele pentru factura si adresa unde trebuie livrata comanda.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
 				<a href="<?php echo esc_url( $this->section_url( 'dashboard' ) ); ?>"><?php esc_html_e( 'Inapoi la sumar', 'schrack-woocommerce-sync' ); ?></a>
 			</div>
 
@@ -659,17 +674,37 @@ class Schrack_Account_Renderer {
 				<input type="hidden" name="redirect_to" value="<?php echo esc_url( $this->section_url( 'addresses' ) ); ?>">
 				<?php wp_nonce_field( self::UPDATE_NONCE_ACTION, 'schrack_account_update_nonce' ); ?>
 
-				<div class="schrack-account__register-grid">
-					<?php foreach ( $fields as $field ) : ?>
-						<?php
-						$name  = (string) $field[0];
-						$class = isset( $field[5] ) ? (string) $field[5] : '';
-						echo $this->value_field( $name, (string) $field[1], (string) $field[2], (bool) $field[3], (string) $field[4], $this->user_meta( $user_id, $name ), $class ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-						?>
-					<?php endforeach; ?>
+				<div class="schrack-account__address-grid">
+					<section class="schrack-account__address-section">
+						<h4><?php esc_html_e( 'Date facturare', 'schrack-woocommerce-sync' ); ?></h4>
+						<p><?php esc_html_e( 'Aceste date apar pe factura si documentele comerciale.', 'schrack-woocommerce-sync' ); ?></p>
+						<div class="schrack-account__register-grid">
+							<?php foreach ( $billing_fields as $field ) : ?>
+								<?php
+								$name  = (string) $field[0];
+								$class = isset( $field[5] ) ? (string) $field[5] : '';
+								echo $this->value_field( $name, (string) $field[1], (string) $field[2], (bool) $field[3], (string) $field[4], $this->user_meta( $user_id, $name ), $class ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+								?>
+							<?php endforeach; ?>
+						</div>
+					</section>
+
+					<section class="schrack-account__address-section">
+						<h4><?php esc_html_e( 'Date livrare', 'schrack-woocommerce-sync' ); ?></h4>
+						<p><?php esc_html_e( 'Completeaza doar daca livrarea trebuie facuta la alta adresa.', 'schrack-woocommerce-sync' ); ?></p>
+						<div class="schrack-account__register-grid">
+							<?php foreach ( $shipping_fields as $field ) : ?>
+								<?php
+								$name  = (string) $field[0];
+								$class = isset( $field[5] ) ? (string) $field[5] : '';
+								echo $this->value_field( $name, (string) $field[1], (string) $field[2], (bool) $field[3], (string) $field[4], $this->user_meta( $user_id, $name ), $class ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+								?>
+							<?php endforeach; ?>
+						</div>
+					</section>
 				</div>
 
-				<button class="schrack-account__button" type="submit"><?php esc_html_e( 'Salveaza adresa', 'schrack-woocommerce-sync' ); ?></button>
+				<button class="schrack-account__button" type="submit"><?php esc_html_e( 'Salveaza adresele', 'schrack-woocommerce-sync' ); ?></button>
 			</form>
 		</div>
 		<?php
@@ -797,7 +832,7 @@ class Schrack_Account_Renderer {
 		$active_link = 'order' === $active_section ? 'orders' : $active_section;
 		$links = array(
 			array( 'section' => 'orders', 'label' => __( 'Comenzile mele', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'orders' ) ),
-			array( 'section' => 'addresses', 'label' => __( 'Adrese facturare/livrare', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'addresses' ) ),
+			array( 'section' => 'addresses', 'label' => __( 'Adrese facturare si livrare', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'addresses' ) ),
 			array( 'section' => 'account', 'label' => __( 'Detalii cont', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'account' ) ),
 			array( 'section' => 'cart', 'label' => __( 'Cosul meu', 'schrack-woocommerce-sync' ), 'url' => $this->cart_url() ),
 		);
@@ -1024,15 +1059,26 @@ class Schrack_Account_Renderer {
 	}
 
 	/**
-	 * Renders billing snapshot.
+	 * Renders billing and shipping address snapshots.
 	 */
-	private function billing_panel( int $user_id ): string {
-		$rows = array(
-			__( 'Nume', 'schrack-woocommerce-sync' )     => trim( $this->user_meta( $user_id, 'billing_first_name' ) . ' ' . $this->user_meta( $user_id, 'billing_last_name' ) ),
-			__( 'Email', 'schrack-woocommerce-sync' )    => $this->user_meta( $user_id, 'billing_email' ),
-			__( 'Telefon', 'schrack-woocommerce-sync' )  => $this->user_meta( $user_id, 'billing_phone' ),
-			__( 'Oras', 'schrack-woocommerce-sync' )     => $this->user_meta( $user_id, 'billing_city' ),
-			__( 'Judet', 'schrack-woocommerce-sync' )    => $this->user_meta( $user_id, 'billing_state' ),
+	private function address_panels( int $user_id ): string {
+		$billing_rows = array(
+			__( 'Nume', 'schrack-woocommerce-sync' )      => trim( $this->user_meta( $user_id, 'billing_first_name' ) . ' ' . $this->user_meta( $user_id, 'billing_last_name' ) ),
+			__( 'Companie', 'schrack-woocommerce-sync' )  => $this->user_meta( $user_id, 'billing_company' ),
+			__( 'CUI', 'schrack-woocommerce-sync' )       => $this->user_meta( $user_id, 'billing_vat_number' ),
+			__( 'Email', 'schrack-woocommerce-sync' )     => $this->user_meta( $user_id, 'billing_email' ),
+			__( 'Telefon', 'schrack-woocommerce-sync' )   => $this->user_meta( $user_id, 'billing_phone' ),
+			__( 'Adresa', 'schrack-woocommerce-sync' )    => $this->address_line( $user_id, 'billing' ),
+			__( 'Localitate', 'schrack-woocommerce-sync' ) => trim( $this->user_meta( $user_id, 'billing_city' ) . ' ' . $this->user_meta( $user_id, 'billing_postcode' ) ),
+			__( 'Judet', 'schrack-woocommerce-sync' )     => $this->user_meta( $user_id, 'billing_state' ),
+		);
+		$shipping_rows = array(
+			__( 'Nume', 'schrack-woocommerce-sync' )      => trim( $this->user_meta( $user_id, 'shipping_first_name' ) . ' ' . $this->user_meta( $user_id, 'shipping_last_name' ) ),
+			__( 'Companie', 'schrack-woocommerce-sync' )  => $this->user_meta( $user_id, 'shipping_company' ),
+			__( 'Telefon', 'schrack-woocommerce-sync' )   => $this->user_meta( $user_id, 'shipping_phone' ),
+			__( 'Adresa', 'schrack-woocommerce-sync' )    => $this->address_line( $user_id, 'shipping' ),
+			__( 'Localitate', 'schrack-woocommerce-sync' ) => trim( $this->user_meta( $user_id, 'shipping_city' ) . ' ' . $this->user_meta( $user_id, 'shipping_postcode' ) ),
+			__( 'Judet', 'schrack-woocommerce-sync' )     => $this->user_meta( $user_id, 'shipping_state' ),
 		);
 
 		ob_start();
@@ -1043,7 +1089,18 @@ class Schrack_Account_Renderer {
 				<a href="<?php echo esc_url( $this->section_url( 'addresses' ) ); ?>"><?php esc_html_e( 'Editeaza', 'schrack-woocommerce-sync' ); ?></a>
 			</div>
 			<dl class="schrack-account__details">
-				<?php foreach ( $rows as $label => $value ) : ?>
+				<?php foreach ( $billing_rows as $label => $value ) : ?>
+					<?php echo $this->detail_row( (string) $label, (string) $value ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php endforeach; ?>
+			</dl>
+		</div>
+		<div class="schrack-account__panel">
+			<div class="schrack-account__panel-head">
+				<h3><?php esc_html_e( 'Date livrare', 'schrack-woocommerce-sync' ); ?></h3>
+				<a href="<?php echo esc_url( $this->section_url( 'addresses' ) ); ?>"><?php esc_html_e( 'Editeaza', 'schrack-woocommerce-sync' ); ?></a>
+			</div>
+			<dl class="schrack-account__details">
+				<?php foreach ( $shipping_rows as $label => $value ) : ?>
 					<?php echo $this->detail_row( (string) $label, (string) $value ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endforeach; ?>
 			</dl>
@@ -1051,6 +1108,22 @@ class Schrack_Account_Renderer {
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Returns a compact address line from user meta.
+	 */
+	private function address_line( int $user_id, string $prefix ): string {
+		$prefix = 'shipping' === $prefix ? 'shipping' : 'billing';
+		$parts  = array_filter(
+			array(
+				$this->user_meta( $user_id, $prefix . '_address_1' ),
+				$this->user_meta( $user_id, $prefix . '_address_2' ),
+			),
+			static fn( string $part ): bool => '' !== trim( $part )
+		);
+
+		return implode( ', ', $parts );
 	}
 
 	/**
@@ -1244,7 +1317,7 @@ class Schrack_Account_Renderer {
 	}
 
 	/**
-	 * Updates billing address meta from POST.
+	 * Updates billing and shipping address meta from POST.
 	 */
 	private function update_billing_address( int $user_id ): void {
 		$fields = array(
@@ -1255,9 +1328,19 @@ class Schrack_Account_Renderer {
 			'billing_email',
 			'billing_phone',
 			'billing_address_1',
+			'billing_address_2',
 			'billing_city',
 			'billing_state',
 			'billing_postcode',
+			'shipping_first_name',
+			'shipping_last_name',
+			'shipping_company',
+			'shipping_phone',
+			'shipping_address_1',
+			'shipping_address_2',
+			'shipping_city',
+			'shipping_state',
+			'shipping_postcode',
 		);
 
 		foreach ( $fields as $field ) {
@@ -1271,6 +1354,7 @@ class Schrack_Account_Renderer {
 		}
 
 		update_user_meta( $user_id, 'billing_country', 'RO' );
+		update_user_meta( $user_id, 'shipping_country', 'RO' );
 	}
 
 	/**
