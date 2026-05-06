@@ -41,6 +41,7 @@ class Schrack_Elementor {
 		add_action( 'admin_post_nopriv_' . Schrack_Registration_Renderer::ACTION, array( $this, 'handle_registration' ) );
 		add_action( 'admin_post_' . Schrack_Account_Renderer::ACTION, array( $this, 'handle_account_login' ) );
 		add_action( 'admin_post_nopriv_' . Schrack_Account_Renderer::ACTION, array( $this, 'handle_account_login' ) );
+		add_action( 'admin_post_' . Schrack_Account_Renderer::UPDATE_ACTION, array( $this, 'handle_account_update' ) );
 		add_action( 'elementor/elements/categories_registered', array( $this, 'register_elementor_category' ) );
 		add_action( 'elementor/widgets/register', array( $this, 'register_widgets' ) );
 		add_action( 'elementor/widgets/widgets_registered', array( $this, 'register_legacy_widgets' ) );
@@ -319,6 +320,14 @@ class Schrack_Elementor {
 	public function handle_account_login(): void {
 		$renderer = new Schrack_Account_Renderer();
 		$renderer->handle_login();
+	}
+
+	/**
+	 * Handles frontend account update form posts.
+	 */
+	public function handle_account_update(): void {
+		$renderer = new Schrack_Account_Renderer();
+		$renderer->handle_update();
 	}
 
 	/**
