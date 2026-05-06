@@ -526,7 +526,7 @@ class Schrack_Account_Renderer {
 	 * Renders a single order detail section.
 	 */
 	private function order_detail_section( int $user_id ): string {
-		$order_id = isset( $_GET[ self::ORDER_QUERY_ARG ] ) ? absint( wp_unslash( (string) $_GET[ self::ORDER_QUERY_ARG ] ) ) : 0;
+		$order_id = $this->requested_order_id();
 		$order    = $order_id > 0 && function_exists( 'wc_get_order' ) ? wc_get_order( $order_id ) : null;
 
 		if ( ! $order instanceof WC_Order || (int) $order->get_user_id() !== $user_id ) {
@@ -1248,9 +1248,10 @@ class Schrack_Account_Renderer {
 	 * Returns the currently selected in-page account section.
 	 */
 	private function active_section(): string {
-		$section = isset( $_GET[ self::SECTION_QUERY_ARG ] ) ? sanitize_key( wp_unslash( (string) $_GET[ self::SECTION_QUERY_ARG ] ) ) : 'dashboard';
+		$has_section = isset( $_GET[ self::SECTION_QUERY_ARG ] );
+		$section     = $has_section ? sanitize_key( wp_unslash( (string) $_GET[ self::SECTION_QUERY_ARG ] ) ) : $this->section_from_woocommerce_endpoint();
 		$allowed = array( 'dashboard', 'orders', 'order', 'addresses', 'account' );
-		$order_id = isset( $_GET[ self::ORDER_QUERY_ARG ] ) ? absint( wp_unslash( (string) $_GET[ self::ORDER_QUERY_ARG ] ) ) : 0;
+		$order_id = $this->requested_order_id();
 
 		if ( 'order' === $section && 0 === $order_id ) {
 			return 'orders';
@@ -1289,7 +1290,7 @@ class Schrack_Account_Renderer {
 	 * Returns the clean URL for the current account portal page.
 	 */
 	private function account_page_url(): string {
-		return remove_query_arg(
+		$current_url = remove_query_arg(
 			array(
 				self::NOTICE_QUERY_ARG,
 				'schrack_register_notice',
@@ -1298,6 +1299,71 @@ class Schrack_Account_Renderer {
 			),
 			$this->current_url()
 		);
+		$account_url = remove_query_arg(
+			array(
+				self::NOTICE_QUERY_ARG,
+				'schrack_register_notice',
+				self::SECTION_QUERY_ARG,
+				self::ORDER_QUERY_ARG,
+			),
+			$this->account_url()
+		);
+
+		return $this->url_is_inside_account_area( $current_url, $account_url ) ? $account_url : $current_url;
+	}
+
+	/**
+	 * Returns order ID from the custom query arg or the WooCommerce view-order endpoint.
+	 */
+	private function requested_order_id(): int {
+		if ( isset( $_GET[ self::ORDER_QUERY_ARG ] ) ) {
+			return absint( wp_unslash( (string) $_GET[ self::ORDER_QUERY_ARG ] ) );
+		}
+
+		$view_order = function_exists( 'get_query_var' ) ? get_query_var( 'view-order' ) : 0;
+
+		return is_scalar( $view_order ) ? absint( $view_order ) : 0;
+	}
+
+	/**
+	 * Maps native WooCommerce account endpoints to the custom in-page sections.
+	 */
+	private function section_from_woocommerce_endpoint(): string {
+		$endpoint = '';
+
+		if ( function_exists( 'WC' ) && is_object( WC() ) && isset( WC()->query ) && is_object( WC()->query ) && method_exists( WC()->query, 'get_current_endpoint' ) ) {
+			$endpoint = WC()->query->get_current_endpoint();
+			$endpoint = is_scalar( $endpoint ) ? sanitize_key( (string) $endpoint ) : '';
+		}
+
+		return match ( $endpoint ) {
+			'orders'       => 'orders',
+			'view-order'   => 'order',
+			'edit-address' => 'addresses',
+			'edit-account' => 'account',
+			default        => 'dashboard',
+		};
+	}
+
+	/**
+	 * Checks whether a URL is the account page itself or a WooCommerce account endpoint below it.
+	 */
+	private function url_is_inside_account_area( string $url, string $account_url ): bool {
+		$current_path = wp_parse_url( $url, PHP_URL_PATH );
+		$account_path = wp_parse_url( $account_url, PHP_URL_PATH );
+
+		if ( ! is_string( $current_path ) || ! is_string( $account_path ) ) {
+			return false;
+		}
+
+		$current_path = '/' . trim( $current_path, '/' );
+		$account_path = '/' . trim( $account_path, '/' );
+
+		if ( '/' === $account_path ) {
+			return false;
+		}
+
+		return $current_path === $account_path || str_starts_with( $current_path . '/', $account_path . '/' );
 	}
 
 	/**
