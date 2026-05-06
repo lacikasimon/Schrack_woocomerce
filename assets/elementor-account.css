@@ -7,6 +7,7 @@
 	--schrack-account-surface: #fff;
 	--schrack-account-text: #16202a;
 	--schrack-account-width: 1120px;
+	--schrack-account-shadow: 0 14px 34px rgba(22, 32, 42, 0.08);
 	color: var(--schrack-account-text);
 	font-size: 14px;
 	width: 100%;
@@ -82,7 +83,7 @@
 	background: var(--schrack-account-surface);
 	border: 1px solid var(--schrack-account-border);
 	border-radius: 8px;
-	box-shadow: 0 16px 42px rgba(22, 32, 42, 0.07);
+	box-shadow: var(--schrack-account-shadow);
 }
 
 .schrack-account__panel {
@@ -104,6 +105,10 @@
 	grid-column: 1 / -1;
 }
 
+.schrack-account__actions {
+	padding: 18px;
+}
+
 .schrack-account__panel h3,
 .schrack-account__welcome h3 {
 	color: var(--schrack-account-text);
@@ -122,6 +127,16 @@
 	display: flex;
 	gap: 14px;
 	justify-content: space-between;
+}
+
+.schrack-account__panel-head > div {
+	min-width: 0;
+}
+
+.schrack-account__panel-head p {
+	font-size: 13px;
+	line-height: 1.45;
+	margin-top: 5px;
 }
 
 .schrack-account__panel-head a,
@@ -469,13 +484,17 @@
 }
 
 .schrack-account__link-list,
-.schrack-account__orders {
+.schrack-account__orders,
+.schrack-account__order-list {
 	display: grid;
 	gap: 10px;
 }
 
-.schrack-account__link-list a,
-.schrack-account__order {
+.schrack-account__link-list {
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.schrack-account__link-list a {
 	align-items: center;
 	background: var(--schrack-account-soft);
 	border: 1px solid transparent;
@@ -489,9 +508,17 @@
 	transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
+.schrack-account__actions .schrack-account__link-list a {
+	background: #fff;
+	border-color: var(--schrack-account-border);
+	font-weight: 850;
+	justify-content: center;
+	min-height: 54px;
+	text-align: center;
+}
+
 .schrack-account__link-list a:hover,
-.schrack-account__link-list a.is-active,
-.schrack-account__order:hover {
+.schrack-account__link-list a.is-active {
 	background: #fff;
 	border-color: var(--schrack-account-accent);
 	color: var(--schrack-account-accent);
@@ -512,6 +539,113 @@
 
 .schrack-account__order {
 	align-items: start;
+}
+
+.schrack-account__order-list {
+	gap: 12px;
+}
+
+.schrack-account__order-row {
+	align-items: center;
+	background: #fff;
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 8px;
+	color: var(--schrack-account-text);
+	display: grid;
+	gap: 16px;
+	grid-template-columns: minmax(145px, 0.75fr) minmax(220px, 1.35fr) minmax(150px, 0.85fr) minmax(120px, 0.55fr);
+	min-height: 88px;
+	padding: 16px;
+	text-decoration: none;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.schrack-account__order-row:hover,
+.schrack-account__order-row:focus {
+	border-color: var(--schrack-account-accent);
+	box-shadow: 0 12px 26px rgba(19, 94, 150, 0.12);
+	color: var(--schrack-account-text);
+	transform: translateY(-1px);
+}
+
+.schrack-account__order-main,
+.schrack-account__order-products,
+.schrack-account__order-commercial,
+.schrack-account__order-total {
+	display: grid;
+	gap: 5px;
+	min-width: 0;
+}
+
+.schrack-account__order-main strong,
+.schrack-account__order-products strong,
+.schrack-account__order-total strong {
+	color: var(--schrack-account-text);
+	font-size: 15px;
+	font-weight: 850;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
+.schrack-account__order-main small,
+.schrack-account__order-products small,
+.schrack-account__order-commercial small,
+.schrack-account__order-total small {
+	color: var(--schrack-account-muted);
+	font-size: 12px;
+	font-weight: 750;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.schrack-account__order-status {
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 999px;
+	font-size: 11px;
+	font-style: normal;
+	font-weight: 850;
+	line-height: 1.2;
+	padding: 6px 9px;
+	width: fit-content;
+}
+
+.schrack-account__order-status.is-completed {
+	background: #edf7ee;
+	border-color: #b8dfbd;
+	color: #24713b;
+}
+
+.schrack-account__order-status.is-processing {
+	background: #eef5fb;
+	border-color: #bdd7ec;
+	color: #135e96;
+}
+
+.schrack-account__order-status.is-on-hold,
+.schrack-account__order-status.is-pending {
+	background: #fff8e5;
+	border-color: #f2d891;
+	color: #8a5b00;
+}
+
+.schrack-account__order-status.is-cancelled,
+.schrack-account__order-status.is-refunded,
+.schrack-account__order-status.is-failed {
+	background: #fff1f1;
+	border-color: #efc5c5;
+	color: #9f2426;
+}
+
+.schrack-account__order-total {
+	justify-items: end;
+	text-align: right;
+}
+
+.schrack-account__order-total em {
+	color: var(--schrack-account-accent);
+	font-size: 12px;
+	font-style: normal;
+	font-weight: 850;
 }
 
 .schrack-account__order span {
@@ -538,22 +672,105 @@
 	gap: 12px;
 }
 
+.schrack-account__order-info-grid {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.schrack-account__order-info,
+.schrack-account__order-note {
+	background: var(--schrack-account-soft);
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 8px;
+	padding: 14px;
+}
+
+.schrack-account__order-info h4,
+.schrack-account__order-note strong {
+	color: var(--schrack-account-text);
+	display: block;
+	font-size: 14px;
+	font-weight: 850;
+	line-height: 1.25;
+	margin: 0 0 12px;
+}
+
+.schrack-account__order-info dl {
+	display: grid;
+	gap: 9px;
+	margin: 0;
+}
+
+.schrack-account__order-info div {
+	display: grid;
+	gap: 3px;
+}
+
+.schrack-account__order-info dt {
+	color: var(--schrack-account-muted);
+	font-size: 11px;
+	font-weight: 850;
+	line-height: 1.25;
+	text-transform: uppercase;
+}
+
+.schrack-account__order-info dd {
+	color: var(--schrack-account-text);
+	font-size: 13px;
+	font-weight: 750;
+	line-height: 1.35;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.schrack-account__order-note p {
+	margin: 0;
+}
+
+.schrack-account__order-lines {
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.schrack-account__order-lines-head {
+	background: var(--schrack-account-soft);
+	color: var(--schrack-account-muted);
+	display: grid;
+	font-size: 11px;
+	font-weight: 850;
+	gap: 12px;
+	grid-template-columns: minmax(0, 1fr) 120px 70px 130px;
+	letter-spacing: 0;
+	line-height: 1.25;
+	padding: 11px 14px;
+	text-transform: uppercase;
+}
+
 .schrack-account__order-line {
 	align-items: center;
 	border-bottom: 1px solid var(--schrack-account-border);
 	display: grid;
-	gap: 6px;
-	grid-template-columns: minmax(0, 1fr) auto auto;
-	padding-bottom: 12px;
+	gap: 12px;
+	grid-template-columns: minmax(0, 1fr) 120px 70px 130px;
+	padding: 13px 14px;
 }
 
 .schrack-account__order-line:last-child {
 	border-bottom: 0;
-	padding-bottom: 0;
+	padding-bottom: 13px;
 }
 
 .schrack-account__order-line span {
-	font-weight: 800;
+	display: grid;
+	gap: 3px;
+}
+
+.schrack-account__order-line span strong {
+	color: var(--schrack-account-text);
+	font-size: 13px;
+	font-weight: 850;
 	line-height: 1.35;
 	overflow-wrap: anywhere;
 }
@@ -565,7 +782,7 @@
 	white-space: nowrap;
 }
 
-.schrack-account__order-line strong {
+.schrack-account__order-line > strong {
 	font-weight: 850;
 	white-space: nowrap;
 }
@@ -599,6 +816,19 @@
 	.schrack-account__orders {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
+
+	.schrack-account__order-row {
+		grid-template-columns: minmax(0, 1fr) minmax(180px, 0.7fr);
+	}
+
+	.schrack-account__order-total {
+		justify-items: start;
+		text-align: left;
+	}
+
+	.schrack-account__order-info-grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 @media (max-width: 640px) {
@@ -621,13 +851,25 @@
 	.schrack-account__summary,
 	.schrack-account__orders,
 	.schrack-account__orders.is-full,
-	.schrack-account__order-meta {
+	.schrack-account__order-meta,
+	.schrack-account__link-list,
+	.schrack-account__order-row {
 		grid-template-columns: 1fr;
+	}
+
+	.schrack-account__order-row {
+		gap: 12px;
+		padding: 14px;
+	}
+
+	.schrack-account__order-lines-head {
+		display: none;
 	}
 
 	.schrack-account__order-line {
 		align-items: start;
 		grid-template-columns: 1fr;
+		padding: 13px;
 	}
 
 	.schrack-account__register-grid {

@@ -428,6 +428,8 @@ class Schrack_Account_Renderer {
 				</div>
 			</div>
 
+			<?php echo $this->account_links_panel( $settings, $active_section ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+
 			<div class="schrack-account__summary">
 				<?php echo $this->summary_card( __( 'Comenzi', 'schrack-woocommerce-sync' ), (string) $this->customer_order_count( $user_id ), __( 'Total comenzi in cont', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php echo $this->summary_card( __( 'Tip cont', 'schrack-woocommerce-sync' ), 'b2b' === $account_type ? __( 'B2B', 'schrack-woocommerce-sync' ) : __( 'Client', 'schrack-woocommerce-sync' ), __( 'Profil comercial', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -439,14 +441,12 @@ class Schrack_Account_Renderer {
 			<?php endif; ?>
 
 			<div class="schrack-account__content-grid">
-				<?php if ( 'yes' === $settings['show_b2b_panel'] ) : ?>
-					<?php echo $this->b2b_panel( $user_id, $account_type, $status_config, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-				<?php endif; ?>
-
-				<?php echo $this->account_links_panel( $settings, $active_section ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-
 				<?php if ( 'yes' === $settings['show_recent_orders'] ) : ?>
 					<?php echo $this->recent_orders_panel( $user_id, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php endif; ?>
+
+				<?php if ( 'yes' === $settings['show_b2b_panel'] ) : ?>
+					<?php echo $this->b2b_panel( $user_id, $account_type, $status_config, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
 				<?php echo $this->billing_panel( $user_id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -496,7 +496,10 @@ class Schrack_Account_Renderer {
 		?>
 		<div class="schrack-account__panel schrack-account__panel--wide schrack-account__section" id="schrack-account-orders">
 			<div class="schrack-account__panel-head">
-				<h3><?php esc_html_e( 'Comenzile mele', 'schrack-woocommerce-sync' ); ?></h3>
+				<div>
+					<h3><?php esc_html_e( 'Comenzile mele', 'schrack-woocommerce-sync' ); ?></h3>
+					<p><?php esc_html_e( 'Istoric recent cu status, total, metoda de plata si produse comandate.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
 				<a href="<?php echo esc_url( $this->section_url( 'dashboard' ) ); ?>"><?php esc_html_e( 'Inapoi la sumar', 'schrack-woocommerce-sync' ); ?></a>
 			</div>
 
@@ -508,7 +511,7 @@ class Schrack_Account_Renderer {
 					<?php endif; ?>
 				</div>
 			<?php else : ?>
-				<div class="schrack-account__orders is-full">
+				<div class="schrack-account__order-list is-full">
 					<?php foreach ( $orders as $order ) : ?>
 						<?php if ( $order instanceof WC_Order ) : ?>
 							<?php echo $this->order_card( $order ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -538,6 +541,10 @@ class Schrack_Account_Renderer {
 		}
 
 		$order_date = $order->get_date_created();
+		$billing_vat = $this->order_meta_first( $order, array( '_billing_vat_number', 'billing_vat_number' ) );
+		$shipping_name = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
+		$billing_name = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
+		$customer_note = trim( (string) $order->get_customer_note() );
 
 		ob_start();
 		?>
@@ -553,11 +560,64 @@ class Schrack_Account_Renderer {
 				<?php echo $this->summary_card( __( 'Total', 'schrack-woocommerce-sync' ), wp_strip_all_tags( $order->get_formatted_order_total() ), __( 'Valoare', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			</div>
 
+			<div class="schrack-account__order-info-grid">
+				<?php
+				echo $this->order_info_block(
+					__( 'Facturare', 'schrack-woocommerce-sync' ),
+					array(
+						__( 'Client', 'schrack-woocommerce-sync' )   => '' !== $order->get_billing_company() ? $order->get_billing_company() : $billing_name,
+						__( 'CUI', 'schrack-woocommerce-sync' )      => $billing_vat,
+						__( 'Email', 'schrack-woocommerce-sync' )    => $order->get_billing_email(),
+						__( 'Telefon', 'schrack-woocommerce-sync' )  => $order->get_billing_phone(),
+						__( 'Localitate', 'schrack-woocommerce-sync' ) => trim( $order->get_billing_city() . ' ' . $order->get_billing_postcode() ),
+					)
+				); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo $this->order_info_block(
+					__( 'Livrare', 'schrack-woocommerce-sync' ),
+					array(
+						__( 'Destinatar', 'schrack-woocommerce-sync' ) => '' !== $shipping_name ? $shipping_name : $billing_name,
+						__( 'Metoda', 'schrack-woocommerce-sync' )     => $order->get_shipping_method(),
+						__( 'Adresa', 'schrack-woocommerce-sync' )     => trim( $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2() ),
+						__( 'Localitate', 'schrack-woocommerce-sync' ) => trim( $order->get_shipping_city() . ' ' . $order->get_shipping_postcode() ),
+					)
+				); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo $this->order_info_block(
+					__( 'Plata si totaluri', 'schrack-woocommerce-sync' ),
+					array(
+						__( 'Metoda plata', 'schrack-woocommerce-sync' ) => $order->get_payment_method_title(),
+						__( 'Subtotal', 'schrack-woocommerce-sync' )     => $this->order_money( $order, (float) $order->get_subtotal() ),
+						__( 'Transport', 'schrack-woocommerce-sync' )    => $this->order_money( $order, (float) $order->get_shipping_total() ),
+						__( 'TVA', 'schrack-woocommerce-sync' )          => $this->order_money( $order, (float) $order->get_total_tax() ),
+					)
+				); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				?>
+			</div>
+
+			<?php if ( '' !== $customer_note ) : ?>
+				<div class="schrack-account__order-note">
+					<strong><?php esc_html_e( 'Nota client', 'schrack-woocommerce-sync' ); ?></strong>
+					<p><?php echo esc_html( $customer_note ); ?></p>
+				</div>
+			<?php endif; ?>
+
 			<div class="schrack-account__order-lines">
+				<div class="schrack-account__order-lines-head">
+					<span><?php esc_html_e( 'Produs', 'schrack-woocommerce-sync' ); ?></span>
+					<span><?php esc_html_e( 'SKU', 'schrack-woocommerce-sync' ); ?></span>
+					<span><?php esc_html_e( 'Cant.', 'schrack-woocommerce-sync' ); ?></span>
+					<span><?php esc_html_e( 'Total', 'schrack-woocommerce-sync' ); ?></span>
+				</div>
 				<?php foreach ( $order->get_items() as $item ) : ?>
+					<?php
+					$product = method_exists( $item, 'get_product' ) ? $item->get_product() : null;
+					$sku     = $product instanceof WC_Product ? $product->get_sku() : '';
+					?>
 					<div class="schrack-account__order-line">
-						<span><?php echo esc_html( $item->get_name() ); ?></span>
-						<small><?php echo esc_html( sprintf( __( 'Cantitate: %s', 'schrack-woocommerce-sync' ), (string) $item->get_quantity() ) ); ?></small>
+						<span>
+							<strong><?php echo esc_html( $item->get_name() ); ?></strong>
+						</span>
+						<small><?php echo esc_html( '' !== $sku ? $sku : '-' ); ?></small>
+						<small><?php echo esc_html( (string) $item->get_quantity() ); ?></small>
 						<strong><?php echo wp_kses_post( $order->get_formatted_line_subtotal( $item ) ); ?></strong>
 					</div>
 				<?php endforeach; ?>
@@ -752,8 +812,13 @@ class Schrack_Account_Renderer {
 
 		ob_start();
 		?>
-		<div class="schrack-account__panel">
-			<h3><?php esc_html_e( 'Actiuni rapide', 'schrack-woocommerce-sync' ); ?></h3>
+		<div class="schrack-account__panel schrack-account__panel--wide schrack-account__actions">
+			<div class="schrack-account__panel-head">
+				<div>
+					<h3><?php esc_html_e( 'Actiuni rapide', 'schrack-woocommerce-sync' ); ?></h3>
+					<p><?php esc_html_e( 'Navigare directa in cont, comenzi, facturare si cos.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
+			</div>
 			<div class="schrack-account__link-list">
 				<?php foreach ( $links as $link ) : ?>
 					<a class="<?php echo esc_attr( (string) $link['section'] === $active_link ? 'is-active' : '' ); ?>" href="<?php echo esc_url( $link['url'] ); ?>"><?php echo esc_html( $link['label'] ); ?></a>
@@ -777,7 +842,10 @@ class Schrack_Account_Renderer {
 		?>
 		<div class="schrack-account__panel schrack-account__panel--wide">
 			<div class="schrack-account__panel-head">
-				<h3><?php esc_html_e( 'Comenzi recente', 'schrack-woocommerce-sync' ); ?></h3>
+				<div>
+					<h3><?php esc_html_e( 'Comenzi recente', 'schrack-woocommerce-sync' ); ?></h3>
+					<p><?php esc_html_e( 'Ultimele comenzi cu status comercial si sumar produse.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
 				<a href="<?php echo esc_url( $this->section_url( 'orders' ) ); ?>"><?php esc_html_e( 'Vezi toate', 'schrack-woocommerce-sync' ); ?></a>
 			</div>
 
@@ -789,7 +857,7 @@ class Schrack_Account_Renderer {
 					<?php endif; ?>
 				</div>
 			<?php else : ?>
-				<div class="schrack-account__orders">
+				<div class="schrack-account__order-list">
 					<?php foreach ( $orders as $order ) : ?>
 						<?php if ( $order instanceof WC_Order ) : ?>
 							<?php echo $this->order_card( $order ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -808,18 +876,151 @@ class Schrack_Account_Renderer {
 	 */
 	private function order_card( WC_Order $order ): string {
 		$order_date = $order->get_date_created();
+		$payment    = trim( (string) $order->get_payment_method_title() );
+		$shipping   = trim( (string) $order->get_shipping_method() );
+		$items      = $this->order_preview_items( $order );
 
 		ob_start();
 		?>
-		<a class="schrack-account__order" href="<?php echo esc_url( $this->order_url( (int) $order->get_id() ) ); ?>">
-			<span>#<?php echo esc_html( $order->get_order_number() ); ?></span>
-			<small><?php echo esc_html( $order_date ? wc_format_datetime( $order_date ) : '-' ); ?></small>
-			<em><?php echo esc_html( wc_get_order_status_name( $order->get_status() ) ); ?></em>
-			<strong><?php echo wp_kses_post( $order->get_formatted_order_total() ); ?></strong>
+		<a class="schrack-account__order-row" href="<?php echo esc_url( $this->order_url( (int) $order->get_id() ) ); ?>">
+			<span class="schrack-account__order-main">
+				<strong>#<?php echo esc_html( $order->get_order_number() ); ?></strong>
+				<small><?php echo esc_html( $order_date ? wc_format_datetime( $order_date ) : '-' ); ?></small>
+				<?php echo $this->order_status_badge( $order ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			</span>
+			<span class="schrack-account__order-products">
+				<strong><?php echo esc_html( $this->order_item_count_label( $order ) ); ?></strong>
+				<small><?php echo esc_html( $items ); ?></small>
+			</span>
+			<span class="schrack-account__order-commercial">
+				<small><?php echo esc_html( '' !== $payment ? $payment : __( 'Plata necompletata', 'schrack-woocommerce-sync' ) ); ?></small>
+				<small><?php echo esc_html( '' !== $shipping ? $shipping : __( 'Livrare necompletata', 'schrack-woocommerce-sync' ) ); ?></small>
+			</span>
+			<span class="schrack-account__order-total">
+				<small><?php esc_html_e( 'Total', 'schrack-woocommerce-sync' ); ?></small>
+				<strong><?php echo wp_kses_post( $order->get_formatted_order_total() ); ?></strong>
+				<em><?php esc_html_e( 'Detalii', 'schrack-woocommerce-sync' ); ?></em>
+			</span>
 		</a>
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders an order status badge.
+	 */
+	private function order_status_badge( WC_Order $order ): string {
+		$status = sanitize_html_class( 'is-' . $order->get_status() );
+
+		return sprintf(
+			'<em class="schrack-account__order-status %1$s">%2$s</em>',
+			esc_attr( $status ),
+			esc_html( wc_get_order_status_name( $order->get_status() ) )
+		);
+	}
+
+	/**
+	 * Returns a localized item count label for an order.
+	 */
+	private function order_item_count_label( WC_Order $order ): string {
+		$count = max( 0, (int) $order->get_item_count() );
+
+		return sprintf(
+			/* translators: %d: item count. */
+			_n( '%d produs', '%d produse', $count, 'schrack-woocommerce-sync' ),
+			$count
+		);
+	}
+
+	/**
+	 * Returns a compact product preview for an order.
+	 */
+	private function order_preview_items( WC_Order $order, int $limit = 3 ): string {
+		$names = array();
+
+		foreach ( $order->get_items() as $item ) {
+			$names[] = $item->get_name();
+
+			if ( count( $names ) >= $limit ) {
+				break;
+			}
+		}
+
+		if ( empty( $names ) ) {
+			return __( 'Fara produse listate', 'schrack-woocommerce-sync' );
+		}
+
+		$total = (int) count( $order->get_items() );
+		$text  = implode( ', ', array_map( 'sanitize_text_field', $names ) );
+
+		if ( $total > $limit ) {
+			$text .= ' +' . ( $total - $limit );
+		}
+
+		return $text;
+	}
+
+	/**
+	 * Renders a small information block in the order detail view.
+	 *
+	 * @param array<string,string> $rows Label/value rows.
+	 */
+	private function order_info_block( string $title, array $rows ): string {
+		ob_start();
+		?>
+		<section class="schrack-account__order-info">
+			<h4><?php echo esc_html( $title ); ?></h4>
+			<dl>
+				<?php foreach ( $rows as $label => $value ) : ?>
+					<?php $value = trim( wp_strip_all_tags( (string) $value ) ); ?>
+					<div>
+						<dt><?php echo esc_html( (string) $label ); ?></dt>
+						<dd><?php echo esc_html( '' !== $value ? $value : __( 'Necompletat', 'schrack-woocommerce-sync' ) ); ?></dd>
+					</div>
+				<?php endforeach; ?>
+			</dl>
+		</section>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Formats a monetary value using the order currency.
+	 */
+	private function order_money( WC_Order $order, float $amount ): string {
+		if ( function_exists( 'wc_price' ) ) {
+			$price = wp_strip_all_tags(
+				wc_price(
+					$amount,
+					array(
+						'currency' => $order->get_currency(),
+					)
+				)
+			);
+
+			return html_entity_decode( $price, ENT_QUOTES, get_bloginfo( 'charset' ) ?: 'UTF-8' );
+		}
+
+		return number_format_i18n( $amount, 2 ) . ' ' . $order->get_currency();
+	}
+
+	/**
+	 * Reads the first non-empty order meta value from a list of keys.
+	 *
+	 * @param array<int,string> $keys Meta keys.
+	 */
+	private function order_meta_first( WC_Order $order, array $keys ): string {
+		foreach ( $keys as $key ) {
+			$value = $order->get_meta( $key, true );
+
+			if ( is_scalar( $value ) && '' !== trim( (string) $value ) ) {
+				return sanitize_text_field( (string) $value );
+			}
+		}
+
+		return '';
 	}
 
 	/**
