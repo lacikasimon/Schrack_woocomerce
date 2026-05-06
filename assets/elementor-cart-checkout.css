@@ -1066,41 +1066,47 @@
 }
 
 .schrack-cart-checkout__woocommerce-order-received ul.woocommerce-order-overview {
-	clear: both;
+	display: none !important;
+}
+
+.schrack-cart-checkout__order-summary {
 	display: grid !important;
 	gap: 10px;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
-	list-style: none;
+	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 	margin: 0 !important;
 	padding: 0 !important;
 	width: 100%;
 }
 
-.schrack-cart-checkout__woocommerce-order-received ul.woocommerce-order-overview li {
+.schrack-cart-checkout__order-summary-card {
 	background: var(--schrack-cart-panel);
 	border: 1px solid var(--schrack-cart-border) !important;
 	border-radius: var(--schrack-cart-radius);
-	clear: none !important;
 	color: var(--schrack-cart-muted);
 	display: grid;
-	float: none !important;
-	font-size: 11px;
-	font-weight: 850;
 	gap: 6px;
 	line-height: 1.25;
 	margin: 0 !important;
+	min-height: 104px;
 	min-width: 0;
 	padding: 12px !important;
-	text-transform: uppercase;
-	width: auto !important;
 }
 
-.schrack-cart-checkout__woocommerce-order-received ul.woocommerce-order-overview li strong {
-	color: var(--schrack-cart-text);
-	display: block;
-	font-size: 15px;
+.schrack-cart-checkout__order-summary-card dt {
+	color: var(--schrack-cart-muted);
+	font-size: 11px;
 	font-weight: 850;
 	line-height: 1.25;
+	margin: 0;
+	text-transform: uppercase;
+}
+
+.schrack-cart-checkout__order-summary-card dd {
+	color: var(--schrack-cart-text);
+	font-size: 18px;
+	font-weight: 500;
+	line-height: 1.22;
+	margin: 0;
 	overflow-wrap: anywhere;
 	text-transform: none !important;
 }
@@ -1290,7 +1296,7 @@
 		grid-template-columns: 1fr;
 	}
 
-	.schrack-cart-checkout__woocommerce-order-received ul.woocommerce-order-overview {
+	.schrack-cart-checkout__order-summary {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
@@ -1331,7 +1337,7 @@
 		grid-template-columns: 1fr;
 	}
 
-	.schrack-cart-checkout__woocommerce-order-received ul.woocommerce-order-overview,
+	.schrack-cart-checkout__order-summary,
 	.schrack-cart-checkout__woocommerce-order-received .woocommerce-columns--addresses,
 	.schrack-cart-checkout__woocommerce-order-received .wc-bacs-bank-details {
 		grid-template-columns: 1fr;

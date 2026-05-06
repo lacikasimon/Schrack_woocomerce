@@ -646,7 +646,7 @@ class Schrack_Cart_Checkout_Renderer {
 				</div>
 
 				<div class="schrack-cart-checkout__woocommerce-order-received">
-					<?php echo $this->render_shortcode( 'woocommerce_checkout', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->render_order_received_content( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</div>
 			</div>
 
@@ -659,6 +659,145 @@ class Schrack_Cart_Checkout_Renderer {
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the WooCommerce confirmation content with a stable custom summary.
+	 *
+	 * @param array<string,string> $settings Settings.
+	 */
+	private function render_order_received_content( array $settings ): string {
+		$content = $this->render_shortcode( 'woocommerce_checkout', $settings );
+		$order   = $this->current_order();
+
+		if ( ! $order instanceof WC_Order ) {
+			return $content;
+		}
+
+		$summary = $this->order_received_summary( $order );
+
+		if ( '' === $summary ) {
+			return $content;
+		}
+
+		$content_with_summary = preg_replace_callback(
+			'/(<p[^>]*class="[^"]*woocommerce-thankyou-order-received[^"]*"[^>]*>.*?<\/p>)/is',
+			static fn( array $matches ): string => $matches[1] . $summary,
+			$content,
+			1
+		);
+
+		return is_string( $content_with_summary ) ? $content_with_summary : $summary . $content;
+	}
+
+	/**
+	 * Renders a controlled order summary row for the confirmation screen.
+	 */
+	private function order_received_summary( WC_Order $order ): string {
+		$date_created = $order->get_date_created();
+		$date_label   = $date_created ? wc_format_datetime( $date_created ) : '';
+
+		$items = array(
+			array(
+				'label' => __( 'Numar comanda', 'schrack-woocommerce-sync' ),
+				'value' => esc_html( $order->get_order_number() ),
+			),
+			array(
+				'label' => __( 'Data', 'schrack-woocommerce-sync' ),
+				'value' => esc_html( $date_label ),
+			),
+			array(
+				'label' => __( 'Email', 'schrack-woocommerce-sync' ),
+				'value' => esc_html( $order->get_billing_email() ),
+			),
+			array(
+				'label' => __( 'Total', 'schrack-woocommerce-sync' ),
+				'value' => wp_kses_post( $order->get_formatted_order_total() ),
+			),
+			array(
+				'label' => __( 'Metoda de plata', 'schrack-woocommerce-sync' ),
+				'value' => esc_html( $order->get_payment_method_title() ),
+			),
+		);
+
+		ob_start();
+		?>
+		<dl class="schrack-cart-checkout__order-summary" aria-label="<?php esc_attr_e( 'Rezumat comanda', 'schrack-woocommerce-sync' ); ?>">
+			<?php foreach ( $items as $item ) : ?>
+				<?php if ( '' === $item['value'] ) : ?>
+					<?php continue; ?>
+				<?php endif; ?>
+
+				<div class="schrack-cart-checkout__order-summary-card">
+					<dt><?php echo esc_html( $item['label'] ); ?></dt>
+					<dd><?php echo $item['value']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></dd>
+				</div>
+			<?php endforeach; ?>
+		</dl>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Returns the currently viewed order when the request is allowed to see it.
+	 */
+	private function current_order(): ?WC_Order {
+		if ( ! function_exists( 'wc_get_order' ) ) {
+			return null;
+		}
+
+		$order_id = 0;
+
+		if ( function_exists( 'get_query_var' ) ) {
+			$order_id = absint( get_query_var( 'order-received' ) );
+		}
+
+		global $wp;
+
+		if ( ! $order_id && isset( $wp ) && is_object( $wp ) && isset( $wp->query_vars['order-received'] ) ) {
+			$order_id = absint( $wp->query_vars['order-received'] );
+		}
+
+		if ( ! $order_id ) {
+			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) ) : '';
+			$path        = wp_parse_url( $request_uri, PHP_URL_PATH );
+
+			if ( is_string( $path ) && preg_match( '#/order-received/([0-9]+)/?#', $path, $matches ) ) {
+				$order_id = absint( $matches[1] );
+			}
+		}
+
+		if ( ! $order_id ) {
+			return null;
+		}
+
+		$order = wc_get_order( $order_id );
+
+		if ( ! $order instanceof WC_Order || ! $this->can_view_order( $order ) ) {
+			return null;
+		}
+
+		return $order;
+	}
+
+	/**
+	 * Checks whether the current visitor can see the order summary.
+	 */
+	private function can_view_order( WC_Order $order ): bool {
+		$request_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['key'] ) ) : '';
+
+		if ( '' !== $request_key ) {
+			return hash_equals( $order->get_order_key(), $request_key );
+		}
+
+		if ( current_user_can( 'manage_woocommerce' ) ) {
+			return true;
+		}
+
+		$user_id = get_current_user_id();
+
+		return 0 < $user_id && (int) $order->get_user_id() === $user_id;
 	}
 
 	/**
