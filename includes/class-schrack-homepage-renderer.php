@@ -1,6 +1,6 @@
 <?php
 /**
- * Elementor homepage category explorer renderer.
+ * Elementor homepage renderer for the Syshub technical catalog.
  *
  * @package SchrackWooCommerceSync
  */
@@ -27,18 +27,12 @@ class Schrack_Homepage_Renderer {
 			return '<div class="schrack-home"><p>' . esc_html__( 'WooCommerce este necesar pentru acest modul.', 'schrack-woocommerce-sync' ) . '</p></div>';
 		}
 
-		$settings                       = $this->sanitize_settings( $settings );
-		$terms                          = $this->catalog_terms( (int) $settings['category_limit'] );
-		$automatic_featured_terms       = $this->featured_terms( $terms, (int) $settings['featured_category_count'] );
-		$has_project_category_selection = ! empty( $settings['project_category_ids'] );
-		$has_bridge_category_selection  = ! empty( $settings['bridge_category_ids'] );
-		$hero_terms                     = $this->terms_for_block( $settings['hero_category_ids'], $automatic_featured_terms, 4 );
-		$solution_terms                 = $this->terms_for_block( $settings['solution_category_ids'], $automatic_featured_terms, 3 );
-		$featured_terms                 = $this->terms_for_block( $settings['featured_category_ids'], $automatic_featured_terms );
-		$project_terms                  = $this->terms_for_block( $settings['project_category_ids'], $terms );
-		$bridge_terms                   = $this->terms_for_block( $settings['bridge_category_ids'], $terms );
-		$tree_terms                     = $this->tree_terms_for_block( $settings['tree_category_ids'], $terms );
-		$tree                           = $this->term_tree( $tree_terms );
+		$settings       = $this->sanitize_settings( $settings );
+		$copy           = $this->homepage_copy();
+		$terms          = $this->catalog_terms( (int) $settings['category_limit'] );
+		$project_terms  = ! empty( $settings['project_category_ids'] ) ? $this->selected_terms( $settings['project_category_ids'], $terms ) : $terms;
+		$category_terms = ! empty( $settings['featured_category_ids'] ) ? $this->selected_terms( $settings['featured_category_ids'], $terms ) : $terms;
+		$product_terms  = ! empty( $settings['solution_category_ids'] ) ? $this->selected_terms( $settings['solution_category_ids'], $terms ) : $category_terms;
 
 		wp_enqueue_style( 'schrack-wc-homepage' );
 		wp_enqueue_script( 'schrack-wc-homepage' );
@@ -78,11 +72,12 @@ class Schrack_Homepage_Renderer {
 							<p class="schrack-home__support"><?php echo esc_html( $settings['support_text'] ); ?></p>
 						<?php endif; ?>
 
-						<?php echo $this->hero_benefits(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-
 						<div class="schrack-home__actions">
 							<a class="schrack-home__button" href="<?php echo esc_url( $settings['shop_url'] ); ?>">
 								<?php echo esc_html( $settings['button_text'] ); ?>
+							</a>
+							<a class="schrack-home__ghost-button" href="<?php echo esc_url( $settings['consultation_url'] ); ?>">
+								<?php echo esc_html( $settings['secondary_button_text'] ); ?>
 							</a>
 							<?php if ( '' !== $settings['company_meta'] ) : ?>
 								<span class="schrack-home__meta"><?php echo esc_html( $settings['company_meta'] ); ?></span>
@@ -90,71 +85,33 @@ class Schrack_Homepage_Renderer {
 						</div>
 					</div>
 
-					<?php echo $this->visual_gallery( $hero_terms ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->hero_visual( $copy['hero_visual'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</div>
 
-				<div class="schrack-home__facts" aria-label="<?php esc_attr_e( 'Informatii companie', 'schrack-woocommerce-sync' ); ?>">
-					<?php foreach ( $this->facts() as $fact ) : ?>
-						<div class="schrack-home__fact">
-							<strong><?php echo esc_html( $fact['label'] ); ?></strong>
-							<span><?php echo esc_html( $fact['value'] ); ?></span>
-						</div>
-					<?php endforeach; ?>
-				</div>
+				<?php echo $this->trust_band( $copy['trust'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 
 				<?php if ( 'yes' === $settings['show_project_paths'] ) : ?>
-					<?php echo $this->project_paths( $project_terms, $settings['shop_url'], $has_project_category_selection ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->project_navigation( $copy['projects'], $project_terms, $settings['shop_url'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
-				<?php if ( 'yes' === $settings['show_shop_bridge'] ) : ?>
-					<?php echo $this->shop_bridge( $bridge_terms, $settings['shop_url'], $has_bridge_category_selection ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php if ( 'yes' === $settings['show_featured_categories'] ) : ?>
+					<?php echo $this->curated_categories_section( $copy['categories'], $category_terms, $settings['shop_url'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
 				<?php if ( 'yes' === $settings['show_solution_spotlight'] ) : ?>
-					<?php echo $this->solution_spotlight( $solution_terms, $settings['show_counts'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->recommended_products_section( $copy['products'], $product_terms, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
-				<div class="schrack-home__catalog">
-					<div class="schrack-home__tree-panel">
-						<div class="schrack-home__panel-head">
-							<span><?php esc_html_e( 'Exploreaza categoriile', 'schrack-woocommerce-sync' ); ?></span>
-							<small><?php echo esc_html( sprintf( __( '%d categorii', 'schrack-woocommerce-sync' ), count( $tree_terms ) ) ); ?></small>
-						</div>
-
-						<label class="schrack-home__search">
-							<span><?php esc_html_e( 'Cauta in arbore', 'schrack-woocommerce-sync' ); ?></span>
-							<input type="search" placeholder="<?php esc_attr_e( 'Nume categorie', 'schrack-woocommerce-sync' ); ?>" data-home-category-search>
-						</label>
-
-						<div class="schrack-home__tree" data-home-category-tree>
-							<?php echo $this->render_tree( $tree, 0, 0, $settings['show_counts'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-						</div>
-						<div class="schrack-home__tree-empty" data-home-category-empty hidden>
-							<?php esc_html_e( 'Nu s-au gasit categorii pentru cautarea introdusa.', 'schrack-woocommerce-sync' ); ?>
-						</div>
-					</div>
-
-					<div class="schrack-home__catalog-main">
-						<?php if ( 'yes' === $settings['show_featured_categories'] ) : ?>
-							<?php echo $this->featured_categories( $featured_terms, $settings['show_counts'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-						<?php endif; ?>
-
-						<?php if ( 'yes' === $settings['show_services'] ) : ?>
-							<?php echo $this->service_cards(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-						<?php endif; ?>
-					</div>
-				</div>
-
-				<?php if ( 'yes' === $settings['show_process'] ) : ?>
-					<?php echo $this->process_steps(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php if ( 'yes' === $settings['show_services'] ) : ?>
+					<?php echo $this->why_syshub( $copy['why'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
-				<?php if ( 'yes' === $settings['show_references'] ) : ?>
-					<?php echo $this->project_references(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php if ( 'yes' === $settings['show_shop_bridge'] ) : ?>
+					<?php echo $this->b2b_offer_block( $copy['b2b'], $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
 				<?php if ( 'yes' === $settings['show_final_cta'] ) : ?>
-					<?php echo $this->final_cta( $settings['shop_url'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->closing_cta( $copy['final'], $settings['contact_url'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 			</div>
 		</section>
@@ -171,15 +128,21 @@ class Schrack_Homepage_Renderer {
 	 */
 	private function sanitize_settings( array $settings ): array {
 		$defaults = array(
-			'eyebrow'                 => __( 'GENE SYS SECURITY SRL', 'schrack-woocommerce-sync' ),
-			'title'                   => __( 'Magazin tehnic pentru proiecte electrice, fotovoltaice si securitate', 'schrack-woocommerce-sync' ),
-			'subtitle'                => __( 'Alege produse pentru instalatii electrice, sisteme fotovoltaice, CCTV, detectie la efractie si mentenanta, cu repere clare pentru proiecte civile si industriale.', 'schrack-woocommerce-sync' ),
-			'support_text'            => __( 'Syshub aduce contextul de proiectare, executie si documentatie; magazinul te ajuta sa pornesti rapid din categoriile potrivite, de la lista de materiale pana la ofertare.', 'schrack-woocommerce-sync' ),
-			'company_meta'            => __( 'Satu Mare - CUI RO 38322763', 'schrack-woocommerce-sync' ),
-			'button_text'             => __( 'Vezi catalogul de produse', 'schrack-woocommerce-sync' ),
+			'eyebrow'                 => __( 'Produse tehnice pentru proiecte electrice, securitate și fotovoltaice — cu suport tehnic Syshub.', 'schrack-woocommerce-sync' ),
+			'title'                   => __( 'Tot ce ai nevoie pentru proiecte electrice, securitate și energie solară', 'schrack-woocommerce-sync' ),
+			'subtitle'                => __( 'Alege produse tehnice potrivite pentru locuințe, spații comerciale și proiecte industriale — online, rapid și cu suport de specialitate.', 'schrack-woocommerce-sync' ),
+			'support_text'            => '',
+			'company_meta'            => '',
+			'button_text'             => __( 'Vezi produsele', 'schrack-woocommerce-sync' ),
+			'secondary_button_text'   => __( 'Cere consultanță', 'schrack-woocommerce-sync' ),
 			'shop_url'                => $this->default_shop_url(),
-			'category_limit'          => 220,
-			'featured_category_count' => 6,
+			'consultation_url'        => 'https://syshub.ro/contact',
+			'material_list_url'       => 'https://syshub.ro/contact',
+			'offer_url'               => 'https://syshub.ro/contact',
+			'contact_url'             => 'https://syshub.ro/contact',
+			'category_limit'            => 220,
+			'featured_category_count'   => 6,
+			'recommended_product_limit' => 8,
 			'hero_category_ids'       => array(),
 			'solution_category_ids'   => array(),
 			'featured_category_ids'   => array(),
@@ -202,8 +165,9 @@ class Schrack_Homepage_Renderer {
 		);
 
 		$settings = wp_parse_args( $settings, $defaults );
+		$settings = $this->replace_legacy_default_copy( $settings, $defaults );
 
-		foreach ( array( 'eyebrow', 'title', 'subtitle', 'support_text', 'company_meta', 'button_text' ) as $key ) {
+		foreach ( array( 'eyebrow', 'title', 'subtitle', 'support_text', 'company_meta', 'button_text', 'secondary_button_text' ) as $key ) {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
@@ -215,16 +179,58 @@ class Schrack_Homepage_Renderer {
 			$settings[ $key ] = $this->selected_term_ids( $settings[ $key ] ?? array() );
 		}
 
-		$settings['shop_url']                = esc_url_raw( (string) $settings['shop_url'] );
-		$settings['category_limit']          = max( 20, min( 600, absint( $settings['category_limit'] ) ) );
-		$settings['featured_category_count'] = max( 0, min( 8, absint( $settings['featured_category_count'] ) ) );
-		$settings['accent_color']            = sanitize_hex_color( (string) $settings['accent_color'] ) ?: $defaults['accent_color'];
-		$settings['action_color']            = sanitize_hex_color( (string) $settings['action_color'] ) ?: $defaults['action_color'];
-		$settings['max_width']               = max( 900, min( 1440, absint( $settings['max_width'] ) ) );
-		$settings['radius']                  = max( 0, min( 8, absint( $settings['radius'] ) ) );
+		foreach ( array( 'shop_url', 'consultation_url', 'material_list_url', 'offer_url', 'contact_url' ) as $url_key ) {
+			$settings[ $url_key ] = esc_url_raw( (string) $settings[ $url_key ] );
+		}
+
+		$settings['category_limit']            = max( 20, min( 600, absint( $settings['category_limit'] ) ) );
+		$settings['featured_category_count']   = max( 0, min( 8, absint( $settings['featured_category_count'] ) ) );
+		$settings['recommended_product_limit'] = max( 0, min( 12, absint( $settings['recommended_product_limit'] ) ) );
+		$settings['accent_color']              = sanitize_hex_color( (string) $settings['accent_color'] ) ?: $defaults['accent_color'];
+		$settings['action_color']              = sanitize_hex_color( (string) $settings['action_color'] ) ?: $defaults['action_color'];
+		$settings['max_width']                 = max( 900, min( 1440, absint( $settings['max_width'] ) ) );
+		$settings['radius']                    = max( 0, min( 8, absint( $settings['radius'] ) ) );
 
 		if ( '' === $settings['shop_url'] ) {
 			$settings['shop_url'] = $this->default_shop_url();
+		}
+
+		foreach ( array( 'consultation_url', 'material_list_url', 'offer_url', 'contact_url' ) as $url_key ) {
+			if ( '' === $settings[ $url_key ] ) {
+				$settings[ $url_key ] = 'https://syshub.ro/contact';
+			}
+		}
+
+		return $settings;
+	}
+
+	/**
+	 * Keeps already-saved Elementor widgets from freezing the old placeholder copy.
+	 *
+	 * @param array<string,mixed> $settings Current settings.
+	 * @param array<string,mixed> $defaults New defaults.
+	 * @return array<string,mixed>
+	 */
+	private function replace_legacy_default_copy( array $settings, array $defaults ): array {
+		$legacy_defaults = array(
+			'eyebrow'      => array( 'GENE SYS SECURITY SRL' ),
+			'title'        => array( 'Magazin tehnic pentru proiecte electrice, fotovoltaice si securitate' ),
+			'subtitle'     => array( 'Alege produse pentru instalatii electrice, sisteme fotovoltaice, CCTV, detectie la efractie si mentenanta, cu repere clare pentru proiecte civile si industriale.' ),
+			'support_text' => array( 'Syshub aduce contextul de proiectare, executie si documentatie; magazinul te ajuta sa pornesti rapid din categoriile potrivite, de la lista de materiale pana la ofertare.' ),
+			'company_meta' => array( 'Satu Mare - CUI RO 38322763' ),
+			'button_text'  => array( 'Vezi catalogul de produse', 'Vezi catalogul' ),
+		);
+
+		foreach ( $legacy_defaults as $key => $legacy_values ) {
+			if ( ! isset( $settings[ $key ] ) ) {
+				continue;
+			}
+
+			$current = trim( (string) $settings[ $key ] );
+
+			if ( in_array( $current, $legacy_values, true ) ) {
+				$settings[ $key ] = $defaults[ $key ] ?? '';
+			}
 		}
 
 		return $settings;
@@ -500,6 +506,525 @@ class Schrack_Homepage_Renderer {
 		}
 
 		return array_values( array_unique( array_filter( array_map( 'absint', $value ) ) ) );
+	}
+
+	/**
+	 * Central homepage copy used by the Syshub technical catalog layout.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function homepage_copy(): array {
+		return array(
+			'hero_visual' => array(
+				array(
+					'title'   => __( 'Electric', 'schrack-woocommerce-sync' ),
+					'text'    => __( 'Cabluri, tablouri, protecții, aparataj și accesorii de montaj.', 'schrack-woocommerce-sync' ),
+					'variant' => 'electric',
+				),
+				array(
+					'title'   => __( 'Securitate', 'schrack-woocommerce-sync' ),
+					'text'    => __( 'CCTV, alarmare, control acces și infrastructură pentru clădiri.', 'schrack-woocommerce-sync' ),
+					'variant' => 'security',
+				),
+				array(
+					'title'   => __( 'Fotovoltaice', 'schrack-woocommerce-sync' ),
+					'text'    => __( 'Componente pentru protecție, cablare, conectare și integrare solară.', 'schrack-woocommerce-sync' ),
+					'variant' => 'solar',
+				),
+				array(
+					'title'   => __( 'Automatizări', 'schrack-woocommerce-sync' ),
+					'text'    => __( 'Distribuție, comandă și control pentru aplicații tehnice.', 'schrack-woocommerce-sync' ),
+					'variant' => 'automation',
+				),
+			),
+			'trust'       => array(
+				__( 'Produse pentru proiecte rezidențiale, comerciale și industriale', 'schrack-woocommerce-sync' ),
+				__( 'Suport tehnic pentru alegerea componentelor potrivite', 'schrack-woocommerce-sync' ),
+				__( 'Soluții pentru instalații electrice, CCTV, alarmare și energie solară', 'schrack-woocommerce-sync' ),
+				__( 'Comandă online sau solicită ofertă personalizată', 'schrack-woocommerce-sync' ),
+			),
+			'projects'    => array(
+				'title'    => __( 'Alege după tipul proiectului', 'schrack-woocommerce-sync' ),
+				'subtitle' => __( 'Găsește mai ușor produsele potrivite pornind de la aplicația reală: locuințe, spații comerciale, hale industriale, sisteme de securitate sau instalații fotovoltaice.', 'schrack-woocommerce-sync' ),
+				'cards'    => array(
+					array(
+						'title'    => __( 'Instalații electrice rezidențiale', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Produse pentru locuințe, apartamente și case: cabluri, protecții, tablouri, aparataj și accesorii de montaj.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'electric', 'cabluri', 'conductori', 'protectii', 'protecții', 'tablouri', 'tablou', 'aparataj', 'prize', 'montaj' ),
+						'variant'  => 'home',
+					),
+					array(
+						'title'    => __( 'Clădiri comerciale și birouri', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Soluții pentru spații cu consum mai mare, distribuție electrică, iluminat, rețelistică și securitate.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'comercial', 'birouri', 'distributie', 'distribuție', 'iluminat', 'retea', 'rețea', 'retelistica', 'securitate' ),
+						'variant'  => 'retail',
+					),
+					array(
+						'title'    => __( 'Sisteme de supraveghere video', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Camere, NVR-uri, surse, cabluri și accesorii pentru proiecte CCTV complete.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'cctv', 'camera', 'camere', 'nvr', 'supraveghere', 'video', 'surse', 'cabluri' ),
+						'variant'  => 'security',
+					),
+					array(
+						'title'    => __( 'Sisteme de alarmare și control acces', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Echipamente pentru protecția clădirilor, detecție, avertizare și acces securizat.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'alarma', 'alarmare', 'efractie', 'efracție', 'control acces', 'acces', 'senzor', 'sirena', 'detector' ),
+						'variant'  => 'alarm',
+					),
+					array(
+						'title'    => __( 'Proiecte fotovoltaice', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Componente pentru instalații solare: protecții, cabluri, conectori, invertoare și accesorii dedicate.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'fotovoltaic', 'solar', 'panou', 'invertor', 'invertoare', 'pv', 'conector', 'protectii', 'protecții', 'cabluri' ),
+						'variant'  => 'solar',
+					),
+					array(
+						'title'    => __( 'Tablouri electrice și automatizări', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Componente pentru distribuție, protecție, comandă și automatizare în proiecte tehnice.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'tablouri', 'tablou', 'automatizare', 'automatizari', 'comanda', 'comandă', 'distributie', 'protecție', 'protectii' ),
+						'variant'  => 'industrial',
+					),
+				),
+			),
+			'categories'  => array(
+				'title'    => __( 'Categorii principale de produse', 'schrack-woocommerce-sync' ),
+				'subtitle' => __( 'Produsele sunt organizate pe domenii tehnice, pentru ca instalatorii, firmele și beneficiarii să poată găsi rapid componentele necesare.', 'schrack-woocommerce-sync' ),
+				'cards'    => array(
+					array(
+						'title'    => __( 'Cabluri și conductori', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Cabluri electrice, conductori și soluții de cablare pentru instalații tehnice.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'cabluri', 'cablu', 'conductori', 'conductor' ),
+					),
+					array(
+						'title'    => __( 'Tablouri electrice', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Tablouri, carcase și componente pentru distribuție electrică.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'tablouri', 'tablou', 'carcase', 'distributie', 'distribuție' ),
+					),
+					array(
+						'title'    => __( 'Protecții electrice', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Siguranțe, întrerupătoare, protecții diferențiale și protecții pentru circuite.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'protectii', 'protecții', 'sigurante', 'siguranțe', 'intrerupatoare', 'întrerupătoare', 'diferential' ),
+					),
+					array(
+						'title'    => __( 'Aparataj și prize', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Prize, întrerupătoare, rame și aparataj pentru clădiri rezidențiale sau comerciale.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'aparataj', 'prize', 'intrerupatoare', 'întrerupătoare', 'rame' ),
+					),
+					array(
+						'title'    => __( 'Iluminat tehnic', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Corpuri de iluminat și componente pentru aplicații tehnice.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'iluminat', 'corpuri', 'led', 'lampa', 'lampă' ),
+					),
+					array(
+						'title'    => __( 'CCTV și securitate', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Camere, NVR-uri, stocare și accesorii pentru supraveghere video.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'cctv', 'securitate', 'camera', 'camere', 'nvr', 'supraveghere', 'video' ),
+					),
+					array(
+						'title'    => __( 'Control acces și alarmare', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Echipamente pentru control acces, detecție, avertizare și protecție la efracție.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'control acces', 'acces', 'alarmare', 'alarma', 'efractie', 'efracție', 'senzor', 'sirena' ),
+					),
+					array(
+						'title'    => __( 'Fotovoltaice', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Componente pentru instalații solare, cablare, protecție și conectare.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'fotovoltaic', 'solar', 'panou', 'invertor', 'pv', 'conector', 'protectii' ),
+					),
+					array(
+						'title'    => __( 'Rack-uri și rețelistică', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Rack-uri, componente de rețea și accesorii pentru infrastructură tehnică.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'rack', 'rack-uri', 'retelistica', 'rețelistică', 'retea', 'rețea', 'patch' ),
+					),
+					array(
+						'title'    => __( 'Accesorii de montaj', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Doze, cleme, șine, conectori și consumabile pentru montaj corect.', 'schrack-woocommerce-sync' ),
+						'keywords' => array( 'montaj', 'accesorii montaj', 'doze', 'cleme', 'sina', 'șină', 'conectori' ),
+					),
+				),
+			),
+			'products'    => array(
+				'title'    => __( 'Produse recomandate pentru proiecte tehnice', 'schrack-woocommerce-sync' ),
+				'subtitle' => __( 'Componente utilizate frecvent în instalații electrice, sisteme de securitate și proiecte de infrastructură tehnică.', 'schrack-woocommerce-sync' ),
+			),
+			'why'         => array(
+				'title'   => __( 'De ce să alegi Syshub?', 'schrack-woocommerce-sync' ),
+				'text'    => __( 'Syshub nu este doar un magazin online. Combinăm selecția de produse tehnice cu experiența din proiecte reale de instalații electrice, securitate și sisteme fotovoltaice. Te ajutăm să alegi componente compatibile, corect dimensionate și potrivite pentru aplicația ta.', 'schrack-woocommerce-sync' ),
+				'columns' => array(
+					array(
+						'title' => __( 'Selecție tehnică', 'schrack-woocommerce-sync' ),
+						'text'  => __( 'Produse alese pentru proiecte reale, nu doar listări generice de catalog.', 'schrack-woocommerce-sync' ),
+					),
+					array(
+						'title' => __( 'Suport la alegere', 'schrack-woocommerce-sync' ),
+						'text'  => __( 'Dacă nu ești sigur ce componentă se potrivește, poți cere recomandare tehnică.', 'schrack-woocommerce-sync' ),
+					),
+					array(
+						'title' => __( 'Soluții complete', 'schrack-woocommerce-sync' ),
+						'text'  => __( 'De la cabluri și protecții până la CCTV, alarmare, automatizări și fotovoltaice.', 'schrack-woocommerce-sync' ),
+					),
+				),
+			),
+			'b2b'         => array(
+				'title'                 => __( 'Ai o listă de materiale sau un proiect complet?', 'schrack-woocommerce-sync' ),
+				'text'                  => __( 'Trimite-ne necesarul tău, iar echipa Syshub te poate ajuta cu identificarea produselor, verificarea compatibilității și pregătirea unei oferte adaptate proiectului.', 'schrack-woocommerce-sync' ),
+				'material_button_text'  => __( 'Trimite lista de materiale', 'schrack-woocommerce-sync' ),
+				'offer_button_text'     => __( 'Solicită ofertă', 'schrack-woocommerce-sync' ),
+			),
+			'final'       => array(
+				'title'       => __( 'Nu știi exact ce produs se potrivește?', 'schrack-woocommerce-sync' ),
+				'text'        => __( 'Spune-ne ce vrei să instalezi sau trimite-ne lista de materiale. Te ajutăm să găsești soluția potrivită pentru proiectul tău.', 'schrack-woocommerce-sync' ),
+				'button_text' => __( 'Contactează echipa Syshub', 'schrack-woocommerce-sync' ),
+			),
+		);
+	}
+
+	/**
+	 * Renders a non-catalog hero panel with curated technical domains.
+	 *
+	 * @param array<int,array<string,string>> $cards Hero visual cards.
+	 */
+	private function hero_visual( array $cards ): string {
+		ob_start();
+		?>
+		<div class="schrack-home__hero-panel" aria-label="<?php esc_attr_e( 'Domenii tehnice Syshub Shop', 'schrack-woocommerce-sync' ); ?>">
+			<?php foreach ( $cards as $card ) : ?>
+				<article class="schrack-home__hero-domain is-<?php echo esc_attr( $card['variant'] ); ?>">
+					<span aria-hidden="true"></span>
+					<strong><?php echo esc_html( $card['title'] ); ?></strong>
+					<p><?php echo esc_html( $card['text'] ); ?></p>
+				</article>
+			<?php endforeach; ?>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the trust/benefit strip.
+	 *
+	 * @param array<int,string> $items Benefit text list.
+	 */
+	private function trust_band( array $items ): string {
+		ob_start();
+		?>
+		<div class="schrack-home__trust" aria-label="<?php esc_attr_e( 'Avantaje Syshub Shop', 'schrack-woocommerce-sync' ); ?>">
+			<?php foreach ( $items as $item ) : ?>
+				<div class="schrack-home__trust-item">
+					<span aria-hidden="true"></span>
+					<strong><?php echo esc_html( $item ); ?></strong>
+				</div>
+			<?php endforeach; ?>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders curated project-based navigation.
+	 *
+	 * @param array<string,mixed> $copy Project section copy.
+	 * @param array<int,WP_Term> $terms Loaded product category terms.
+	 */
+	private function project_navigation( array $copy, array $terms, string $shop_url ): string {
+		ob_start();
+		?>
+		<div class="schrack-home__pathways">
+			<div class="schrack-home__section-head is-wide">
+				<div>
+					<span><?php echo esc_html( $copy['title'] ); ?></span>
+					<p><?php echo esc_html( $copy['subtitle'] ); ?></p>
+				</div>
+			</div>
+
+			<div class="schrack-home__path-grid">
+				<?php foreach ( $copy['cards'] as $card ) : ?>
+					<?php $product_url = $this->curated_term_url( $terms, $card['keywords'], $shop_url ); ?>
+					<article class="schrack-home__path-card is-<?php echo esc_attr( $card['variant'] ); ?>">
+						<div class="schrack-home__path-head">
+							<div class="schrack-home__path-icon" aria-hidden="true"></div>
+							<div class="schrack-home__path-copy">
+								<strong><?php echo esc_html( $card['title'] ); ?></strong>
+							</div>
+						</div>
+						<p class="schrack-home__path-text"><?php echo esc_html( $card['text'] ); ?></p>
+						<div class="schrack-home__path-actions">
+							<a class="schrack-home__mini-button" href="<?php echo esc_url( $product_url ); ?>"><?php esc_html_e( 'Vezi produse', 'schrack-woocommerce-sync' ); ?></a>
+						</div>
+					</article>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders human-curated categories instead of raw imported category names.
+	 *
+	 * @param array<string,mixed> $copy Category section copy.
+	 * @param array<int,WP_Term> $terms Loaded product category terms.
+	 */
+	private function curated_categories_section( array $copy, array $terms, string $shop_url ): string {
+		ob_start();
+		?>
+		<div class="schrack-home__curated">
+			<div class="schrack-home__section-head is-wide">
+				<div>
+					<span><?php echo esc_html( $copy['title'] ); ?></span>
+					<p><?php echo esc_html( $copy['subtitle'] ); ?></p>
+				</div>
+			</div>
+
+			<div class="schrack-home__curated-grid">
+				<?php foreach ( $copy['cards'] as $index => $card ) : ?>
+					<?php $url = $this->curated_term_url( $terms, $card['keywords'], $shop_url ); ?>
+					<a class="schrack-home__curated-card" href="<?php echo esc_url( $url ); ?>">
+						<span class="schrack-home__curated-marker" aria-hidden="true"><?php echo esc_html( str_pad( (string) ( $index + 1 ), 2, '0', STR_PAD_LEFT ) ); ?></span>
+						<strong><?php echo esc_html( $card['title'] ); ?></strong>
+						<span><?php echo esc_html( $card['text'] ); ?></span>
+					</a>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders recommended products for technical projects.
+	 *
+	 * @param array<string,string> $copy Product section copy.
+	 * @param array<int,WP_Term>  $terms Loaded product category terms.
+	 * @param array<string,mixed> $settings Widget settings.
+	 */
+	private function recommended_products_section( array $copy, array $terms, array $settings ): string {
+		$products = $this->recommended_products( $terms, $settings );
+
+		if ( empty( $products ) ) {
+			return '';
+		}
+
+		ob_start();
+		?>
+		<div class="schrack-home__recommended">
+			<div class="schrack-home__section-head is-wide">
+				<div>
+					<span><?php echo esc_html( $copy['title'] ); ?></span>
+					<p><?php echo esc_html( $copy['subtitle'] ); ?></p>
+				</div>
+			</div>
+
+			<div class="schrack-home__product-grid">
+				<?php foreach ( $products as $product ) : ?>
+					<?php echo $this->product_card( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Returns a small product set from curated technical categories.
+	 *
+	 * @param array<int,WP_Term>  $terms Loaded product category terms.
+	 * @param array<string,mixed> $settings Widget settings.
+	 * @return array<int,WC_Product>
+	 */
+	private function recommended_products( array $terms, array $settings ): array {
+		if ( ! function_exists( 'wc_get_products' ) || (int) $settings['recommended_product_limit'] <= 0 ) {
+			return array();
+		}
+
+		$args = array(
+			'status'  => 'publish',
+			'limit'   => (int) $settings['recommended_product_limit'],
+			'orderby' => 'popularity',
+			'order'   => 'DESC',
+			'return'  => 'objects',
+		);
+
+		$slugs = $this->recommended_term_slugs( $terms );
+
+		if ( ! empty( $slugs ) ) {
+			$args['category'] = $slugs;
+		}
+
+		$products = wc_get_products( $args );
+
+		if ( empty( $products ) && isset( $args['category'] ) ) {
+			unset( $args['category'] );
+			$products = wc_get_products( $args );
+		}
+
+		if ( ! is_array( $products ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_filter(
+				$products,
+				static fn( $product ): bool => $product instanceof WC_Product && $product->is_visible()
+			)
+		);
+	}
+
+	/**
+	 * Builds product-category slugs from the curated category definitions.
+	 *
+	 * @param array<int,WP_Term> $terms Loaded product category terms.
+	 * @return array<int,string>
+	 */
+	private function recommended_term_slugs( array $terms ): array {
+		$copy  = $this->homepage_copy();
+		$slugs = array();
+
+		foreach ( $copy['categories']['cards'] as $card ) {
+			$term = $this->best_term_for_keywords( $terms, $card['keywords'] );
+
+			if ( $term instanceof WP_Term && '' !== $term->slug ) {
+				$slugs[] = $term->slug;
+			}
+		}
+
+		return array_values( array_unique( $slugs ) );
+	}
+
+	/**
+	 * Renders a compact product card.
+	 */
+	private function product_card( WC_Product $product ): string {
+		$link       = $product->get_permalink();
+		$sku        = $product->get_sku();
+		$price_html = $product->get_price_html();
+
+		ob_start();
+		?>
+		<article class="schrack-home__product-card">
+			<a class="schrack-home__product-image" href="<?php echo esc_url( $link ); ?>">
+				<?php echo wp_kses_post( $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) ); ?>
+			</a>
+			<div class="schrack-home__product-body">
+				<?php if ( '' !== $sku ) : ?>
+					<small><?php echo esc_html( sprintf( __( 'Cod produs: %s', 'schrack-woocommerce-sync' ), $sku ) ); ?></small>
+				<?php endif; ?>
+				<a href="<?php echo esc_url( $link ); ?>"><?php echo esc_html( $product->get_name() ); ?></a>
+				<?php if ( '' !== $price_html ) : ?>
+					<span class="schrack-home__product-price"><?php echo wp_kses_post( $price_html ); ?></span>
+				<?php endif; ?>
+				<a class="schrack-home__mini-button" href="<?php echo esc_url( $link ); ?>"><?php esc_html_e( 'Vezi produs', 'schrack-woocommerce-sync' ); ?></a>
+			</div>
+		</article>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the Syshub reasoning block.
+	 *
+	 * @param array<string,mixed> $copy Why Syshub copy.
+	 */
+	private function why_syshub( array $copy ): string {
+		ob_start();
+		?>
+		<div class="schrack-home__why">
+			<div class="schrack-home__why-copy">
+				<span><?php echo esc_html( $copy['title'] ); ?></span>
+				<p><?php echo esc_html( $copy['text'] ); ?></p>
+			</div>
+			<div class="schrack-home__why-grid">
+				<?php foreach ( $copy['columns'] as $column ) : ?>
+					<article class="schrack-home__why-card">
+						<strong><?php echo esc_html( $column['title'] ); ?></strong>
+						<p><?php echo esc_html( $column['text'] ); ?></p>
+					</article>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the B2B material-list and offer CTA block.
+	 *
+	 * @param array<string,string> $copy B2B copy.
+	 * @param array<string,mixed>  $settings Widget settings.
+	 */
+	private function b2b_offer_block( array $copy, array $settings ): string {
+		ob_start();
+		?>
+		<div class="schrack-home__offer">
+			<div>
+				<span><?php echo esc_html( $copy['title'] ); ?></span>
+				<p><?php echo esc_html( $copy['text'] ); ?></p>
+			</div>
+			<div class="schrack-home__offer-actions">
+				<a class="schrack-home__button" href="<?php echo esc_url( $settings['material_list_url'] ); ?>"><?php echo esc_html( $copy['material_button_text'] ); ?></a>
+				<a class="schrack-home__ghost-button" href="<?php echo esc_url( $settings['offer_url'] ); ?>"><?php echo esc_html( $copy['offer_button_text'] ); ?></a>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the closing consultation CTA.
+	 *
+	 * @param array<string,string> $copy Final CTA copy.
+	 */
+	private function closing_cta( array $copy, string $contact_url ): string {
+		ob_start();
+		?>
+		<div class="schrack-home__final">
+			<div>
+				<strong><?php echo esc_html( $copy['title'] ); ?></strong>
+				<p><?php echo esc_html( $copy['text'] ); ?></p>
+			</div>
+			<div class="schrack-home__final-actions">
+				<a class="schrack-home__button" href="<?php echo esc_url( $contact_url ); ?>"><?php echo esc_html( $copy['button_text'] ); ?></a>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Returns the best matching category URL for a curated card.
+	 *
+	 * @param array<int,WP_Term> $terms Loaded product category terms.
+	 * @param array<int,string>  $keywords Matching keywords.
+	 */
+	private function curated_term_url( array $terms, array $keywords, string $shop_url ): string {
+		$term = $this->best_term_for_keywords( $terms, $keywords );
+
+		if ( ! $term instanceof WP_Term ) {
+			return $shop_url;
+		}
+
+		$link = get_term_link( $term );
+
+		return is_wp_error( $link ) ? $shop_url : (string) $link;
+	}
+
+	/**
+	 * Finds the strongest term match without exposing raw imported names in the UI.
+	 *
+	 * @param array<int,WP_Term> $terms Loaded product category terms.
+	 * @param array<int,string>  $keywords Matching keywords.
+	 */
+	private function best_term_for_keywords( array $terms, array $keywords ): ?WP_Term {
+		$matches = $this->matched_terms( $terms, $keywords, 1 );
+
+		return $matches[0] ?? null;
 	}
 
 	/**
@@ -848,8 +1373,8 @@ class Schrack_Homepage_Renderer {
 		?>
 		<div class="schrack-home__section-head">
 			<div>
-				<span><?php esc_html_e( 'Categorii populare', 'schrack-woocommerce-sync' ); ?></span>
-				<p><?php esc_html_e( 'Porneste rapid din categoriile principale ale magazinului.', 'schrack-woocommerce-sync' ); ?></p>
+				<span><?php esc_html_e( 'Categorii principale de produse', 'schrack-woocommerce-sync' ); ?></span>
+				<p><?php esc_html_e( 'Porneste din domenii tehnice clare, fara categorii brute importate pe prima pagina.', 'schrack-woocommerce-sync' ); ?></p>
 			</div>
 		</div>
 

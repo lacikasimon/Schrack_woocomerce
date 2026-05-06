@@ -84,9 +84,9 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'eyebrow',
 			array(
-				'label'   => __( 'Eticheta', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Mesaj pozitionare', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'GENE SYS SECURITY SRL', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Produse tehnice pentru proiecte electrice, securitate și fotovoltaice — cu suport tehnic Syshub.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -95,7 +95,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'       => __( 'Titlu', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::TEXT,
-				'default'     => __( 'Magazin tehnic pentru proiecte electrice, fotovoltaice si securitate', 'schrack-woocommerce-sync' ),
+				'default'     => __( 'Tot ce ai nevoie pentru proiecte electrice, securitate și energie solară', 'schrack-woocommerce-sync' ),
 				'label_block' => true,
 			)
 		);
@@ -105,43 +105,92 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Descriere', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXTAREA,
-				'default' => __( 'Alege produse pentru instalatii electrice, sisteme fotovoltaice, CCTV, detectie la efractie si mentenanta, cu repere clare pentru proiecte civile si industriale.', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Alege produse tehnice potrivite pentru locuințe, spații comerciale și proiecte industriale — online, rapid și cu suport de specialitate.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'support_text',
 			array(
-				'label'   => __( 'Descriere suplimentara', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Descriere suplimentara optionala', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXTAREA,
-				'default' => __( 'Syshub aduce contextul de proiectare, executie si documentatie; magazinul te ajuta sa pornesti rapid din categoriile potrivite, de la lista de materiale pana la ofertare.', 'schrack-woocommerce-sync' ),
+				'default' => '',
 			)
 		);
 
 		$this->add_control(
 			'company_meta',
 			array(
-				'label'   => __( 'Meta companie', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Nota hero optionala', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Satu Mare - CUI RO 38322763', 'schrack-woocommerce-sync' ),
+				'default' => '',
 			)
 		);
 
 		$this->add_control(
 			'button_text',
 			array(
-				'label'   => __( 'Text buton magazin', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Text buton produse', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Vezi catalogul de produse', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Vezi produsele', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'secondary_button_text',
+			array(
+				'label'   => __( 'Text buton consultanta', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::TEXT,
+				'default' => __( 'Cere consultanță', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'shop_url',
 			array(
-				'label'         => __( 'URL magazin', 'schrack-woocommerce-sync' ),
+				'label'         => __( 'URL produse', 'schrack-woocommerce-sync' ),
 				'type'          => \Elementor\Controls_Manager::URL,
 				'placeholder'   => $shop_placeholder,
+				'show_external' => false,
+			)
+		);
+
+		$this->add_control(
+			'consultation_url',
+			array(
+				'label'         => __( 'URL consultanta', 'schrack-woocommerce-sync' ),
+				'type'          => \Elementor\Controls_Manager::URL,
+				'placeholder'   => 'https://syshub.ro/contact',
+				'show_external' => false,
+			)
+		);
+
+		$this->add_control(
+			'material_list_url',
+			array(
+				'label'         => __( 'URL lista materiale', 'schrack-woocommerce-sync' ),
+				'type'          => \Elementor\Controls_Manager::URL,
+				'placeholder'   => 'https://syshub.ro/contact',
+				'show_external' => false,
+			)
+		);
+
+		$this->add_control(
+			'offer_url',
+			array(
+				'label'         => __( 'URL oferta', 'schrack-woocommerce-sync' ),
+				'type'          => \Elementor\Controls_Manager::URL,
+				'placeholder'   => 'https://syshub.ro/contact',
+				'show_external' => false,
+			)
+		);
+
+		$this->add_control(
+			'contact_url',
+			array(
+				'label'         => __( 'URL contact final', 'schrack-woocommerce-sync' ),
+				'type'          => \Elementor\Controls_Manager::URL,
+				'placeholder'   => 'https://syshub.ro/contact',
 				'show_external' => false,
 			)
 		);
@@ -159,20 +208,20 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'category_limit',
 			array(
-				'label'       => __( 'Categorii in arbore', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Categorii incarcate pentru mapare', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::NUMBER,
 				'default'     => 220,
 				'min'         => 20,
 				'max'         => 600,
 				'step'        => 20,
-				'description' => __( 'Limiteaza arborele pentru magazine mari si memorie redusa.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Limiteaza termenii folositi intern pentru legarea cardurilor curate la categorii reale.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'featured_category_count',
 			array(
-				'label'   => __( 'Carduri categorii', 'schrack-woocommerce-sync' ),
+				'label'   => __( 'Compatibilitate veche: carduri categorii', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::NUMBER,
 				'default' => 6,
 				'min'     => 0,
@@ -184,7 +233,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'block_category_heading',
 			array(
-				'label'     => __( 'Categorii pe blocuri', 'schrack-woocommerce-sync' ),
+				'label'     => __( 'Mapare categorii reale', 'schrack-woocommerce-sync' ),
 				'type'      => \Elementor\Controls_Manager::HEADING,
 				'separator' => 'before',
 			)
@@ -193,72 +242,84 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'hero_category_ids',
 			array(
-				'label'       => __( 'Categorii hero vizual', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Compatibilitate veche: categorii hero', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT2,
 				'options'     => $category_options,
 				'multiple'    => true,
 				'label_block' => true,
-				'description' => __( 'Alege pana la 4 categorii pentru cardurile mari din partea dreapta a hero-ului. Gol = automat.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Hero-ul nou foloseste domenii curate si nu afiseaza nume brute de categorii.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'solution_category_ids',
 			array(
-				'label'       => __( 'Categorii bloc solutii cu imagini', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Categorii pentru produse recomandate', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT2,
 				'options'     => $category_options,
 				'multiple'    => true,
 				'label_block' => true,
-				'description' => __( 'Primele 3 categorii selectate apar in blocul de solutii vizuale. Gol = automat.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Limiteaza produsele recomandate la aceste categorii. Gol = mapare automata pe categoriile curate.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'featured_category_ids',
 			array(
-				'label'       => __( 'Categorii populare afisate', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Categorii reale pentru maparea categoriilor curate', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT2,
 				'options'     => $category_options,
 				'multiple'    => true,
 				'label_block' => true,
-				'description' => __( 'Controleaza cardurile din blocul Categorii populare. Gol = automat.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Cardurile publice raman curate; selectia schimba doar linkurile catre categoriile WooCommerce.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'tree_category_ids',
 			array(
-				'label'       => __( 'Categorii in arborele de explorare', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Compatibilitate veche: arbore categorii', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT2,
 				'options'     => $category_options,
 				'multiple'    => true,
 				'label_block' => true,
-				'description' => __( 'Daca alegi categorii aici, arborele afiseaza doar selectia respectiva. Gol = toate categoriile incarcate.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Pagina principală nu mai afișează arbore brut de categorii importate.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'project_category_ids',
 			array(
-				'label'       => __( 'Categorii pentru blocul tip proiect', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Categorii reale pentru proiecte', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT2,
 				'options'     => $category_options,
 				'multiple'    => true,
 				'label_block' => true,
-				'description' => __( 'Limiteaza categoriile folosite in tagurile si butoanele din blocul Alege proiectul. Gol = automat din catalog.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Limiteaza linkurile din cardurile pe tip de proiect. Titlurile publice raman curate.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
 		$this->add_control(
 			'bridge_category_ids',
 			array(
-				'label'       => __( 'Categorii pentru blocul serviciu catre produse', 'schrack-woocommerce-sync' ),
+				'label'       => __( 'Compatibilitate veche: categorie serviciu-produse', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::SELECT2,
 				'options'     => $category_options,
 				'multiple'    => true,
 				'label_block' => true,
-				'description' => __( 'Limiteaza categoriile folosite in randurile Syshub x magazin. Gol = automat din catalog.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Blocul vechi a fost inlocuit cu cerere B2B si oferta personalizata.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'recommended_product_limit',
+			array(
+				'label'   => __( 'Produse recomandate afisate', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::NUMBER,
+				'default' => 8,
+				'min'     => 0,
+				'max'     => 12,
+				'step'    => 1,
 			)
 		);
 
@@ -270,14 +331,14 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
 				'return_value' => 'yes',
-				'default'      => 'yes',
+				'default'      => 'no',
 			)
 		);
 
 		$this->add_control(
 			'show_featured_categories',
 			array(
-				'label'        => __( 'Carduri categorii populare', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'Categorii principale curate', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
@@ -289,7 +350,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'show_project_paths',
 			array(
-				'label'        => __( 'Alegere tip proiect', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'Navigare dupa tipul proiectului', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
@@ -301,7 +362,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'show_shop_bridge',
 			array(
-				'label'        => __( 'Serviciu catre produse', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'Bloc B2B / oferta', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
@@ -313,7 +374,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'show_solution_spotlight',
 			array(
-				'label'        => __( 'Bloc solutii cu imagini', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'Produse recomandate', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
@@ -325,31 +386,31 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'show_process',
 			array(
-				'label'        => __( 'Flux ofertare si receptie', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'Compatibilitate veche: flux ofertare', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
 				'return_value' => 'yes',
-				'default'      => 'yes',
+				'default'      => 'no',
 			)
 		);
 
 		$this->add_control(
 			'show_references',
 			array(
-				'label'        => __( 'Repere proiecte Syshub', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'Compatibilitate veche: repere proiecte', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
 				'return_value' => 'yes',
-				'default'      => 'yes',
+				'default'      => 'no',
 			)
 		);
 
 		$this->add_control(
 			'show_final_cta',
 			array(
-				'label'        => __( 'CTA catalog / oferta', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'CTA final contact', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
@@ -361,7 +422,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$this->add_control(
 			'show_services',
 			array(
-				'label'        => __( 'Carduri servicii Syshub', 'schrack-woocommerce-sync' ),
+				'label'        => __( 'De ce Syshub', 'schrack-woocommerce-sync' ),
 				'type'         => \Elementor\Controls_Manager::SWITCHER,
 				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
 				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
@@ -447,8 +508,10 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 	protected function render(): void {
 		$settings = $this->get_settings_for_display();
 
-		if ( isset( $settings['shop_url'] ) && is_array( $settings['shop_url'] ) ) {
-			$settings['shop_url'] = (string) ( $settings['shop_url']['url'] ?? '' );
+		foreach ( array( 'shop_url', 'consultation_url', 'material_list_url', 'offer_url', 'contact_url' ) as $url_key ) {
+			if ( isset( $settings[ $url_key ] ) && is_array( $settings[ $url_key ] ) ) {
+				$settings[ $url_key ] = (string) ( $settings[ $url_key ]['url'] ?? '' );
+			}
 		}
 
 		foreach ( array( 'max_width', 'radius' ) as $slider_key ) {

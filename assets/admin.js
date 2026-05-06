@@ -270,8 +270,88 @@
 		updateBulkSelectionState(root);
 	}
 
+	function initB2BFilters(root) {
+		var form = root.closest('form');
+		var table = form ? form.querySelector('[data-b2b-table]') : null;
+		var search = root.querySelector('[data-b2b-search]');
+		var statusFilter = root.querySelector('[data-b2b-status-filter]');
+		var clear = root.querySelector('[data-b2b-clear-filters]');
+		var visibleCount = root.querySelector('[data-b2b-visible-count]');
+		var rows = table ? toArray(table.querySelectorAll('[data-b2b-row]')) : [];
+		var emptyRow = table ? table.querySelector('[data-b2b-empty-row]') : null;
+
+		function refresh() {
+			var query = search ? search.value.trim().toLowerCase() : '';
+			var status = statusFilter ? statusFilter.value : '';
+			var count = 0;
+
+			rows.forEach(function (row) {
+				var searchText = (row.getAttribute('data-b2b-search') || '').toLowerCase();
+				var rowStatus = row.getAttribute('data-b2b-status') || '';
+				var matchesSearch = '' === query || searchText.indexOf(query) !== -1;
+				var matchesStatus = '' === status || rowStatus === status;
+				var isVisible = matchesSearch && matchesStatus;
+
+				row.hidden = !isVisible;
+
+				if (isVisible) {
+					count++;
+				}
+			});
+
+			if (visibleCount) {
+				visibleCount.textContent = String(count);
+			}
+
+			if (emptyRow) {
+				emptyRow.hidden = count > 0;
+			}
+		}
+
+		if (!table) {
+			return;
+		}
+
+		if (search) {
+			search.addEventListener('input', refresh);
+		}
+
+		if (statusFilter) {
+			statusFilter.addEventListener('change', refresh);
+		}
+
+		if (clear) {
+			clear.addEventListener('click', function () {
+				if (search) {
+					search.value = '';
+				}
+
+				if (statusFilter) {
+					statusFilter.value = '';
+				}
+
+				refresh();
+
+				if (search) {
+					search.focus();
+				}
+			});
+		}
+
+		refresh();
+	}
+
 	function initMarkupBulkControls() {
 		toArray(document.querySelectorAll('[data-markups-bulk]')).forEach(initMarkupBulk);
+	}
+
+	function initB2BFilterControls() {
+		toArray(document.querySelectorAll('[data-b2b-filters]')).forEach(initB2BFilters);
+	}
+
+	function initAdminControls() {
+		initMarkupBulkControls();
+		initB2BFilterControls();
 	}
 
 	document.addEventListener('submit', function (event) {
@@ -287,8 +367,8 @@
 	});
 
 	if ('loading' === document.readyState) {
-		document.addEventListener('DOMContentLoaded', initMarkupBulkControls);
+		document.addEventListener('DOMContentLoaded', initAdminControls);
 	} else {
-		initMarkupBulkControls();
+		initAdminControls();
 	}
 }());

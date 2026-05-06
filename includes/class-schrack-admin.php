@@ -95,8 +95,8 @@ class Schrack_Admin {
 
 		add_submenu_page(
 			'woocommerce',
-			__( 'Schrack B2B Customers', 'schrack-woocommerce-sync' ),
-			__( 'Schrack B2B', 'schrack-woocommerce-sync' ),
+			__( 'Clienti B2B', 'schrack-woocommerce-sync' ),
+			__( 'Clienti B2B', 'schrack-woocommerce-sync' ),
 			self::CAPABILITY,
 			'schrack-sync-b2b',
 			array( $this, 'render_b2b_page' )
@@ -208,12 +208,12 @@ class Schrack_Admin {
 			$updated++;
 		}
 
-		$this->logger->info( 'admin', 'Schrack B2B customers were updated.', '', array( 'updated' => $updated ) );
+		$this->logger->info( 'admin', 'Clienti B2B were updated.', '', array( 'updated' => $updated ) );
 		$this->set_notice(
 			'success',
 			sprintf(
 				/* translators: %d: updated customers. */
-				__( '%d B2B customer rows saved.', 'schrack-woocommerce-sync' ),
+				__( '%d clienti B2B salvati.', 'schrack-woocommerce-sync' ),
 				$updated
 			)
 		);
@@ -397,7 +397,7 @@ class Schrack_Admin {
 		$b2b_status   = in_array( $b2b_status, array( 'pending', 'approved', 'rejected', 'disabled' ), true ) ? $b2b_status : 'pending';
 
 		?>
-		<h2><?php esc_html_e( 'Schrack B2B', 'schrack-woocommerce-sync' ); ?></h2>
+		<h2><?php esc_html_e( 'Clienti B2B', 'schrack-woocommerce-sync' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>
 				<th><label for="schrack_account_type"><?php esc_html_e( 'Tip cont', 'schrack-woocommerce-sync' ); ?></label></th>
@@ -924,7 +924,7 @@ class Schrack_Admin {
 		$tabs = array(
 			'settings' => array( 'label' => __( 'Settings', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync' ),
 			'markups'  => array( 'label' => __( 'Category Markups', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-markups' ),
-			'b2b'      => array( 'label' => __( 'B2B Customers', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-b2b' ),
+			'b2b'      => array( 'label' => __( 'Clienti B2B', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-b2b' ),
 			'manual'   => array( 'label' => __( 'Manual Sync', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-manual' ),
 			'logs'     => array( 'label' => __( 'Logs', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-logs' ),
 			'status'   => array( 'label' => __( 'Status', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-status' ),
