@@ -35,11 +35,12 @@
 }
 
 .schrack-cart-checkout__hero {
-	align-items: end;
+	align-items: flex-start;
 	background: linear-gradient(180deg, #fff 0%, #f9fafc 100%);
 	border: 1px solid var(--schrack-cart-border);
 	border-radius: var(--schrack-cart-radius);
 	display: flex;
+	flex-wrap: wrap;
 	gap: 20px;
 	justify-content: space-between;
 	padding: 22px;
@@ -47,6 +48,7 @@
 
 .schrack-cart-checkout__intro {
 	display: grid;
+	flex: 1 1 420px;
 	gap: 8px;
 	min-width: 0;
 }
@@ -78,11 +80,15 @@
 .schrack-cart-checkout__steps {
 	align-items: stretch;
 	display: flex;
-	flex: 0 0 auto;
+	flex: 1 1 300px;
+	flex-wrap: wrap;
 	gap: 8px;
 	list-style: none;
 	margin: 0;
+	max-width: 100%;
+	min-width: 0;
 	padding: 0;
+	justify-content: flex-end;
 }
 
 .schrack-cart-checkout__steps li {
@@ -91,8 +97,11 @@
 	border: 1px solid var(--schrack-cart-border);
 	border-radius: var(--schrack-cart-radius);
 	display: inline-flex;
+	flex: 0 1 auto;
 	gap: 8px;
+	max-width: 100%;
 	min-height: 42px;
+	min-width: 0;
 	padding: 8px 10px;
 }
 
@@ -115,6 +124,8 @@
 	font-size: 12px;
 	font-weight: 850;
 	line-height: 1.2;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .schrack-cart-checkout__layout {
@@ -186,6 +197,7 @@
 	align-items: center;
 	border-bottom: 1px solid var(--schrack-cart-border);
 	display: flex;
+	flex-wrap: wrap;
 	gap: 12px;
 	justify-content: space-between;
 	padding-bottom: 14px;
@@ -193,10 +205,12 @@
 
 .schrack-cart-checkout__panel-head h2 {
 	color: var(--schrack-cart-text);
+	flex: 1 1 260px;
 	font-size: 20px;
 	font-weight: 850;
 	line-height: 1.18;
 	margin: 0;
+	min-width: 0;
 }
 
 .schrack-cart-checkout__panel-head span {
@@ -204,9 +218,12 @@
 	border: 1px solid color-mix(in srgb, var(--schrack-cart-accent) 24%, var(--schrack-cart-border));
 	border-radius: 999px;
 	color: var(--schrack-cart-accent);
+	flex: 0 1 auto;
 	font-size: 12px;
 	font-weight: 850;
 	line-height: 1.15;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 	padding: 7px 10px;
 	text-align: center;
 }
@@ -245,11 +262,24 @@
 .schrack-cart-checkout__notice {
 	border: 1px solid var(--schrack-cart-border);
 	border-radius: var(--schrack-cart-radius);
+	display: block;
 	font-size: 14px;
 	font-weight: 750;
 	line-height: 1.45;
 	margin: 0 0 14px;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
 	padding: 12px 14px;
+	text-align: left;
+	width: 100%;
+}
+
+.schrack-cart-checkout .woocommerce-error li,
+.schrack-cart-checkout .woocommerce-info li,
+.schrack-cart-checkout .woocommerce-message li {
+	max-width: 100%;
+	overflow-wrap: anywhere;
 }
 
 .schrack-cart-checkout .woocommerce-message,
@@ -1289,6 +1319,7 @@
 
 	.schrack-cart-checkout__steps {
 		flex-wrap: wrap;
+		justify-content: flex-start;
 		width: 100%;
 	}
 

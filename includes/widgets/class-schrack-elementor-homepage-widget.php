@@ -63,6 +63,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 	 */
 	protected function register_controls(): void {
 		$shop_placeholder = home_url( '/shop/' );
+		$category_options = $this->category_options();
 
 		if ( function_exists( 'wc_get_page_permalink' ) ) {
 			$shop_url = wc_get_page_permalink( 'shop' );
@@ -177,6 +178,87 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 				'min'     => 0,
 				'max'     => 8,
 				'step'    => 1,
+			)
+		);
+
+		$this->add_control(
+			'block_category_heading',
+			array(
+				'label'     => __( 'Categorii pe blocuri', 'schrack-woocommerce-sync' ),
+				'type'      => \Elementor\Controls_Manager::HEADING,
+				'separator' => 'before',
+			)
+		);
+
+		$this->add_control(
+			'hero_category_ids',
+			array(
+				'label'       => __( 'Categorii hero vizual', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::SELECT2,
+				'options'     => $category_options,
+				'multiple'    => true,
+				'label_block' => true,
+				'description' => __( 'Alege pana la 4 categorii pentru cardurile mari din partea dreapta a hero-ului. Gol = automat.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'solution_category_ids',
+			array(
+				'label'       => __( 'Categorii bloc solutii cu imagini', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::SELECT2,
+				'options'     => $category_options,
+				'multiple'    => true,
+				'label_block' => true,
+				'description' => __( 'Primele 3 categorii selectate apar in blocul de solutii vizuale. Gol = automat.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'featured_category_ids',
+			array(
+				'label'       => __( 'Categorii populare afisate', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::SELECT2,
+				'options'     => $category_options,
+				'multiple'    => true,
+				'label_block' => true,
+				'description' => __( 'Controleaza cardurile din blocul Categorii populare. Gol = automat.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'tree_category_ids',
+			array(
+				'label'       => __( 'Categorii in arborele de explorare', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::SELECT2,
+				'options'     => $category_options,
+				'multiple'    => true,
+				'label_block' => true,
+				'description' => __( 'Daca alegi categorii aici, arborele afiseaza doar selectia respectiva. Gol = toate categoriile incarcate.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'project_category_ids',
+			array(
+				'label'       => __( 'Categorii pentru blocul tip proiect', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::SELECT2,
+				'options'     => $category_options,
+				'multiple'    => true,
+				'label_block' => true,
+				'description' => __( 'Limiteaza categoriile folosite in tagurile si butoanele din blocul Alege proiectul. Gol = automat din catalog.', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'bridge_category_ids',
+			array(
+				'label'       => __( 'Categorii pentru blocul serviciu catre produse', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::SELECT2,
+				'options'     => $category_options,
+				'multiple'    => true,
+				'label_block' => true,
+				'description' => __( 'Limiteaza categoriile folosite in randurile Syshub x magazin. Gol = automat din catalog.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -378,5 +460,46 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$renderer = new Schrack_Homepage_Renderer();
 
 		echo $renderer->render( $settings, $this->get_id() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Returns product category options for Elementor select controls.
+	 *
+	 * @return array<int,string>
+	 */
+	private function category_options(): array {
+		if ( ! taxonomy_exists( 'product_cat' ) ) {
+			return array();
+		}
+
+		$terms = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'number'     => 500,
+				'orderby'    => 'name',
+				'order'      => 'ASC',
+			)
+		);
+
+		if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
+			return array();
+		}
+
+		$options = array();
+
+		foreach ( $terms as $term ) {
+			if ( ! $term instanceof WP_Term ) {
+				continue;
+			}
+
+			$options[ (int) $term->term_id ] = sprintf(
+				'%s (%d)',
+				$term->name,
+				(int) $term->count
+			);
+		}
+
+		return $options;
 	}
 }

@@ -27,10 +27,18 @@ class Schrack_Homepage_Renderer {
 			return '<div class="schrack-home"><p>' . esc_html__( 'WooCommerce este necesar pentru acest modul.', 'schrack-woocommerce-sync' ) . '</p></div>';
 		}
 
-		$settings       = $this->sanitize_settings( $settings );
-		$terms          = $this->catalog_terms( (int) $settings['category_limit'] );
-		$featured_terms = $this->featured_terms( $terms, (int) $settings['featured_category_count'] );
-		$tree           = $this->term_tree( $terms );
+		$settings                       = $this->sanitize_settings( $settings );
+		$terms                          = $this->catalog_terms( (int) $settings['category_limit'] );
+		$automatic_featured_terms       = $this->featured_terms( $terms, (int) $settings['featured_category_count'] );
+		$has_project_category_selection = ! empty( $settings['project_category_ids'] );
+		$has_bridge_category_selection  = ! empty( $settings['bridge_category_ids'] );
+		$hero_terms                     = $this->terms_for_block( $settings['hero_category_ids'], $automatic_featured_terms, 4 );
+		$solution_terms                 = $this->terms_for_block( $settings['solution_category_ids'], $automatic_featured_terms, 3 );
+		$featured_terms                 = $this->terms_for_block( $settings['featured_category_ids'], $automatic_featured_terms );
+		$project_terms                  = $this->terms_for_block( $settings['project_category_ids'], $terms );
+		$bridge_terms                   = $this->terms_for_block( $settings['bridge_category_ids'], $terms );
+		$tree_terms                     = $this->tree_terms_for_block( $settings['tree_category_ids'], $terms );
+		$tree                           = $this->term_tree( $tree_terms );
 
 		wp_enqueue_style( 'schrack-wc-homepage' );
 		wp_enqueue_script( 'schrack-wc-homepage' );
@@ -82,7 +90,7 @@ class Schrack_Homepage_Renderer {
 						</div>
 					</div>
 
-					<?php echo $this->visual_gallery( $featured_terms ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->visual_gallery( $hero_terms ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</div>
 
 				<div class="schrack-home__facts" aria-label="<?php esc_attr_e( 'Informatii companie', 'schrack-woocommerce-sync' ); ?>">
@@ -95,22 +103,22 @@ class Schrack_Homepage_Renderer {
 				</div>
 
 				<?php if ( 'yes' === $settings['show_project_paths'] ) : ?>
-					<?php echo $this->project_paths( $terms, $settings['shop_url'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->project_paths( $project_terms, $settings['shop_url'], $has_project_category_selection ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
 				<?php if ( 'yes' === $settings['show_shop_bridge'] ) : ?>
-					<?php echo $this->shop_bridge( $terms, $settings['shop_url'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->shop_bridge( $bridge_terms, $settings['shop_url'], $has_bridge_category_selection ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
 				<?php if ( 'yes' === $settings['show_solution_spotlight'] ) : ?>
-					<?php echo $this->solution_spotlight( $featured_terms, $settings['show_counts'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->solution_spotlight( $solution_terms, $settings['show_counts'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 
 				<div class="schrack-home__catalog">
 					<div class="schrack-home__tree-panel">
 						<div class="schrack-home__panel-head">
 							<span><?php esc_html_e( 'Exploreaza categoriile', 'schrack-woocommerce-sync' ); ?></span>
-							<small><?php echo esc_html( sprintf( __( '%d categorii', 'schrack-woocommerce-sync' ), count( $terms ) ) ); ?></small>
+							<small><?php echo esc_html( sprintf( __( '%d categorii', 'schrack-woocommerce-sync' ), count( $tree_terms ) ) ); ?></small>
 						</div>
 
 						<label class="schrack-home__search">
@@ -159,7 +167,7 @@ class Schrack_Homepage_Renderer {
 	 * Normalizes widget settings.
 	 *
 	 * @param array<string,mixed> $settings Raw settings.
-	 * @return array<string,string|int>
+	 * @return array<string,mixed>
 	 */
 	private function sanitize_settings( array $settings ): array {
 		$defaults = array(
@@ -172,6 +180,12 @@ class Schrack_Homepage_Renderer {
 			'shop_url'                => $this->default_shop_url(),
 			'category_limit'          => 220,
 			'featured_category_count' => 6,
+			'hero_category_ids'       => array(),
+			'solution_category_ids'   => array(),
+			'featured_category_ids'   => array(),
+			'tree_category_ids'       => array(),
+			'project_category_ids'    => array(),
+			'bridge_category_ids'     => array(),
 			'show_counts'              => 'yes',
 			'show_services'            => 'yes',
 			'show_project_paths'       => 'yes',
@@ -195,6 +209,10 @@ class Schrack_Homepage_Renderer {
 
 		foreach ( array( 'show_counts', 'show_services', 'show_project_paths', 'show_shop_bridge', 'show_solution_spotlight', 'show_featured_categories', 'show_process', 'show_references', 'show_final_cta' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
+		}
+
+		foreach ( array( 'hero_category_ids', 'solution_category_ids', 'featured_category_ids', 'tree_category_ids', 'project_category_ids', 'bridge_category_ids' ) as $key ) {
+			$settings[ $key ] = $this->selected_term_ids( $settings[ $key ] ?? array() );
 		}
 
 		$settings['shop_url']                = esc_url_raw( (string) $settings['shop_url'] );
@@ -328,6 +346,163 @@ class Schrack_Homepage_Renderer {
 	}
 
 	/**
+	 * Returns selected terms for a specific homepage block, with automatic fallback.
+	 *
+	 * @param array<int,int> $selected_ids Selected product category IDs.
+	 * @param array<int,WP_Term> $automatic_terms Fallback terms when no selection exists.
+	 * @return array<int,WP_Term>
+	 */
+	private function terms_for_block( array $selected_ids, array $automatic_terms, int $limit = 0 ): array {
+		if ( ! empty( $selected_ids ) ) {
+			$selected_terms = $this->selected_terms( $selected_ids, $automatic_terms );
+
+			if ( ! empty( $selected_terms ) ) {
+				return $limit > 0 ? array_slice( $selected_terms, 0, $limit ) : $selected_terms;
+			}
+		}
+
+		return $limit > 0 ? array_slice( $automatic_terms, 0, $limit ) : $automatic_terms;
+	}
+
+	/**
+	 * Returns terms for the category tree, including descendants of selected parents.
+	 *
+	 * @param array<int,int>     $selected_ids Selected product category IDs.
+	 * @param array<int,WP_Term> $automatic_terms Fallback terms when no selection exists.
+	 * @return array<int,WP_Term>
+	 */
+	private function tree_terms_for_block( array $selected_ids, array $automatic_terms ): array {
+		if ( empty( $selected_ids ) ) {
+			return $automatic_terms;
+		}
+
+		$selected_terms = $this->selected_terms( $selected_ids, $automatic_terms );
+
+		if ( empty( $selected_terms ) ) {
+			return $automatic_terms;
+		}
+
+		$descendant_ids = array();
+
+		foreach ( $selected_ids as $term_id ) {
+			$children = get_term_children( $term_id, 'product_cat' );
+
+			if ( is_wp_error( $children ) || ! is_array( $children ) ) {
+				continue;
+			}
+
+			$descendant_ids = array_merge( $descendant_ids, $children );
+		}
+
+		return $this->merge_terms( $selected_terms, $this->selected_terms( $descendant_ids, $automatic_terms ) );
+	}
+
+	/**
+	 * Returns selected terms in the configured order.
+	 *
+	 * @param array<int,int> $selected_ids Selected product category IDs.
+	 * @param array<int,WP_Term> $available_terms Already loaded terms.
+	 * @return array<int,WP_Term>
+	 */
+	private function selected_terms( array $selected_ids, array $available_terms ): array {
+		$terms_by_id = array();
+
+		foreach ( $available_terms as $term ) {
+			$terms_by_id[ (int) $term->term_id ] = $term;
+		}
+
+		$missing_ids = array_values(
+			array_filter(
+				$selected_ids,
+				static fn( int $term_id ): bool => ! isset( $terms_by_id[ $term_id ] )
+			)
+		);
+
+		foreach ( $this->terms_by_ids( $missing_ids ) as $term ) {
+			$terms_by_id[ (int) $term->term_id ] = $term;
+		}
+
+		$selected_terms = array();
+
+		foreach ( $selected_ids as $term_id ) {
+			if ( isset( $terms_by_id[ $term_id ] ) ) {
+				$selected_terms[] = $terms_by_id[ $term_id ];
+			}
+		}
+
+		return $selected_terms;
+	}
+
+	/**
+	 * Loads category terms by ID.
+	 *
+	 * @param array<int,int> $ids Category IDs.
+	 * @return array<int,WP_Term>
+	 */
+	private function terms_by_ids( array $ids ): array {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $ids ) ) ) );
+
+		if ( empty( $ids ) || ! taxonomy_exists( 'product_cat' ) ) {
+			return array();
+		}
+
+		$terms = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'include'    => $ids,
+				'orderby'    => 'include',
+			)
+		);
+
+		if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_filter(
+				$terms,
+				static fn( $term ): bool => $term instanceof WP_Term
+			)
+		);
+	}
+
+	/**
+	 * Merges term lists without duplicates.
+	 *
+	 * @param array<int,WP_Term> $primary Primary terms.
+	 * @param array<int,WP_Term> $extra Extra terms.
+	 * @return array<int,WP_Term>
+	 */
+	private function merge_terms( array $primary, array $extra ): array {
+		$merged = array();
+
+		foreach ( array_merge( $primary, $extra ) as $term ) {
+			$merged[ (int) $term->term_id ] = $term;
+		}
+
+		return array_values( $merged );
+	}
+
+	/**
+	 * Normalizes Elementor select2 values to category IDs.
+	 *
+	 * @param mixed $value Raw Elementor value.
+	 * @return array<int,int>
+	 */
+	private function selected_term_ids( mixed $value ): array {
+		if ( is_string( $value ) ) {
+			$value = '' === trim( $value ) ? array() : explode( ',', $value );
+		}
+
+		if ( ! is_array( $value ) ) {
+			return array();
+		}
+
+		return array_values( array_unique( array_filter( array_map( 'absint', $value ) ) ) );
+	}
+
+	/**
 	 * Renders short hero benefit descriptions.
 	 */
 	private function hero_benefits(): string {
@@ -375,13 +550,14 @@ class Schrack_Homepage_Renderer {
 		?>
 		<div class="schrack-home__visual" aria-label="<?php esc_attr_e( 'Categorii recomandate', 'schrack-woocommerce-sync' ); ?>">
 			<?php foreach ( array_slice( $terms, 0, 4 ) as $index => $term ) : ?>
-				<figure class="schrack-home__visual-card <?php echo 0 === $index ? 'is-large' : ''; ?>">
+				<?php $link = get_term_link( $term ); ?>
+				<a class="schrack-home__visual-card <?php echo 0 === $index ? 'is-large' : ''; ?>" href="<?php echo esc_url( is_wp_error( $link ) ? '#' : $link ); ?>">
 					<?php echo $this->term_image( $term, 'woocommerce_thumbnail' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-					<figcaption>
+					<span class="schrack-home__visual-caption">
 						<strong><?php echo esc_html( $term->name ); ?></strong>
 						<span><?php echo esc_html( sprintf( __( '%d produse in catalog', 'schrack-woocommerce-sync' ), (int) $term->count ) ); ?></span>
-					</figcaption>
-				</figure>
+					</span>
+				</a>
 			<?php endforeach; ?>
 		</div>
 		<?php
@@ -393,8 +569,9 @@ class Schrack_Homepage_Renderer {
 	 * Renders project-entry cards that keep the next step commerce-oriented.
 	 *
 	 * @param array<int,WP_Term> $terms Category terms.
+	 * @param bool               $fallback_to_selected_terms Use the selected list when keyword matching is empty.
 	 */
-	private function project_paths( array $terms, string $shop_url ): string {
+	private function project_paths( array $terms, string $shop_url, bool $fallback_to_selected_terms = false ): string {
 		$paths = array(
 			array(
 				'label'       => __( 'Rezidential', 'schrack-woocommerce-sync' ),
@@ -459,7 +636,7 @@ class Schrack_Homepage_Renderer {
 			<div class="schrack-home__path-grid">
 				<?php foreach ( $paths as $path ) : ?>
 					<?php
-					$matched_terms = $this->matched_terms( $terms, $path['keywords'], 3 );
+					$matched_terms = $this->matched_terms( $terms, $path['keywords'], 3, $fallback_to_selected_terms );
 					$product_url   = $this->term_collection_url( $matched_terms, $shop_url );
 					?>
 					<div class="schrack-home__path-card is-<?php echo esc_attr( $path['variant'] ); ?>" role="group" aria-label="<?php echo esc_attr( $path['label'] . ': ' . $path['title'] ); ?>">
@@ -496,8 +673,9 @@ class Schrack_Homepage_Renderer {
 	 * Renders a service-to-product bridge for shop-oriented visitors.
 	 *
 	 * @param array<int,WP_Term> $terms Category terms.
+	 * @param bool               $fallback_to_selected_terms Use the selected list when keyword matching is empty.
 	 */
-	private function shop_bridge( array $terms, string $shop_url ): string {
+	private function shop_bridge( array $terms, string $shop_url, bool $fallback_to_selected_terms = false ): string {
 		ob_start();
 		?>
 		<div class="schrack-home__commerce">
@@ -510,7 +688,7 @@ class Schrack_Homepage_Renderer {
 			<div class="schrack-home__commerce-list">
 				<?php foreach ( $this->services() as $service ) : ?>
 					<?php
-					$matched_terms = $this->matched_terms( $terms, $service['keywords'], 4 );
+					$matched_terms = $this->matched_terms( $terms, $service['keywords'], 4, $fallback_to_selected_terms );
 					$product_url   = $this->term_collection_url( $matched_terms, $shop_url );
 					?>
 					<article class="schrack-home__commerce-row is-<?php echo esc_attr( $service['variant'] ); ?>">
@@ -967,9 +1145,10 @@ class Schrack_Homepage_Renderer {
 	 *
 	 * @param array<int,WP_Term> $terms Category terms.
 	 * @param array<int,string>  $keywords Search tokens.
+	 * @param bool               $fallback_to_terms Return the first terms when no keyword match exists.
 	 * @return array<int,WP_Term>
 	 */
-	private function matched_terms( array $terms, array $keywords, int $limit ): array {
+	private function matched_terms( array $terms, array $keywords, int $limit, bool $fallback_to_terms = false ): array {
 		if ( empty( $terms ) || empty( $keywords ) || $limit <= 0 ) {
 			return array();
 		}
@@ -1017,10 +1196,16 @@ class Schrack_Homepage_Renderer {
 			}
 		);
 
-		return array_map(
+		$matched_terms = array_map(
 			static fn( array $item ): WP_Term => $item['term'],
 			array_slice( $scored, 0, $limit )
 		);
+
+		if ( empty( $matched_terms ) && $fallback_to_terms ) {
+			return array_slice( $terms, 0, $limit );
+		}
+
+		return $matched_terms;
 	}
 
 	/**
