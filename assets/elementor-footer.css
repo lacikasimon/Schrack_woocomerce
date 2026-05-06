@@ -404,14 +404,18 @@
 .schrack-footer__payments {
 	align-items: center;
 	display: flex;
-	margin: 0 0 24px;
+	justify-content: center;
+	margin: 24px 0 0;
 	min-width: 0;
+	text-align: center;
+	width: 100%;
 }
 
 .schrack-footer__payments img {
 	border: 0;
 	display: block;
 	height: auto;
+	margin: 0 auto;
 	max-width: min(100%, 420px);
 	width: 420px;
 }

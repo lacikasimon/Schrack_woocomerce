@@ -112,7 +112,7 @@ class Schrack_Footer_Renderer {
 					</div>
 				</div>
 
-				<?php if ( 'yes' === $settings['show_eu_block'] || 'yes' === $settings['show_anpc'] ) : ?>
+				<?php if ( 'yes' === $settings['show_eu_block'] || 'yes' === $settings['show_anpc'] || 'yes' === $settings['show_payments'] ) : ?>
 					<div class="schrack-footer__compliance">
 						<?php if ( 'yes' === $settings['show_eu_block'] ) : ?>
 							<div class="schrack-footer__eu">
@@ -128,14 +128,16 @@ class Schrack_Footer_Renderer {
 							</div>
 						<?php endif; ?>
 
-						<div class="schrack-footer__service-tags" aria-label="<?php esc_attr_e( 'Servicii complete', 'schrack-woocommerce-sync' ); ?>">
-							<h4><?php esc_html_e( 'Servicii complete:', 'schrack-woocommerce-sync' ); ?></h4>
-							<div>
-								<?php foreach ( array( __( 'Consultanta', 'schrack-woocommerce-sync' ), __( 'Proiectare', 'schrack-woocommerce-sync' ), __( 'Executie', 'schrack-woocommerce-sync' ), __( 'Mentenanta', 'schrack-woocommerce-sync' ) ) as $tag ) : ?>
-									<span><?php echo esc_html( $tag ); ?></span>
-								<?php endforeach; ?>
+						<?php if ( 'yes' === $settings['show_eu_block'] || 'yes' === $settings['show_anpc'] ) : ?>
+							<div class="schrack-footer__service-tags" aria-label="<?php esc_attr_e( 'Servicii complete', 'schrack-woocommerce-sync' ); ?>">
+								<h4><?php esc_html_e( 'Servicii complete:', 'schrack-woocommerce-sync' ); ?></h4>
+								<div>
+									<?php foreach ( array( __( 'Consultanta', 'schrack-woocommerce-sync' ), __( 'Proiectare', 'schrack-woocommerce-sync' ), __( 'Executie', 'schrack-woocommerce-sync' ), __( 'Mentenanta', 'schrack-woocommerce-sync' ) ) as $tag ) : ?>
+										<span><?php echo esc_html( $tag ); ?></span>
+									<?php endforeach; ?>
+								</div>
 							</div>
-						</div>
+						<?php endif; ?>
 
 						<?php if ( 'yes' === $settings['show_anpc'] ) : ?>
 							<div class="schrack-footer__anpc">
@@ -149,6 +151,18 @@ class Schrack_Footer_Renderer {
 								</div>
 							</div>
 						<?php endif; ?>
+
+						<?php if ( 'yes' === $settings['show_payments'] ) : ?>
+							<div class="schrack-footer__payments" aria-label="<?php esc_attr_e( 'Metode de plata acceptate', 'schrack-woocommerce-sync' ); ?>">
+								<img
+									src="<?php echo esc_url( $this->payment_logo_src() ); ?>"
+									alt="<?php esc_attr_e( 'NETOPIA Payments, Mastercard si Visa', 'schrack-woocommerce-sync' ); ?>"
+									width="1852"
+									height="349"
+									loading="lazy"
+								>
+							</div>
+						<?php endif; ?>
 					</div>
 				<?php endif; ?>
 
@@ -156,18 +170,6 @@ class Schrack_Footer_Renderer {
 					<p class="schrack-footer__legal">
 						<?php echo esc_html( $settings['company_name'] ); ?> · CUI <?php echo esc_html( $settings['cui'] ); ?> · Reg. Com. <?php echo esc_html( $settings['reg_com'] ); ?> · <?php echo esc_html( $settings['cui_note'] ); ?> · EUID <?php echo esc_html( $settings['euid'] ); ?>
 					</p>
-
-					<?php if ( 'yes' === $settings['show_payments'] ) : ?>
-						<div class="schrack-footer__payments" aria-label="<?php esc_attr_e( 'Metode de plata acceptate', 'schrack-woocommerce-sync' ); ?>">
-							<img
-								src="<?php echo esc_url( $this->payment_logo_src() ); ?>"
-								alt="<?php esc_attr_e( 'NETOPIA Payments, Mastercard si Visa', 'schrack-woocommerce-sync' ); ?>"
-								width="1852"
-								height="349"
-								loading="lazy"
-							>
-						</div>
-					<?php endif; ?>
 
 					<div class="schrack-footer__bottom-row">
 						<p><?php echo esc_html( sprintf( __( '© %1$d GENE SYS SECURITY SRL. Toate drepturile rezervate.', 'schrack-woocommerce-sync' ), (int) gmdate( 'Y' ) ) ); ?></p>
