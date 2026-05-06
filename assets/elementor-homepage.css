@@ -239,6 +239,7 @@
 	border: 1px solid var(--schrack-home-border);
 	border-radius: var(--schrack-home-radius);
 	box-shadow: 0 14px 34px rgba(20, 31, 43, 0.08);
+	color: var(--schrack-home-text);
 	display: grid;
 	gap: 10px;
 	grid-template-rows: auto auto minmax(0, 1fr);
@@ -246,6 +247,17 @@
 	overflow: hidden;
 	padding: 18px;
 	position: relative;
+	text-decoration: none;
+	transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.schrack-home__hero-domain:hover,
+.schrack-home__hero-domain:focus {
+	border-color: color-mix(in srgb, var(--schrack-domain-accent, var(--schrack-home-accent)) 36%, var(--schrack-home-border));
+	box-shadow: 0 18px 42px rgba(20, 31, 43, 0.12);
+	color: var(--schrack-home-text);
+	outline: none;
+	transform: translateY(-2px);
 }
 
 .schrack-home__hero-domain::before {

@@ -804,26 +804,22 @@
 }
 
 .schrack-b2b-table th:nth-child(1) {
-	width: 18%;
+	width: 22%;
 }
 
 .schrack-b2b-table th:nth-child(2) {
-	width: 25%;
+	width: 23%;
 }
 
 .schrack-b2b-table th:nth-child(3) {
-	width: 18%;
+	width: 25%;
 }
 
 .schrack-b2b-table th:nth-child(4) {
-	width: 11%;
+	width: 20%;
 }
 
 .schrack-b2b-table th:nth-child(5) {
-	width: 18%;
-}
-
-.schrack-b2b-table th:nth-child(6) {
 	width: 10%;
 }
 
@@ -841,6 +837,7 @@
 }
 
 .schrack-b2b-table input[type="text"],
+.schrack-b2b-table input[type="email"],
 .schrack-b2b-table input[type="number"],
 .schrack-b2b-table select {
 	max-width: 100%;
@@ -856,9 +853,29 @@
 	justify-self: start;
 }
 
+.schrack-b2b-row-id,
+.schrack-b2b-field-label {
+	color: var(--schrack-text-muted);
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.25;
+	margin-bottom: 3px;
+}
+
+.schrack-b2b-row-id {
+	margin-bottom: 0;
+}
+
 .schrack-b2b-discount {
+	display: grid !important;
+	gap: 5px;
+	max-width: none;
+}
+
+.schrack-b2b-discount__control {
 	align-items: center;
-	display: flex !important;
+	display: flex;
 	gap: 6px;
 	max-width: 120px;
 }
@@ -867,9 +884,19 @@
 	min-width: 76px;
 }
 
-.schrack-b2b-discount span {
+.schrack-b2b-discount__control span {
 	color: var(--schrack-text-muted);
 	font-weight: 700;
+}
+
+.schrack-b2b-actions {
+	display: grid;
+	gap: 8px;
+}
+
+.schrack-b2b-actions .button {
+	text-align: center;
+	width: 100%;
 }
 
 .schrack-b2b-empty-row td {

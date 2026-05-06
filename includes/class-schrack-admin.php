@@ -196,6 +196,7 @@ class Schrack_Admin {
 			: array();
 
 		$updated = 0;
+		$warnings = array();
 
 		foreach ( $input as $user_id => $row ) {
 			$user_id = absint( $user_id );
@@ -204,19 +205,31 @@ class Schrack_Admin {
 				continue;
 			}
 
-			$this->save_b2b_user_meta( $user_id, $row );
+			$warning = $this->save_b2b_user_meta( $user_id, $row );
+
+			if ( null !== $warning ) {
+				$warnings[] = $warning;
+			}
+
 			$updated++;
 		}
 
 		$this->logger->info( 'admin', 'Clienti B2B were updated.', '', array( 'updated' => $updated ) );
-		$this->set_notice(
-			'success',
-			sprintf(
-				/* translators: %d: updated customers. */
-				__( '%d clienti B2B salvati.', 'schrack-woocommerce-sync' ),
-				$updated
-			)
+		$message = sprintf(
+			/* translators: %d: updated customers. */
+			__( '%d clienti B2B salvati.', 'schrack-woocommerce-sync' ),
+			$updated
 		);
+
+		if ( ! empty( $warnings ) ) {
+			$message .= ' ' . sprintf(
+				/* translators: %d: warning count. */
+				__( '%d campuri nu au putut fi actualizate.', 'schrack-woocommerce-sync' ),
+				count( $warnings )
+			);
+		}
+
+		$this->set_notice( empty( $warnings ) ? 'success' : 'warning', $message, empty( $warnings ) ? array() : $warnings );
 		$this->redirect( 'schrack-sync-b2b' );
 	}
 
@@ -476,13 +489,85 @@ class Schrack_Admin {
 	 *
 	 * @param array<string,mixed> $input Unsanitized row input.
 	 */
-	private function save_b2b_user_meta( int $user_id, array $input ): void {
-		$account_type = isset( $input['account_type'] ) && 'b2b' === sanitize_key( (string) $input['account_type'] ) ? 'b2b' : 'customer';
-		$status       = $this->sanitize_admin_choice( $input['status'] ?? 'pending', array( 'pending', 'approved', 'rejected', 'disabled' ), 'pending' );
-		$company      = isset( $input['company'] ) ? sanitize_text_field( (string) $input['company'] ) : '';
-		$cui          = isset( $input['cui'] ) ? sanitize_text_field( (string) $input['cui'] ) : '';
-		$reg_number   = isset( $input['registration_number'] ) ? sanitize_text_field( (string) $input['registration_number'] ) : '';
-		$discount     = $this->sanitize_b2b_discount_percent( $input['discount_percent'] ?? 0 );
+	private function save_b2b_user_meta( int $user_id, array $input ): ?string {
+		$account_type     = isset( $input['account_type'] ) && 'b2b' === sanitize_key( (string) $input['account_type'] ) ? 'b2b' : 'customer';
+		$status           = $this->sanitize_admin_choice( $input['status'] ?? 'pending', array( 'pending', 'approved', 'rejected', 'disabled' ), 'pending' );
+		$has_first_name   = array_key_exists( 'first_name', $input );
+		$has_last_name    = array_key_exists( 'last_name', $input );
+		$has_display_name = array_key_exists( 'display_name', $input );
+		$first_name       = isset( $input['first_name'] ) ? sanitize_text_field( (string) $input['first_name'] ) : '';
+		$last_name        = isset( $input['last_name'] ) ? sanitize_text_field( (string) $input['last_name'] ) : '';
+		$display_name     = isset( $input['display_name'] ) ? sanitize_text_field( (string) $input['display_name'] ) : '';
+		$email            = isset( $input['email'] ) ? sanitize_email( (string) $input['email'] ) : '';
+		$registered       = isset( $input['registered'] ) ? $this->sanitize_admin_datetime( $input['registered'] ) : '';
+		$company          = isset( $input['company'] ) ? sanitize_text_field( (string) $input['company'] ) : '';
+		$cui              = isset( $input['cui'] ) ? sanitize_text_field( (string) $input['cui'] ) : '';
+		$reg_number       = isset( $input['registration_number'] ) ? sanitize_text_field( (string) $input['registration_number'] ) : '';
+		$discount         = $this->sanitize_b2b_discount_percent( $input['discount_percent'] ?? 0 );
+		$phone            = isset( $input['billing_phone'] ) ? sanitize_text_field( (string) $input['billing_phone'] ) : '';
+		$address          = isset( $input['billing_address_1'] ) ? sanitize_text_field( (string) $input['billing_address_1'] ) : '';
+		$city             = isset( $input['billing_city'] ) ? sanitize_text_field( (string) $input['billing_city'] ) : '';
+		$county           = isset( $input['billing_state'] ) ? sanitize_text_field( (string) $input['billing_state'] ) : '';
+		$postcode         = isset( $input['billing_postcode'] ) ? sanitize_text_field( (string) $input['billing_postcode'] ) : '';
+		$requested_at     = array_key_exists( 'requested_at', $input ) ? $this->sanitize_admin_datetime( $input['requested_at'] ) : null;
+		$approved_at      = array_key_exists( 'approved_at', $input ) ? $this->sanitize_admin_datetime( $input['approved_at'] ) : null;
+		$warning          = null;
+
+		$user_data = array( 'ID' => $user_id );
+
+		if ( $has_first_name ) {
+			$user_data['first_name'] = $first_name;
+		}
+
+		if ( $has_last_name ) {
+			$user_data['last_name'] = $last_name;
+		}
+
+		if ( $has_display_name && '' === $display_name ) {
+			$display_name = trim( $first_name . ' ' . $last_name );
+		}
+
+		if ( $has_display_name && '' !== $display_name ) {
+			$user_data['display_name'] = $display_name;
+		}
+
+		if ( '' !== $registered ) {
+			$user_data['user_registered'] = $registered;
+		}
+
+		if ( '' !== $email && is_email( $email ) ) {
+			$email_owner = email_exists( $email );
+
+			if ( false === $email_owner || (int) $email_owner === $user_id ) {
+				$user_data['user_email'] = $email;
+			} else {
+				$warning = sprintf(
+					/* translators: 1: user id, 2: email address. */
+					__( 'User #%1$d: emailul %2$s este deja folosit de alt cont.', 'schrack-woocommerce-sync' ),
+					$user_id,
+					$email
+				);
+			}
+		} elseif ( array_key_exists( 'email', $input ) ) {
+			$warning = sprintf(
+				/* translators: %d: user id. */
+				__( 'User #%d: email invalid, restul datelor au fost salvate.', 'schrack-woocommerce-sync' ),
+				$user_id
+			);
+		}
+
+		if ( count( $user_data ) > 1 ) {
+			$user_result = wp_update_user( $user_data );
+
+			if ( is_wp_error( $user_result ) ) {
+				$warning = sprintf(
+					/* translators: 1: user id, 2: error message. */
+					__( 'User #%1$d: datele userului nu au putut fi actualizate: %2$s', 'schrack-woocommerce-sync' ),
+					$user_id,
+					$user_result->get_error_message()
+				);
+			}
+		}
 
 		update_user_meta( $user_id, '_schrack_account_type', $account_type );
 		update_user_meta( $user_id, '_schrack_b2b_status', $status );
@@ -491,21 +576,59 @@ class Schrack_Admin {
 		update_user_meta( $user_id, '_schrack_b2b_registration_number', $reg_number );
 		update_user_meta( $user_id, '_schrack_b2b_discount_percent', $this->format_percent_value( $discount ) );
 
-		if ( 'b2b' === $account_type && '' === (string) get_user_meta( $user_id, '_schrack_b2b_requested_at', true ) ) {
+		if ( null !== $requested_at ) {
+			update_user_meta( $user_id, '_schrack_b2b_requested_at', $requested_at );
+		}
+
+		if ( null !== $approved_at ) {
+			update_user_meta( $user_id, '_schrack_b2b_approved_at', $approved_at );
+		}
+
+		if ( 'b2b' === $account_type && null === $requested_at && '' === (string) get_user_meta( $user_id, '_schrack_b2b_requested_at', true ) ) {
 			update_user_meta( $user_id, '_schrack_b2b_requested_at', current_time( 'mysql' ) );
 		}
 
-		if ( 'b2b' === $account_type && 'approved' === $status && '' === (string) get_user_meta( $user_id, '_schrack_b2b_approved_at', true ) ) {
+		if ( 'b2b' === $account_type && 'approved' === $status && null === $approved_at && '' === (string) get_user_meta( $user_id, '_schrack_b2b_approved_at', true ) ) {
 			update_user_meta( $user_id, '_schrack_b2b_approved_at', current_time( 'mysql' ) );
 		}
 
-		if ( '' !== $company ) {
-			update_user_meta( $user_id, 'billing_company', $company );
+		if ( $has_first_name ) {
+			update_user_meta( $user_id, 'billing_first_name', $first_name );
 		}
 
-		if ( '' !== $cui ) {
-			update_user_meta( $user_id, 'billing_vat_number', $cui );
+		if ( $has_last_name ) {
+			update_user_meta( $user_id, 'billing_last_name', $last_name );
 		}
+
+		update_user_meta( $user_id, 'billing_company', $company );
+		update_user_meta( $user_id, 'billing_vat_number', $cui );
+		if ( array_key_exists( 'billing_phone', $input ) ) {
+			update_user_meta( $user_id, 'billing_phone', $phone );
+		}
+
+		if ( array_key_exists( 'billing_address_1', $input ) ) {
+			update_user_meta( $user_id, 'billing_address_1', $address );
+		}
+
+		if ( array_key_exists( 'billing_city', $input ) ) {
+			update_user_meta( $user_id, 'billing_city', $city );
+		}
+
+		if ( array_key_exists( 'billing_state', $input ) ) {
+			update_user_meta( $user_id, 'billing_state', $county );
+		}
+
+		if ( array_key_exists( 'billing_postcode', $input ) ) {
+			update_user_meta( $user_id, 'billing_postcode', $postcode );
+		}
+
+		update_user_meta( $user_id, 'billing_country', 'RO' );
+
+		if ( '' !== $email && is_email( $email ) ) {
+			update_user_meta( $user_id, 'billing_email', $email );
+		}
+
+		return $warning;
 	}
 
 	/**
@@ -528,6 +651,29 @@ class Schrack_Admin {
 		$value = round( $value, 2 );
 
 		return rtrim( rtrim( number_format( $value, 2, '.', '' ), '0' ), '.' );
+	}
+
+	/**
+	 * Sanitizes admin-editable datetime values.
+	 */
+	private function sanitize_admin_datetime( mixed $value ): string {
+		$value = is_scalar( $value ) ? trim( str_replace( 'T', ' ', sanitize_text_field( (string) $value ) ) ) : '';
+
+		if ( '' === $value ) {
+			return '';
+		}
+
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?$/', $value ) ) {
+			return 16 === strlen( $value ) ? $value . ':00' : $value;
+		}
+
+		$timestamp = strtotime( $value );
+
+		if ( false === $timestamp ) {
+			return '';
+		}
+
+		return gmdate( 'Y-m-d H:i:s', $timestamp );
 	}
 
 	/**
@@ -792,8 +938,23 @@ class Schrack_Admin {
 			$user_id      = (int) $user->ID;
 			$account_type = sanitize_key( (string) get_user_meta( $user_id, '_schrack_account_type', true ) );
 			$status       = sanitize_key( (string) get_user_meta( $user_id, '_schrack_b2b_status', true ) );
+			$first_name   = sanitize_text_field( (string) get_user_meta( $user_id, 'first_name', true ) );
+			$last_name    = sanitize_text_field( (string) get_user_meta( $user_id, 'last_name', true ) );
 			$company      = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_company_name', true ) );
 			$cui          = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_cui', true ) );
+			$phone        = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_phone', true ) );
+			$address      = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_address_1', true ) );
+			$city         = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_city', true ) );
+			$county       = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_state', true ) );
+			$postcode     = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_postcode', true ) );
+
+			if ( '' === $first_name ) {
+				$first_name = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_first_name', true ) );
+			}
+
+			if ( '' === $last_name ) {
+				$last_name = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_last_name', true ) );
+			}
 
 			if ( '' === $company ) {
 				$company = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_company', true ) );
@@ -814,6 +975,9 @@ class Schrack_Admin {
 			$rows[] = array(
 				'user_id'             => $user_id,
 				'name'                => $user->display_name,
+				'first_name'          => $first_name,
+				'last_name'           => $last_name,
+				'display_name'        => $user->display_name,
 				'email'               => $user->user_email,
 				'registered'          => $user->user_registered,
 				'account_type'        => $account_type,
@@ -821,12 +985,18 @@ class Schrack_Admin {
 				'status_label'        => $this->b2b_status_label( $status ),
 				'company'             => $company,
 				'cui'                 => $cui,
+				'billing_phone'       => $phone,
+				'billing_address_1'   => $address,
+				'billing_city'        => $city,
+				'billing_state'       => $county,
+				'billing_postcode'    => $postcode,
 				'registration_number' => sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_registration_number', true ) ),
 				'requested_at'        => sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_requested_at', true ) ),
 				'approved_at'         => sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_approved_at', true ) ),
 				'discount'            => $discount,
 				'discount_display'    => $this->format_percent_value( $discount ),
-				'edit_url'            => get_edit_user_link( $user_id ),
+				'customer_url'        => $this->b2b_customer_admin_url( $user_id ),
+				'user_url'            => get_edit_user_link( $user_id ),
 			);
 		}
 
@@ -851,6 +1021,21 @@ class Schrack_Admin {
 		);
 
 		return $rows;
+	}
+
+	/**
+	 * Returns the WooCommerce customer admin URL for a user.
+	 */
+	private function b2b_customer_admin_url( int $user_id ): string {
+		return add_query_arg(
+			array(
+				'page'      => 'wc-admin',
+				'path'      => '/customers',
+				'filter'    => 'single_customer',
+				'customers' => $user_id,
+			),
+			admin_url( 'admin.php' )
+		);
 	}
 
 	/**

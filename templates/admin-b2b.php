@@ -150,12 +150,11 @@ $dashboard_cards       = array(
 			<table class="widefat striped schrack-b2b-table" data-b2b-table>
 				<thead>
 					<tr>
-						<th scope="col"><?php esc_html_e( 'Client', 'schrack-woocommerce-sync' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Firma', 'schrack-woocommerce-sync' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Verificare', 'schrack-woocommerce-sync' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Discount', 'schrack-woocommerce-sync' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Cerere', 'schrack-woocommerce-sync' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Profil', 'schrack-woocommerce-sync' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'User', 'schrack-woocommerce-sync' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Firma si fiscal', 'schrack-woocommerce-sync' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Contact facturare', 'schrack-woocommerce-sync' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Verificare B2B', 'schrack-woocommerce-sync' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Acces', 'schrack-woocommerce-sync' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -172,67 +171,131 @@ $dashboard_cards       = array(
 							' ',
 							array(
 								(string) ( $customer['name'] ?? '' ),
+								(string) ( $customer['first_name'] ?? '' ),
+								(string) ( $customer['last_name'] ?? '' ),
 								(string) ( $customer['email'] ?? '' ),
 								(string) ( $customer['company'] ?? '' ),
 								(string) ( $customer['cui'] ?? '' ),
 								(string) ( $customer['registration_number'] ?? '' ),
+								(string) ( $customer['billing_phone'] ?? '' ),
+								(string) ( $customer['billing_address_1'] ?? '' ),
+								(string) ( $customer['billing_city'] ?? '' ),
+								(string) ( $customer['billing_state'] ?? '' ),
 								(string) ( $customer['status_label'] ?? '' ),
 							)
 						);
 						?>
 						<tr class="schrack-b2b-row is-<?php echo esc_attr( $status ); ?>" data-b2b-row data-b2b-status="<?php echo esc_attr( $status ); ?>" data-b2b-search="<?php echo esc_attr( $customer_search ); ?>">
 							<td>
-								<strong><?php echo esc_html( (string) $customer['name'] ); ?></strong>
-								<span><?php echo esc_html( (string) $customer['email'] ); ?></span>
-							</td>
-							<td>
 								<div class="schrack-b2b-field-stack">
+									<span class="schrack-b2b-row-id"><?php echo esc_html( '#' . (string) $user_id ); ?></span>
 									<label>
-										<span class="screen-reader-text"><?php esc_html_e( 'Companie', 'schrack-woocommerce-sync' ); ?></span>
-										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][company]" value="<?php echo esc_attr( (string) $customer['company'] ); ?>" placeholder="<?php esc_attr_e( 'Companie', 'schrack-woocommerce-sync' ); ?>">
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Prenume', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][first_name]" value="<?php echo esc_attr( (string) $customer['first_name'] ); ?>">
 									</label>
 									<label>
-										<span class="screen-reader-text"><?php esc_html_e( 'CUI / Cod fiscal', 'schrack-woocommerce-sync' ); ?></span>
-										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][cui]" value="<?php echo esc_attr( (string) $customer['cui'] ); ?>" placeholder="<?php esc_attr_e( 'CUI / Cod fiscal', 'schrack-woocommerce-sync' ); ?>">
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Nume', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][last_name]" value="<?php echo esc_attr( (string) $customer['last_name'] ); ?>">
 									</label>
 									<label>
-										<span class="screen-reader-text"><?php esc_html_e( 'Nr. Registrul Comertului', 'schrack-woocommerce-sync' ); ?></span>
-										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][registration_number]" value="<?php echo esc_attr( (string) $customer['registration_number'] ); ?>" placeholder="<?php esc_attr_e( 'Nr. Registrul Comertului', 'schrack-woocommerce-sync' ); ?>">
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Nume afisat', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][display_name]" value="<?php echo esc_attr( (string) $customer['display_name'] ); ?>">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Email', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="email" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][email]" value="<?php echo esc_attr( (string) $customer['email'] ); ?>">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Inregistrat', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][registered]" value="<?php echo esc_attr( (string) $customer['registered'] ); ?>" placeholder="YYYY-MM-DD HH:MM:SS">
 									</label>
 								</div>
 							</td>
 							<td>
 								<div class="schrack-b2b-field-stack">
-									<select name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][account_type]">
-										<option value="customer" <?php selected( (string) $customer['account_type'], 'customer' ); ?>><?php esc_html_e( 'Client standard', 'schrack-woocommerce-sync' ); ?></option>
-										<option value="b2b" <?php selected( (string) $customer['account_type'], 'b2b' ); ?>><?php esc_html_e( 'B2B', 'schrack-woocommerce-sync' ); ?></option>
-									</select>
-									<select name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][status]">
-										<?php foreach ( $status_options as $value => $label ) : ?>
-											<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $status, $value ); ?>><?php echo esc_html( $label ); ?></option>
-										<?php endforeach; ?>
-									</select>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Companie', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][company]" value="<?php echo esc_attr( (string) $customer['company'] ); ?>">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'CUI / Cod fiscal', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][cui]" value="<?php echo esc_attr( (string) $customer['cui'] ); ?>">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Nr. Registrul Comertului', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][registration_number]" value="<?php echo esc_attr( (string) $customer['registration_number'] ); ?>">
+									</label>
+									<label class="schrack-b2b-discount">
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Discount %', 'schrack-woocommerce-sync' ); ?></span>
+										<span class="schrack-b2b-discount__control">
+											<input type="number" min="0" max="100" step="0.01" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][discount_percent]" value="<?php echo esc_attr( (string) $customer['discount_display'] ); ?>">
+											<span>%</span>
+										</span>
+									</label>
+								</div>
+							</td>
+							<td>
+								<div class="schrack-b2b-field-stack">
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Telefon', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][billing_phone]" value="<?php echo esc_attr( (string) $customer['billing_phone'] ); ?>">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Adresa', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][billing_address_1]" value="<?php echo esc_attr( (string) $customer['billing_address_1'] ); ?>">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Oras', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][billing_city]" value="<?php echo esc_attr( (string) $customer['billing_city'] ); ?>">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Judet', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][billing_state]" value="<?php echo esc_attr( (string) $customer['billing_state'] ); ?>">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Cod postal', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][billing_postcode]" value="<?php echo esc_attr( (string) $customer['billing_postcode'] ); ?>">
+									</label>
+								</div>
+							</td>
+							<td>
+								<div class="schrack-b2b-field-stack">
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Tip cont', 'schrack-woocommerce-sync' ); ?></span>
+										<select name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][account_type]">
+											<option value="customer" <?php selected( (string) $customer['account_type'], 'customer' ); ?>><?php esc_html_e( 'Client standard', 'schrack-woocommerce-sync' ); ?></option>
+											<option value="b2b" <?php selected( (string) $customer['account_type'], 'b2b' ); ?>><?php esc_html_e( 'B2B', 'schrack-woocommerce-sync' ); ?></option>
+										</select>
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Status', 'schrack-woocommerce-sync' ); ?></span>
+										<select name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][status]">
+											<?php foreach ( $status_options as $value => $label ) : ?>
+												<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $status, $value ); ?>><?php echo esc_html( $label ); ?></option>
+											<?php endforeach; ?>
+										</select>
+									</label>
 									<span class="schrack-status-pill <?php echo esc_attr( $status_class ); ?>"><?php echo esc_html( (string) $customer['status_label'] ); ?></span>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Cerere primita', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][requested_at]" value="<?php echo esc_attr( (string) $customer['requested_at'] ); ?>" placeholder="YYYY-MM-DD HH:MM:SS">
+									</label>
+									<label>
+										<span class="schrack-b2b-field-label"><?php esc_html_e( 'Aprobat la', 'schrack-woocommerce-sync' ); ?></span>
+										<input type="text" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][approved_at]" value="<?php echo esc_attr( (string) $customer['approved_at'] ); ?>" placeholder="YYYY-MM-DD HH:MM:SS">
+									</label>
 								</div>
 							</td>
 							<td>
-								<label class="schrack-b2b-discount">
-									<input type="number" min="0" max="100" step="0.01" name="schrack_b2b_customers[<?php echo esc_attr( (string) $user_id ); ?>][discount_percent]" value="<?php echo esc_attr( (string) $customer['discount_display'] ); ?>">
-									<span>%</span>
-								</label>
-							</td>
-							<td>
-								<span><?php esc_html_e( 'Primit:', 'schrack-woocommerce-sync' ); ?> <?php echo esc_html( '' !== (string) $customer['requested_at'] ? (string) $customer['requested_at'] : '-' ); ?></span>
-								<span><?php esc_html_e( 'Aprobat:', 'schrack-woocommerce-sync' ); ?> <?php echo esc_html( '' !== (string) $customer['approved_at'] ? (string) $customer['approved_at'] : '-' ); ?></span>
-								<span><?php esc_html_e( 'Inregistrat:', 'schrack-woocommerce-sync' ); ?> <?php echo esc_html( (string) $customer['registered'] ); ?></span>
-							</td>
-							<td>
-								<a class="button" href="<?php echo esc_url( (string) $customer['edit_url'] ); ?>"><?php esc_html_e( 'Deschide', 'schrack-woocommerce-sync' ); ?></a>
+								<div class="schrack-b2b-actions">
+									<a class="button" href="<?php echo esc_url( (string) $customer['customer_url'] ); ?>"><?php esc_html_e( 'Client WC', 'schrack-woocommerce-sync' ); ?></a>
+									<a class="button" href="<?php echo esc_url( (string) $customer['user_url'] ); ?>"><?php esc_html_e( 'User WP', 'schrack-woocommerce-sync' ); ?></a>
+								</div>
 							</td>
 						</tr>
 					<?php endforeach; ?>
 					<tr class="schrack-b2b-empty-row" data-b2b-empty-row hidden>
-						<td colspan="6"><?php esc_html_e( 'Nu exista clienti pentru filtrele selectate.', 'schrack-woocommerce-sync' ); ?></td>
+						<td colspan="5"><?php esc_html_e( 'Nu exista clienti pentru filtrele selectate.', 'schrack-woocommerce-sync' ); ?></td>
 					</tr>
 				</tbody>
 			</table>

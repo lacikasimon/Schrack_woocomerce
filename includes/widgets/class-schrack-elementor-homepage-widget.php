@@ -64,6 +64,7 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 	protected function register_controls(): void {
 		$shop_placeholder = home_url( '/shop/' );
 		$category_options = $this->category_options();
+		$single_category_options = array( '' => __( 'Automat / magazin', 'schrack-woocommerce-sync' ) ) + $category_options;
 
 		if ( function_exists( 'wc_get_page_permalink' ) ) {
 			$shop_url = wc_get_page_permalink( 'shop' );
@@ -299,6 +300,8 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 			)
 		);
 
+		$this->add_homepage_card_category_controls( $single_category_options );
+
 		$this->add_control(
 			'bridge_category_ids',
 			array(
@@ -523,6 +526,62 @@ class Schrack_Elementor_Homepage_Widget extends \Elementor\Widget_Base {
 		$renderer = new Schrack_Homepage_Renderer();
 
 		echo $renderer->render( $settings, $this->get_id() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Adds one category select for each curated homepage card.
+	 *
+	 * @param array<int|string,string> $options Category select options.
+	 */
+	private function add_homepage_card_category_controls( array $options ): void {
+		$this->add_control(
+			'hero_card_category_heading',
+			array(
+				'label'     => __( 'Linkuri categorii - carduri hero', 'schrack-woocommerce-sync' ),
+				'type'      => \Elementor\Controls_Manager::HEADING,
+				'separator' => 'before',
+			)
+		);
+
+		$this->add_single_category_control( 'hero_electric_category_id', __( 'Hero: Electric', 'schrack-woocommerce-sync' ), $options );
+		$this->add_single_category_control( 'hero_security_category_id', __( 'Hero: Securitate', 'schrack-woocommerce-sync' ), $options );
+		$this->add_single_category_control( 'hero_solar_category_id', __( 'Hero: Fotovoltaice', 'schrack-woocommerce-sync' ), $options );
+		$this->add_single_category_control( 'hero_automation_category_id', __( 'Hero: Automatizări', 'schrack-woocommerce-sync' ), $options );
+
+		$this->add_control(
+			'project_card_category_heading',
+			array(
+				'label'     => __( 'Linkuri categorii - carduri proiecte', 'schrack-woocommerce-sync' ),
+				'type'      => \Elementor\Controls_Manager::HEADING,
+				'separator' => 'before',
+			)
+		);
+
+		$this->add_single_category_control( 'project_residential_category_id', __( 'Proiect: Instalații electrice rezidențiale', 'schrack-woocommerce-sync' ), $options );
+		$this->add_single_category_control( 'project_commercial_category_id', __( 'Proiect: Clădiri comerciale și birouri', 'schrack-woocommerce-sync' ), $options );
+		$this->add_single_category_control( 'project_video_category_id', __( 'Proiect: Sisteme de supraveghere video', 'schrack-woocommerce-sync' ), $options );
+		$this->add_single_category_control( 'project_alarm_category_id', __( 'Proiect: Sisteme de alarmare și control acces', 'schrack-woocommerce-sync' ), $options );
+		$this->add_single_category_control( 'project_solar_category_id', __( 'Proiect: Proiecte fotovoltaice', 'schrack-woocommerce-sync' ), $options );
+		$this->add_single_category_control( 'project_automation_category_id', __( 'Proiect: Tablouri electrice și automatizări', 'schrack-woocommerce-sync' ), $options );
+	}
+
+	/**
+	 * Adds a single category select control.
+	 *
+	 * @param array<int|string,string> $options Category select options.
+	 */
+	private function add_single_category_control( string $id, string $label, array $options ): void {
+		$this->add_control(
+			$id,
+			array(
+				'label'       => $label,
+				'type'        => \Elementor\Controls_Manager::SELECT2,
+				'options'     => $options,
+				'multiple'    => false,
+				'label_block' => true,
+				'default'     => '',
+			)
+		);
 	}
 
 	/**
