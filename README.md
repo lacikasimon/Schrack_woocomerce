@@ -172,6 +172,8 @@ Stored meta fields:
 
 The product page widget shows mapped product identity fields, visible WooCommerce attributes, and stored Schrack technical attributes that are relevant to customers. Catalog imports populate `_schrack_technical_attributes` from extra public catalog columns while excluding duplicate core fields plus commercial, import, sync, and internal values.
 
+The customer/B2B account portal can be placed with the Elementor widget or with `[schrack_account_page]`. It renders a custom login form for guests and a WooCommerce account dashboard for logged-in users, including B2B status from `_schrack_account_type` and `_schrack_b2b_status`. Store admins can edit those B2B fields from the WordPress user profile screen.
+
 ## Cron and Background Jobs
 
 Recurring jobs are registered through Action Scheduler when available:

@@ -64,6 +64,10 @@ class Schrack_Admin {
 		add_action( 'admin_post_schrack_wc_sync_stop_syncs', array( $this, 'stop_syncs' ) );
 		add_action( 'admin_post_schrack_wc_sync_sku_action', array( $this, 'sku_action' ) );
 		add_action( 'admin_post_schrack_wc_sync_clear_logs', array( $this, 'clear_logs' ) );
+		add_action( 'show_user_profile', array( $this, 'render_user_b2b_fields' ) );
+		add_action( 'edit_user_profile', array( $this, 'render_user_b2b_fields' ) );
+		add_action( 'personal_options_update', array( $this, 'save_user_b2b_fields' ) );
+		add_action( 'edit_user_profile_update', array( $this, 'save_user_b2b_fields' ) );
 	}
 
 	/**
@@ -316,6 +320,134 @@ class Schrack_Admin {
 		$this->logger->delete_all();
 		$this->set_notice( 'success', __( 'Logs cleared.', 'schrack-woocommerce-sync' ) );
 		$this->redirect( 'schrack-sync-logs' );
+	}
+
+	/**
+	 * Renders B2B fields on WordPress user profiles.
+	 */
+	public function render_user_b2b_fields( WP_User $user ): void {
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			return;
+		}
+
+		$user_id      = (int) $user->ID;
+		$account_type = sanitize_key( (string) get_user_meta( $user_id, '_schrack_account_type', true ) );
+		$b2b_status   = sanitize_key( (string) get_user_meta( $user_id, '_schrack_b2b_status', true ) );
+		$company      = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_company_name', true ) );
+		$cui          = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_cui', true ) );
+		$reg_number   = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_registration_number', true ) );
+		$requested_at = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_requested_at', true ) );
+
+		if ( '' === $company ) {
+			$company = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_company', true ) );
+		}
+
+		if ( '' === $cui ) {
+			$cui = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_vat_number', true ) );
+		}
+
+		$account_type = 'b2b' === $account_type ? 'b2b' : 'customer';
+		$b2b_status   = in_array( $b2b_status, array( 'pending', 'approved', 'rejected', 'disabled' ), true ) ? $b2b_status : 'pending';
+
+		?>
+		<h2><?php esc_html_e( 'Schrack B2B', 'schrack-woocommerce-sync' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th><label for="schrack_account_type"><?php esc_html_e( 'Tip cont', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<select id="schrack_account_type" name="schrack_b2b[account_type]">
+						<option value="customer" <?php selected( $account_type, 'customer' ); ?>><?php esc_html_e( 'Client standard', 'schrack-woocommerce-sync' ); ?></option>
+						<option value="b2b" <?php selected( $account_type, 'b2b' ); ?>><?php esc_html_e( 'B2B', 'schrack-woocommerce-sync' ); ?></option>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<th><label for="schrack_b2b_status"><?php esc_html_e( 'Status B2B', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<select id="schrack_b2b_status" name="schrack_b2b[status]">
+						<option value="pending" <?php selected( $b2b_status, 'pending' ); ?>><?php esc_html_e( 'In verificare', 'schrack-woocommerce-sync' ); ?></option>
+						<option value="approved" <?php selected( $b2b_status, 'approved' ); ?>><?php esc_html_e( 'Aprobat', 'schrack-woocommerce-sync' ); ?></option>
+						<option value="rejected" <?php selected( $b2b_status, 'rejected' ); ?>><?php esc_html_e( 'Respins', 'schrack-woocommerce-sync' ); ?></option>
+						<option value="disabled" <?php selected( $b2b_status, 'disabled' ); ?>><?php esc_html_e( 'Dezactivat', 'schrack-woocommerce-sync' ); ?></option>
+					</select>
+					<p class="description"><?php esc_html_e( 'Acest status este afisat in pagina de cont client/B2B.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th><label for="schrack_b2b_company"><?php esc_html_e( 'Companie', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td><input id="schrack_b2b_company" class="regular-text" type="text" name="schrack_b2b[company]" value="<?php echo esc_attr( $company ); ?>"></td>
+			</tr>
+			<tr>
+				<th><label for="schrack_b2b_cui"><?php esc_html_e( 'CUI / Cod fiscal', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td><input id="schrack_b2b_cui" class="regular-text" type="text" name="schrack_b2b[cui]" value="<?php echo esc_attr( $cui ); ?>"></td>
+			</tr>
+			<tr>
+				<th><label for="schrack_b2b_reg_number"><?php esc_html_e( 'Nr. Registrul Comertului', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td><input id="schrack_b2b_reg_number" class="regular-text" type="text" name="schrack_b2b[registration_number]" value="<?php echo esc_attr( $reg_number ); ?>"></td>
+			</tr>
+			<?php if ( '' !== $requested_at ) : ?>
+				<tr>
+					<th><?php esc_html_e( 'Cerere primita', 'schrack-woocommerce-sync' ); ?></th>
+					<td><?php echo esc_html( $requested_at ); ?></td>
+				</tr>
+			<?php endif; ?>
+		</table>
+		<?php wp_nonce_field( 'schrack_user_b2b_fields', 'schrack_user_b2b_nonce' ); ?>
+		<?php
+	}
+
+	/**
+	 * Saves B2B fields from WordPress user profiles.
+	 */
+	public function save_user_b2b_fields( int $user_id ): void {
+		if ( ! current_user_can( self::CAPABILITY ) || ! current_user_can( 'edit_user', $user_id ) ) {
+			return;
+		}
+
+		$nonce = isset( $_POST['schrack_user_b2b_nonce'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['schrack_user_b2b_nonce'] ) ) : '';
+
+		if ( ! wp_verify_nonce( $nonce, 'schrack_user_b2b_fields' ) ) {
+			return;
+		}
+
+		$input = isset( $_POST['schrack_b2b'] ) && is_array( $_POST['schrack_b2b'] )
+			? wp_unslash( $_POST['schrack_b2b'] )
+			: array();
+
+		$account_type = isset( $input['account_type'] ) && 'b2b' === sanitize_key( (string) $input['account_type'] ) ? 'b2b' : 'customer';
+		$status       = $this->sanitize_admin_choice( $input['status'] ?? 'pending', array( 'pending', 'approved', 'rejected', 'disabled' ), 'pending' );
+		$company      = isset( $input['company'] ) ? sanitize_text_field( (string) $input['company'] ) : '';
+		$cui          = isset( $input['cui'] ) ? sanitize_text_field( (string) $input['cui'] ) : '';
+		$reg_number   = isset( $input['registration_number'] ) ? sanitize_text_field( (string) $input['registration_number'] ) : '';
+
+		update_user_meta( $user_id, '_schrack_account_type', $account_type );
+		update_user_meta( $user_id, '_schrack_b2b_status', $status );
+		update_user_meta( $user_id, '_schrack_b2b_company_name', $company );
+		update_user_meta( $user_id, '_schrack_b2b_cui', $cui );
+		update_user_meta( $user_id, '_schrack_b2b_registration_number', $reg_number );
+
+		if ( 'b2b' === $account_type && '' === (string) get_user_meta( $user_id, '_schrack_b2b_requested_at', true ) ) {
+			update_user_meta( $user_id, '_schrack_b2b_requested_at', current_time( 'mysql' ) );
+		}
+
+		if ( '' !== $company ) {
+			update_user_meta( $user_id, 'billing_company', $company );
+		}
+
+		if ( '' !== $cui ) {
+			update_user_meta( $user_id, 'billing_vat_number', $cui );
+		}
+	}
+
+	/**
+	 * Sanitizes a small admin select value.
+	 *
+	 * @param array<int,string> $allowed Allowed values.
+	 */
+	private function sanitize_admin_choice( mixed $value, array $allowed, string $default ): string {
+		$value = sanitize_key( is_scalar( $value ) ? (string) $value : '' );
+
+		return in_array( $value, $allowed, true ) ? $value : $default;
 	}
 
 	/**

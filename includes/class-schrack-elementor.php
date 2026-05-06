@@ -39,6 +39,8 @@ class Schrack_Elementor {
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
 		add_action( 'admin_post_' . Schrack_Registration_Renderer::ACTION, array( $this, 'handle_registration' ) );
 		add_action( 'admin_post_nopriv_' . Schrack_Registration_Renderer::ACTION, array( $this, 'handle_registration' ) );
+		add_action( 'admin_post_' . Schrack_Account_Renderer::ACTION, array( $this, 'handle_account_login' ) );
+		add_action( 'admin_post_nopriv_' . Schrack_Account_Renderer::ACTION, array( $this, 'handle_account_login' ) );
 		add_action( 'elementor/elements/categories_registered', array( $this, 'register_elementor_category' ) );
 		add_action( 'elementor/widgets/register', array( $this, 'register_widgets' ) );
 		add_action( 'elementor/widgets/widgets_registered', array( $this, 'register_legacy_widgets' ) );
@@ -49,6 +51,7 @@ class Schrack_Elementor {
 		add_action( 'wp_ajax_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_filter( 'woocommerce_add_to_cart_fragments', array( $this, 'cart_fragments' ) );
+		add_shortcode( 'schrack_account_page', array( $this, 'account_shortcode' ) );
 	}
 
 	/**
@@ -112,6 +115,13 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-registration.css',
 			array(),
 			SCHRACK_WC_SYNC_VERSION
+		);
+
+		wp_register_style(
+			'schrack-wc-account',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-account.css',
+			array(),
+			$this->asset_version( 'assets/elementor-account.css' )
 		);
 
 		wp_register_style(
@@ -206,6 +216,7 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-header-search-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-account-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-cart-checkout-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-pay-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-received-widget.php';
@@ -222,6 +233,7 @@ class Schrack_Elementor {
 			new Schrack_Elementor_Product_Page_Widget(),
 			new Schrack_Elementor_Customer_Register_Widget(),
 			new Schrack_Elementor_B2B_Register_Widget(),
+			new Schrack_Elementor_Account_Widget(),
 			new Schrack_Elementor_Cart_Checkout_Widget(),
 			new Schrack_Elementor_Order_Pay_Widget(),
 			new Schrack_Elementor_Order_Received_Widget(),
@@ -252,6 +264,7 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-header-search-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-product-page-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-registration-widgets.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-account-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-cart-checkout-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-pay-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-received-widget.php';
@@ -268,6 +281,7 @@ class Schrack_Elementor {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Page_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Customer_Register_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_B2B_Register_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Account_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Cart_Checkout_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Order_Pay_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Order_Received_Widget() );
@@ -297,6 +311,26 @@ class Schrack_Elementor {
 	public function handle_registration(): void {
 		$renderer = new Schrack_Registration_Renderer();
 		$renderer->handle_registration();
+	}
+
+	/**
+	 * Handles frontend login form posts.
+	 */
+	public function handle_account_login(): void {
+		$renderer = new Schrack_Account_Renderer();
+		$renderer->handle_login();
+	}
+
+	/**
+	 * Renders the account portal by shortcode.
+	 *
+	 * @param array<string,mixed>|string $atts Shortcode attributes.
+	 */
+	public function account_shortcode( array|string $atts = array() ): string {
+		$settings = is_array( $atts ) ? $atts : array();
+		$renderer = new Schrack_Account_Renderer();
+
+		return $renderer->render( $settings, 'shortcode' );
 	}
 
 	/**

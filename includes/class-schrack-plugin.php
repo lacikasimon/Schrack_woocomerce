@@ -120,6 +120,7 @@ class Schrack_Plugin {
 			'class-schrack-header-search-renderer.php',
 			'class-schrack-product-page-renderer.php',
 			'class-schrack-registration-renderer.php',
+			'class-schrack-account-renderer.php',
 			'class-schrack-cart-checkout-renderer.php',
 			'class-schrack-homepage-renderer.php',
 			'class-schrack-footer-renderer.php',
