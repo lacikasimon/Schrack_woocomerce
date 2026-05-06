@@ -119,6 +119,15 @@ class Schrack_Elementor_Account_Widget extends \Elementor\Widget_Base {
 		);
 
 		$this->add_control(
+			'register_title',
+			array(
+				'label'   => __( 'Titlu inregistrare', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::TEXT,
+				'default' => __( 'Nu ai cont?', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
 			'b2b_title',
 			array(
 				'label'     => __( 'Titlu B2B', 'schrack-woocommerce-sync' ),

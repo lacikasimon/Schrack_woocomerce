@@ -122,6 +122,7 @@ class Schrack_Account_Renderer {
 			'b2b_text'              => __( 'Clientii B2B pot trimite datele companiei pentru verificare, conditii comerciale si suport pe proiect.', 'schrack-woocommerce-sync' ),
 			'b2b_button_text'       => __( 'Solicita cont B2B', 'schrack-woocommerce-sync' ),
 			'customer_button_text'  => __( 'Creeaza cont client', 'schrack-woocommerce-sync' ),
+			'register_title'        => __( 'Nu ai cont?', 'schrack-woocommerce-sync' ),
 			'success_redirect'      => '',
 			'customer_register_url' => '',
 			'b2b_register_url'      => '',
@@ -136,7 +137,7 @@ class Schrack_Account_Renderer {
 
 		$settings = wp_parse_args( $settings, $defaults );
 
-		foreach ( array( 'eyebrow', 'title', 'subtitle', 'login_title', 'login_subtitle', 'b2b_title', 'b2b_text', 'b2b_button_text', 'customer_button_text' ) as $key ) {
+		foreach ( array( 'eyebrow', 'title', 'subtitle', 'login_title', 'login_subtitle', 'b2b_title', 'b2b_text', 'b2b_button_text', 'customer_button_text', 'register_title' ) as $key ) {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
@@ -239,22 +240,105 @@ class Schrack_Account_Renderer {
 				<?php endif; ?>
 			</div>
 
-			<?php if ( 'yes' === $settings['show_b2b_panel'] ) : ?>
-				<div class="schrack-account__panel schrack-account__panel--b2b">
-					<span class="schrack-account__tag"><?php esc_html_e( 'B2B', 'schrack-woocommerce-sync' ); ?></span>
-					<h3><?php echo esc_html( $settings['b2b_title'] ); ?></h3>
-					<p><?php echo esc_html( $settings['b2b_text'] ); ?></p>
-					<ul class="schrack-account__checks">
-						<li><?php esc_html_e( 'Date de companie si facturare pastrate in cont.', 'schrack-woocommerce-sync' ); ?></li>
-						<li><?php esc_html_e( 'Cerere verificata manual inainte de activare.', 'schrack-woocommerce-sync' ); ?></li>
-						<li><?php esc_html_e( 'Istoric comenzi si suport pentru proiecte recurente.', 'schrack-woocommerce-sync' ); ?></li>
-					</ul>
-					<?php if ( '' !== $settings['b2b_register_url'] ) : ?>
-						<a class="schrack-account__button is-secondary" href="<?php echo esc_url( $settings['b2b_register_url'] ); ?>"><?php echo esc_html( $settings['b2b_button_text'] ); ?></a>
-					<?php endif; ?>
-				</div>
-			<?php endif; ?>
+			<?php echo $this->registration_portal( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders direct B2C and B2B registration choices for guests.
+	 *
+	 * @param array<string,string> $settings Settings.
+	 */
+	private function registration_portal( array $settings ): string {
+		ob_start();
+		?>
+		<div class="schrack-account__panel schrack-account__panel--register">
+			<span class="schrack-account__tag"><?php esc_html_e( 'Inregistrare', 'schrack-woocommerce-sync' ); ?></span>
+			<h3><?php echo esc_html( $settings['register_title'] ); ?></h3>
+
+			<div class="schrack-account__register-options">
+				<details class="schrack-account__register-option" open>
+					<summary>
+						<span><?php esc_html_e( 'Client B2C', 'schrack-woocommerce-sync' ); ?></span>
+						<small><?php esc_html_e( 'Comenzi rapide si istoric in cont.', 'schrack-woocommerce-sync' ); ?></small>
+					</summary>
+					<?php echo $this->registration_form( 'customer', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				</details>
+
+				<?php if ( 'yes' === $settings['show_b2b_panel'] ) : ?>
+					<details class="schrack-account__register-option">
+						<summary>
+							<span><?php esc_html_e( 'Companie B2B', 'schrack-woocommerce-sync' ); ?></span>
+							<small><?php esc_html_e( 'Validare firma si acces comercial.', 'schrack-woocommerce-sync' ); ?></small>
+						</summary>
+						<p><?php echo esc_html( $settings['b2b_text'] ); ?></p>
+						<ul class="schrack-account__checks">
+							<li><?php esc_html_e( 'Date de companie si facturare pastrate in cont.', 'schrack-woocommerce-sync' ); ?></li>
+							<li><?php esc_html_e( 'Cerere verificata manual inainte de activare.', 'schrack-woocommerce-sync' ); ?></li>
+							<li><?php esc_html_e( 'Istoric comenzi si suport pentru proiecte recurente.', 'schrack-woocommerce-sync' ); ?></li>
+						</ul>
+						<?php echo $this->registration_form( 'b2b', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					</details>
+				<?php endif; ?>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders a compact registration form that posts to the existing registration handler.
+	 *
+	 * @param array<string,string> $settings Settings.
+	 */
+	private function registration_form( string $mode, array $settings ): string {
+		$mode       = 'b2b' === $mode ? 'b2b' : 'customer';
+		$button     = 'b2b' === $mode ? $settings['b2b_button_text'] : $settings['customer_button_text'];
+		$redirect   = $this->current_url();
+		$auto_login = 'customer' === $mode ? 'yes' : 'no';
+
+		ob_start();
+		?>
+		<form class="schrack-account__register-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( Schrack_Registration_Renderer::ACTION ); ?>">
+			<input type="hidden" name="registration_mode" value="<?php echo esc_attr( $mode ); ?>">
+			<input type="hidden" name="redirect_to" value="<?php echo esc_url( $redirect ); ?>">
+			<input type="hidden" name="success_redirect" value="<?php echo esc_url( $redirect ); ?>">
+			<input type="hidden" name="terms_required" value="yes">
+			<input type="hidden" name="auto_login" value="<?php echo esc_attr( $auto_login ); ?>">
+			<input class="schrack-account__website" type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true">
+			<?php wp_nonce_field( Schrack_Registration_Renderer::NONCE_ACTION, 'schrack_register_nonce' ); ?>
+
+			<div class="schrack-account__register-grid">
+				<?php echo $this->field( 'first_name', __( 'Prenume', 'schrack-woocommerce-sync' ), 'text', true, 'given-name' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->field( 'last_name', __( 'Nume', 'schrack-woocommerce-sync' ), 'text', true, 'family-name' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->field( 'email', __( 'Email', 'schrack-woocommerce-sync' ), 'email', true, 'email' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->field( 'phone', __( 'Telefon', 'schrack-woocommerce-sync' ), 'tel', 'b2b' === $mode, 'tel' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->field( 'password', __( 'Parola', 'schrack-woocommerce-sync' ), 'password', true, 'new-password' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->field( 'password_confirm', __( 'Confirma parola', 'schrack-woocommerce-sync' ), 'password', true, 'new-password' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+
+				<?php if ( 'b2b' === $mode ) : ?>
+					<?php echo $this->field( 'company_name', __( 'Companie', 'schrack-woocommerce-sync' ), 'text', true, 'organization', 'schrack-account__field--wide' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->field( 'cui', __( 'CUI / Cod fiscal', 'schrack-woocommerce-sync' ), 'text', true, 'off' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->field( 'registration_number', __( 'Nr. Registrul Comertului', 'schrack-woocommerce-sync' ), 'text', false, 'off' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->field( 'fiscal_address', __( 'Adresa de facturare', 'schrack-woocommerce-sync' ), 'text', true, 'street-address', 'schrack-account__field--wide' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->field( 'city', __( 'Oras', 'schrack-woocommerce-sync' ), 'text', true, 'address-level2' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->field( 'county', __( 'Judet', 'schrack-woocommerce-sync' ), 'text', false, 'address-level1' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->field( 'postal_code', __( 'Cod postal', 'schrack-woocommerce-sync' ), 'text', false, 'postal-code' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php endif; ?>
+			</div>
+
+			<label class="schrack-account__terms">
+				<input type="checkbox" name="terms" value="yes" required>
+				<span><?php esc_html_e( 'Sunt de acord cu politica magazinului.', 'schrack-woocommerce-sync' ); ?></span>
+			</label>
+
+			<button class="schrack-account__button" type="submit"><?php echo esc_html( $button ); ?></button>
+		</form>
 		<?php
 
 		return (string) ob_get_clean();
@@ -494,10 +578,10 @@ class Schrack_Account_Renderer {
 	/**
 	 * Renders one login input field.
 	 */
-	private function field( string $name, string $label, string $type, bool $required, string $autocomplete ): string {
+	private function field( string $name, string $label, string $type, bool $required, string $autocomplete, string $class = '' ): string {
 		ob_start();
 		?>
-		<label class="schrack-account__field">
+		<label class="schrack-account__field <?php echo esc_attr( $class ); ?>">
 			<span><?php echo esc_html( $label ); ?><?php echo $required ? ' *' : ''; ?></span>
 			<input
 				type="<?php echo esc_attr( $type ); ?>"
@@ -515,14 +599,27 @@ class Schrack_Account_Renderer {
 	 * Renders notice from transient.
 	 */
 	private function render_notice(): string {
-		$key = isset( $_GET[ self::NOTICE_QUERY_ARG ] ) ? sanitize_key( wp_unslash( (string) $_GET[ self::NOTICE_QUERY_ARG ] ) ) : '';
+		$notice = $this->notice_from_query( self::NOTICE_QUERY_ARG, self::NOTICE_TRANSIENT_PREFIX );
+
+		if ( '' === $notice ) {
+			$notice = $this->notice_from_query( 'schrack_register_notice', 'schrack_register_notice_' );
+		}
+
+		return $notice;
+	}
+
+	/**
+	 * Renders one transient notice from a query argument.
+	 */
+	private function notice_from_query( string $query_arg, string $transient_prefix ): string {
+		$key = isset( $_GET[ $query_arg ] ) ? sanitize_key( wp_unslash( (string) $_GET[ $query_arg ] ) ) : '';
 
 		if ( '' === $key ) {
 			return '';
 		}
 
-		$notice = get_transient( self::NOTICE_TRANSIENT_PREFIX . $key );
-		delete_transient( self::NOTICE_TRANSIENT_PREFIX . $key );
+		$notice = get_transient( $transient_prefix . $key );
+		delete_transient( $transient_prefix . $key );
 
 		if ( ! is_array( $notice ) ) {
 			return '';
@@ -752,6 +849,6 @@ class Schrack_Account_Renderer {
 		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( (string) $_SERVER['REQUEST_URI'] ) : '/';
 		$url         = esc_url_raw( $scheme . $host . $request_uri );
 
-		return remove_query_arg( self::NOTICE_QUERY_ARG, $url );
+		return remove_query_arg( array( self::NOTICE_QUERY_ARG, 'schrack_register_notice' ), $url );
 	}
 }

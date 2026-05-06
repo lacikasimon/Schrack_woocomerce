@@ -96,6 +96,10 @@
 	background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
 }
 
+.schrack-account__panel--register {
+	align-content: start;
+}
+
 .schrack-account__panel--wide {
 	grid-column: 1 / -1;
 }
@@ -140,15 +144,76 @@
 	margin: 0;
 }
 
+.schrack-account__register-options,
+.schrack-account__register-form {
+	display: grid;
+	gap: 14px;
+}
+
+.schrack-account__register-option {
+	background: #fff;
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.schrack-account__register-option summary {
+	cursor: pointer;
+	display: grid;
+	gap: 4px;
+	list-style: none;
+	padding: 14px;
+}
+
+.schrack-account__register-option summary::-webkit-details-marker {
+	display: none;
+}
+
+.schrack-account__register-option summary span {
+	color: var(--schrack-account-text);
+	font-size: 15px;
+	font-weight: 850;
+	line-height: 1.25;
+}
+
+.schrack-account__register-option summary small {
+	color: var(--schrack-account-muted);
+	font-size: 12px;
+	font-weight: 750;
+	line-height: 1.3;
+}
+
+.schrack-account__register-option[open] summary {
+	background: var(--schrack-account-soft);
+	border-bottom: 1px solid var(--schrack-account-border);
+}
+
+.schrack-account__register-option > p,
+.schrack-account__register-option > .schrack-account__checks,
+.schrack-account__register-option > .schrack-account__register-form {
+	margin: 14px;
+}
+
+.schrack-account__register-grid {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .schrack-account__field {
 	display: grid;
 	gap: 7px;
 	min-width: 0;
 }
 
+.schrack-account__field--wide {
+	grid-column: 1 / -1;
+}
+
 .schrack-account__field span,
 .schrack-account__remember,
-.schrack-account__small-link {
+.schrack-account__small-link,
+.schrack-account__terms {
 	color: #334050;
 	font-size: 13px;
 	font-weight: 750;
@@ -181,8 +246,20 @@
 	gap: 8px;
 }
 
-.schrack-account__remember input {
+.schrack-account__terms {
+	align-items: flex-start;
+	display: flex;
+	gap: 10px;
+}
+
+.schrack-account__remember input,
+.schrack-account__terms input {
 	accent-color: var(--schrack-account-action);
+}
+
+.schrack-account__terms input {
+	flex: 0 0 auto;
+	margin-top: 2px;
 }
 
 .schrack-account__button,
@@ -490,6 +567,10 @@
 
 	.schrack-account__summary,
 	.schrack-account__orders {
+		grid-template-columns: 1fr;
+	}
+
+	.schrack-account__register-grid {
 		grid-template-columns: 1fr;
 	}
 
