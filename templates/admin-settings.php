@@ -140,7 +140,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</tr>
 			<tr>
 				<th scope="row"><?php esc_html_e( 'Product images', 'schrack-woocommerce-sync' ); ?></th>
-				<td><label><input type="checkbox" name="schrack_settings[image_import_enabled]" value="yes" <?php checked( $settings['image_import_enabled'], 'yes' ); ?>> <?php esc_html_e( 'Import images from the Schrack Foto/Fotografie catalog column', 'schrack-woocommerce-sync' ); ?></label></td>
+				<td>
+					<label><input type="checkbox" name="schrack_settings[image_import_enabled]" value="yes" <?php checked( $settings['image_import_enabled'], 'yes' ); ?>> <?php esc_html_e( 'Download catalog images into the WordPress media library', 'schrack-woocommerce-sync' ); ?></label>
+					<p class="description"><?php esc_html_e( 'When disabled, catalog sync still stores the external Schrack image URL and products without a downloaded image keep using that URL on the storefront.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_image_batch_size"><?php esc_html_e( 'Image batch size', 'schrack-woocommerce-sync' ); ?></label></th>

@@ -52,7 +52,23 @@ class Schrack_Image_Sync {
 	 * @return array<string,mixed>
 	 */
 	public function sync_batch( int $limit ): array {
-		$limit          = max( 1, $limit );
+		$limit = max( 1, $limit );
+
+		if ( ! $this->is_image_import_enabled() ) {
+			$result = $this->disabled_result(
+				array(
+					'batch_count' => 0,
+					'batch_limit' => $limit,
+					'source'      => 'batch',
+				)
+			);
+
+			$this->settings->update_status( 'images', $result );
+			$this->logger->info( 'images', 'Skipped Schrack image sync because image imports are disabled.', null, $result );
+
+			return $result;
+		}
+
 		$total_products = $this->count_pending_image_products();
 		$run_id         = $this->new_run_id();
 		$product_ids    = $this->claim_pending_product_ids( $limit, $run_id );
@@ -112,6 +128,24 @@ class Schrack_Image_Sync {
 		$batch_size  = max( 1, min( 250, $batch_size ) );
 		$max_batches = max( 0, $max_batches );
 		$time_limit  = max( 0, $time_limit );
+
+		if ( ! $this->is_image_import_enabled() ) {
+			$result = $this->disabled_result(
+				array(
+					'batch_count'       => 0,
+					'batch_limit'       => $batch_size,
+					'batches_processed' => 0,
+					'cli_drain'         => 'yes',
+					'source'            => 'cli_drain',
+				)
+			);
+
+			$this->settings->update_status( 'images', $result );
+			$this->logger->info( 'images', 'Skipped Schrack image drain because image imports are disabled.', null, $result );
+
+			return $result;
+		}
+
 		$deadline    = $time_limit > 0 ? time() + $time_limit : 0;
 		$batches     = 0;
 		$last_result = array();
@@ -173,8 +207,24 @@ class Schrack_Image_Sync {
 	public function claim_parallel_batches( int $batch_size, int $workers ): array {
 		$batch_size     = max( 1, $batch_size );
 		$workers        = max( 1, $workers );
-		$total_products = $this->count_pending_image_products();
 		$run_id         = $this->new_run_id();
+
+		if ( ! $this->is_image_import_enabled() ) {
+			return $this->disabled_result(
+				array(
+					'run_id'          => $run_id,
+					'chunks'          => array(),
+					'queued_products' => 0,
+					'total_products'  => 0,
+					'batch_count'     => 0,
+					'batch_limit'     => $batch_size,
+					'workers'         => $workers,
+					'source'          => 'parallel_claim',
+				)
+			);
+		}
+
+		$total_products = $this->count_pending_image_products();
 		$product_ids    = $this->claim_pending_product_ids( $batch_size * $workers, $run_id );
 		$chunks         = array_values(
 			array_filter(
@@ -215,6 +265,26 @@ class Schrack_Image_Sync {
 	 */
 	public function sync_product_ids( array $product_ids, string $run_id = '' ): array {
 		$product_ids = array_values( array_unique( array_filter( array_map( 'absint', $product_ids ) ) ) );
+
+		if ( ! $this->is_image_import_enabled() ) {
+			if ( '' !== $run_id ) {
+				$this->release_product_claims( $product_ids, $run_id );
+			}
+
+			$result = $this->disabled_result(
+				array(
+					'batch_count' => count( $product_ids ),
+					'source'      => 'explicit_products',
+				)
+			);
+
+			if ( '' !== $run_id ) {
+				$result['run_id'] = $run_id;
+			}
+
+			return $result;
+		}
+
 		$processed    = 0;
 		$errors       = 0;
 		$imported     = 0;
@@ -526,6 +596,36 @@ class Schrack_Image_Sync {
 	 */
 	private function retry_cooldown(): int {
 		return max( MINUTE_IN_SECONDS, min( DAY_IN_SECONDS, (int) $this->settings->get( 'image_retry_cooldown', HOUR_IN_SECONDS ) ) );
+	}
+
+	/**
+	 * Returns whether media-library image imports are enabled.
+	 */
+	private function is_image_import_enabled(): bool {
+		return 'yes' === (string) $this->settings->get( 'image_import_enabled', 'yes' );
+	}
+
+	/**
+	 * Builds a no-op result for disabled image imports.
+	 *
+	 * @param array<string,mixed> $context Extra result fields.
+	 * @return array<string,mixed>
+	 */
+	private function disabled_result( array $context = array() ): array {
+		return array_merge(
+			array(
+				'processed'            => 0,
+				'imported'             => 0,
+				'attached'             => 0,
+				'skipped'              => 0,
+				'reused'               => 0,
+				'errors'               => 0,
+				'completed_cycle'      => 'yes',
+				'image_import_enabled' => 'no',
+				'disabled'             => 'yes',
+			),
+			$context
+		);
 	}
 
 	/**

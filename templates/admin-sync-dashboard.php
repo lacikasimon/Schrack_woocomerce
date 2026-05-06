@@ -10,7 +10,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 $sync_dashboard = isset( $sync_dashboard ) && is_array( $sync_dashboard ) ? $sync_dashboard : array();
+$settings       = isset( $settings ) && is_array( $settings ) ? $settings : array();
 $imported_total = absint( $sync_dashboard['imported_products'] ?? 0 );
+$image_import_enabled = 'yes' === (string) ( $settings['image_import_enabled'] ?? 'yes' );
 $cards          = array(
 	array(
 		'class' => 'is-primary',
@@ -33,14 +35,21 @@ $cards          = array(
 	),
 	array(
 		'class' => 'is-warning',
-		'label' => __( 'Image URL only', 'schrack-woocommerce-sync' ),
+		'label' => $image_import_enabled ? __( 'Image URL only', 'schrack-woocommerce-sync' ) : __( 'External image URLs', 'schrack-woocommerce-sync' ),
 		'value' => absint( $sync_dashboard['image_url_only_products'] ?? 0 ),
-		'meta'  => sprintf(
-			/* translators: 1: percentage, 2: products without image URL. */
-			__( '%1$s%% waiting for media import. Missing URL: %2$s', 'schrack-woocommerce-sync' ),
-			(string) ( $sync_dashboard['image_url_only_pct'] ?? 0 ),
-			number_format_i18n( absint( $sync_dashboard['image_missing_url_products'] ?? 0 ) )
-		),
+		'meta'  => $image_import_enabled
+			? sprintf(
+				/* translators: 1: percentage, 2: products without image URL. */
+				__( '%1$s%% waiting for media import. Missing URL: %2$s', 'schrack-woocommerce-sync' ),
+				(string) ( $sync_dashboard['image_url_only_pct'] ?? 0 ),
+				number_format_i18n( absint( $sync_dashboard['image_missing_url_products'] ?? 0 ) )
+			)
+			: sprintf(
+				/* translators: 1: percentage, 2: products without image URL. */
+				__( '%1$s%% using stored external URLs. Missing URL: %2$s', 'schrack-woocommerce-sync' ),
+				(string) ( $sync_dashboard['image_url_only_pct'] ?? 0 ),
+				number_format_i18n( absint( $sync_dashboard['image_missing_url_products'] ?? 0 ) )
+			),
 		'pct'   => (float) ( $sync_dashboard['image_url_only_pct'] ?? 0 ),
 	),
 	array(

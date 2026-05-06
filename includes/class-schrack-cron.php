@@ -114,6 +114,15 @@ class Schrack_Cron {
 			);
 		}
 
+		if ( 'images' === $task && ! $this->should_import_images() ) {
+			return array(
+				'queued'  => false,
+				'code'    => 'image_import_disabled',
+				'message' => __( 'Image sync is disabled. Catalog image URLs remain stored as external references.', 'schrack-woocommerce-sync' ),
+				'task'    => $task,
+			);
+		}
+
 		$conflict = $this->active_sync_conflict();
 
 		if ( null !== $conflict ) {
@@ -602,6 +611,10 @@ class Schrack_Cron {
 		$limit            = $this->image_batch_limit();
 		$parallel_workers = $this->image_parallel_workers();
 
+		if ( ! $this->should_import_images() ) {
+			return $sync->sync_batch( $limit );
+		}
+
 		if ( $parallel_workers > 1 && $this->can_queue_parallel_image_workers() ) {
 			return $this->queue_parallel_image_sync( $sync, $limit, $parallel_workers, $queue_continuation );
 		}
@@ -819,6 +832,27 @@ class Schrack_Cron {
 		$product_ids = is_array( $product_ids ) ? array_values( array_map( 'absint', $product_ids ) ) : array();
 
 		try {
+			if ( ! $this->should_import_images() ) {
+				$result = $sync->sync_product_ids( $product_ids, $run_id );
+				$result = array_merge(
+					$result,
+					array(
+						'cursor'          => 0,
+						'batch_start'     => 0,
+						'batch_limit'     => count( $product_ids ),
+						'completed_cycle' => 'yes',
+						'parallel'        => 'yes',
+						'worker_index'    => absint( $worker_index ),
+					),
+					$this->memory_status_context()
+				);
+
+				$this->settings->update_status( 'images', $result );
+				$this->logger->info( 'images', 'Skipped Schrack image sync worker because image imports are disabled.', null, $result );
+
+				return $result;
+			}
+
 			$result = $sync->sync_product_ids( $product_ids, $run_id );
 			$result = array_merge(
 				$result,

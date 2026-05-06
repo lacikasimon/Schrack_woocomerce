@@ -11,6 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $queue_status = isset( $queue_status ) && is_array( $queue_status ) ? $queue_status : array();
 $stop_request = isset( $stop_request ) && is_array( $stop_request ) ? $stop_request : null;
+$settings     = isset( $settings ) && is_array( $settings ) ? $settings : array();
+$image_import_enabled = 'yes' === (string) ( $settings['image_import_enabled'] ?? 'yes' );
 ?>
 <div class="wrap schrack-sync-admin">
 	<h1><?php esc_html_e( 'Schrack Manual Sync', 'schrack-woocommerce-sync' ); ?></h1>
@@ -71,11 +73,14 @@ $stop_request = isset( $stop_request ) && is_array( $stop_request ) ? $stop_requ
 				<input type="hidden" name="action" value="schrack_wc_sync_manual_sync">
 				<?php wp_nonce_field( 'schrack_wc_sync_manual_sync' ); ?>
 				<button type="submit" class="button button-secondary" name="sync_task" value="catalog"><?php esc_html_e( 'Import catalog', 'schrack-woocommerce-sync' ); ?></button>
-				<button type="submit" class="button button-secondary" name="sync_task" value="images"><?php esc_html_e( 'Sync images', 'schrack-woocommerce-sync' ); ?></button>
+				<button type="submit" class="button button-secondary" name="sync_task" value="images" <?php disabled( ! $image_import_enabled ); ?>><?php esc_html_e( 'Sync images', 'schrack-woocommerce-sync' ); ?></button>
 				<button type="submit" class="button button-secondary" name="sync_task" value="prices"><?php esc_html_e( 'Sync prices', 'schrack-woocommerce-sync' ); ?></button>
 				<button type="submit" class="button button-secondary" name="sync_task" value="stock"><?php esc_html_e( 'Sync stock', 'schrack-woocommerce-sync' ); ?></button>
 				<button type="submit" class="button button-primary" name="sync_task" value="full"><?php esc_html_e( 'Full sync', 'schrack-woocommerce-sync' ); ?></button>
 			</form>
+			<?php if ( ! $image_import_enabled ) : ?>
+				<p class="description"><?php esc_html_e( 'Image sync is disabled; products without downloaded images use their stored external image URLs.', 'schrack-woocommerce-sync' ); ?></p>
+			<?php endif; ?>
 		</div>
 
 		<div class="schrack-panel">

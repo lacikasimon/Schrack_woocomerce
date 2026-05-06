@@ -96,6 +96,10 @@ class Schrack_Frontend_Image_Loader {
 	 * Queues a background image import when a product has a Schrack image URL but no featured image.
 	 */
 	public function ensure_product_image( WC_Product $product, int $request_limit = 1 ): WC_Product {
+		if ( ! $this->is_image_import_enabled() ) {
+			return $product;
+		}
+
 		$request_limit = max( 0, (int) apply_filters( 'schrack_wc_sync_frontend_image_import_limit', $request_limit, $product ) );
 
 		if ( $request_limit <= 0 || self::$attempts >= $request_limit ) {
@@ -203,7 +207,9 @@ class Schrack_Frontend_Image_Loader {
 			return '';
 		}
 
-		$this->queue_background_image_import( $product );
+		if ( $this->is_image_import_enabled() ) {
+			$this->queue_background_image_import( $product );
+		}
 
 		$attributes = $this->remote_image_attributes( $product, $size, $attr, $image_url );
 
@@ -291,7 +297,7 @@ class Schrack_Frontend_Image_Loader {
 	private function queue_background_image_import( WC_Product $product ): void {
 		$product_id = (int) $product->get_id();
 
-		if ( $product_id <= 0 || 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
+		if ( $product_id <= 0 || ! $this->is_image_import_enabled() ) {
 			return;
 		}
 
@@ -392,6 +398,13 @@ class Schrack_Frontend_Image_Loader {
 	 */
 	private function product_remote_image_url( WC_Product $product ): string {
 		return $this->normalize_image_url( (string) $product->get_meta( self::IMAGE_META_KEY, true ) );
+	}
+
+	/**
+	 * Returns whether remote images should be downloaded in the background.
+	 */
+	private function is_image_import_enabled(): bool {
+		return 'yes' === (string) $this->settings->get( 'image_import_enabled', 'yes' );
 	}
 
 	/**

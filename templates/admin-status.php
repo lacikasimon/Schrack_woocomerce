@@ -198,7 +198,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 						$details[] = $memory_detail;
 					}
 
-					foreach ( array( 'memory_safe_mode', 'rate_limited', 'queue_failed', 'waiting_workers' ) as $detail_key ) {
+					foreach ( array( 'memory_safe_mode', 'rate_limited', 'queue_failed', 'waiting_workers', 'disabled' ) as $detail_key ) {
 						if ( 'yes' === (string) ( $row[ $detail_key ] ?? 'no' ) ) {
 							$details[] = ucwords( str_replace( '_', ' ', $detail_key ) ) . ': yes';
 						}

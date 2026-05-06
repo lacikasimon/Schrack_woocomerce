@@ -235,7 +235,7 @@ class Schrack_Admin {
 
 		if ( ! empty( $result['queued'] ) ) {
 			$this->set_notice( 'success', (string) $result['message'], $this->format_debug_data( $result ) );
-		} elseif ( 'active_sync' === (string) ( $result['code'] ?? '' ) ) {
+		} elseif ( in_array( (string) ( $result['code'] ?? '' ), array( 'active_sync', 'image_import_disabled' ), true ) ) {
 			$this->set_notice( 'warning', (string) $result['message'] );
 		} else {
 			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'Unknown sync task.', 'schrack-woocommerce-sync' ) ) );
@@ -355,6 +355,7 @@ class Schrack_Admin {
 	public function render_manual_page(): void {
 		$this->assert_can_manage();
 
+		$settings       = $this->settings->all();
 		$notice         = $this->get_notice();
 		$queue_status   = $this->cron->queue_status();
 		$stop_request   = $this->active_stop_request( $this->settings->stop_request(), $queue_status );

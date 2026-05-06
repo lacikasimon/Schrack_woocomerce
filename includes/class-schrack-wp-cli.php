@@ -100,6 +100,11 @@ class Schrack_WP_CLI {
 			$sync        = new Schrack_Image_Sync( $this->settings, $this->logger );
 			$result      = $sync->sync_until_idle( $batch_size, $max_batches, $time_limit );
 
+			if ( 'yes' === (string) ( $result['disabled'] ?? 'no' ) ) {
+				WP_CLI::success( 'Schrack image sync is disabled. External image URLs remain stored on products.' );
+				return;
+			}
+
 			WP_CLI::success(
 				sprintf(
 					'Schrack image drain finished. Batches: %d, processed: %d, imported: %d, reused: %d, errors: %d, complete: %s.',
@@ -115,6 +120,11 @@ class Schrack_WP_CLI {
 		}
 
 		$result = $this->cron->run_image_sync();
+		if ( 'yes' === (string) ( $result['disabled'] ?? 'no' ) ) {
+			WP_CLI::success( 'Schrack image sync is disabled. External image URLs remain stored on products.' );
+			return;
+		}
+
 		WP_CLI::success(
 			sprintf(
 				'Schrack image sync batch finished. Queued products: %d, processed: %d, imported: %d, errors: %d.',
