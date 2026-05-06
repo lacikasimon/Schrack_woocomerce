@@ -80,7 +80,7 @@
 .schrack-cart-checkout__steps {
 	align-items: stretch;
 	display: flex;
-	flex: 1 1 300px;
+	flex: 0 1 520px;
 	flex-wrap: wrap;
 	gap: 8px;
 	list-style: none;
@@ -99,9 +99,10 @@
 	display: inline-flex;
 	flex: 0 1 auto;
 	gap: 8px;
+	justify-content: flex-start;
 	max-width: 100%;
 	min-height: 42px;
-	min-width: 0;
+	min-width: 118px;
 	padding: 8px 10px;
 }
 
@@ -125,7 +126,8 @@
 	font-weight: 850;
 	line-height: 1.2;
 	min-width: 0;
-	overflow-wrap: anywhere;
+	overflow-wrap: normal;
+	word-break: normal;
 }
 
 .schrack-cart-checkout__layout {

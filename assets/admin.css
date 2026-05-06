@@ -744,6 +744,121 @@
 	background: var(--schrack-red);
 }
 
+.schrack-b2b-summary {
+	display: grid;
+	gap: 12px;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	margin-bottom: 12px;
+}
+
+.schrack-b2b-summary__item {
+	background: #f6f7f7;
+	border: 1px solid #e2e4e7;
+	border-radius: 8px;
+	display: grid;
+	gap: 4px;
+	padding: 13px 14px;
+}
+
+.schrack-b2b-summary__item strong {
+	color: #1d2327;
+	font-size: 24px;
+	font-weight: 750;
+	line-height: 1;
+}
+
+.schrack-b2b-summary__item span {
+	color: var(--schrack-text-muted);
+	font-size: 12px;
+	font-weight: 650;
+	line-height: 1.25;
+}
+
+.schrack-b2b-table {
+	margin-top: 12px;
+}
+
+.schrack-b2b-table th,
+.schrack-b2b-table td {
+	vertical-align: top;
+}
+
+.schrack-b2b-table td {
+	display: table-cell;
+	min-width: 130px;
+}
+
+.schrack-b2b-table td > strong,
+.schrack-b2b-table td > span,
+.schrack-b2b-table label {
+	display: block;
+}
+
+.schrack-b2b-table td > span {
+	color: var(--schrack-text-muted);
+	font-size: 12px;
+	line-height: 1.45;
+	margin-top: 4px;
+}
+
+.schrack-b2b-table input[type="text"],
+.schrack-b2b-table input[type="number"],
+.schrack-b2b-table select {
+	max-width: 100%;
+	width: 100%;
+}
+
+.schrack-b2b-table label + label,
+.schrack-b2b-table select + select {
+	margin-top: 7px;
+}
+
+.schrack-b2b-status {
+	border: 1px solid transparent;
+	border-radius: 999px;
+	display: inline-flex;
+	font-size: 11px;
+	font-weight: 750;
+	line-height: 1.2;
+	margin-top: 8px;
+	padding: 4px 8px;
+}
+
+.schrack-b2b-status.is-approved {
+	background: #edfaef;
+	border-color: #b8e6c1;
+	color: #0a6b2b;
+}
+
+.schrack-b2b-status.is-pending {
+	background: #fff8e5;
+	border-color: #f0d58c;
+	color: #755100;
+}
+
+.schrack-b2b-status.is-rejected,
+.schrack-b2b-status.is-disabled {
+	background: #fcf0f1;
+	border-color: #f0b6b8;
+	color: #8a2424;
+}
+
+.schrack-b2b-discount {
+	align-items: center;
+	display: flex !important;
+	gap: 6px;
+	max-width: 120px;
+}
+
+.schrack-b2b-discount input {
+	min-width: 76px;
+}
+
+.schrack-b2b-discount span {
+	color: var(--schrack-text-muted);
+	font-weight: 700;
+}
+
 .schrack-sync-admin code {
 	background: #f6f7f7;
 	border: 1px solid #e2e4e7;

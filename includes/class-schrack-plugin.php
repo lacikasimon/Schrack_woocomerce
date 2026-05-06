@@ -60,6 +60,13 @@ class Schrack_Plugin {
 	private ?Schrack_Frontend_Image_Loader $frontend_image_loader = null;
 
 	/**
+	 * B2B pricing service.
+	 *
+	 * @var Schrack_B2B_Pricing|null
+	 */
+	private ?Schrack_B2B_Pricing $b2b_pricing = null;
+
+	/**
 	 * Returns the singleton instance.
 	 */
 	public static function instance(): Schrack_Plugin {
@@ -82,6 +89,8 @@ class Schrack_Plugin {
 		$this->cron->init();
 		$this->frontend_image_loader = new Schrack_Frontend_Image_Loader( $this->settings, $this->logger );
 		$this->frontend_image_loader->init();
+		$this->b2b_pricing = new Schrack_B2B_Pricing();
+		$this->b2b_pricing->init();
 		$this->elementor = new Schrack_Elementor();
 		$this->elementor->init();
 
@@ -111,6 +120,7 @@ class Schrack_Plugin {
 			'class-schrack-soap-client.php',
 			'class-schrack-product-mapper.php',
 			'class-schrack-frontend-image-loader.php',
+			'class-schrack-b2b-pricing.php',
 			'class-schrack-catalog-importer.php',
 			'class-schrack-image-sync.php',
 			'class-schrack-price-sync.php',

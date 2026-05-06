@@ -59,6 +59,7 @@ class Schrack_Admin {
 
 		add_action( 'admin_post_schrack_wc_sync_save_settings', array( $this, 'save_settings' ) );
 		add_action( 'admin_post_schrack_wc_sync_save_markups', array( $this, 'save_markups' ) );
+		add_action( 'admin_post_schrack_wc_sync_save_b2b_customers', array( $this, 'save_b2b_customers' ) );
 		add_action( 'admin_post_schrack_wc_sync_soap_debug', array( $this, 'soap_debug' ) );
 		add_action( 'admin_post_schrack_wc_sync_manual_sync', array( $this, 'manual_sync' ) );
 		add_action( 'admin_post_schrack_wc_sync_stop_syncs', array( $this, 'stop_syncs' ) );
@@ -90,6 +91,15 @@ class Schrack_Admin {
 			self::CAPABILITY,
 			'schrack-sync-markups',
 			array( $this, 'render_markups_page' )
+		);
+
+		add_submenu_page(
+			'woocommerce',
+			__( 'Schrack B2B Customers', 'schrack-woocommerce-sync' ),
+			__( 'Schrack B2B', 'schrack-woocommerce-sync' ),
+			self::CAPABILITY,
+			'schrack-sync-b2b',
+			array( $this, 'render_b2b_page' )
 		);
 
 		add_submenu_page(
@@ -172,6 +182,42 @@ class Schrack_Admin {
 		$this->logger->info( 'admin', 'Schrack category markup rules were updated.' );
 		$this->set_notice( 'success', __( 'Category markups saved.', 'schrack-woocommerce-sync' ) );
 		$this->redirect( 'schrack-sync-markups' );
+	}
+
+	/**
+	 * Saves B2B customer verification and discount rows.
+	 */
+	public function save_b2b_customers(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_b2b_customers' );
+
+		$input = isset( $_POST['schrack_b2b_customers'] ) && is_array( $_POST['schrack_b2b_customers'] )
+			? wp_unslash( $_POST['schrack_b2b_customers'] )
+			: array();
+
+		$updated = 0;
+
+		foreach ( $input as $user_id => $row ) {
+			$user_id = absint( $user_id );
+
+			if ( $user_id <= 0 || ! is_array( $row ) || ! current_user_can( 'edit_user', $user_id ) ) {
+				continue;
+			}
+
+			$this->save_b2b_user_meta( $user_id, $row );
+			$updated++;
+		}
+
+		$this->logger->info( 'admin', 'Schrack B2B customers were updated.', '', array( 'updated' => $updated ) );
+		$this->set_notice(
+			'success',
+			sprintf(
+				/* translators: %d: updated customers. */
+				__( '%d B2B customer rows saved.', 'schrack-woocommerce-sync' ),
+				$updated
+			)
+		);
+		$this->redirect( 'schrack-sync-b2b' );
 	}
 
 	/**
@@ -337,6 +383,7 @@ class Schrack_Admin {
 		$cui          = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_cui', true ) );
 		$reg_number   = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_registration_number', true ) );
 		$requested_at = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_requested_at', true ) );
+		$discount     = $this->sanitize_b2b_discount_percent( get_user_meta( $user_id, '_schrack_b2b_discount_percent', true ) );
 
 		if ( '' === $company ) {
 			$company = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_company', true ) );
@@ -371,6 +418,13 @@ class Schrack_Admin {
 						<option value="disabled" <?php selected( $b2b_status, 'disabled' ); ?>><?php esc_html_e( 'Dezactivat', 'schrack-woocommerce-sync' ); ?></option>
 					</select>
 					<p class="description"><?php esc_html_e( 'Acest status este afisat in pagina de cont client/B2B.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th><label for="schrack_b2b_discount"><?php esc_html_e( 'Discount B2B %', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<input id="schrack_b2b_discount" type="number" min="0" max="100" step="0.01" name="schrack_b2b[discount_percent]" value="<?php echo esc_attr( $this->format_percent_value( $discount ) ); ?>">
+					<p class="description"><?php esc_html_e( 'Se aplica automat doar clientilor cu tip cont B2B si status Aprobat.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>
@@ -414,20 +468,35 @@ class Schrack_Admin {
 			? wp_unslash( $_POST['schrack_b2b'] )
 			: array();
 
+		$this->save_b2b_user_meta( $user_id, $input );
+	}
+
+	/**
+	 * Saves normalized B2B metadata for one customer.
+	 *
+	 * @param array<string,mixed> $input Unsanitized row input.
+	 */
+	private function save_b2b_user_meta( int $user_id, array $input ): void {
 		$account_type = isset( $input['account_type'] ) && 'b2b' === sanitize_key( (string) $input['account_type'] ) ? 'b2b' : 'customer';
 		$status       = $this->sanitize_admin_choice( $input['status'] ?? 'pending', array( 'pending', 'approved', 'rejected', 'disabled' ), 'pending' );
 		$company      = isset( $input['company'] ) ? sanitize_text_field( (string) $input['company'] ) : '';
 		$cui          = isset( $input['cui'] ) ? sanitize_text_field( (string) $input['cui'] ) : '';
 		$reg_number   = isset( $input['registration_number'] ) ? sanitize_text_field( (string) $input['registration_number'] ) : '';
+		$discount     = $this->sanitize_b2b_discount_percent( $input['discount_percent'] ?? 0 );
 
 		update_user_meta( $user_id, '_schrack_account_type', $account_type );
 		update_user_meta( $user_id, '_schrack_b2b_status', $status );
 		update_user_meta( $user_id, '_schrack_b2b_company_name', $company );
 		update_user_meta( $user_id, '_schrack_b2b_cui', $cui );
 		update_user_meta( $user_id, '_schrack_b2b_registration_number', $reg_number );
+		update_user_meta( $user_id, '_schrack_b2b_discount_percent', $this->format_percent_value( $discount ) );
 
 		if ( 'b2b' === $account_type && '' === (string) get_user_meta( $user_id, '_schrack_b2b_requested_at', true ) ) {
 			update_user_meta( $user_id, '_schrack_b2b_requested_at', current_time( 'mysql' ) );
+		}
+
+		if ( 'b2b' === $account_type && 'approved' === $status && '' === (string) get_user_meta( $user_id, '_schrack_b2b_approved_at', true ) ) {
+			update_user_meta( $user_id, '_schrack_b2b_approved_at', current_time( 'mysql' ) );
 		}
 
 		if ( '' !== $company ) {
@@ -437,6 +506,28 @@ class Schrack_Admin {
 		if ( '' !== $cui ) {
 			update_user_meta( $user_id, 'billing_vat_number', $cui );
 		}
+	}
+
+	/**
+	 * Sanitizes a B2B discount percentage.
+	 */
+	private function sanitize_b2b_discount_percent( mixed $value ): float {
+		$value = is_scalar( $value ) ? str_replace( ',', '.', (string) $value ) : '0';
+
+		if ( ! is_numeric( $value ) ) {
+			return 0.0;
+		}
+
+		return max( 0.0, min( 100.0, round( (float) $value, 2 ) ) );
+	}
+
+	/**
+	 * Formats percentage values for admin inputs.
+	 */
+	private function format_percent_value( float $value ): string {
+		$value = round( $value, 2 );
+
+		return rtrim( rtrim( number_format( $value, 2, '.', '' ), '0' ), '.' );
 	}
 
 	/**
@@ -479,6 +570,19 @@ class Schrack_Admin {
 		$notice = $this->get_notice();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-markups.php';
+	}
+
+	/**
+	 * Renders B2B verification and discount page.
+	 */
+	public function render_b2b_page(): void {
+		$this->assert_can_manage();
+
+		$customers = $this->b2b_customer_rows();
+		$summary   = $this->b2b_customer_summary( $customers );
+		$notice    = $this->get_notice();
+
+		include SCHRACK_WC_SYNC_PATH . 'templates/admin-b2b.php';
 	}
 
 	/**
@@ -646,6 +750,153 @@ class Schrack_Admin {
 	}
 
 	/**
+	 * Returns B2B-related users for admin verification and discount editing.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function b2b_customer_rows(): array {
+		$query = new WP_User_Query(
+			array(
+				'number'     => 300,
+				'orderby'    => 'registered',
+				'order'      => 'DESC',
+				'meta_query' => array(
+					'relation' => 'OR',
+					array(
+						'key'   => '_schrack_account_type',
+						'value' => 'b2b',
+					),
+					array(
+						'key'     => '_schrack_b2b_status',
+						'compare' => 'EXISTS',
+					),
+					array(
+						'key'     => '_schrack_b2b_cui',
+						'compare' => 'EXISTS',
+					),
+					array(
+						'key'     => 'billing_vat_number',
+						'compare' => 'EXISTS',
+					),
+				),
+			)
+		);
+
+		$rows = array();
+
+		foreach ( $query->get_results() as $user ) {
+			if ( ! $user instanceof WP_User ) {
+				continue;
+			}
+
+			$user_id      = (int) $user->ID;
+			$account_type = sanitize_key( (string) get_user_meta( $user_id, '_schrack_account_type', true ) );
+			$status       = sanitize_key( (string) get_user_meta( $user_id, '_schrack_b2b_status', true ) );
+			$company      = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_company_name', true ) );
+			$cui          = sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_cui', true ) );
+
+			if ( '' === $company ) {
+				$company = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_company', true ) );
+			}
+
+			if ( '' === $cui ) {
+				$cui = sanitize_text_field( (string) get_user_meta( $user_id, 'billing_vat_number', true ) );
+			}
+
+			if ( 'b2b' !== $account_type && '' !== $cui ) {
+				$account_type = 'b2b';
+			}
+
+			$account_type = 'b2b' === $account_type ? 'b2b' : 'customer';
+			$status       = in_array( $status, array( 'pending', 'approved', 'rejected', 'disabled' ), true ) ? $status : 'pending';
+			$discount     = $this->sanitize_b2b_discount_percent( get_user_meta( $user_id, '_schrack_b2b_discount_percent', true ) );
+
+			$rows[] = array(
+				'user_id'             => $user_id,
+				'name'                => $user->display_name,
+				'email'               => $user->user_email,
+				'registered'          => $user->user_registered,
+				'account_type'        => $account_type,
+				'status'              => $status,
+				'status_label'        => $this->b2b_status_label( $status ),
+				'company'             => $company,
+				'cui'                 => $cui,
+				'registration_number' => sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_registration_number', true ) ),
+				'requested_at'        => sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_requested_at', true ) ),
+				'approved_at'         => sanitize_text_field( (string) get_user_meta( $user_id, '_schrack_b2b_approved_at', true ) ),
+				'discount'            => $discount,
+				'discount_display'    => $this->format_percent_value( $discount ),
+				'edit_url'            => get_edit_user_link( $user_id ),
+			);
+		}
+
+		$priority = array(
+			'pending'  => 0,
+			'approved' => 1,
+			'rejected' => 2,
+			'disabled' => 3,
+		);
+
+		usort(
+			$rows,
+			static function ( array $left, array $right ) use ( $priority ): int {
+				$status_order = ( $priority[ (string) $left['status'] ] ?? 9 ) <=> ( $priority[ (string) $right['status'] ] ?? 9 );
+
+				if ( 0 !== $status_order ) {
+					return $status_order;
+				}
+
+				return strnatcasecmp( (string) $left['company'], (string) $right['company'] );
+			}
+		);
+
+		return $rows;
+	}
+
+	/**
+	 * Builds B2B customer counters for the admin page.
+	 *
+	 * @param array<int,array<string,mixed>> $customers Customer rows.
+	 * @return array<string,int>
+	 */
+	private function b2b_customer_summary( array $customers ): array {
+		$summary = array(
+			'total'      => count( $customers ),
+			'pending'    => 0,
+			'approved'   => 0,
+			'rejected'   => 0,
+			'disabled'   => 0,
+			'discounted' => 0,
+		);
+
+		foreach ( $customers as $customer ) {
+			$status = (string) ( $customer['status'] ?? '' );
+
+			if ( isset( $summary[ $status ] ) ) {
+				$summary[ $status ]++;
+			}
+
+			if ( (float) ( $customer['discount'] ?? 0 ) > 0.0 ) {
+				$summary['discounted']++;
+			}
+		}
+
+		return $summary;
+	}
+
+	/**
+	 * Returns a readable B2B status label.
+	 */
+	public function b2b_status_label( string $status ): string {
+		return match ( $status ) {
+			'approved' => __( 'Aprobat', 'schrack-woocommerce-sync' ),
+			'rejected' => __( 'Respins', 'schrack-woocommerce-sync' ),
+			'disabled' => __( 'Dezactivat', 'schrack-woocommerce-sync' ),
+			default    => __( 'In verificare', 'schrack-woocommerce-sync' ),
+		};
+	}
+
+	/**
 	 * Keeps the stop banner visible only while a sync action is actually running.
 	 *
 	 * @param array<string,mixed>|null      $stop_request Stop request.
@@ -673,6 +924,7 @@ class Schrack_Admin {
 		$tabs = array(
 			'settings' => array( 'label' => __( 'Settings', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync' ),
 			'markups'  => array( 'label' => __( 'Category Markups', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-markups' ),
+			'b2b'      => array( 'label' => __( 'B2B Customers', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-b2b' ),
 			'manual'   => array( 'label' => __( 'Manual Sync', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-manual' ),
 			'logs'     => array( 'label' => __( 'Logs', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-logs' ),
 			'status'   => array( 'label' => __( 'Status', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-status' ),
