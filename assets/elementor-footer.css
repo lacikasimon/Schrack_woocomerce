@@ -401,6 +401,21 @@
 	overflow-wrap: anywhere;
 }
 
+.schrack-footer__payments {
+	align-items: center;
+	display: flex;
+	margin: 0 0 24px;
+	min-width: 0;
+}
+
+.schrack-footer__payments img {
+	border: 0;
+	display: block;
+	height: auto;
+	max-width: min(100%, 420px);
+	width: 420px;
+}
+
 .schrack-footer__bottom-row {
 	align-items: center;
 	display: flex;
@@ -463,6 +478,10 @@
 
 	.schrack-footer__bottom {
 		padding: 22px 0;
+	}
+
+	.schrack-footer__payments img {
+		width: 100%;
 	}
 
 	.schrack-footer__eu {

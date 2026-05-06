@@ -157,6 +157,18 @@ class Schrack_Footer_Renderer {
 						<?php echo esc_html( $settings['company_name'] ); ?> · CUI <?php echo esc_html( $settings['cui'] ); ?> · Reg. Com. <?php echo esc_html( $settings['reg_com'] ); ?> · <?php echo esc_html( $settings['cui_note'] ); ?> · EUID <?php echo esc_html( $settings['euid'] ); ?>
 					</p>
 
+					<?php if ( 'yes' === $settings['show_payments'] ) : ?>
+						<div class="schrack-footer__payments" aria-label="<?php esc_attr_e( 'Metode de plata acceptate', 'schrack-woocommerce-sync' ); ?>">
+							<img
+								src="<?php echo esc_url( $this->payment_logo_src() ); ?>"
+								alt="<?php esc_attr_e( 'NETOPIA Payments, Mastercard si Visa', 'schrack-woocommerce-sync' ); ?>"
+								width="1852"
+								height="349"
+								loading="lazy"
+							>
+						</div>
+					<?php endif; ?>
+
 					<div class="schrack-footer__bottom-row">
 						<p><?php echo esc_html( sprintf( __( '© %1$d GENE SYS SECURITY SRL. Toate drepturile rezervate.', 'schrack-woocommerce-sync' ), (int) gmdate( 'Y' ) ) ); ?></p>
 						<nav aria-label="<?php esc_attr_e( 'Linkuri legale', 'schrack-woocommerce-sync' ); ?>">
@@ -199,13 +211,14 @@ class Schrack_Footer_Renderer {
 			'cui_note'      => __( 'Platitor de TVA (la facturare)', 'schrack-woocommerce-sync' ),
 			'reg_com'       => 'J2017001105304',
 			'euid'          => 'ROONRC.J2017001105304',
-			'show_social'   => 'yes',
-			'show_eu_block' => 'yes',
-			'show_anpc'     => 'yes',
-			'accent_color'  => '#1e40af',
-			'deep_color'    => '#172554',
-			'max_width'     => 1280,
-			'radius'        => 8,
+			'show_social'       => 'yes',
+			'show_eu_block'     => 'yes',
+			'show_anpc'         => 'yes',
+			'show_payments'     => 'yes',
+			'accent_color'      => '#1e40af',
+			'deep_color'        => '#172554',
+			'max_width'         => 1280,
+			'radius'            => 8,
 		);
 
 		$settings = wp_parse_args( $settings, $defaults );
@@ -214,7 +227,7 @@ class Schrack_Footer_Renderer {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
-		foreach ( array( 'show_social', 'show_eu_block', 'show_anpc' ) as $key ) {
+		foreach ( array( 'show_social', 'show_eu_block', 'show_anpc', 'show_payments' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
 		}
 
@@ -285,6 +298,13 @@ class Schrack_Footer_Renderer {
 			array( 'label' => __( 'Solutionarea alternativa a litigiilor', 'schrack-woocommerce-sync' ), 'href' => 'https://anpc.ro/ce-este-sal/', 'external' => true ),
 			array( 'label' => __( 'Solutionarea online a litigiilor', 'schrack-woocommerce-sync' ), 'href' => 'https://consumer-redress.ec.europa.eu/site-relocation_en', 'external' => true ),
 		);
+	}
+
+	/**
+	 * Returns the local NETOPIA payments logo URL.
+	 */
+	private function payment_logo_src(): string {
+		return SCHRACK_WC_SYNC_URL . 'assets/netopia-payments-bg-white.png';
 	}
 
 	/**
