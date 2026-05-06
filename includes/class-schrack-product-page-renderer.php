@@ -136,7 +136,17 @@ class Schrack_Product_Page_Renderer {
 		<div class="schrack-product-page__media">
 			<div class="schrack-product-page__main-image">
 				<?php
-				if ( empty( $image_ids ) ) {
+				$remote_image = $this->frontend_image_loader()->remote_product_image_html(
+					$product,
+					'woocommerce_single',
+					array(
+						'loading' => 'eager',
+					)
+				);
+
+				if ( '' !== $remote_image ) {
+					echo $remote_image; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				} elseif ( empty( $image_ids ) ) {
 					echo wc_placeholder_img( 'woocommerce_single' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				} else {
 					echo wp_get_attachment_image(
@@ -151,7 +161,7 @@ class Schrack_Product_Page_Renderer {
 				?>
 			</div>
 
-			<?php if ( count( $image_ids ) > 1 ) : ?>
+			<?php if ( '' === $remote_image && count( $image_ids ) > 1 ) : ?>
 				<div class="schrack-product-page__thumbs">
 					<?php foreach ( array_slice( $image_ids, 0, 6 ) as $thumb_id ) : ?>
 						<div class="schrack-product-page__thumb">

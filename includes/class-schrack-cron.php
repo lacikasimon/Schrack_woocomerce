@@ -1017,7 +1017,13 @@ class Schrack_Cron {
 	 * Clears scheduled actions.
 	 */
 	public static function clear_scheduled_actions(): void {
-		foreach ( array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER ) as $hook ) {
+		$hooks = array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER );
+
+		if ( class_exists( 'Schrack_Frontend_Image_Loader' ) ) {
+			$hooks[] = Schrack_Frontend_Image_Loader::BACKGROUND_HOOK;
+		}
+
+		foreach ( $hooks as $hook ) {
 			if ( function_exists( 'as_unschedule_all_actions' ) ) {
 				as_unschedule_all_actions( $hook, null, self::GROUP );
 			}
@@ -1782,9 +1788,15 @@ class Schrack_Cron {
 	/**
 	 * Returns queue-aware task definitions.
 	 *
-	 * @return array<string,array{hook:string,label:string}>
+	 * @return array<string,array{hook:string,label:string,extra_hooks?:array<int,string>}>
 	 */
 	private function task_definitions(): array {
+		$image_extra_hooks = array( self::HOOK_IMAGE_WORKER );
+
+		if ( class_exists( 'Schrack_Frontend_Image_Loader' ) ) {
+			$image_extra_hooks[] = Schrack_Frontend_Image_Loader::BACKGROUND_HOOK;
+		}
+
 		return array(
 			'catalog' => array(
 				'hook'  => self::HOOK_CATALOG,
@@ -1805,7 +1817,7 @@ class Schrack_Cron {
 			'images'  => array(
 				'hook'  => self::HOOK_IMAGES,
 				'label' => __( 'Images', 'schrack-woocommerce-sync' ),
-				'extra_hooks' => array( self::HOOK_IMAGE_WORKER ),
+				'extra_hooks' => $image_extra_hooks,
 			),
 		);
 	}
