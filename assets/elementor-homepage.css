@@ -790,6 +790,15 @@
 	transform: translateY(-1px);
 }
 
+.schrack-home__path-card.is-solar .schrack-home__path-actions .schrack-home__mini-button {
+	color: var(--schrack-home-text);
+}
+
+.schrack-home__path-card.is-solar .schrack-home__path-actions .schrack-home__mini-button:hover,
+.schrack-home__path-card.is-solar .schrack-home__path-actions .schrack-home__mini-button:focus {
+	color: #fff;
+}
+
 .schrack-home__text-link {
 	color: var(--schrack-home-accent);
 	font-size: 12px;

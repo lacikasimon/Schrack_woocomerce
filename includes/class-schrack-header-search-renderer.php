@@ -78,8 +78,11 @@ class Schrack_Header_Search_Renderer {
 					placeholder="<?php echo esc_attr( $settings['placeholder'] ); ?>"
 					autocomplete="off"
 					data-header-search-input
+					role="combobox"
 					aria-autocomplete="list"
+					aria-controls="<?php echo esc_attr( $instance_id . '-results' ); ?>"
 					aria-expanded="false"
+					aria-haspopup="listbox"
 				>
 				<input type="hidden" name="post_type" value="product">
 				<button class="schrack-header-search__button" type="submit">
@@ -87,7 +90,14 @@ class Schrack_Header_Search_Renderer {
 					<span class="schrack-header-search__spinner" aria-hidden="true"></span>
 				</button>
 			</form>
-			<div class="schrack-header-search__results" data-header-search-results hidden></div>
+			<div
+				id="<?php echo esc_attr( $instance_id . '-results' ); ?>"
+				class="schrack-header-search__results"
+				role="listbox"
+				aria-label="<?php esc_attr_e( 'Rezultate cautare produse', 'schrack-woocommerce-sync' ); ?>"
+				data-header-search-results
+				hidden
+			></div>
 		</div>
 		<?php
 
@@ -122,7 +132,7 @@ class Schrack_Header_Search_Renderer {
 
 		ob_start();
 		?>
-		<div class="schrack-header-search__panel" role="listbox">
+		<div class="schrack-header-search__panel">
 			<?php if ( empty( $products ) ) : ?>
 				<?php echo $this->empty_message( __( 'Nu s-au gasit produse.', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php else : ?>

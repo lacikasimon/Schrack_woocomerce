@@ -107,6 +107,7 @@
 	font-style: italic;
 }
 
+.schrack-footer h2,
 .schrack-footer h3 {
 	color: var(--schrack-footer-slate);
 	font-size: 18px;
@@ -119,7 +120,7 @@
 	margin-top: 20px;
 }
 
-.schrack-footer__social h3 {
+.schrack-footer__social h2 {
 	color: var(--schrack-footer-muted);
 	font-size: 12px;
 	font-weight: 800;
@@ -317,8 +318,8 @@
 	text-align: center;
 }
 
-.schrack-footer__service-tags h4,
-.schrack-footer__anpc h4 {
+.schrack-footer__service-tags h3,
+.schrack-footer__anpc h3 {
 	color: var(--schrack-footer-muted);
 	font-size: 14px;
 	font-weight: 650;
@@ -350,7 +351,7 @@
 	text-align: center;
 }
 
-.schrack-footer__anpc h4 {
+.schrack-footer__anpc h3 {
 	font-size: 12px;
 	font-weight: 850;
 	letter-spacing: 0;

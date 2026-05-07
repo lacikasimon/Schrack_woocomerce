@@ -62,7 +62,7 @@ class Schrack_Footer_Renderer {
 
 						<?php if ( 'yes' === $settings['show_social'] ) : ?>
 							<div class="schrack-footer__social">
-								<h3><?php esc_html_e( 'Retele sociale', 'schrack-woocommerce-sync' ); ?></h3>
+								<h2><?php esc_html_e( 'Retele sociale', 'schrack-woocommerce-sync' ); ?></h2>
 								<div>
 									<?php foreach ( $this->social_links( $settings['site_url'], $settings['company_name'] ) as $link ) : ?>
 										<a href="<?php echo esc_url( $link['href'] ); ?>" target="_blank" rel="noopener noreferrer" aria-label="<?php echo esc_attr( $link['label'] ); ?>">
@@ -76,7 +76,7 @@ class Schrack_Footer_Renderer {
 					</div>
 
 					<nav class="schrack-footer__links" aria-label="<?php esc_attr_e( 'Servicii', 'schrack-woocommerce-sync' ); ?>">
-						<h3><?php esc_html_e( 'Servicii', 'schrack-woocommerce-sync' ); ?></h3>
+						<h2><?php esc_html_e( 'Servicii', 'schrack-woocommerce-sync' ); ?></h2>
 						<ul>
 							<?php foreach ( $this->service_links() as $link ) : ?>
 								<li><a href="<?php echo esc_url( $link['href'] ); ?>"><?php echo esc_html( $link['label'] ); ?></a></li>
@@ -85,7 +85,7 @@ class Schrack_Footer_Renderer {
 					</nav>
 
 					<nav class="schrack-footer__links" aria-label="<?php esc_attr_e( 'Companie', 'schrack-woocommerce-sync' ); ?>">
-						<h3><?php esc_html_e( 'Companie', 'schrack-woocommerce-sync' ); ?></h3>
+						<h2><?php esc_html_e( 'Companie', 'schrack-woocommerce-sync' ); ?></h2>
 						<ul>
 							<?php foreach ( $this->company_links() as $link ) : ?>
 								<li><a href="<?php echo esc_url( $link['href'] ); ?>"><?php echo esc_html( $link['label'] ); ?></a></li>
@@ -94,7 +94,7 @@ class Schrack_Footer_Renderer {
 					</nav>
 
 					<div class="schrack-footer__contact">
-						<h3><?php esc_html_e( 'Contact', 'schrack-woocommerce-sync' ); ?></h3>
+						<h2><?php esc_html_e( 'Contact', 'schrack-woocommerce-sync' ); ?></h2>
 						<div class="schrack-footer__contact-list">
 							<a href="<?php echo esc_url( 'tel:' . $settings['phone_tel'] ); ?>">
 								<span aria-hidden="true"></span>
@@ -130,7 +130,7 @@ class Schrack_Footer_Renderer {
 
 						<?php if ( 'yes' === $settings['show_eu_block'] || 'yes' === $settings['show_anpc'] ) : ?>
 							<div class="schrack-footer__service-tags" aria-label="<?php esc_attr_e( 'Servicii complete', 'schrack-woocommerce-sync' ); ?>">
-								<h4><?php esc_html_e( 'Servicii complete:', 'schrack-woocommerce-sync' ); ?></h4>
+								<h3><?php esc_html_e( 'Servicii complete:', 'schrack-woocommerce-sync' ); ?></h3>
 								<div>
 									<?php foreach ( array( __( 'Consultanta', 'schrack-woocommerce-sync' ), __( 'Proiectare', 'schrack-woocommerce-sync' ), __( 'Executie', 'schrack-woocommerce-sync' ), __( 'Mentenanta', 'schrack-woocommerce-sync' ) ) as $tag ) : ?>
 										<span><?php echo esc_html( $tag ); ?></span>
@@ -141,7 +141,7 @@ class Schrack_Footer_Renderer {
 
 						<?php if ( 'yes' === $settings['show_anpc'] ) : ?>
 							<div class="schrack-footer__anpc">
-								<h4><?php esc_html_e( 'ANPC', 'schrack-woocommerce-sync' ); ?></h4>
+								<h3><?php esc_html_e( 'ANPC', 'schrack-woocommerce-sync' ); ?></h3>
 								<div>
 									<?php foreach ( $this->anpc_links() as $link ) : ?>
 										<a href="<?php echo esc_url( $link['href'] ); ?>" target="_blank" rel="nofollow noopener noreferrer" aria-label="<?php echo esc_attr( $link['label'] ); ?>">
