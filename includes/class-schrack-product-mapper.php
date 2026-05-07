@@ -756,6 +756,7 @@ class Schrack_Product_Mapper {
 
 		if ( $imported_url === $image_url && $this->is_valid_image_attachment( $thumbnail_id ) ) {
 			$attachment_id = $thumbnail_id;
+			update_post_meta( $product_id, '_schrack_imported_image_url', $image_url );
 			$this->mark_attachment_image_source( $attachment_id, $image_url );
 			$this->mark_product_image_sync_meta( $product_id, 'already_imported', $image_url, $attachment_id );
 
@@ -1211,7 +1212,13 @@ class Schrack_Product_Mapper {
 			$image_url = 'https:' . $image_url;
 		}
 
-		return esc_url_raw( $image_url );
+		$image_url = esc_url_raw( $image_url );
+
+		if ( preg_match( '/^http:\/\//i', $image_url ) ) {
+			$image_url = 'https://' . substr( $image_url, 7 );
+		}
+
+		return $image_url;
 	}
 
 	/**

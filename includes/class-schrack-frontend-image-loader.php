@@ -545,6 +545,12 @@ class Schrack_Frontend_Image_Loader {
 			$image_url = 'https:' . $image_url;
 		}
 
-		return esc_url_raw( $image_url );
+		$image_url = esc_url_raw( $image_url );
+
+		if ( preg_match( '/^http:\/\//i', $image_url ) ) {
+			$image_url = 'https://' . substr( $image_url, 7 );
+		}
+
+		return $image_url;
 	}
 }

@@ -160,9 +160,10 @@ class Schrack_Catalog_Importer {
 			return 'failed';
 		}
 
-		$current_url = $this->normalize_catalog_url( (string) get_post_meta( $product_id, '_schrack_image_url', true ) );
+		$current_raw = (string) get_post_meta( $product_id, '_schrack_image_url', true );
+		$current_url = $this->normalize_catalog_url( $current_raw );
 
-		if ( $current_url === $image_url ) {
+		if ( $current_url === $image_url && trim( $current_raw ) === $image_url ) {
 			return 'verified';
 		}
 
@@ -676,7 +677,7 @@ class Schrack_Catalog_Importer {
 			return '';
 		}
 
-		return esc_url_raw( trim( (string) $item['image_url'] ) );
+		return $this->normalize_catalog_url( (string) $item['image_url'] );
 	}
 
 	/**
@@ -1998,7 +1999,13 @@ class Schrack_Catalog_Importer {
 			$value = 'https:' . $value;
 		}
 
-		return esc_url_raw( $value );
+		$value = esc_url_raw( $value );
+
+		if ( preg_match( '/^http:\/\//i', $value ) ) {
+			$value = 'https://' . substr( $value, 7 );
+		}
+
+		return $value;
 	}
 
 	/**
