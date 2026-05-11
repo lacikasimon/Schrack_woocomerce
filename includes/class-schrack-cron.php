@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Schrack_Cron {
 	public const GROUP        = 'schrack-wc-sync';
 	public const HOOK_CATALOG = 'schrack_wc_sync_catalog';
+	public const HOOK_TELESYSTEM_CATALOG = 'schrack_wc_sync_telesystem_catalog';
 	public const HOOK_PRICES  = 'schrack_wc_sync_prices';
 	public const HOOK_STOCK   = 'schrack_wc_sync_stock';
 	public const HOOK_FULL    = 'schrack_wc_sync_full';
@@ -47,6 +48,7 @@ class Schrack_Cron {
 		add_filter( 'cron_schedules', array( $this, 'add_wp_cron_schedules' ) );
 		add_action( 'init', array( $this, 'maybe_schedule_recurring_actions' ) );
 		add_action( self::HOOK_CATALOG, array( $this, 'run_catalog_import' ) );
+		add_action( self::HOOK_TELESYSTEM_CATALOG, array( $this, 'run_telesystem_catalog_import' ) );
 		add_action( self::HOOK_PRICES, array( $this, 'run_price_sync' ) );
 		add_action( self::HOOK_STOCK, array( $this, 'run_stock_sync' ) );
 		add_action( self::HOOK_IMAGES, array( $this, 'run_image_sync' ) );
@@ -84,6 +86,11 @@ class Schrack_Cron {
 	 */
 	public function maybe_schedule_recurring_actions(): void {
 		$this->schedule_recurring_action( self::HOOK_CATALOG, (string) $this->settings->get( 'catalog_sync_frequency', 'daily' ) );
+		if ( 'yes' === (string) $this->settings->get( 'telesystem_enabled', 'yes' ) ) {
+			$this->schedule_recurring_action( self::HOOK_TELESYSTEM_CATALOG, (string) $this->settings->get( 'telesystem_sync_frequency', 'daily' ) );
+		} elseif ( self::has_scheduled_hook( self::HOOK_TELESYSTEM_CATALOG ) ) {
+			self::clear_hook_actions( self::HOOK_TELESYSTEM_CATALOG );
+		}
 		$this->schedule_recurring_action( self::HOOK_PRICES, (string) $this->settings->get( 'price_sync_frequency', 'daily' ) );
 		$this->schedule_recurring_action( self::HOOK_STOCK, (string) $this->settings->get( 'stock_sync_frequency', 'hourly' ) );
 	}
@@ -119,6 +126,15 @@ class Schrack_Cron {
 				'queued'  => false,
 				'code'    => 'image_import_disabled',
 				'message' => __( 'Image sync is disabled. Catalog image URLs remain stored as external references.', 'schrack-woocommerce-sync' ),
+				'task'    => $task,
+			);
+		}
+
+		if ( 'telesystem_catalog' === $task && 'yes' !== (string) $this->settings->get( 'telesystem_enabled', 'yes' ) ) {
+			return array(
+				'queued'  => false,
+				'code'    => 'telesystem_disabled',
+				'message' => __( 'Telesystem sync is disabled.', 'schrack-woocommerce-sync' ),
 				'task'    => $task,
 			);
 		}
@@ -407,7 +423,7 @@ class Schrack_Cron {
 			if ( $queue_continuation ) {
 				if ( $this->should_continue_batch( $result ) ) {
 					$this->queue_next_batch_if_needed( self::HOOK_CATALOG, 'catalog', $result );
-				} elseif ( $this->should_import_images() ) {
+				} elseif ( $this->should_import_images() && 'yes' !== (string) ( $result['disabled'] ?? 'no' ) ) {
 					if ( ! $this->queue_sync_batch( self::HOOK_IMAGES, 'images', array(), array( 'source' => 'catalog_completed' ) ) ) {
 						$this->mark_queue_failed(
 							'images',
@@ -435,6 +451,110 @@ class Schrack_Cron {
 		} catch ( Throwable $exception ) {
 			$this->logger->error( 'catalog', 'Schrack catalog import batch failed.', null, array( 'error' => $exception->getMessage() ) );
 			$this->settings->update_status( 'catalog', array( 'processed' => 0, 'errors' => 1 ) );
+			return array(
+				'processed'       => 0,
+				'errors'          => 1,
+				'completed_cycle' => 'yes',
+			);
+		}
+	}
+
+	/**
+	 * Runs a Telesystem catalog import batch.
+	 */
+	public function run_telesystem_catalog_import( bool $queue_continuation = true ): array {
+		$importer    = new Schrack_Telesystem_Importer( $this->settings, $this->logger );
+		$limit       = $this->telesystem_batch_limit();
+		$max_batches = $this->telesystem_batches_per_run();
+		$started_at  = time();
+
+		try {
+			if ( $this->settings->is_stop_requested() ) {
+				return $this->handle_stopped_sync( Schrack_Telesystem_Importer::STATUS_KEY, 0, 0 );
+			}
+
+			$result            = array();
+			$total_processed   = 0;
+			$total_errors      = 0;
+			$total_prices      = 0;
+			$total_stock       = 0;
+			$total_image_urls  = 0;
+			$batches           = 0;
+
+			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( Schrack_Telesystem_Importer::STATUS_KEY, $total_processed, $total_errors );
+				}
+
+				if ( $batch_index > 0 && $this->should_pause_batch_run( $started_at, Schrack_Telesystem_Importer::STATUS_KEY ) ) {
+					break;
+				}
+
+				$result = $importer->import_from_feed( $limit );
+				++$batches;
+
+				$total_processed  += (int) ( $result['processed'] ?? 0 );
+				$total_errors     += (int) ( $result['errors'] ?? 0 );
+				$total_prices     += (int) ( $result['prices_synced'] ?? 0 );
+				$total_stock      += (int) ( $result['stock_synced'] ?? 0 );
+				$total_image_urls += (int) ( $result['image_urls_seen'] ?? 0 );
+				$this->release_batch_memory();
+
+				if ( $this->is_stopped_result( $result ) ) {
+					return $this->handle_stopped_sync( Schrack_Telesystem_Importer::STATUS_KEY, $total_processed, $total_errors );
+				}
+
+				if ( $this->settings->is_stop_requested() ) {
+					return $this->handle_stopped_sync( Schrack_Telesystem_Importer::STATUS_KEY, $total_processed, $total_errors );
+				}
+
+				if ( ! $this->should_continue_batch( $result ) || $this->should_pause_batch_run( $started_at, Schrack_Telesystem_Importer::STATUS_KEY ) ) {
+					break;
+				}
+			}
+
+			$result = array_merge(
+				$result,
+				array(
+					'processed'                    => $total_processed,
+					'errors'                       => $total_errors,
+					'prices_synced'                => $total_prices,
+					'stock_synced'                 => $total_stock,
+					'image_urls_seen'              => $total_image_urls,
+					'batches_processed'            => $batches,
+					'telesystem_batches_per_run'   => $max_batches,
+					'catalog_source'               => 'telesystem',
+				),
+				$this->memory_status_context()
+			);
+
+			$this->settings->update_status( Schrack_Telesystem_Importer::STATUS_KEY, $result );
+			$this->logger->info( 'telesystem', 'Finished Telesystem catalog import run.', null, $result );
+
+			if ( $queue_continuation ) {
+				if ( $this->should_continue_batch( $result ) ) {
+					$this->queue_next_batch_if_needed( self::HOOK_TELESYSTEM_CATALOG, Schrack_Telesystem_Importer::STATUS_KEY, $result );
+				} elseif ( $this->should_import_images() ) {
+					if ( ! $this->queue_sync_batch( self::HOOK_IMAGES, 'images', array(), array( 'source' => 'telesystem_catalog_completed' ) ) ) {
+						$this->mark_queue_failed(
+							'images',
+							array(
+								'processed'       => 0,
+								'errors'          => 1,
+								'completed_cycle' => 'no',
+								'source'          => 'telesystem_catalog_completed',
+							),
+							self::HOOK_IMAGES,
+							array()
+						);
+					}
+				}
+			}
+
+			return $result;
+		} catch ( Throwable $exception ) {
+			$this->logger->error( 'telesystem', 'Telesystem catalog import batch failed.', null, array( 'error' => $exception->getMessage() ) );
+			$this->settings->update_status( Schrack_Telesystem_Importer::STATUS_KEY, array( 'processed' => 0, 'errors' => 1 ) );
 			return array(
 				'processed'       => 0,
 				'errors'          => 1,
@@ -1051,19 +1171,37 @@ class Schrack_Cron {
 	 * Clears scheduled actions.
 	 */
 	public static function clear_scheduled_actions(): void {
-		$hooks = array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER );
+		$hooks = array( self::HOOK_CATALOG, self::HOOK_TELESYSTEM_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER );
 
 		if ( class_exists( 'Schrack_Frontend_Image_Loader' ) ) {
 			$hooks[] = Schrack_Frontend_Image_Loader::BACKGROUND_HOOK;
 		}
 
 		foreach ( $hooks as $hook ) {
-			if ( function_exists( 'as_unschedule_all_actions' ) ) {
-				as_unschedule_all_actions( $hook, null, self::GROUP );
-			}
-
-			wp_clear_scheduled_hook( $hook );
+			self::clear_hook_actions( $hook );
 		}
+	}
+
+	/**
+	 * Clears Action Scheduler and WP-Cron actions for one hook.
+	 */
+	private static function clear_hook_actions( string $hook ): void {
+		if ( function_exists( 'as_unschedule_all_actions' ) ) {
+			as_unschedule_all_actions( $hook, null, self::GROUP );
+		}
+
+		wp_clear_scheduled_hook( $hook );
+	}
+
+	/**
+	 * Returns whether a hook currently has Action Scheduler or WP-Cron work.
+	 */
+	private static function has_scheduled_hook( string $hook ): bool {
+		if ( function_exists( 'as_next_scheduled_action' ) && as_next_scheduled_action( $hook, array(), self::GROUP ) ) {
+			return true;
+		}
+
+		return (bool) wp_next_scheduled( $hook );
 	}
 
 	/**
@@ -1458,6 +1596,15 @@ class Schrack_Cron {
 	}
 
 	/**
+	 * Returns the effective Telesystem CSV batch size.
+	 */
+	private function telesystem_batch_limit(): int {
+		$limit = max( 1, min( 5000, (int) $this->settings->get( 'telesystem_batch_size', 500 ) ) );
+
+		return $this->is_low_memory_host() ? min( $limit, 500 ) : $limit;
+	}
+
+	/**
 	 * Returns the effective SOAP-backed product batch size.
 	 */
 	private function sync_batch_limit(): int {
@@ -1482,6 +1629,15 @@ class Schrack_Cron {
 		$max_batches = max( 1, min( 20, (int) $this->settings->get( 'catalog_batches_per_run', 1 ) ) );
 
 		// Catalog import is now streamed and cache-backed, so 2 GB hosts can safely chain a few batches.
+		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 5 ) : $max_batches;
+	}
+
+	/**
+	 * Returns how many Telesystem feed batches one PHP request may process.
+	 */
+	private function telesystem_batches_per_run(): int {
+		$max_batches = max( 1, min( 20, (int) $this->settings->get( 'telesystem_batches_per_run', 3 ) ) );
+
 		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 5 ) : $max_batches;
 	}
 
@@ -1835,6 +1991,10 @@ class Schrack_Cron {
 			'catalog' => array(
 				'hook'  => self::HOOK_CATALOG,
 				'label' => __( 'Catalog', 'schrack-woocommerce-sync' ),
+			),
+			'telesystem_catalog' => array(
+				'hook'  => self::HOOK_TELESYSTEM_CATALOG,
+				'label' => __( 'Telesystem catalog', 'schrack-woocommerce-sync' ),
 			),
 			'full'    => array(
 				'hook'  => self::HOOK_FULL,

@@ -163,13 +163,21 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</tr>
 			</thead>
 			<tbody>
-				<?php foreach ( array( 'catalog', 'price', 'stock', 'images' ) as $operation ) : ?>
+				<?php foreach ( array( 'catalog', 'telesystem_catalog', 'price', 'stock', 'images' ) as $operation ) : ?>
 					<?php
 					$row     = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
 					$details = array();
 
 					if ( 'catalog' === $operation ) {
 						foreach ( array( 'image_urls_seen', 'image_urls_stored', 'image_urls_backfilled', 'image_url_meta_errors' ) as $detail_key ) {
+							if ( isset( $row[ $detail_key ] ) ) {
+								$details[] = ucwords( str_replace( '_', ' ', $detail_key ) ) . ': ' . absint( $row[ $detail_key ] );
+							}
+						}
+					}
+
+					if ( 'telesystem_catalog' === $operation ) {
+						foreach ( array( 'prices_synced', 'stock_synced', 'image_urls_seen' ) as $detail_key ) {
 							if ( isset( $row[ $detail_key ] ) ) {
 								$details[] = ucwords( str_replace( '_', ' ', $detail_key ) ) . ': ' . absint( $row[ $detail_key ] );
 							}
@@ -205,7 +213,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					}
 					?>
 					<tr>
-						<td><?php echo esc_html( ucfirst( $operation ) ); ?></td>
+						<td><?php echo esc_html( 'telesystem_catalog' === $operation ? __( 'Telesystem catalog', 'schrack-woocommerce-sync' ) : ucfirst( $operation ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $row['last_run'] ?? '-' ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $row['processed'] ?? 0 ) ); ?></td>
 						<td><?php echo esc_html( (string) ( $row['batches_processed'] ?? '-' ) ); ?></td>

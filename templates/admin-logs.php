@@ -27,6 +27,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<select name="operation">
 				<option value=""><?php esc_html_e( 'All operations', 'schrack-woocommerce-sync' ); ?></option>
 				<option value="catalog" <?php selected( $args['operation'], 'catalog' ); ?>><?php esc_html_e( 'Catalog', 'schrack-woocommerce-sync' ); ?></option>
+				<option value="telesystem" <?php selected( $args['operation'], 'telesystem' ); ?>><?php esc_html_e( 'Telesystem', 'schrack-woocommerce-sync' ); ?></option>
+				<option value="telesystem_catalog" <?php selected( $args['operation'], 'telesystem_catalog' ); ?>><?php esc_html_e( 'Telesystem catalog queue', 'schrack-woocommerce-sync' ); ?></option>
 				<option value="price" <?php selected( $args['operation'], 'price' ); ?>><?php esc_html_e( 'Price', 'schrack-woocommerce-sync' ); ?></option>
 				<option value="stock" <?php selected( $args['operation'], 'stock' ); ?>><?php esc_html_e( 'Stock', 'schrack-woocommerce-sync' ); ?></option>
 				<option value="images" <?php selected( $args['operation'], 'images' ); ?>><?php esc_html_e( 'Images', 'schrack-woocommerce-sync' ); ?></option>

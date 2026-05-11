@@ -122,6 +122,7 @@ class Schrack_Plugin {
 			'class-schrack-frontend-image-loader.php',
 			'class-schrack-b2b-pricing.php',
 			'class-schrack-catalog-importer.php',
+			'class-schrack-telesystem-importer.php',
 			'class-schrack-image-sync.php',
 			'class-schrack-price-sync.php',
 			'class-schrack-stock-sync.php',

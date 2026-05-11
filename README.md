@@ -7,6 +7,7 @@ Professional WooCommerce plugin skeleton for importing Schrack products and sync
 This plugin handles only:
 
 - Catalog import from Schrack SOAP `GetCatalogAs` or future Datanorm / CSV / XML sources.
+- Separate Telesystem CSV feed import from the configured B2B feed URL.
 - Purchase price lookup through `GetItemPrice`.
 - Stock lookup through `GetStockItemQuantities`.
 - WooCommerce simple product create/update by SKU.
@@ -60,6 +61,8 @@ The admin settings page stores values through the WordPress Options API:
 - SOAP endpoint URL
 - WSDL URL
 - Datanorm URL
+- Telesystem feed toggle and feed URL
+- Telesystem batch size, batches per run, and price column strategy
 - Customer number
 - Webshop username
 - Webshop password
@@ -179,6 +182,7 @@ The customer/B2B account portal can be placed with the Elementor widget or with 
 Recurring jobs are registered through Action Scheduler when available:
 
 - Catalog import: daily / weekly
+- Telesystem CSV import: daily / weekly
 - Price sync: daily / every 6 hours / hourly
 - Stock sync: hourly / every 30 minutes
 
@@ -188,12 +192,15 @@ Catalog, price, and stock batches persist cursors in the status option. Each bat
 
 Catalog sync stores product image URLs in `_schrack_image_url`. If media-library image import is enabled, image sync then claims existing products with pending image URLs and dispatches parallel Action Scheduler workers, controlled by the image batch size, follow-up delay, download timeout, retry cooldown, and `Parallel image workers` settings. If image import is disabled, pending products are left with their external image URLs and the storefront remote-image fallback continues to use those URLs for products without downloaded images. Image workers stop before PHP timeout/memory pressure and release unfinished claims for the next wave. Failed image downloads are marked in product meta and retried after a cooldown.
 
+Telesystem is handled as a separate catalog source. Its products are marked with `_schrack_catalog_source = telesystem` and source-specific metadata such as `_telesystem_item_number`, `_telesystem_price_1`, `_telesystem_price_2`, `_telesystem_stock_text`, and `_telesystem_technical_attributes`. Telesystem products are not given `_schrack_item_number`, so Schrack SOAP price and stock syncs do not process them. The shared image queue still uses `_schrack_image_url` so Telesystem product images can be downloaded by the existing image sync.
+
 ## WP-CLI
 
 Commands:
 
 ```bash
 wp schrack-sync catalog
+wp schrack-sync telesystem
 wp schrack-sync prices
 wp schrack-sync stock
 wp schrack-sync images

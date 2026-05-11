@@ -58,6 +58,14 @@ class Schrack_WP_CLI {
 	}
 
 	/**
+	 * Imports a Telesystem feed batch.
+	 */
+	public function telesystem(): void {
+		$this->cron->run_telesystem_catalog_import();
+		WP_CLI::success( 'Telesystem catalog import batch finished.' );
+	}
+
+	/**
 	 * Syncs price batch.
 	 */
 	public function prices(): void {

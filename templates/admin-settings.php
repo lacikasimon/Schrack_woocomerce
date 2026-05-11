@@ -42,6 +42,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<td><input class="regular-text code" id="schrack_datanorm" type="url" name="schrack_settings[datanorm_url]" value="<?php echo esc_attr( $settings['datanorm_url'] ); ?>"></td>
 			</tr>
 			<tr>
+				<th scope="row"><?php esc_html_e( 'Telesystem feed', 'schrack-woocommerce-sync' ); ?></th>
+				<td>
+					<label><input type="checkbox" name="schrack_settings[telesystem_enabled]" value="yes" <?php checked( $settings['telesystem_enabled'] ?? 'yes', 'yes' ); ?>> <?php esc_html_e( 'Enable separate Telesystem CSV sync', 'schrack-woocommerce-sync' ); ?></label>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_telesystem_feed_url"><?php esc_html_e( 'Telesystem feed URL', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td><input class="regular-text code" id="schrack_telesystem_feed_url" type="url" name="schrack_settings[telesystem_feed_url]" value="<?php echo esc_attr( $settings['telesystem_feed_url'] ?? '' ); ?>"></td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="schrack_customer_number"><?php esc_html_e( 'Customer number', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td><input class="regular-text" id="schrack_customer_number" type="text" name="schrack_settings[customer_number]" value="<?php echo esc_attr( $settings['customer_number'] ); ?>" autocomplete="off"></td>
 			</tr>
@@ -77,6 +87,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<td>
 					<input id="schrack_catalog_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[catalog_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['catalog_batches_per_run'] ) ) ) ); ?>">
 					<p class="description"><?php esc_html_e( 'For 2 GB cPanel hosting, 3 is now the recommended value. Runtime protection stops before memory or execution time gets risky.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_telesystem_batch_size"><?php esc_html_e( 'Telesystem batch size', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<input id="schrack_telesystem_batch_size" type="number" min="1" max="1000" step="1" name="schrack_settings[telesystem_batch_size]" value="<?php echo esc_attr( min( 1000, max( 1, absint( $settings['telesystem_batch_size'] ?? 500 ) ) ) ); ?>">
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_telesystem_batches_per_run"><?php esc_html_e( 'Telesystem batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<input id="schrack_telesystem_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[telesystem_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['telesystem_batches_per_run'] ?? 3 ) ) ) ); ?>">
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_telesystem_price_source"><?php esc_html_e( 'Telesystem price source', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<select id="schrack_telesystem_price_source" name="schrack_settings[telesystem_price_source]">
+						<option value="pret2" <?php selected( $settings['telesystem_price_source'] ?? 'pret2', 'pret2' ); ?>><?php esc_html_e( 'Pret 2, fallback Pret 1', 'schrack-woocommerce-sync' ); ?></option>
+						<option value="pret1" <?php selected( $settings['telesystem_price_source'] ?? 'pret2', 'pret1' ); ?>><?php esc_html_e( 'Pret 1, fallback Pret 2', 'schrack-woocommerce-sync' ); ?></option>
+						<option value="pret1_markup" <?php selected( $settings['telesystem_price_source'] ?? 'pret2', 'pret1_markup' ); ?>><?php esc_html_e( 'Pret 1 + default/category markup', 'schrack-woocommerce-sync' ); ?></option>
+					</select>
 				</td>
 			</tr>
 			<tr>
@@ -241,6 +273,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<select id="schrack_catalog_frequency" name="schrack_settings[catalog_sync_frequency]">
 						<option value="daily" <?php selected( $settings['catalog_sync_frequency'], 'daily' ); ?>><?php esc_html_e( 'Daily', 'schrack-woocommerce-sync' ); ?></option>
 						<option value="weekly" <?php selected( $settings['catalog_sync_frequency'], 'weekly' ); ?>><?php esc_html_e( 'Weekly', 'schrack-woocommerce-sync' ); ?></option>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="schrack_telesystem_frequency"><?php esc_html_e( 'Telesystem import frequency', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<select id="schrack_telesystem_frequency" name="schrack_settings[telesystem_sync_frequency]">
+						<option value="daily" <?php selected( $settings['telesystem_sync_frequency'] ?? 'daily', 'daily' ); ?>><?php esc_html_e( 'Daily', 'schrack-woocommerce-sync' ); ?></option>
+						<option value="weekly" <?php selected( $settings['telesystem_sync_frequency'] ?? 'daily', 'weekly' ); ?>><?php esc_html_e( 'Weekly', 'schrack-woocommerce-sync' ); ?></option>
 					</select>
 				</td>
 			</tr>

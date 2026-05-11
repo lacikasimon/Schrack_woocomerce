@@ -206,11 +206,12 @@ class Schrack_Product_Page_Renderer {
 	 */
 	private function identity_row( WC_Product $product ): string {
 		$sku         = $product->get_sku();
-		$item_number = $this->meta_text( $product, '_schrack_item_number' );
+		$source      = $this->catalog_source( $product );
+		$item_number = $this->source_meta_text( $product, 'item_number', '_schrack_item_number' );
 		$items       = array();
 
 		if ( '' !== $item_number ) {
-			$items[] = array( __( 'Cod Schrack', 'schrack-woocommerce-sync' ), $item_number );
+			$items[] = array( $this->source_item_label( $source ), $item_number );
 		}
 
 		if ( '' !== $sku && $sku !== $item_number ) {
@@ -279,10 +280,10 @@ class Schrack_Product_Page_Renderer {
 	private function meta_grid( WC_Product $product ): string {
 		$items = array_filter(
 			array(
-				$this->meta_item( __( 'EAN', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_ean' ) ),
-				$this->meta_item( __( 'Producator', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_manufacturer' ) ),
-				$this->meta_item( __( 'Unitate', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_unit' ) ),
-				$this->meta_item( __( 'Status catalog', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_catalog_status' ) ),
+				$this->meta_item( __( 'EAN', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'ean', '_schrack_ean' ) ),
+				$this->meta_item( __( 'Producator', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'manufacturer', '_schrack_manufacturer' ) ),
+				$this->meta_item( __( 'Unitate', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'unit', '_schrack_unit' ) ),
+				$this->meta_item( __( 'Status catalog', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'catalog_status', '_schrack_catalog_status' ) ),
 			)
 		);
 
@@ -365,16 +366,17 @@ class Schrack_Product_Page_Renderer {
 	 */
 	private function specifications( WC_Product $product, array $settings ): string {
 		$stock_html = wc_get_stock_html( $product );
+		$source     = $this->catalog_source( $product );
 		$items = array_filter(
 			array(
-				$this->meta_item( __( 'Cod Schrack', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_item_number' ) ),
+				$this->meta_item( $this->source_item_label( $source ), $this->source_meta_text( $product, 'item_number', '_schrack_item_number' ) ),
 				$this->meta_item( __( 'SKU', 'schrack-woocommerce-sync' ), $product->get_sku() ),
 				$this->meta_item( __( 'Categorii', 'schrack-woocommerce-sync' ), $this->term_names( $product, 'product_cat' ) ),
 				$this->meta_item( __( 'Etichete', 'schrack-woocommerce-sync' ), $this->term_names( $product, 'product_tag' ) ),
-				$this->meta_item( __( 'EAN', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_ean' ) ),
-				$this->meta_item( __( 'Producator', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_manufacturer' ) ),
-				$this->meta_item( __( 'Unitate', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_unit' ) ),
-				$this->meta_item( __( 'Status catalog', 'schrack-woocommerce-sync' ), $this->meta_text( $product, '_schrack_catalog_status' ) ),
+				$this->meta_item( __( 'EAN', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'ean', '_schrack_ean' ) ),
+				$this->meta_item( __( 'Producator', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'manufacturer', '_schrack_manufacturer' ) ),
+				$this->meta_item( __( 'Unitate', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'unit', '_schrack_unit' ) ),
+				$this->meta_item( __( 'Status catalog', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'catalog_status', '_schrack_catalog_status' ) ),
 				$this->meta_item( __( 'Greutate', 'schrack-woocommerce-sync' ), $this->product_weight( $product ) ),
 				$this->meta_item( __( 'Dimensiuni', 'schrack-woocommerce-sync' ), $this->product_dimensions( $product ) ),
 				$this->meta_item( __( 'Disponibilitate', 'schrack-woocommerce-sync' ), '' !== $stock_html ? wp_strip_all_tags( $stock_html ) : '' ),
@@ -503,7 +505,8 @@ class Schrack_Product_Page_Renderer {
 	 * @return array<int,array{label:string,value:string}>
 	 */
 	private function technical_attributes( WC_Product $product, int $limit ): array {
-		$raw = $product->get_meta( '_schrack_technical_attributes', true );
+		$source = $this->catalog_source( $product );
+		$raw    = $product->get_meta( 'schrack' === $source ? '_schrack_technical_attributes' : '_' . $source . '_technical_attributes', true );
 
 		if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
 			return array();
@@ -530,6 +533,42 @@ class Schrack_Product_Page_Renderer {
 		}
 
 		return $items;
+	}
+
+	/**
+	 * Returns the catalog source stored on the product.
+	 */
+	private function catalog_source( WC_Product $product ): string {
+		$source = sanitize_key( (string) $product->get_meta( '_schrack_catalog_source', true ) );
+
+		return '' !== $source ? $source : 'schrack';
+	}
+
+	/**
+	 * Reads source-specific metadata, falling back to the legacy Schrack meta key.
+	 */
+	private function source_meta_text( WC_Product $product, string $suffix, string $fallback_key ): string {
+		$source = $this->catalog_source( $product );
+
+		if ( 'schrack' !== $source ) {
+			$value = $this->meta_text( $product, '_' . $source . '_' . sanitize_key( $suffix ) );
+
+			if ( '' !== $value ) {
+				return $value;
+			}
+		}
+
+		return $this->meta_text( $product, $fallback_key );
+	}
+
+	/**
+	 * Returns the source-specific product code label.
+	 */
+	private function source_item_label( string $source ): string {
+		return match ( sanitize_key( $source ) ) {
+			'telesystem' => __( 'Cod Telesystem', 'schrack-woocommerce-sync' ),
+			default      => __( 'Cod Schrack', 'schrack-woocommerce-sync' ),
+		};
 	}
 
 	/**

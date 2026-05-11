@@ -545,11 +545,15 @@ class Schrack_Product_Mapper {
 	 * @param bool                $is_new Whether this is a new product.
 	 */
 	private function apply_product_data( WC_Product $product, array $data, bool $is_new ): void {
-		$sku  = sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) );
-		$name = trim( sanitize_text_field( $this->string_value( $data['name'] ?? '' ) ) );
+		$source          = $this->catalog_source( $data );
+		$source_label    = $this->catalog_source_label( $source );
+		$previous_source = sanitize_key( $this->string_value( $product->get_meta( '_schrack_catalog_source', true ) ) );
+		$had_source_item = '' !== $this->string_value( $product->get_meta( $this->source_meta_key( $source, 'item_number' ), true ) );
+		$sku             = sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) );
+		$name            = trim( sanitize_text_field( $this->string_value( $data['name'] ?? '' ) ) );
 
 		if ( $is_new && '' === $name ) {
-			$name = 'Schrack ' . $sku;
+			$name = $source_label . ' ' . $sku;
 		}
 
 		if ( $is_new ) {
@@ -577,19 +581,37 @@ class Schrack_Product_Mapper {
 			}
 		}
 
-		$product->update_meta_data( '_schrack_item_number', $sku );
-		$this->update_optional_meta( $product, '_schrack_ean', $data, 'ean', $is_new );
-		$this->update_optional_meta( $product, '_schrack_manufacturer', $data, 'manufacturer', $is_new );
-		$this->update_optional_meta( $product, '_schrack_unit', $data, 'unit', $is_new );
-		$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
+		$product->update_meta_data( '_schrack_catalog_source', $source );
+		$this->update_optional_meta( $product, '_schrack_supplier', $data, 'supplier', $is_new );
+
+		if ( 'schrack' === $source ) {
+			$product->update_meta_data( '_schrack_item_number', $sku );
+			$this->update_optional_meta( $product, '_schrack_ean', $data, 'ean', $is_new );
+			$this->update_optional_meta( $product, '_schrack_manufacturer', $data, 'manufacturer', $is_new );
+			$this->update_optional_meta( $product, '_schrack_unit', $data, 'unit', $is_new );
+			$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
+		} else {
+			$product->update_meta_data( $this->source_meta_key( $source, 'item_number' ), $sku );
+			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'ean' ), $data, 'ean', $is_new );
+			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'manufacturer' ), $data, 'manufacturer', $is_new );
+			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'unit' ), $data, 'unit', $is_new );
+			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'catalog_status' ), $data, 'catalog_status', $is_new );
+
+			if ( $is_new || $previous_source === $source || $had_source_item ) {
+				$product->delete_meta_data( '_schrack_item_number' );
+			}
+		}
+
 		$this->update_product_image_url( $product, $data, $is_new );
 
 		if ( $is_new || ! empty( $data['category_path'] ) ) {
-			$product->update_meta_data( '_schrack_raw_category', $this->category_path_label( $data['category_path'] ?? '' ) );
+			$category_meta_key = 'schrack' === $source ? '_schrack_raw_category' : $this->source_meta_key( $source, 'raw_category' );
+			$product->update_meta_data( $category_meta_key, $this->category_path_label( $data['category_path'] ?? '' ) );
 		}
 
 		if ( ! empty( $data['technical_attributes'] ) ) {
-			$product->update_meta_data( '_schrack_technical_attributes', wp_json_encode( $data['technical_attributes'] ) );
+			$technical_meta_key = 'schrack' === $source ? '_schrack_technical_attributes' : $this->source_meta_key( $source, 'technical_attributes' );
+			$product->update_meta_data( $technical_meta_key, wp_json_encode( $data['technical_attributes'] ) );
 		}
 	}
 
@@ -684,12 +706,45 @@ class Schrack_Product_Mapper {
 	}
 
 	/**
+	 * Returns the catalog source for source-specific supplier metadata.
+	 *
+	 * @param array<string,mixed> $data Product data.
+	 */
+	private function catalog_source( array $data ): string {
+		$source = sanitize_key( $this->string_value( $data['source'] ?? ( $data['catalog_source'] ?? 'schrack' ) ) );
+
+		return '' !== $source ? $source : 'schrack';
+	}
+
+	/**
+	 * Returns a readable source label for fallback product names.
+	 */
+	private function catalog_source_label( string $source ): string {
+		return match ( sanitize_key( $source ) ) {
+			'telesystem' => 'Telesystem',
+			'schrack'    => 'Schrack',
+			default      => ucwords( str_replace( array( '-', '_' ), ' ', sanitize_key( $source ) ) ),
+		};
+	}
+
+	/**
+	 * Builds a source-specific product meta key.
+	 */
+	private function source_meta_key( string $source, string $suffix ): string {
+		$source = sanitize_key( $source );
+		$suffix = sanitize_key( $suffix );
+
+		return '_' . ( '' !== $source ? $source : 'catalog' ) . '_' . $suffix;
+	}
+
+	/**
 	 * Stores the Schrack catalog photo URL without slowing down product creation.
 	 *
 	 * @param array<string,mixed> $data Product data.
 	 */
 	private function update_product_image_url( WC_Product $product, array $data, bool $is_new ): void {
 		$image_url = isset( $data['image_url'] ) ? $this->normalize_image_url( $this->string_value( $data['image_url'] ) ) : '';
+		$source    = $this->catalog_source( $data );
 
 		if ( '' === $image_url && ! $is_new ) {
 			return;
@@ -698,6 +753,10 @@ class Schrack_Product_Mapper {
 		$current_url = $this->normalize_image_url( $this->string_value( $product->get_meta( '_schrack_image_url', true ) ) );
 
 		$product->update_meta_data( '_schrack_image_url', $image_url );
+
+		if ( 'schrack' !== $source ) {
+			$product->update_meta_data( $this->source_meta_key( $source, 'image_url' ), $image_url );
+		}
 
 		if ( '' !== $image_url && $image_url !== $current_url ) {
 			$product->update_meta_data( '_schrack_image_status', 'pending' );
