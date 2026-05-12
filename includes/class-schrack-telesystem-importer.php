@@ -281,14 +281,36 @@ class Schrack_Telesystem_Importer {
 			return null;
 		}
 
-		$response = wp_remote_get(
-			$feed_url,
-			array(
-				'timeout'  => 120,
-				'stream'   => true,
-				'filename' => $temp_file,
-			)
-		);
+		$disable_curl_decoding = static function ( $handle ): void {
+			if ( defined( 'CURLOPT_HTTP_CONTENT_DECODING' ) ) {
+				curl_setopt( $handle, CURLOPT_HTTP_CONTENT_DECODING, false );
+			}
+
+			if ( defined( 'CURLOPT_ENCODING' ) ) {
+				curl_setopt( $handle, CURLOPT_ENCODING, 'identity' );
+			}
+		};
+
+		// Telesystem currently sends Content-Encoding: UTF-8, so avoid automatic decompression.
+		add_action( 'http_api_curl', $disable_curl_decoding, 10, 1 );
+
+		try {
+			$response = wp_remote_get(
+				$feed_url,
+				array(
+					'timeout'    => 120,
+					'stream'     => true,
+					'filename'   => $temp_file,
+					'decompress' => false,
+					'headers'    => array(
+						'Accept'          => 'text/csv,text/plain,*/*;q=0.8',
+						'Accept-Encoding' => 'identity',
+					),
+				)
+			);
+		} finally {
+			remove_action( 'http_api_curl', $disable_curl_decoding, 10 );
+		}
 
 		if ( is_wp_error( $response ) ) {
 			wp_delete_file( $temp_file );
@@ -317,9 +339,10 @@ class Schrack_Telesystem_Importer {
 			'Downloaded Telesystem feed.',
 			null,
 			array(
-				'status_code'  => $status_code,
-				'content_type' => wp_remote_retrieve_header( $response, 'content-type' ),
-				'bytes'        => $bytes,
+				'status_code'      => $status_code,
+				'content_type'     => wp_remote_retrieve_header( $response, 'content-type' ),
+				'content_encoding' => wp_remote_retrieve_header( $response, 'content-encoding' ),
+				'bytes'            => $bytes,
 			)
 		);
 
@@ -357,6 +380,7 @@ class Schrack_Telesystem_Importer {
 		$header_map = $this->normalize_csv_headers( str_getcsv( $first_line, $delimiter, '"', '\\' ) );
 		$headers    = array_column( $header_map, 'key' );
 		$labels     = array();
+		$duplicates = $this->duplicate_header_summary( $header_map );
 
 		foreach ( $header_map as $column ) {
 			$labels[ (string) $column['key'] ] = (string) $column['label'];
@@ -388,12 +412,45 @@ class Schrack_Telesystem_Importer {
 		$signature_context = hash_init( 'sha256' );
 		$rows_seen         = 0;
 		$rows_without_sku  = 0;
+		$footer_rows       = 0;
 		$written           = 0;
 		$write_failed      = false;
+		$header_count      = count( $headers );
+		$short_rows        = 0;
+		$extra_rows        = 0;
+		$shortest_columns  = $header_count;
+		$longest_columns   = $header_count;
+		$malformed_samples = array();
+		$line_number       = 1;
 
 		while ( false !== ( $values = fgetcsv( $handle, 0, $delimiter, '"', '\\' ) ) ) {
+			++$line_number;
+
 			if ( $this->csv_values_are_blank( $values ) ) {
 				continue;
+			}
+
+			if ( $this->csv_values_are_footer( $values ) ) {
+				++$footer_rows;
+				continue;
+			}
+
+			$value_count      = count( $values );
+			$shortest_columns = min( $shortest_columns, $value_count );
+			$longest_columns  = max( $longest_columns, $value_count );
+
+			if ( $value_count < $header_count ) {
+				++$short_rows;
+			} elseif ( $value_count > $header_count ) {
+				++$extra_rows;
+			}
+
+			if ( $value_count !== $header_count && count( $malformed_samples ) < 5 ) {
+				$malformed_samples[] = array(
+					'line'    => $line_number,
+					'columns' => $value_count,
+					'sku'     => sanitize_text_field( $this->string_value( $values[1] ?? '' ) ),
+				);
 			}
 
 			$row = $this->combine_csv_row( $headers, $values );
@@ -442,6 +499,10 @@ class Schrack_Telesystem_Importer {
 					'delimiter'        => $delimiter,
 					'rows_seen'        => $rows_seen,
 					'rows_without_sku' => $rows_without_sku,
+					'footer_rows'      => $footer_rows,
+					'header_columns'   => $header_count,
+					'short_rows'       => $short_rows,
+					'extra_rows'       => $extra_rows,
 				)
 			);
 
@@ -456,10 +517,34 @@ class Schrack_Telesystem_Importer {
 				'Parsed Telesystem CSV feed.',
 				null,
 				array(
-					'delimiter'        => $delimiter,
-					'rows_seen'        => $rows_seen,
-					'items'            => $written,
-					'rows_without_sku' => $rows_without_sku,
+					'delimiter'                => $delimiter,
+					'header_columns'           => $header_count,
+					'duplicate_headers'        => count( $duplicates ),
+					'duplicate_header_summary' => array_slice( $duplicates, 0, 20, true ),
+					'rows_seen'                => $rows_seen,
+					'items'                    => $written,
+					'rows_without_sku'         => $rows_without_sku,
+					'footer_rows'              => $footer_rows,
+					'short_rows'               => $short_rows,
+					'extra_rows'               => $extra_rows,
+					'shortest_columns'         => $shortest_columns,
+					'longest_columns'          => $longest_columns,
+				)
+			);
+		}
+
+		if ( $short_rows > 0 || $extra_rows > 0 ) {
+			$this->logger->warning(
+				self::OPERATION,
+				'Telesystem feed contained rows with an unexpected column count; affected rows were padded or truncated.',
+				null,
+				array(
+					'header_columns'    => $header_count,
+					'short_rows'        => $short_rows,
+					'extra_rows'        => $extra_rows,
+					'shortest_columns'  => $shortest_columns,
+					'longest_columns'   => $longest_columns,
+					'malformed_samples' => $malformed_samples,
 				)
 			);
 		}
@@ -475,7 +560,8 @@ class Schrack_Telesystem_Importer {
 	 * @return array<string,mixed>
 	 */
 	private function normalize_telesystem_row( array $row, array $labels ): array {
-		$images = array_values(
+		$source_sku = sanitize_text_field( $this->clean_text( $this->row_value( $row, 'codprodus' ) ) );
+		$images     = array_values(
 			array_filter(
 				array_map(
 					array( $this, 'normalize_catalog_url' ),
@@ -512,10 +598,11 @@ class Schrack_Telesystem_Importer {
 		$item = array(
 			'source'               => self::SOURCE,
 			'supplier'             => $this->clean_text( $this->row_value( $row, 'furnizor' ) ) ?: 'TELESYSTEM',
-			'sku'                  => sanitize_text_field( $this->clean_text( $this->row_value( $row, 'codprodus' ) ) ),
+			'sku'                  => $this->telesystem_product_sku( $source_sku ),
+			'source_item_number'   => $source_sku,
 			'name'                 => sanitize_text_field( $this->clean_text( $this->row_value( $row, 'denumire' ) ) ),
 			'short_description'    => '',
-			'description'          => wp_kses_post( $this->row_value( $row, 'descriereprodus' ) ),
+			'description'          => $this->clean_html( $this->row_value( $row, 'descriereprodus' ) ),
 			'manufacturer'         => sanitize_text_field( $manufacturer ),
 			'ean'                  => sanitize_text_field( $this->clean_text( $this->row_value( $row, 'ean' ) ) ),
 			'image_url'            => $images[0] ?? '',
@@ -571,7 +658,7 @@ class Schrack_Telesystem_Importer {
 			$product->update_meta_data( '_telesystem_last_stock_sync', current_time( 'mysql' ) );
 		}
 
-		$product->update_meta_data( '_telesystem_item_number', sanitize_text_field( $this->string_value( $item['sku'] ?? '' ) ) );
+		$product->update_meta_data( '_telesystem_item_number', sanitize_text_field( $this->source_item_number( $item ) ) );
 		$product->update_meta_data( '_telesystem_supplier', sanitize_text_field( $this->string_value( $item['supplier'] ?? 'TELESYSTEM' ) ) );
 		$product->update_meta_data( '_telesystem_price_1', $price_1 > 0 ? $this->format_price( $price_1 ) : '' );
 		$product->update_meta_data( '_telesystem_price_2', $price_2 > 0 ? $this->format_price( $price_2 ) : '' );
@@ -1063,6 +1150,38 @@ class Schrack_Telesystem_Importer {
 	}
 
 	/**
+	 * Returns duplicate normalized header counts for feed diagnostics.
+	 *
+	 * @param array<int,array{key:string,label:string}> $header_map Normalized header metadata.
+	 * @return array<string,int>
+	 */
+	private function duplicate_header_summary( array $header_map ): array {
+		$counts = array();
+
+		foreach ( $header_map as $column ) {
+			$base_key = $this->catalog_key( (string) ( $column['label'] ?? '' ) );
+
+			if ( '' === $base_key ) {
+				$base_key = $this->catalog_key( (string) ( $column['key'] ?? '' ) );
+			}
+
+			if ( '' === $base_key ) {
+				continue;
+			}
+
+			$counts[ $base_key ] = ( $counts[ $base_key ] ?? 0 ) + 1;
+		}
+
+		$duplicates = array_filter(
+			$counts,
+			static fn( int $count ): bool => $count > 1
+		);
+		arsort( $duplicates );
+
+		return $duplicates;
+	}
+
+	/**
 	 * Combines a CSV row with headers without allowing malformed rows to fatal.
 	 *
 	 * @param array<int,string> $headers CSV headers.
@@ -1127,6 +1246,31 @@ class Schrack_Telesystem_Importer {
 	}
 
 	/**
+	 * Detects the timestamp footer row currently appended after Telesystem product rows.
+	 *
+	 * @param mixed $values CSV values.
+	 */
+	private function csv_values_are_footer( mixed $values ): bool {
+		if ( ! is_array( $values ) || empty( $values ) ) {
+			return false;
+		}
+
+		$first = is_scalar( $values[0] ?? null ) ? trim( (string) $values[0] ) : '';
+
+		if ( ! preg_match( '/^\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{2}$/', $first ) ) {
+			return false;
+		}
+
+		foreach ( array_slice( $values, 1 ) as $value ) {
+			if ( is_scalar( $value ) && '' !== trim( (string) $value ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Extracts SKUs from a normalized batch for lookup priming.
 	 *
 	 * @param array<int,array<string,mixed>> $items Normalized items.
@@ -1159,6 +1303,34 @@ class Schrack_Telesystem_Importer {
 		$sku = trim( (string) $item['sku'] );
 
 		return '' !== $sku ? $sku : null;
+	}
+
+	/**
+	 * Returns the supplier item number stored separately from the WooCommerce SKU.
+	 *
+	 * @param array<string,mixed> $item Normalized item.
+	 */
+	private function source_item_number( array $item ): string {
+		$item_number = isset( $item['source_item_number'] ) && is_scalar( $item['source_item_number'] )
+			? sanitize_text_field( trim( (string) $item['source_item_number'] ) )
+			: '';
+
+		if ( '' !== $item_number ) {
+			return $item_number;
+		}
+
+		return isset( $item['sku'] ) && is_scalar( $item['sku'] )
+			? sanitize_text_field( trim( (string) $item['sku'] ) )
+			: '';
+	}
+
+	/**
+	 * Builds a WooCommerce SKU that cannot collide with Schrack catalog products.
+	 */
+	private function telesystem_product_sku( string $source_sku ): string {
+		$source_sku = sanitize_text_field( trim( $source_sku ) );
+
+		return '' !== $source_sku ? 'TS-' . $source_sku : '';
 	}
 
 	/**
@@ -1212,10 +1384,97 @@ class Schrack_Telesystem_Importer {
 	 * Normalizes text while tolerating bad remote feed encoding.
 	 */
 	private function clean_text( string $value ): string {
-		$value = html_entity_decode( trim( $value ), ENT_QUOTES );
+		$value = html_entity_decode( trim( $value ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$value = $this->repair_mojibake( $value );
 		$value = wp_check_invalid_utf8( $value, true );
 
 		return trim( wp_strip_all_tags( $value ) );
+	}
+
+	/**
+	 * Normalizes trusted product-description HTML while fixing common feed mojibake.
+	 */
+	private function clean_html( string $value ): string {
+		$value = html_entity_decode( trim( $value ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$value = $this->repair_mojibake( $value );
+		$value = wp_check_invalid_utf8( $value, true );
+
+		return wp_kses_post( $value );
+	}
+
+	/**
+	 * Repairs common double-encoded UTF-8 sequences present in the Telesystem CSV.
+	 */
+	private function repair_mojibake( string $value ): string {
+		if ( '' === $value ) {
+			return '';
+		}
+
+		$value = strtr(
+			$value,
+			array(
+				"\xC3\x82\xC2\xB0"             => "\xC2\xB0",
+				"\xC3\x82\xC2\xB1"             => "\xC2\xB1",
+				"\xC3\x83\xC2\x97"             => "\xC3\x97",
+				"\xC3\xA2\xC2\x80\xC2\x93"     => "\xE2\x80\x93",
+				"\xC3\xA2\xC2\x80\xC2\x94"     => "\xE2\x80\x94",
+				"\xC3\xA2\xC2\x80\xC2\x99"     => "\xE2\x80\x99",
+				"\xC3\xA2\xC2\x80\xC2\x9C"     => "\xE2\x80\x9C",
+				"\xC3\xA2\xC2\x80\xC2\x9D"     => "\xE2\x80\x9D",
+				"\xC3\xA2\xC2\x82\xC2\xAC"     => "\xE2\x82\xAC",
+			)
+		);
+
+		if ( ! function_exists( 'mb_convert_encoding' ) || ! $this->looks_like_mojibake( $value ) ) {
+			return $value;
+		}
+
+		$bytes = @mb_convert_encoding( $value, 'ISO-8859-1', 'UTF-8' );
+
+		if ( ! is_string( $bytes ) || '' === $bytes ) {
+			return $value;
+		}
+
+		$roundtrip = @mb_convert_encoding( $bytes, 'UTF-8', 'ISO-8859-1' );
+
+		if ( $roundtrip !== $value ) {
+			return $value;
+		}
+
+		$repaired = @mb_convert_encoding( $bytes, 'UTF-8', 'UTF-8' );
+
+		if ( ! is_string( $repaired ) || '' === $repaired ) {
+			return $value;
+		}
+
+		return $this->mojibake_score( $repaired ) < $this->mojibake_score( $value ) ? $repaired : $value;
+	}
+
+	/**
+	 * Detects common mojibake marker bytes after they were encoded as UTF-8 text.
+	 */
+	private function looks_like_mojibake( string $value ): bool {
+		return str_contains( $value, "\xC3\x83" )
+			|| str_contains( $value, "\xC3\x82" )
+			|| str_contains( $value, "\xC3\xA2\xC2\x80" )
+			|| str_contains( $value, "\xEF\xBF\xBD" )
+			|| 1 === preg_match( '/[\x{0080}-\x{009F}]/u', $value );
+	}
+
+	/**
+	 * Scores how many mojibake markers remain in a string.
+	 */
+	private function mojibake_score( string $value ): int {
+		$score = substr_count( $value, "\xC3\x83" )
+			+ substr_count( $value, "\xC3\x82" )
+			+ substr_count( $value, "\xC3\xA2\xC2\x80" )
+			+ substr_count( $value, "\xEF\xBF\xBD" );
+
+		if ( preg_match_all( '/[\x{0080}-\x{009F}]/u', $value, $matches ) ) {
+			$score += count( $matches[0] );
+		}
+
+		return $score;
 	}
 
 	/**

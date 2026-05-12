@@ -39,6 +39,13 @@ class Schrack_Product_Mapper {
 	private array $sku_product_id_cache = array();
 
 	/**
+	 * Per-request source item number to product ID cache.
+	 *
+	 * @var array<string,int>
+	 */
+	private array $source_item_product_id_cache = array();
+
+	/**
 	 * Per-request category lookup cache.
 	 *
 	 * @var array<string,int>
@@ -90,6 +97,49 @@ class Schrack_Product_Mapper {
 		$product_id = (int) wc_get_product_id_by_sku( $sku );
 
 		$this->sku_product_id_cache[ $sku ] = $product_id;
+
+		return $product_id;
+	}
+
+	/**
+	 * Finds a product by source-specific supplier item number.
+	 */
+	private function find_product_by_source_item_number( string $source, string $item_number ): int {
+		global $wpdb;
+
+		$source      = sanitize_key( $source );
+		$item_number = sanitize_text_field( trim( $item_number ) );
+
+		if ( '' === $source || '' === $item_number || 'schrack' === $source ) {
+			return 0;
+		}
+
+		$cache_key = $source . ':' . $item_number;
+
+		if ( array_key_exists( $cache_key, $this->source_item_product_id_cache ) ) {
+			return $this->source_item_product_id_cache[ $cache_key ];
+		}
+
+		$item_meta_key = $this->source_meta_key( $source, 'item_number' );
+		$sql           = "
+			SELECT item_meta.post_id
+			FROM {$wpdb->postmeta} AS item_meta
+			INNER JOIN {$wpdb->posts} AS products
+				ON products.ID = item_meta.post_id
+			LEFT JOIN {$wpdb->postmeta} AS source_meta
+				ON source_meta.post_id = products.ID
+				AND source_meta.meta_key = '_schrack_catalog_source'
+			WHERE item_meta.meta_key = %s
+				AND item_meta.meta_value = %s
+				AND (source_meta.meta_value = %s OR source_meta.meta_id IS NULL)
+				AND products.post_type IN ('product', 'product_variation')
+				AND products.post_status NOT IN ('trash', 'auto-draft')
+			ORDER BY item_meta.post_id ASC
+			LIMIT 1
+		";
+		$product_id    = absint( $wpdb->get_var( $wpdb->prepare( $sql, $item_meta_key, $item_number, $source ) ) );
+
+		$this->source_item_product_id_cache[ $cache_key ] = $product_id;
 
 		return $product_id;
 	}
@@ -267,7 +317,13 @@ class Schrack_Product_Mapper {
 			throw new InvalidArgumentException( 'SKU is required for Schrack product import.' );
 		}
 
-		$product_id = $this->find_product_by_sku( $sku );
+		$source             = $this->catalog_source( $data );
+		$source_item_number = $this->source_item_number( $data, $sku );
+		$product_id         = $this->find_product_by_source_item_number( $source, $source_item_number );
+
+		if ( $product_id <= 0 ) {
+			$product_id = $this->find_product_by_sku( $sku );
+		}
 
 		if ( $product_id > 0 ) {
 			return $this->update_product( $product_id, $data );
@@ -289,9 +345,18 @@ class Schrack_Product_Mapper {
 		$product = new WC_Product_Simple();
 		$this->apply_product_data( $product, $data, true );
 		$product_id = $product->save();
-		$this->sku_product_id_cache[ sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) ) ] = (int) $product_id;
+		$source      = $this->catalog_source( $data );
+		$sku         = sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) );
+		$item_number = $this->source_item_number( $data, $sku );
+		$item_key    = $source . ':' . $item_number;
 
-		$this->logger->debug( 'catalog', 'Created Schrack product.', $this->string_value( $data['sku'] ?? '' ), array( 'product_id' => $product_id ) );
+		$this->sku_product_id_cache[ $sku ] = (int) $product_id;
+
+		if ( 'schrack' !== $source && '' !== $item_number ) {
+			$this->source_item_product_id_cache[ $item_key ] = (int) $product_id;
+		}
+
+		$this->logger->debug( 'catalog', 'Created ' . $this->catalog_source_label( $source ) . ' product.', $item_number, array( 'product_id' => $product_id ) );
 
 		return (int) $product_id;
 	}
@@ -311,9 +376,18 @@ class Schrack_Product_Mapper {
 
 		$this->apply_product_data( $product, $data, false );
 		$product->save();
-		$this->sku_product_id_cache[ sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) ) ] = $product_id;
+		$source      = $this->catalog_source( $data );
+		$sku         = sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) );
+		$item_number = $this->source_item_number( $data, $sku );
+		$item_key    = $source . ':' . $item_number;
 
-		$this->logger->debug( 'catalog', 'Updated Schrack product.', $this->string_value( $data['sku'] ?? '' ), array( 'product_id' => $product_id ) );
+		$this->sku_product_id_cache[ $sku ] = $product_id;
+
+		if ( 'schrack' !== $source && '' !== $item_number ) {
+			$this->source_item_product_id_cache[ $item_key ] = $product_id;
+		}
+
+		$this->logger->debug( 'catalog', 'Updated ' . $this->catalog_source_label( $source ) . ' product.', $item_number, array( 'product_id' => $product_id ) );
 
 		return $product_id;
 	}
@@ -545,21 +619,26 @@ class Schrack_Product_Mapper {
 	 * @param bool                $is_new Whether this is a new product.
 	 */
 	private function apply_product_data( WC_Product $product, array $data, bool $is_new ): void {
-		$source          = $this->catalog_source( $data );
-		$source_label    = $this->catalog_source_label( $source );
-		$previous_source = sanitize_key( $this->string_value( $product->get_meta( '_schrack_catalog_source', true ) ) );
-		$had_source_item = '' !== $this->string_value( $product->get_meta( $this->source_meta_key( $source, 'item_number' ), true ) );
-		$sku             = sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) );
-		$name            = trim( sanitize_text_field( $this->string_value( $data['name'] ?? '' ) ) );
+		$source       = $this->catalog_source( $data );
+		$source_label = $this->catalog_source_label( $source );
+		$sku          = sanitize_text_field( $this->string_value( $data['sku'] ?? '' ) );
+		$source_item  = $this->source_item_number( $data, $sku );
+		$name         = trim( sanitize_text_field( $this->string_value( $data['name'] ?? '' ) ) );
 
 		if ( $is_new && '' === $name ) {
-			$name = $source_label . ' ' . $sku;
+			$name = $source_label . ' ' . $source_item;
 		}
 
 		if ( $is_new ) {
 			$product->set_sku( $sku );
 			$product->set_status( (string) $this->settings->get( 'publish_status', 'draft' ) );
 			$product->set_catalog_visibility( 'visible' );
+		} elseif ( 'schrack' !== $source && '' !== $sku && $sku !== (string) $product->get_sku() ) {
+			$sku_owner_id = $this->find_product_by_sku( $sku );
+
+			if ( $sku_owner_id <= 0 || $sku_owner_id === absint( $product->get_id() ) ) {
+				$product->set_sku( $sku );
+			}
 		}
 
 		if ( '' !== $name ) {
@@ -585,21 +664,19 @@ class Schrack_Product_Mapper {
 		$this->update_optional_meta( $product, '_schrack_supplier', $data, 'supplier', $is_new );
 
 		if ( 'schrack' === $source ) {
-			$product->update_meta_data( '_schrack_item_number', $sku );
+			$product->update_meta_data( '_schrack_item_number', $source_item );
 			$this->update_optional_meta( $product, '_schrack_ean', $data, 'ean', $is_new );
 			$this->update_optional_meta( $product, '_schrack_manufacturer', $data, 'manufacturer', $is_new );
 			$this->update_optional_meta( $product, '_schrack_unit', $data, 'unit', $is_new );
 			$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
 		} else {
-			$product->update_meta_data( $this->source_meta_key( $source, 'item_number' ), $sku );
+			$product->update_meta_data( $this->source_meta_key( $source, 'item_number' ), $source_item );
 			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'ean' ), $data, 'ean', $is_new );
 			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'manufacturer' ), $data, 'manufacturer', $is_new );
 			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'unit' ), $data, 'unit', $is_new );
 			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'catalog_status' ), $data, 'catalog_status', $is_new );
 
-			if ( $is_new || $previous_source === $source || $had_source_item ) {
-				$product->delete_meta_data( '_schrack_item_number' );
-			}
+			$product->delete_meta_data( '_schrack_item_number' );
 		}
 
 		$this->update_product_image_url( $product, $data, $is_new );
@@ -714,6 +791,19 @@ class Schrack_Product_Mapper {
 		$source = sanitize_key( $this->string_value( $data['source'] ?? ( $data['catalog_source'] ?? 'schrack' ) ) );
 
 		return '' !== $source ? $source : 'schrack';
+	}
+
+	/**
+	 * Returns the supplier item number, falling back to the WooCommerce SKU.
+	 *
+	 * @param array<string,mixed> $data Product data.
+	 */
+	private function source_item_number( array $data, string $fallback_sku = '' ): string {
+		$item_number = isset( $data['source_item_number'] ) && is_scalar( $data['source_item_number'] )
+			? sanitize_text_field( trim( (string) $data['source_item_number'] ) )
+			: '';
+
+		return '' !== $item_number ? $item_number : sanitize_text_field( trim( $fallback_sku ) );
 	}
 
 	/**

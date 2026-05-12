@@ -786,12 +786,52 @@ class Schrack_Admin {
 	 * @return array<string,mixed>
 	 */
 	private function sync_dashboard_stats(): array {
+		$sources = array(
+			'schrack'    => $this->sync_dashboard_source_stats(
+				'schrack',
+				__( 'Schrack', 'schrack-woocommerce-sync' ),
+				'_schrack_item_number',
+				'_schrack_last_price_sync',
+				'_schrack_last_stock_sync'
+			),
+			'telesystem' => $this->sync_dashboard_source_stats(
+				'telesystem',
+				__( 'Telesystem', 'schrack-woocommerce-sync' ),
+				'_telesystem_item_number',
+				'_telesystem_last_price_sync',
+				'_telesystem_last_stock_sync'
+			),
+		);
+
+		$totals                  = $this->sync_dashboard_total_stats( $sources );
+		$totals['calculated_at'] = current_time( 'mysql' );
+		$totals['sources']       = $sources;
+
+		return $totals;
+	}
+
+	/**
+	 * Returns sync coverage counters for one catalog source.
+	 *
+	 * @param string $source Catalog source key.
+	 * @param string $label Human readable source label.
+	 * @param string $item_meta_key Product item-number meta key for the source.
+	 * @param string $last_price_meta_key Last price sync meta key for the source.
+	 * @param string $last_stock_meta_key Last stock sync meta key for the source.
+	 * @return array<string,mixed>
+	 */
+	private function sync_dashboard_source_stats( string $source, string $label, string $item_meta_key, string $last_price_meta_key, string $last_stock_meta_key ): array {
 		global $wpdb;
 
-		$sql = "
-			SELECT
-				COUNT(*) AS imported_products,
-				SUM(CASE WHEN sync_meta.image_url <> '' THEN 1 ELSE 0 END) AS image_url_products,
+		$source_condition = 'schrack' === $source
+			? "( source_meta.meta_id IS NULL OR source_meta.meta_value = '' OR source_meta.meta_value = %s )"
+			: 'source_meta.meta_value = %s';
+
+		$sql = $wpdb->prepare(
+			"
+				SELECT
+					COUNT(*) AS imported_products,
+					SUM(CASE WHEN sync_meta.image_url <> '' THEN 1 ELSE 0 END) AS image_url_products,
 				SUM(
 					CASE
 						WHEN sync_meta.image_url <> ''
@@ -821,42 +861,53 @@ class Schrack_Admin {
 				SUM(CASE WHEN sync_meta.last_price_sync <> '' THEN 1 ELSE 0 END) AS price_synced_products,
 				SUM(CASE WHEN sync_meta.last_stock_sync <> '' THEN 1 ELSE 0 END) AS stock_synced_products
 			FROM (
-				SELECT
-					products.ID AS product_id,
-					MAX(CASE WHEN product_meta.meta_key = '_schrack_image_url' THEN product_meta.meta_value ELSE '' END) AS image_url,
-					MAX(CASE WHEN product_meta.meta_key = '_schrack_imported_image_url' THEN product_meta.meta_value ELSE '' END) AS imported_image_url,
-					MAX(CASE WHEN product_meta.meta_key = '_thumbnail_id' THEN product_meta.meta_value ELSE '' END) AS thumbnail_id,
-					MAX(CASE WHEN product_meta.meta_key = '_schrack_image_attachment_id' THEN product_meta.meta_value ELSE '' END) AS image_attachment_id,
-					MAX(CASE WHEN product_meta.meta_key = '_schrack_last_price_sync' THEN product_meta.meta_value ELSE '' END) AS last_price_sync,
-					MAX(CASE WHEN product_meta.meta_key = '_schrack_last_stock_sync' THEN product_meta.meta_value ELSE '' END) AS last_stock_sync
-				FROM {$wpdb->posts} AS products
-				INNER JOIN {$wpdb->postmeta} AS item_meta
-					ON item_meta.post_id = products.ID
-					AND item_meta.meta_key = '_schrack_item_number'
-					AND item_meta.meta_value <> ''
-				LEFT JOIN {$wpdb->postmeta} AS product_meta
-					ON product_meta.post_id = products.ID
-					AND product_meta.meta_key IN (
-						'_schrack_image_url',
-						'_schrack_imported_image_url',
-						'_thumbnail_id',
-						'_schrack_image_attachment_id',
-						'_schrack_last_price_sync',
-						'_schrack_last_stock_sync'
-					)
-				WHERE products.post_type = 'product'
-					AND products.post_status IN ('publish', 'draft', 'private')
-				GROUP BY products.ID
-			) AS sync_meta
-			LEFT JOIN {$wpdb->posts} AS thumbnail_attachment
+					SELECT
+						products.ID AS product_id,
+						MAX(CASE WHEN product_meta.meta_key = '_schrack_image_url' THEN product_meta.meta_value ELSE '' END) AS image_url,
+						MAX(CASE WHEN product_meta.meta_key = '_schrack_imported_image_url' THEN product_meta.meta_value ELSE '' END) AS imported_image_url,
+						MAX(CASE WHEN product_meta.meta_key = '_thumbnail_id' THEN product_meta.meta_value ELSE '' END) AS thumbnail_id,
+						MAX(CASE WHEN product_meta.meta_key = '_schrack_image_attachment_id' THEN product_meta.meta_value ELSE '' END) AS image_attachment_id,
+						MAX(CASE WHEN product_meta.meta_key = %s THEN product_meta.meta_value ELSE '' END) AS last_price_sync,
+						MAX(CASE WHEN product_meta.meta_key = %s THEN product_meta.meta_value ELSE '' END) AS last_stock_sync
+					FROM {$wpdb->posts} AS products
+					INNER JOIN {$wpdb->postmeta} AS item_meta
+						ON item_meta.post_id = products.ID
+						AND item_meta.meta_key = %s
+						AND item_meta.meta_value <> ''
+					LEFT JOIN {$wpdb->postmeta} AS source_meta
+						ON source_meta.post_id = products.ID
+						AND source_meta.meta_key = '_schrack_catalog_source'
+					LEFT JOIN {$wpdb->postmeta} AS product_meta
+						ON product_meta.post_id = products.ID
+						AND product_meta.meta_key IN (
+							'_schrack_image_url',
+							'_schrack_imported_image_url',
+							'_thumbnail_id',
+							'_schrack_image_attachment_id',
+							%s,
+							%s
+						)
+					WHERE products.post_type = 'product'
+						AND products.post_status IN ('publish', 'draft', 'private')
+						AND {$source_condition}
+					GROUP BY products.ID
+				) AS sync_meta
+				LEFT JOIN {$wpdb->posts} AS thumbnail_attachment
 				ON thumbnail_attachment.ID = CAST(sync_meta.thumbnail_id AS UNSIGNED)
 				AND thumbnail_attachment.post_type = 'attachment'
 				AND thumbnail_attachment.post_status = 'inherit'
-			LEFT JOIN {$wpdb->posts} AS stored_attachment
-				ON stored_attachment.ID = CAST(sync_meta.image_attachment_id AS UNSIGNED)
-				AND stored_attachment.post_type = 'attachment'
-				AND stored_attachment.post_status = 'inherit'
-		";
+				LEFT JOIN {$wpdb->posts} AS stored_attachment
+					ON stored_attachment.ID = CAST(sync_meta.image_attachment_id AS UNSIGNED)
+					AND stored_attachment.post_type = 'attachment'
+					AND stored_attachment.post_status = 'inherit'
+			",
+			$last_price_meta_key,
+			$last_stock_meta_key,
+			$item_meta_key,
+			$last_price_meta_key,
+			$last_stock_meta_key,
+			$source
+		);
 		$row = $wpdb->get_row( $sql, ARRAY_A );
 		$row = is_array( $row ) ? $row : array();
 
@@ -868,6 +919,8 @@ class Schrack_Admin {
 		$stock_synced_products   = absint( $row['stock_synced_products'] ?? 0 );
 
 		return array(
+			'source'                  => $source,
+			'label'                   => $label,
 			'imported_products'       => $imported_products,
 			'image_url_products'      => $image_url_products,
 			'image_synced_products'   => $image_synced_products,
@@ -879,8 +932,51 @@ class Schrack_Admin {
 			'image_url_only_pct'      => $this->sync_dashboard_percentage( $image_url_only_products, $imported_products ),
 			'price_synced_pct'        => $this->sync_dashboard_percentage( $price_synced_products, $imported_products ),
 			'stock_synced_pct'        => $this->sync_dashboard_percentage( $stock_synced_products, $imported_products ),
-			'calculated_at'           => current_time( 'mysql' ),
 			'query_error'             => (string) $wpdb->last_error,
+		);
+	}
+
+	/**
+	 * Combines source counters into the legacy dashboard summary keys.
+	 *
+	 * @param array<string,array<string,mixed>> $sources Source counters.
+	 * @return array<string,mixed>
+	 */
+	private function sync_dashboard_total_stats( array $sources ): array {
+		$imported_products       = 0;
+		$image_url_products      = 0;
+		$image_synced_products   = 0;
+		$image_url_only_products = 0;
+		$price_synced_products   = 0;
+		$stock_synced_products   = 0;
+		$query_errors            = array();
+
+		foreach ( $sources as $source_stats ) {
+			$imported_products       += absint( $source_stats['imported_products'] ?? 0 );
+			$image_url_products      += absint( $source_stats['image_url_products'] ?? 0 );
+			$image_synced_products   += absint( $source_stats['image_synced_products'] ?? 0 );
+			$image_url_only_products += absint( $source_stats['image_url_only_products'] ?? 0 );
+			$price_synced_products   += absint( $source_stats['price_synced_products'] ?? 0 );
+			$stock_synced_products   += absint( $source_stats['stock_synced_products'] ?? 0 );
+
+			if ( '' !== (string) ( $source_stats['query_error'] ?? '' ) ) {
+				$query_errors[] = (string) $source_stats['query_error'];
+			}
+		}
+
+		return array(
+			'imported_products'          => $imported_products,
+			'image_url_products'         => $image_url_products,
+			'image_synced_products'      => $image_synced_products,
+			'image_url_only_products'    => $image_url_only_products,
+			'image_missing_url_products' => max( 0, $imported_products - $image_url_products ),
+			'price_synced_products'      => $price_synced_products,
+			'stock_synced_products'      => $stock_synced_products,
+			'image_synced_pct'           => $this->sync_dashboard_percentage( $image_synced_products, $imported_products ),
+			'image_url_only_pct'         => $this->sync_dashboard_percentage( $image_url_only_products, $imported_products ),
+			'price_synced_pct'           => $this->sync_dashboard_percentage( $price_synced_products, $imported_products ),
+			'stock_synced_pct'           => $this->sync_dashboard_percentage( $stock_synced_products, $imported_products ),
+			'query_error'                => implode( ' ', array_unique( $query_errors ) ),
 		);
 	}
 
