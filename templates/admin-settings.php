@@ -42,6 +42,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<td><input class="regular-text code" id="schrack_datanorm" type="url" name="schrack_settings[datanorm_url]" value="<?php echo esc_attr( $settings['datanorm_url'] ); ?>"></td>
 			</tr>
 			<tr>
+				<th scope="row"><?php esc_html_e( 'Schrack sync', 'schrack-woocommerce-sync' ); ?></th>
+				<td>
+					<label><input type="checkbox" name="schrack_settings[schrack_enabled]" value="yes" <?php checked( $settings['schrack_enabled'] ?? 'yes', 'yes' ); ?>> <?php esc_html_e( 'Enable Schrack SOAP catalog, price, and stock sync', 'schrack-woocommerce-sync' ); ?></label>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><?php esc_html_e( 'Telesystem feed', 'schrack-woocommerce-sync' ); ?></th>
 				<td>
 					<label><input type="checkbox" name="schrack_settings[telesystem_enabled]" value="yes" <?php checked( $settings['telesystem_enabled'] ?? 'yes', 'yes' ); ?>> <?php esc_html_e( 'Enable separate Telesystem CSV sync', 'schrack-woocommerce-sync' ); ?></label>

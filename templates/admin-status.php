@@ -85,6 +85,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 						</td>
 					</tr>
 					<tr>
+						<th><?php esc_html_e( 'Schrack sync', 'schrack-woocommerce-sync' ); ?></th>
+						<td>
+							<?php $schrack_enabled = 'yes' === (string) ( $settings['schrack_enabled'] ?? 'yes' ); ?>
+							<span class="schrack-status-pill <?php echo $schrack_enabled ? 'is-ok' : 'is-warning'; ?>">
+								<?php echo $schrack_enabled ? esc_html__( 'Enabled', 'schrack-woocommerce-sync' ) : esc_html__( 'Disabled', 'schrack-woocommerce-sync' ); ?>
+							</span>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Telesystem feed', 'schrack-woocommerce-sync' ); ?></th>
+						<td>
+							<?php $telesystem_enabled = 'yes' === (string) ( $settings['telesystem_enabled'] ?? 'yes' ); ?>
+							<span class="schrack-status-pill <?php echo $telesystem_enabled ? 'is-ok' : 'is-warning'; ?>">
+								<?php echo $telesystem_enabled ? esc_html__( 'Enabled', 'schrack-woocommerce-sync' ) : esc_html__( 'Disabled', 'schrack-woocommerce-sync' ); ?>
+							</span>
+						</td>
+					</tr>
+					<tr>
 						<th><?php esc_html_e( 'Mode', 'schrack-woocommerce-sync' ); ?></th>
 						<td><?php echo esc_html( strtoupper( (string) ( $settings['environment'] ?? '' ) ) ); ?></td>
 					</tr>

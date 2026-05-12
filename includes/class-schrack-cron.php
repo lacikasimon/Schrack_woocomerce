@@ -89,14 +89,19 @@ class Schrack_Cron {
 			return;
 		}
 
-		$this->schedule_recurring_action( self::HOOK_CATALOG, (string) $this->settings->get( 'catalog_sync_frequency', 'daily' ) );
+		if ( $this->is_schrack_enabled() ) {
+			$this->schedule_recurring_action( self::HOOK_CATALOG, (string) $this->settings->get( 'catalog_sync_frequency', 'daily' ) );
+			$this->schedule_recurring_action( self::HOOK_PRICES, (string) $this->settings->get( 'price_sync_frequency', 'daily' ) );
+			$this->schedule_recurring_action( self::HOOK_STOCK, (string) $this->settings->get( 'stock_sync_frequency', 'hourly' ) );
+		} else {
+			$this->clear_schrack_source_actions();
+		}
+
 		if ( 'yes' === (string) $this->settings->get( 'telesystem_enabled', 'yes' ) ) {
 			$this->schedule_recurring_action( self::HOOK_TELESYSTEM_CATALOG, (string) $this->settings->get( 'telesystem_sync_frequency', 'daily' ) );
 		} elseif ( self::has_scheduled_hook( self::HOOK_TELESYSTEM_CATALOG ) ) {
 			self::clear_hook_actions( self::HOOK_TELESYSTEM_CATALOG );
 		}
-		$this->schedule_recurring_action( self::HOOK_PRICES, (string) $this->settings->get( 'price_sync_frequency', 'daily' ) );
-		$this->schedule_recurring_action( self::HOOK_STOCK, (string) $this->settings->get( 'stock_sync_frequency', 'hourly' ) );
 	}
 
 	/**
@@ -121,6 +126,15 @@ class Schrack_Cron {
 				'queued'  => false,
 				'code'    => 'unknown_task',
 				'message' => __( 'Unknown sync task.', 'schrack-woocommerce-sync' ),
+				'task'    => $task,
+			);
+		}
+
+		if ( in_array( $task, array( 'catalog', 'prices', 'stock', 'full' ), true ) && ! $this->is_schrack_enabled() ) {
+			return array(
+				'queued'  => false,
+				'code'    => 'schrack_disabled',
+				'message' => __( 'Schrack sync is disabled.', 'schrack-woocommerce-sync' ),
 				'task'    => $task,
 			);
 		}
@@ -355,6 +369,10 @@ class Schrack_Cron {
 	 * Runs a catalog import batch.
 	 */
 	public function run_catalog_import( bool $queue_continuation = true ): array {
+		if ( ! $this->is_schrack_enabled() ) {
+			return $this->disabled_schrack_result( 'catalog' );
+		}
+
 		$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
 		$limit    = $this->catalog_batch_limit();
 		$max_batches = $this->catalog_batches_per_run();
@@ -571,6 +589,10 @@ class Schrack_Cron {
 	 * Runs a price sync batch.
 	 */
 	public function run_price_sync( bool $queue_continuation = true ): array {
+		if ( ! $this->is_schrack_enabled() ) {
+			return $this->disabled_schrack_result( 'price' );
+		}
+
 		$sync  = new Schrack_Price_Sync( $this->settings, $this->logger );
 		$limit = $this->sync_batch_limit();
 		$max_batches = $this->sync_batches_per_run();
@@ -651,6 +673,10 @@ class Schrack_Cron {
 	 * Runs a stock sync batch.
 	 */
 	public function run_stock_sync( bool $queue_continuation = true ): array {
+		if ( ! $this->is_schrack_enabled() ) {
+			return $this->disabled_schrack_result( 'stock' );
+		}
+
 		$sync  = new Schrack_Stock_Sync( $this->settings, $this->logger );
 		$limit = $this->sync_batch_limit();
 		$max_batches = $this->sync_batches_per_run();
@@ -1077,6 +1103,11 @@ class Schrack_Cron {
 	 * Runs catalog, price, and stock tasks.
 	 */
 	public function run_full_sync( string $stage = 'catalog' ): void {
+		if ( ! $this->is_schrack_enabled() ) {
+			$this->disabled_schrack_result( 'full' );
+			return;
+		}
+
 		$mode = (string) $this->settings->get( 'import_mode', 'catalog_price_stock' );
 
 		if ( $this->settings->is_stop_requested() ) {
@@ -1184,6 +1215,44 @@ class Schrack_Cron {
 		foreach ( $hooks as $hook ) {
 			self::clear_hook_actions( $hook );
 		}
+	}
+
+	/**
+	 * Clears only Schrack-source catalog, price, stock, and full sync actions.
+	 */
+	private function clear_schrack_source_actions(): void {
+		foreach ( array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL ) as $hook ) {
+			if ( self::has_scheduled_hook( $hook ) ) {
+				self::clear_hook_actions( $hook );
+			}
+		}
+	}
+
+	/**
+	 * Returns whether Schrack SOAP-backed syncs are enabled.
+	 */
+	private function is_schrack_enabled(): bool {
+		return 'yes' === (string) $this->settings->get( 'schrack_enabled', 'yes' );
+	}
+
+	/**
+	 * Stores and returns a no-op status for disabled Schrack sync tasks.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function disabled_schrack_result( string $status_key ): array {
+		$result = array(
+			'processed'       => 0,
+			'errors'          => 0,
+			'completed_cycle' => 'yes',
+			'disabled'        => 'yes',
+			'message'         => 'Schrack sync is disabled.',
+		);
+
+		$this->settings->update_status( $status_key, $result );
+		$this->logger->info( $status_key, 'Skipped Schrack sync because it is disabled.', null, $result );
+
+		return $result;
 	}
 
 	/**

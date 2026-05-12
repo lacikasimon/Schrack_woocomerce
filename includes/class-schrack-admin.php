@@ -298,7 +298,7 @@ class Schrack_Admin {
 
 		if ( ! empty( $result['queued'] ) ) {
 			$this->set_notice( 'success', (string) $result['message'], $this->format_debug_data( $result ) );
-		} elseif ( in_array( (string) ( $result['code'] ?? '' ), array( 'active_sync', 'image_import_disabled' ), true ) ) {
+		} elseif ( in_array( (string) ( $result['code'] ?? '' ), array( 'active_sync', 'image_import_disabled', 'schrack_disabled', 'telesystem_disabled' ), true ) ) {
 			$this->set_notice( 'warning', (string) $result['message'] );
 		} else {
 			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'Unknown sync task.', 'schrack-woocommerce-sync' ) ) );

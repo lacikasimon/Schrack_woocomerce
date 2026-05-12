@@ -61,7 +61,7 @@ The admin settings page stores values through the WordPress Options API:
 - SOAP endpoint URL
 - WSDL URL
 - Datanorm URL
-- Telesystem feed toggle and feed URL
+- Schrack SOAP sync toggle, Telesystem feed toggle, and Telesystem feed URL
 - Telesystem batch size, batches per run, and price column strategy
 - Customer number
 - Webshop username
@@ -179,7 +179,7 @@ The customer/B2B account portal can be placed with the Elementor widget or with 
 
 ## Cron and Background Jobs
 
-Recurring jobs can be enabled or disabled from the admin settings. When enabled, they are registered through Action Scheduler when available:
+Recurring jobs can be globally enabled or disabled from the admin settings. Schrack SOAP sync and the Telesystem CSV feed can also be enabled or disabled separately. When automatic sync is enabled, jobs are registered through Action Scheduler when available:
 
 - Catalog import: daily / weekly
 - Telesystem CSV import: daily / weekly
