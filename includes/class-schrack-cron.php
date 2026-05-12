@@ -85,6 +85,10 @@ class Schrack_Cron {
 	 * Schedules recurring syncs.
 	 */
 	public function maybe_schedule_recurring_actions(): void {
+		if ( 'yes' !== (string) $this->settings->get( 'automatic_sync_enabled', 'yes' ) ) {
+			return;
+		}
+
 		$this->schedule_recurring_action( self::HOOK_CATALOG, (string) $this->settings->get( 'catalog_sync_frequency', 'daily' ) );
 		if ( 'yes' === (string) $this->settings->get( 'telesystem_enabled', 'yes' ) ) {
 			$this->schedule_recurring_action( self::HOOK_TELESYSTEM_CATALOG, (string) $this->settings->get( 'telesystem_sync_frequency', 'daily' ) );

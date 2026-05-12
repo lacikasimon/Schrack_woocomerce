@@ -76,6 +76,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 						</td>
 					</tr>
 					<tr>
+						<th><?php esc_html_e( 'Automatic sync', 'schrack-woocommerce-sync' ); ?></th>
+						<td>
+							<?php $automatic_sync_enabled = 'yes' === (string) ( $settings['automatic_sync_enabled'] ?? 'yes' ); ?>
+							<span class="schrack-status-pill <?php echo $automatic_sync_enabled ? 'is-ok' : 'is-warning'; ?>">
+								<?php echo $automatic_sync_enabled ? esc_html__( 'Enabled', 'schrack-woocommerce-sync' ) : esc_html__( 'Disabled', 'schrack-woocommerce-sync' ); ?>
+							</span>
+						</td>
+					</tr>
+					<tr>
 						<th><?php esc_html_e( 'Mode', 'schrack-woocommerce-sync' ); ?></th>
 						<td><?php echo esc_html( strtoupper( (string) ( $settings['environment'] ?? '' ) ) ); ?></td>
 					</tr>

@@ -179,7 +179,7 @@ The customer/B2B account portal can be placed with the Elementor widget or with 
 
 ## Cron and Background Jobs
 
-Recurring jobs are registered through Action Scheduler when available:
+Recurring jobs can be enabled or disabled from the admin settings. When enabled, they are registered through Action Scheduler when available:
 
 - Catalog import: daily / weekly
 - Telesystem CSV import: daily / weekly

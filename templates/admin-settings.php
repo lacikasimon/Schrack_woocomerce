@@ -249,6 +249,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<h2><?php esc_html_e( 'Schedules and Logging', 'schrack-woocommerce-sync' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>
+				<th scope="row"><?php esc_html_e( 'Automatic sync', 'schrack-woocommerce-sync' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="schrack_settings[automatic_sync_enabled]" value="yes" <?php checked( $settings['automatic_sync_enabled'] ?? 'yes', 'yes' ); ?>>
+						<?php esc_html_e( 'Enable recurring catalog, Telesystem, price, and stock syncs', 'schrack-woocommerce-sync' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'When disabled, existing recurring jobs are cleared after saving. Manual sync buttons and WP-CLI commands remain available.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="schrack_price_frequency"><?php esc_html_e( 'Price sync frequency', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
 					<select id="schrack_price_frequency" name="schrack_settings[price_sync_frequency]">
