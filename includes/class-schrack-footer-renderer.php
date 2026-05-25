@@ -295,10 +295,15 @@ class Schrack_Footer_Renderer {
 	 */
 	private function legal_links(): array {
 		return array(
-			array( 'label' => __( 'Politica cookie', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/politica-cookie-uri', 'external' => false ),
+			array( 'label' => __( 'Termeni si conditii', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'terms' ), 'external' => false ),
+			array( 'label' => __( 'Livrare si plata', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'delivery' ), 'external' => false ),
+			array( 'label' => __( 'Retur si rambursare', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'returns' ), 'external' => false ),
+			array( 'label' => __( 'Garantii', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'warranty' ), 'external' => false ),
+			array( 'label' => __( 'Confidentialitate', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'privacy' ), 'external' => false ),
+			array( 'label' => __( 'Politica cookie', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'cookies' ), 'external' => false ),
+			array( 'label' => __( 'Litigii', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'disputes' ), 'external' => false ),
 			array( 'label' => 'ANPC', 'href' => 'https://anpc.ro/', 'external' => true ),
-			array( 'label' => __( 'Solutionarea alternativa a litigiilor', 'schrack-woocommerce-sync' ), 'href' => 'https://anpc.ro/ce-este-sal/', 'external' => true ),
-			array( 'label' => __( 'Solutionarea online a litigiilor', 'schrack-woocommerce-sync' ), 'href' => 'https://consumer-redress.ec.europa.eu/site-relocation_en', 'external' => true ),
+			array( 'label' => __( 'SAL ANPC', 'schrack-woocommerce-sync' ), 'href' => 'https://anpc.ro/sal/', 'external' => true ),
 		);
 	}
 
@@ -322,12 +327,12 @@ class Schrack_Footer_Renderer {
 				'src'   => 'https://syshub.ro/assets/anpc-logo-C3lA3zda.svg',
 			),
 			array(
-				'label' => __( 'Solutionarea alternativa a litigiilor', 'schrack-woocommerce-sync' ),
-				'href'  => 'https://anpc.ro/ce-este-sal/',
+				'label' => __( 'SAL ANPC', 'schrack-woocommerce-sync' ),
+				'href'  => 'https://anpc.ro/sal/',
 				'src'   => 'https://syshub.ro/assets/anpc-sal-BLYQEtJZ.svg',
 			),
 			array(
-				'label' => __( 'Solutionarea online a litigiilor', 'schrack-woocommerce-sync' ),
+				'label' => __( 'Redresare consumatori UE', 'schrack-woocommerce-sync' ),
 				'href'  => 'https://consumer-redress.ec.europa.eu/site-relocation_en',
 				'src'   => 'https://syshub.ro/assets/anpc-sol-vgITSumg.svg',
 			),
@@ -343,21 +348,32 @@ class Schrack_Footer_Renderer {
 		return array(
 			array(
 				'alt' => __( 'Cofinantat de Uniunea Europeana', 'schrack-woocommerce-sync' ),
-				'src' => 'https://syshub.ro/assets/uniunea-europeana-cofinantat-Subb6x4v.png',
+				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat.png',
 			),
 			array(
 				'alt' => __( 'Guvernul Romaniei', 'schrack-woocommerce-sync' ),
-				'src' => 'https://syshub.ro/assets/guvernul-romaniei-Yha6L_8V.png',
+				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei.png',
 			),
 			array(
 				'alt' => 'REGIO Nord-Vest',
-				'src' => 'https://syshub.ro/assets/regio-nord-vest-DcT-iwjj.png',
+				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest.png',
 			),
 			array(
 				'alt' => __( 'Agentia de Dezvoltare Regionala Nord-Vest', 'schrack-woocommerce-sync' ),
-				'src' => 'https://syshub.ro/assets/adr-nord-vest-bTPLxXrD.svg',
+				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/adr-nord-vest.svg',
 			),
 		);
+	}
+
+	/**
+	 * Returns the generated legal page URL.
+	 */
+	private function legal_url( string $type ): string {
+		if ( class_exists( 'Schrack_Legal_Pages' ) ) {
+			return Schrack_Legal_Pages::page_url( $type );
+		}
+
+		return home_url( '/' );
 	}
 
 	/**
@@ -369,7 +385,7 @@ class Schrack_Footer_Renderer {
 		return array(
 			array(
 				'label' => 'Facebook',
-				'href'  => 'https://www.facebook.com/sharer/sharer.php?u=' . rawurlencode( $site_url ),
+				'href'  => 'https://www.facebook.com/profile.php?id=61590108433393',
 				'short' => 'f',
 			),
 			array(

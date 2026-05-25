@@ -44,6 +44,8 @@ class Schrack_Header_Renderer {
 			style="<?php echo esc_attr( $style ); ?>"
 			data-schrack-header
 		>
+			<?php echo $this->eu_top_bar( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+
 			<div class="schrack-header__inner">
 				<a class="schrack-header__brand" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['company_name'] ); ?>">
 					<span class="schrack-header__logo" aria-hidden="true">
@@ -150,6 +152,7 @@ class Schrack_Header_Renderer {
 			'show_search_price'   => 'yes',
 			'show_search_sku'     => 'yes',
 			'show_search_stock'   => 'yes',
+			'show_eu_logos'       => 'yes',
 			'search_placeholder'  => __( 'Cauta produse, coduri, SKU...', 'schrack-woocommerce-sync' ),
 			'search_button_text'  => __( 'Cauta', 'schrack-woocommerce-sync' ),
 			'search_min_chars'    => 3,
@@ -161,6 +164,7 @@ class Schrack_Header_Renderer {
 			'account_label'       => __( 'Contul meu', 'schrack-woocommerce-sync' ),
 			'login_label'         => __( 'Autentificare', 'schrack-woocommerce-sync' ),
 			'menu_label'          => __( 'Meniu', 'schrack-woocommerce-sync' ),
+			'eu_link_url'         => 'https://oportunitati-ue.gov.ro/',
 			'accent_color'        => '#135e96',
 			'action_color'        => '#b32d2e',
 			'max_width'           => 1280,
@@ -173,12 +177,13 @@ class Schrack_Header_Renderer {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
-		foreach ( array( 'show_brand_text', 'show_account', 'show_cart', 'show_cart_total', 'show_search', 'show_search_images', 'show_search_price', 'show_search_sku', 'show_search_stock', 'search_enable_fuzzy', 'is_sticky' ) as $key ) {
+		foreach ( array( 'show_brand_text', 'show_account', 'show_cart', 'show_cart_total', 'show_search', 'show_search_images', 'show_search_price', 'show_search_sku', 'show_search_stock', 'show_eu_logos', 'search_enable_fuzzy', 'is_sticky' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
 		}
 
 		$settings['logo_url']           = esc_url_raw( (string) $settings['logo_url'] );
 		$settings['site_url']           = esc_url_raw( (string) $settings['site_url'] );
+		$settings['eu_link_url']        = esc_url_raw( (string) $settings['eu_link_url'] );
 		$settings['menu_id']            = absint( $settings['menu_id'] );
 		$settings['accent_color']       = sanitize_hex_color( (string) $settings['accent_color'] ) ?: $defaults['accent_color'];
 		$settings['action_color']       = sanitize_hex_color( (string) $settings['action_color'] ) ?: $defaults['action_color'];
@@ -193,6 +198,38 @@ class Schrack_Header_Renderer {
 		}
 
 		return $settings;
+	}
+
+	/**
+	 * Renders the EU funding logo strip above the main header.
+	 *
+	 * @param array<string,string|int> $settings Sanitized settings.
+	 */
+	private function eu_top_bar( array $settings ): string {
+		if ( 'yes' !== $settings['show_eu_logos'] ) {
+			return '';
+		}
+
+		ob_start();
+		?>
+		<div class="schrack-header__eu-top">
+			<div class="schrack-header__eu-inner" aria-label="<?php esc_attr_e( 'Logo-uri finantare europeana', 'schrack-woocommerce-sync' ); ?>">
+				<?php foreach ( $this->eu_logos() as $logo ) : ?>
+					<?php if ( '' !== $settings['eu_link_url'] ) : ?>
+						<a class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>" href="<?php echo esc_url( $settings['eu_link_url'] ); ?>" target="_blank" rel="noopener noreferrer" aria-label="<?php echo esc_attr( $logo['alt'] ); ?>">
+							<img src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
+						</a>
+					<?php else : ?>
+						<span class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>">
+							<img src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
+						</span>
+					<?php endif; ?>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
 	}
 
 	/**
@@ -347,7 +384,60 @@ class Schrack_Header_Renderer {
 				'label' => __( 'Cos', 'schrack-woocommerce-sync' ),
 				'href'  => $this->cart_url(),
 			),
+			array(
+				'label' => __( 'Termeni si conditii', 'schrack-woocommerce-sync' ),
+				'href'  => $this->legal_url( 'terms' ),
+			),
+			array(
+				'label' => __( 'Livrare si plata', 'schrack-woocommerce-sync' ),
+				'href'  => $this->legal_url( 'delivery' ),
+			),
+			array(
+				'label' => __( 'Retur si rambursare', 'schrack-woocommerce-sync' ),
+				'href'  => $this->legal_url( 'returns' ),
+			),
 		);
+	}
+
+	/**
+	 * Returns EU funding logo metadata.
+	 *
+	 * @return array<int,array{alt:string,class:string,src:string}>
+	 */
+	private function eu_logos(): array {
+		return array(
+			array(
+				'alt'   => __( 'Cofinantat de Uniunea Europeana', 'schrack-woocommerce-sync' ),
+				'class' => 'is-eu',
+				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat.png',
+			),
+			array(
+				'alt'   => __( 'Guvernul Romaniei', 'schrack-woocommerce-sync' ),
+				'class' => 'is-government',
+				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei.png',
+			),
+			array(
+				'alt'   => 'REGIO Nord-Vest',
+				'class' => 'is-regio',
+				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest.png',
+			),
+			array(
+				'alt'   => __( 'Agentia de Dezvoltare Regionala Nord-Vest', 'schrack-woocommerce-sync' ),
+				'class' => 'is-adr',
+				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/adr-nord-vest.svg',
+			),
+		);
+	}
+
+	/**
+	 * Returns the generated legal page URL.
+	 */
+	private function legal_url( string $type ): string {
+		if ( class_exists( 'Schrack_Legal_Pages' ) ) {
+			return Schrack_Legal_Pages::page_url( $type );
+		}
+
+		return home_url( '/' );
 	}
 
 	/**

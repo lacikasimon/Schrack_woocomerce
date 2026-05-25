@@ -137,6 +137,40 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 		$this->end_controls_section();
 
 		$this->start_controls_section(
+			'section_eu_logos',
+			array(
+				'label' => __( 'Finantare UE', 'schrack-woocommerce-sync' ),
+				'tab'   => \Elementor\Controls_Manager::TAB_CONTENT,
+			)
+		);
+
+		$this->add_control(
+			'show_eu_logos',
+			array(
+				'label'        => __( 'Afiseaza logo-uri UE sus', 'schrack-woocommerce-sync' ),
+				'type'         => \Elementor\Controls_Manager::SWITCHER,
+				'label_on'     => __( 'Da', 'schrack-woocommerce-sync' ),
+				'label_off'    => __( 'Nu', 'schrack-woocommerce-sync' ),
+				'return_value' => 'yes',
+				'default'      => 'yes',
+			)
+		);
+
+		$this->add_control(
+			'eu_link_url',
+			array(
+				'label'       => __( 'URL informare UE', 'schrack-woocommerce-sync' ),
+				'type'        => \Elementor\Controls_Manager::URL,
+				'default'     => array(
+					'url' => 'https://oportunitati-ue.gov.ro/',
+				),
+				'label_block' => true,
+			)
+		);
+
+		$this->end_controls_section();
+
+		$this->start_controls_section(
 			'section_search',
 			array(
 				'label' => __( 'Cautare produse', 'schrack-woocommerce-sync' ),
@@ -418,7 +452,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 	protected function render(): void {
 		$settings = $this->get_settings_for_display();
 
-		foreach ( array( 'logo_url', 'site_url' ) as $url_key ) {
+		foreach ( array( 'logo_url', 'site_url', 'eu_link_url' ) as $url_key ) {
 			if ( isset( $settings[ $url_key ] ) && is_array( $settings[ $url_key ] ) ) {
 				$settings[ $url_key ] = (string) ( $settings[ $url_key ]['url'] ?? '' );
 			}
