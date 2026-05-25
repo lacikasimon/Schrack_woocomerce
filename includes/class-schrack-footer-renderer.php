@@ -208,7 +208,7 @@ class Schrack_Footer_Renderer {
 			'phone_display' => '0749 235 958',
 			'phone_tel'     => '+40749235958',
 			'address_one'   => __( 'Judet Satu Mare, loc. Satu Mare', 'schrack-woocommerce-sync' ),
-			'address_two'   => __( 'Str. Gheorghe Baritiu 88, cod postal 440135', 'schrack-woocommerce-sync' ),
+			'address_two'   => __( 'Str. Gheorghe Baritiu 86, cod postal 440135', 'schrack-woocommerce-sync' ),
 			'cui'           => 'RO 38322763',
 			'cui_note'      => __( 'Platitor de TVA (la facturare)', 'schrack-woocommerce-sync' ),
 			'reg_com'       => 'J2017001105304',

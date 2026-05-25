@@ -182,7 +182,7 @@ class Schrack_Elementor_Footer_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Adresa linia 2', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Str. Gheorghe Baritiu 88, cod postal 440135', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Str. Gheorghe Baritiu 86, cod postal 440135', 'schrack-woocommerce-sync' ),
 			)
 		);
 

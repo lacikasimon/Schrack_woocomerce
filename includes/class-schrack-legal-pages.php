@@ -277,7 +277,7 @@ class Schrack_Legal_Pages {
 			'phone_tel'     => '+40749235958',
 			'email'         => '' !== $email ? $email : 'contact@syshub.ro',
 			'address_one'   => __( 'Judet Satu Mare, loc. Satu Mare', 'schrack-woocommerce-sync' ),
-			'address_two'   => __( 'Str. Gheorghe Baritiu 88, cod postal 440135', 'schrack-woocommerce-sync' ),
+			'address_two'   => __( 'Str. Gheorghe Baritiu 86, cod postal 440135', 'schrack-woocommerce-sync' ),
 			'cui'           => 'RO 38322763',
 			'reg_com'       => 'J2017001105304',
 			'euid'          => 'ROONRC.J2017001105304',
