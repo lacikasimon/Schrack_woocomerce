@@ -67,13 +67,6 @@ class Schrack_Plugin {
 	private ?Schrack_B2B_Pricing $b2b_pricing = null;
 
 	/**
-	 * Legal page service.
-	 *
-	 * @var Schrack_Legal_Pages|null
-	 */
-	private ?Schrack_Legal_Pages $legal_pages = null;
-
-	/**
 	 * Returns the singleton instance.
 	 */
 	public static function instance(): Schrack_Plugin {
@@ -98,8 +91,6 @@ class Schrack_Plugin {
 		$this->frontend_image_loader->init();
 		$this->b2b_pricing = new Schrack_B2B_Pricing();
 		$this->b2b_pricing->init();
-		$this->legal_pages = new Schrack_Legal_Pages();
-		$this->legal_pages->init();
 		$this->elementor = new Schrack_Elementor();
 		$this->elementor->init();
 
@@ -145,7 +136,6 @@ class Schrack_Plugin {
 			'class-schrack-homepage-renderer.php',
 			'class-schrack-footer-renderer.php',
 			'class-schrack-support-renderer.php',
-			'class-schrack-legal-pages.php',
 			'class-schrack-elementor.php',
 			'class-schrack-cron.php',
 			'class-schrack-admin.php',
@@ -179,12 +169,9 @@ class Schrack_Plugin {
 
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-settings.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-logger.php';
-		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-legal-pages.php';
 
 		Schrack_Settings::install_defaults();
 		Schrack_Logger::create_table();
-		Schrack_Legal_Pages::install_pages();
-		flush_rewrite_rules();
 	}
 
 	/**

@@ -295,15 +295,12 @@ class Schrack_Footer_Renderer {
 	 */
 	private function legal_links(): array {
 		return array(
-			array( 'label' => __( 'Termeni si conditii', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'terms' ), 'external' => false ),
-			array( 'label' => __( 'Livrare si plata', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'delivery' ), 'external' => false ),
-			array( 'label' => __( 'Retur si rambursare', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'returns' ), 'external' => false ),
-			array( 'label' => __( 'Garantii', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'warranty' ), 'external' => false ),
-			array( 'label' => __( 'Confidentialitate', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'privacy' ), 'external' => false ),
-			array( 'label' => __( 'Politica cookie', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'cookies' ), 'external' => false ),
-			array( 'label' => __( 'Litigii', 'schrack-woocommerce-sync' ), 'href' => $this->legal_url( 'disputes' ), 'external' => false ),
+			array( 'label' => __( 'Finantare UE', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/finantare-ue', 'external' => true ),
+			array( 'label' => __( 'Termeni si conditii', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/termeni-si-conditii', 'external' => true ),
+			array( 'label' => __( 'Politica cookie', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/politica-cookie-uri', 'external' => true ),
+			array( 'label' => 'GDPR', 'href' => 'https://syshub.ro/gdpr', 'external' => true ),
 			array( 'label' => 'ANPC', 'href' => 'https://anpc.ro/', 'external' => true ),
-			array( 'label' => __( 'SAL ANPC', 'schrack-woocommerce-sync' ), 'href' => 'https://anpc.ro/sal/', 'external' => true ),
+			array( 'label' => __( 'SAL ANPC', 'schrack-woocommerce-sync' ), 'href' => 'https://anpc.ro/ce-este-sal/', 'external' => true ),
 		);
 	}
 
@@ -328,7 +325,7 @@ class Schrack_Footer_Renderer {
 			),
 			array(
 				'label' => __( 'SAL ANPC', 'schrack-woocommerce-sync' ),
-				'href'  => 'https://anpc.ro/sal/',
+				'href'  => 'https://anpc.ro/ce-este-sal/',
 				'src'   => 'https://syshub.ro/assets/anpc-sal-BLYQEtJZ.svg',
 			),
 			array(
@@ -363,17 +360,6 @@ class Schrack_Footer_Renderer {
 				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/adr-nord-vest.svg',
 			),
 		);
-	}
-
-	/**
-	 * Returns the generated legal page URL.
-	 */
-	private function legal_url( string $type ): string {
-		if ( class_exists( 'Schrack_Legal_Pages' ) ) {
-			return Schrack_Legal_Pages::page_url( $type );
-		}
-
-		return home_url( '/' );
 	}
 
 	/**

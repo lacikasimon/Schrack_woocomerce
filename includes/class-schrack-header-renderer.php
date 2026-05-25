@@ -384,18 +384,6 @@ class Schrack_Header_Renderer {
 				'label' => __( 'Cos', 'schrack-woocommerce-sync' ),
 				'href'  => $this->cart_url(),
 			),
-			array(
-				'label' => __( 'Termeni si conditii', 'schrack-woocommerce-sync' ),
-				'href'  => $this->legal_url( 'terms' ),
-			),
-			array(
-				'label' => __( 'Livrare si plata', 'schrack-woocommerce-sync' ),
-				'href'  => $this->legal_url( 'delivery' ),
-			),
-			array(
-				'label' => __( 'Retur si rambursare', 'schrack-woocommerce-sync' ),
-				'href'  => $this->legal_url( 'returns' ),
-			),
 		);
 	}
 
@@ -427,17 +415,6 @@ class Schrack_Header_Renderer {
 				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/adr-nord-vest.svg',
 			),
 		);
-	}
-
-	/**
-	 * Returns the generated legal page URL.
-	 */
-	private function legal_url( string $type ): string {
-		if ( class_exists( 'Schrack_Legal_Pages' ) ) {
-			return Schrack_Legal_Pages::page_url( $type );
-		}
-
-		return home_url( '/' );
 	}
 
 	/**
