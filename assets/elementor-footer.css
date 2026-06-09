@@ -88,6 +88,20 @@
 	font-style: normal;
 }
 
+.schrack-footer:not(:has(.schrack-footer__regional))::before {
+	border-bottom: 1px solid #e2e8f0;
+	color: #020617;
+	content: "Investim \00een viitorul regiunii!\A BH BN CJ MM SJ SM\A www.regionordvest.ro | www.nord-vest.ro";
+	display: block;
+	font-size: 16px;
+	font-style: italic;
+	font-weight: 650;
+	line-height: 1.45;
+	padding: 24px 16px;
+	text-align: center;
+	white-space: pre-line;
+}
+
 .schrack-footer__top {
 	background: linear-gradient(90deg, var(--schrack-footer-deep), var(--schrack-footer-accent), var(--schrack-footer-deep));
 	padding: 12px 16px;
