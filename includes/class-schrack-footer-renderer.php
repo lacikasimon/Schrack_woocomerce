@@ -35,6 +35,8 @@ class Schrack_Footer_Renderer {
 			class="schrack-footer"
 			style="<?php echo esc_attr( $style ); ?>"
 		>
+			<?php echo $this->regional_program_footer(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+
 			<?php if ( '' !== $settings['top_message'] ) : ?>
 				<div class="schrack-footer__top">
 					<p><?php echo esc_html( $settings['top_message'] ); ?></p>
@@ -176,6 +178,37 @@ class Schrack_Footer_Renderer {
 	}
 
 	/**
+	 * Returns the mandatory Programul Regional Nord-Vest footer strip.
+	 */
+	private function regional_program_footer(): string {
+		$regional_links = $this->regional_links();
+
+		ob_start();
+		?>
+		<section class="schrack-footer__regional" aria-label="<?php esc_attr_e( 'Subsol obligatoriu Programul Regional Nord-Vest', 'schrack-woocommerce-sync' ); ?>">
+			<p><?php esc_html_e( 'Investim în viitorul regiunii!', 'schrack-woocommerce-sync' ); ?></p>
+			<div class="schrack-footer__county-band" aria-label="<?php esc_attr_e( 'Judetele Regiunii de Dezvoltare Nord-Vest', 'schrack-woocommerce-sync' ); ?>">
+				<?php foreach ( $this->county_band() as $county ) : ?>
+					<span style="<?php echo esc_attr( 'background-color:' . $county['color'] . ';' ); ?>"><?php echo esc_html( $county['label'] ); ?></span>
+				<?php endforeach; ?>
+			</div>
+			<div class="schrack-footer__regional-links">
+				<?php foreach ( $regional_links as $index => $link ) : ?>
+					<span>
+						<a href="<?php echo esc_url( $link['href'] ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $link['label'] ); ?></a>
+						<?php if ( $index < count( $regional_links ) - 1 ) : ?>
+							<i aria-hidden="true">|</i>
+						<?php endif; ?>
+					</span>
+				<?php endforeach; ?>
+			</div>
+		</section>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * Normalizes widget settings.
 	 *
 	 * @param array<string,mixed> $settings Raw settings.
@@ -249,6 +282,34 @@ class Schrack_Footer_Renderer {
 			array( 'label' => __( 'Detectie la efractie & alarmare', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/servicii/detectie-efractie' ),
 			array( 'label' => __( 'Mentenanta tehnica', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/servicii/mentenanta' ),
 			array( 'label' => __( 'Consultanta & infrastructura electrica', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/servicii/consultanta' ),
+		);
+	}
+
+	/**
+	 * Returns Programul Regional Nord-Vest official links.
+	 *
+	 * @return array<int,array{label:string,href:string}>
+	 */
+	private function regional_links(): array {
+		return array(
+			array( 'label' => 'www.regionordvest.ro', 'href' => 'https://regionordvest.ro/' ),
+			array( 'label' => 'www.nord-vest.ro', 'href' => 'https://www.nord-vest.ro/' ),
+		);
+	}
+
+	/**
+	 * Returns Regiunea de Dezvoltare Nord-Vest county band colors.
+	 *
+	 * @return array<int,array{label:string,color:string}>
+	 */
+	private function county_band(): array {
+		return array(
+			array( 'label' => 'BH', 'color' => '#84CDDD' ),
+			array( 'label' => 'BN', 'color' => '#2EBBD5' ),
+			array( 'label' => 'CJ', 'color' => '#188CB1' ),
+			array( 'label' => 'MM', 'color' => '#196194' ),
+			array( 'label' => 'SJ', 'color' => '#1E528F' ),
+			array( 'label' => 'SM', 'color' => '#2A416F' ),
 		);
 	}
 

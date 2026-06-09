@@ -21,6 +21,73 @@
 	box-sizing: border-box;
 }
 
+.schrack-footer__regional {
+	border-bottom: 1px solid #e2e8f0;
+	padding: 32px 16px;
+	text-align: center;
+}
+
+.schrack-footer__regional p {
+	color: #020617;
+	font-size: 20px;
+	font-style: italic;
+	font-weight: 650;
+	letter-spacing: 0;
+	line-height: 1.3;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.schrack-footer__county-band {
+	display: grid;
+	grid-template-columns: repeat(6, minmax(0, 1fr));
+	margin: 16px auto 0;
+	max-width: 448px;
+	overflow: hidden;
+	width: 100%;
+}
+
+.schrack-footer__county-band span {
+	color: #fff;
+	display: block;
+	font-size: 16px;
+	font-weight: 750;
+	line-height: 1.2;
+	padding: 6px 4px;
+	text-align: center;
+}
+
+.schrack-footer__regional-links {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	justify-content: center;
+	margin-top: 12px;
+}
+
+.schrack-footer__regional-links span {
+	align-items: center;
+	display: inline-flex;
+	gap: 12px;
+}
+
+.schrack-footer__regional-links a {
+	color: #172554;
+	font-size: 14px;
+	font-weight: 650;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	transition: color 160ms ease;
+}
+
+.schrack-footer__regional-links i {
+	color: #172554;
+	font-style: normal;
+}
+
 .schrack-footer__top {
 	background: linear-gradient(90deg, var(--schrack-footer-deep), var(--schrack-footer-accent), var(--schrack-footer-deep));
 	padding: 12px 16px;
@@ -172,6 +239,8 @@
 .schrack-footer__links a:focus,
 .schrack-footer__contact a:hover,
 .schrack-footer__contact a:focus,
+.schrack-footer__regional-links a:hover,
+.schrack-footer__regional-links a:focus,
 .schrack-footer__bottom a:hover,
 .schrack-footer__bottom a:focus {
 	color: var(--schrack-footer-slate);
@@ -427,6 +496,19 @@
 
 	.schrack-footer {
 		margin-top: 0 !important;
+	}
+
+	.schrack-footer__regional {
+		padding: 24px 16px;
+	}
+
+	.schrack-footer__regional p {
+		font-size: 18px;
+	}
+
+	.schrack-footer__county-band span {
+		font-size: 14px;
+		padding: 6px 2px;
 	}
 
 	.schrack-footer__inner {
