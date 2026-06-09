@@ -161,6 +161,13 @@ class Schrack_Elementor {
 			$this->asset_version( 'assets/elementor-footer.css' )
 		);
 
+		wp_register_style(
+			'schrack-wc-funding',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-funding.css',
+			array(),
+			$this->asset_version( 'assets/elementor-funding.css' )
+		);
+
 		wp_register_script(
 			'schrack-wc-homepage',
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-homepage.js',
@@ -223,12 +230,14 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-received-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-funding-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-support-widget.php';
 
 		$widgets = array(
 			new Schrack_Elementor_Header_Widget(),
 			new Schrack_Elementor_Homepage_Widget(),
 			new Schrack_Elementor_Footer_Widget(),
+			new Schrack_Elementor_Funding_Widget(),
 			new Schrack_Elementor_Product_Filter_Widget(),
 			new Schrack_Elementor_Header_Search_Widget(),
 			new Schrack_Elementor_Product_Page_Widget(),
@@ -271,12 +280,14 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-received-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-funding-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-support-widget.php';
 
 		if ( is_object( $widgets_manager ) && method_exists( $widgets_manager, 'register_widget_type' ) ) {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Header_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Homepage_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Footer_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Funding_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Filter_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Header_Search_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Page_Widget() );

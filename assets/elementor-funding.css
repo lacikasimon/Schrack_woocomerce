@@ -1,0 +1,377 @@
+.schrack-funding {
+	--schrack-funding-accent: #1e40af;
+	--schrack-funding-border: #e2e8f0;
+	--schrack-funding-muted: #64748b;
+	--schrack-funding-radius: 8px;
+	--schrack-funding-slate: #0f172a;
+	--schrack-funding-width: 1024px;
+	background: #fff;
+	color: var(--schrack-funding-slate);
+	font-size: 16px;
+	width: 100%;
+}
+
+.schrack-funding *,
+.schrack-funding *::before,
+.schrack-funding *::after {
+	box-sizing: border-box;
+}
+
+.schrack-funding__article {
+	display: grid;
+	gap: 40px;
+	margin: 0 auto;
+	max-width: min(100%, var(--schrack-funding-width));
+	padding: 40px 16px 48px;
+	width: 100%;
+}
+
+.schrack-funding h1,
+.schrack-funding h2,
+.schrack-funding h3,
+.schrack-funding p {
+	margin: 0;
+}
+
+.schrack-funding__header {
+	display: grid;
+	gap: 32px;
+}
+
+.schrack-funding__header-text {
+	max-width: 900px;
+	min-width: 0;
+}
+
+.schrack-funding__eyebrow {
+	color: var(--schrack-funding-accent);
+	font-size: 14px;
+	font-weight: 800;
+	letter-spacing: 0;
+	line-height: 1.35;
+	margin-bottom: 12px;
+	text-transform: uppercase;
+}
+
+.schrack-funding h1 {
+	color: #172554;
+	font-size: clamp(28px, 4vw, 40px);
+	font-weight: 650;
+	letter-spacing: 0;
+	line-height: 1.12;
+	overflow-wrap: anywhere;
+}
+
+.schrack-funding__hero {
+	aspect-ratio: 16 / 7;
+	background: #f1f5f9;
+	border: 1px solid var(--schrack-funding-border);
+	border-radius: var(--schrack-funding-radius);
+	margin: 0;
+	min-height: 220px;
+	overflow: hidden;
+}
+
+.schrack-funding__hero img,
+.schrack-funding__gallery img {
+	border: 0;
+	display: block;
+	height: 100%;
+	object-fit: cover;
+	width: 100%;
+}
+
+.schrack-funding__section {
+	border-top: 1px solid var(--schrack-funding-border);
+	display: grid;
+	gap: 20px;
+	padding-top: 32px;
+}
+
+.schrack-funding h2 {
+	color: var(--schrack-funding-slate);
+	font-size: 24px;
+	font-weight: 650;
+	letter-spacing: 0;
+	line-height: 1.25;
+}
+
+.schrack-funding h3 {
+	color: var(--schrack-funding-slate);
+	font-size: 18px;
+	font-weight: 650;
+	line-height: 1.3;
+}
+
+.schrack-funding__copy {
+	color: #334155;
+	display: grid;
+	gap: 16px;
+	line-height: 1.68;
+}
+
+.schrack-funding__objectives {
+	display: grid;
+	gap: 24px;
+	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+	margin-top: 8px;
+}
+
+.schrack-funding__objective-primary {
+	border-left: 4px solid var(--schrack-funding-accent);
+	padding-left: 16px;
+}
+
+.schrack-funding__objective-primary p,
+.schrack-funding__objective-list li,
+.schrack-funding__communication p {
+	color: #475569;
+	font-size: 14px;
+	line-height: 1.65;
+}
+
+.schrack-funding__objective-primary p {
+	margin-top: 8px;
+}
+
+.schrack-funding__objective-list ul {
+	display: grid;
+	gap: 10px;
+	list-style: none;
+	margin: 12px 0 0;
+	padding: 0;
+}
+
+.schrack-funding__objective-list li {
+	display: flex;
+	gap: 8px;
+}
+
+.schrack-funding__objective-list li > span {
+	background: var(--schrack-funding-accent);
+	border-radius: 999px;
+	flex: 0 0 auto;
+	height: 6px;
+	margin-top: 10px;
+	width: 6px;
+}
+
+.schrack-funding__timeline {
+	border-bottom: 1px solid var(--schrack-funding-border);
+	border-top: 1px solid var(--schrack-funding-border);
+}
+
+.schrack-funding__timeline-item {
+	display: grid;
+	gap: 8px;
+	grid-template-columns: 128px minmax(0, 1fr);
+	padding: 16px 0;
+}
+
+.schrack-funding__timeline-item + .schrack-funding__timeline-item {
+	border-top: 1px solid var(--schrack-funding-border);
+}
+
+.schrack-funding__timeline-item time {
+	color: var(--schrack-funding-accent);
+	font-size: 14px;
+	font-weight: 750;
+	line-height: 1.4;
+}
+
+.schrack-funding__timeline-item p {
+	color: var(--schrack-funding-slate);
+	font-weight: 550;
+	line-height: 1.45;
+}
+
+.schrack-funding__links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	margin-top: 10px;
+}
+
+.schrack-funding__links a,
+.schrack-funding__oportunitati a,
+.schrack-funding__program-links a {
+	color: var(--schrack-funding-accent);
+	font-size: 14px;
+	font-weight: 750;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.schrack-funding__links a:hover,
+.schrack-funding__links a:focus,
+.schrack-funding__oportunitati a:hover,
+.schrack-funding__oportunitati a:focus,
+.schrack-funding__program-links a:hover,
+.schrack-funding__program-links a:focus {
+	color: #172554;
+	outline: none;
+}
+
+.schrack-funding__gallery {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.schrack-funding__gallery figure,
+.schrack-funding__communication {
+	background: #fff;
+	border: 1px solid var(--schrack-funding-border);
+	border-radius: var(--schrack-funding-radius);
+	margin: 0;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.schrack-funding__gallery img {
+	aspect-ratio: 4 / 3;
+	height: auto;
+}
+
+.schrack-funding__gallery figcaption {
+	color: #334155;
+	font-size: 14px;
+	line-height: 1.55;
+	padding: 12px 16px;
+}
+
+.schrack-funding__video {
+	background: #000;
+	border: 1px solid var(--schrack-funding-border);
+	border-radius: var(--schrack-funding-radius);
+	overflow: hidden;
+}
+
+.schrack-funding__video video {
+	aspect-ratio: 16 / 9;
+	background: #000;
+	display: block;
+	height: auto;
+	width: 100%;
+}
+
+.schrack-funding__communications {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.schrack-funding__communication {
+	display: grid;
+	gap: 10px;
+	padding: 20px;
+}
+
+.schrack-funding__oportunitati {
+	border-bottom: 1px solid var(--schrack-funding-border);
+	border-top: 1px solid var(--schrack-funding-border);
+	padding: 16px 0;
+	text-align: center;
+}
+
+.schrack-funding__oportunitati p {
+	color: #475569;
+	font-size: 14px;
+	line-height: 1.6;
+}
+
+.schrack-funding__program-footer {
+	display: grid;
+	gap: 12px;
+	padding-top: 8px;
+	text-align: center;
+}
+
+.schrack-funding__program-footer > p {
+	color: var(--schrack-funding-slate);
+	font-size: 20px;
+	font-style: italic;
+	font-weight: 750;
+	line-height: 1.25;
+}
+
+.schrack-funding__county-band {
+	display: grid;
+	grid-template-columns: repeat(6, minmax(0, 1fr));
+	margin: 4px auto 0;
+	max-width: 448px;
+	overflow: hidden;
+	width: min(100%, 448px);
+}
+
+.schrack-funding__county-band span {
+	color: #fff;
+	font-size: 16px;
+	font-weight: 850;
+	line-height: 1;
+	padding: 8px 6px;
+}
+
+.schrack-funding__program-links {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	justify-content: center;
+}
+
+.schrack-funding__program-links span {
+	align-items: center;
+	display: inline-flex;
+	gap: 12px;
+}
+
+.schrack-funding__program-links em {
+	color: #334155;
+	font-style: normal;
+}
+
+@media (max-width: 780px) {
+	.schrack-funding__article {
+		gap: 32px;
+		padding-top: 32px;
+	}
+
+	.schrack-funding__objectives,
+	.schrack-funding__gallery,
+	.schrack-funding__communications {
+		grid-template-columns: 1fr;
+	}
+
+	.schrack-funding__hero {
+		aspect-ratio: 16 / 9;
+		min-height: 0;
+	}
+}
+
+@media (max-width: 520px) {
+	.schrack-funding__article {
+		padding: 28px 14px 40px;
+	}
+
+	.schrack-funding h1 {
+		font-size: 27px;
+	}
+
+	.schrack-funding h2 {
+		font-size: 22px;
+	}
+
+	.schrack-funding__timeline-item {
+		grid-template-columns: 1fr;
+	}
+
+	.schrack-funding__county-band span {
+		font-size: 14px;
+		padding: 7px 4px;
+	}
+
+	.schrack-funding__program-links span {
+		gap: 8px;
+	}
+}

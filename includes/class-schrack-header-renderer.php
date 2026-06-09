@@ -44,8 +44,6 @@ class Schrack_Header_Renderer {
 			style="<?php echo esc_attr( $style ); ?>"
 			data-schrack-header
 		>
-			<?php echo $this->eu_top_bar( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-
 			<div class="schrack-header__inner">
 				<a class="schrack-header__brand" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['company_name'] ); ?>">
 					<span class="schrack-header__logo" aria-hidden="true">
@@ -80,6 +78,8 @@ class Schrack_Header_Renderer {
 					</button>
 				</div>
 			</div>
+
+			<?php echo $this->eu_top_bar( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 
 			<div class="schrack-header__backdrop" hidden data-header-menu-close></div>
 
@@ -164,7 +164,6 @@ class Schrack_Header_Renderer {
 			'account_label'       => __( 'Contul meu', 'schrack-woocommerce-sync' ),
 			'login_label'         => __( 'Autentificare', 'schrack-woocommerce-sync' ),
 			'menu_label'          => __( 'Meniu', 'schrack-woocommerce-sync' ),
-			'eu_link_url'         => 'https://oportunitati-ue.gov.ro/',
 			'accent_color'        => '#135e96',
 			'action_color'        => '#b32d2e',
 			'max_width'           => 1280,
@@ -183,7 +182,6 @@ class Schrack_Header_Renderer {
 
 		$settings['logo_url']           = esc_url_raw( (string) $settings['logo_url'] );
 		$settings['site_url']           = esc_url_raw( (string) $settings['site_url'] );
-		$settings['eu_link_url']        = esc_url_raw( (string) $settings['eu_link_url'] );
 		$settings['menu_id']            = absint( $settings['menu_id'] );
 		$settings['accent_color']       = sanitize_hex_color( (string) $settings['accent_color'] ) ?: $defaults['accent_color'];
 		$settings['action_color']       = sanitize_hex_color( (string) $settings['action_color'] ) ?: $defaults['action_color'];
@@ -201,7 +199,7 @@ class Schrack_Header_Renderer {
 	}
 
 	/**
-	 * Renders the EU funding logo strip above the main header.
+	 * Renders the EU funding logo strip below the main header.
 	 *
 	 * @param array<string,string|int> $settings Sanitized settings.
 	 */
@@ -215,15 +213,9 @@ class Schrack_Header_Renderer {
 		<div class="schrack-header__eu-top">
 			<div class="schrack-header__eu-inner" aria-label="<?php esc_attr_e( 'Logo-uri finantare europeana', 'schrack-woocommerce-sync' ); ?>">
 				<?php foreach ( $this->eu_logos() as $logo ) : ?>
-					<?php if ( '' !== $settings['eu_link_url'] ) : ?>
-						<a class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>" href="<?php echo esc_url( $settings['eu_link_url'] ); ?>" target="_blank" rel="noopener noreferrer" aria-label="<?php echo esc_attr( $logo['alt'] ); ?>">
-							<img src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
-						</a>
-					<?php else : ?>
-						<span class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>">
-							<img src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
-						</span>
-					<?php endif; ?>
+					<span class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>">
+						<img src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
+					</span>
 				<?php endforeach; ?>
 			</div>
 		</div>

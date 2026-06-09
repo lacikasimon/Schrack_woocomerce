@@ -235,7 +235,6 @@ class Schrack_Elementor_Footer_Widget extends \Elementor\Widget_Base {
 		foreach (
 			array(
 				'show_social'       => __( 'Retele sociale', 'schrack-woocommerce-sync' ),
-				'show_eu_block'     => __( 'Bloc informare UE', 'schrack-woocommerce-sync' ),
 				'show_anpc'         => __( 'Bloc ANPC', 'schrack-woocommerce-sync' ),
 				'show_payments'     => __( 'Logo NETOPIA Payments', 'schrack-woocommerce-sync' ),
 			) as $key => $label

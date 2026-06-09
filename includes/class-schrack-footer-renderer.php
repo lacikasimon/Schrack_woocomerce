@@ -112,23 +112,9 @@ class Schrack_Footer_Renderer {
 					</div>
 				</div>
 
-				<?php if ( 'yes' === $settings['show_eu_block'] || 'yes' === $settings['show_anpc'] || 'yes' === $settings['show_payments'] ) : ?>
+				<?php if ( 'yes' === $settings['show_anpc'] || 'yes' === $settings['show_payments'] ) : ?>
 					<div class="schrack-footer__compliance">
-						<?php if ( 'yes' === $settings['show_eu_block'] ) : ?>
-							<div class="schrack-footer__eu">
-								<div class="schrack-footer__eu-logos" aria-label="<?php esc_attr_e( 'Logo-uri finantare europeana', 'schrack-woocommerce-sync' ); ?>">
-									<?php foreach ( $this->eu_logos() as $logo ) : ?>
-										<img src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="lazy">
-									<?php endforeach; ?>
-								</div>
-								<p>
-									<?php esc_html_e( 'Pentru informatii detaliate despre celelalte programe cofinantate de Uniunea Europeana, va invitam sa vizitati', 'schrack-woocommerce-sync' ); ?>
-									<a href="https://oportunitati-ue.gov.ro/" target="_blank" rel="noopener noreferrer">www.oportunitati-ue.gov.ro</a>.
-								</p>
-							</div>
-						<?php endif; ?>
-
-						<?php if ( 'yes' === $settings['show_eu_block'] || 'yes' === $settings['show_anpc'] ) : ?>
+						<?php if ( 'yes' === $settings['show_anpc'] || 'yes' === $settings['show_payments'] ) : ?>
 							<div class="schrack-footer__service-tags" aria-label="<?php esc_attr_e( 'Servicii complete', 'schrack-woocommerce-sync' ); ?>">
 								<h3><?php esc_html_e( 'Servicii complete:', 'schrack-woocommerce-sync' ); ?></h3>
 								<div>
@@ -214,7 +200,6 @@ class Schrack_Footer_Renderer {
 			'reg_com'       => 'J2017001105304',
 			'euid'          => 'ROONRC.J2017001105304',
 			'show_social'       => 'yes',
-			'show_eu_block'     => 'yes',
 			'show_anpc'         => 'yes',
 			'show_payments'     => 'yes',
 			'accent_color'      => '#1e40af',
@@ -229,7 +214,7 @@ class Schrack_Footer_Renderer {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
-		foreach ( array( 'show_social', 'show_eu_block', 'show_anpc', 'show_payments' ) as $key ) {
+		foreach ( array( 'show_social', 'show_anpc', 'show_payments' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
 		}
 
@@ -297,6 +282,7 @@ class Schrack_Footer_Renderer {
 		return array(
 			array( 'label' => __( 'Finantare UE', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/finantare-ue', 'external' => true ),
 			array( 'label' => __( 'Termeni si conditii', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/termeni-si-conditii', 'external' => true ),
+			array( 'label' => __( 'Politica de retur', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/politica-de-retur', 'external' => true ),
 			array( 'label' => __( 'Politica cookie', 'schrack-woocommerce-sync' ), 'href' => 'https://syshub.ro/politica-cookie-uri', 'external' => true ),
 			array( 'label' => 'GDPR', 'href' => 'https://syshub.ro/gdpr', 'external' => true ),
 			array( 'label' => 'ANPC', 'href' => 'https://anpc.ro/', 'external' => true ),
@@ -332,32 +318,6 @@ class Schrack_Footer_Renderer {
 				'label' => __( 'Redresare consumatori UE', 'schrack-woocommerce-sync' ),
 				'href'  => 'https://consumer-redress.ec.europa.eu/site-relocation_en',
 				'src'   => 'https://syshub.ro/assets/anpc-sol-vgITSumg.svg',
-			),
-		);
-	}
-
-	/**
-	 * Returns EU funding logos used by the Syshub footer.
-	 *
-	 * @return array<int,array{alt:string,src:string}>
-	 */
-	private function eu_logos(): array {
-		return array(
-			array(
-				'alt' => __( 'Cofinantat de Uniunea Europeana', 'schrack-woocommerce-sync' ),
-				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat.png',
-			),
-			array(
-				'alt' => __( 'Guvernul Romaniei', 'schrack-woocommerce-sync' ),
-				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei.png',
-			),
-			array(
-				'alt' => 'REGIO Nord-Vest',
-				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest.png',
-			),
-			array(
-				'alt' => __( 'Agentia de Dezvoltare Regionala Nord-Vest', 'schrack-woocommerce-sync' ),
-				'src' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/adr-nord-vest.svg',
 			),
 		);
 	}
