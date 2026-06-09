@@ -213,7 +213,9 @@ class Schrack_Header_Renderer {
 		<div class="schrack-header__eu-top">
 			<div class="schrack-header__eu-inner" aria-label="<?php esc_attr_e( 'Logo-uri finantare europeana', 'schrack-woocommerce-sync' ); ?>">
 				<?php foreach ( $this->eu_logos() as $logo ) : ?>
-					<img class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>" src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
+					<a class="<?php echo esc_attr( 'schrack-header__eu-item ' . $logo['class'] ); ?>" href="<?php echo esc_url( $logo['href'] ); ?>" target="_blank" rel="noopener noreferrer">
+						<img class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>" src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
+					</a>
 				<?php endforeach; ?>
 			</div>
 		</div>
@@ -380,28 +382,32 @@ class Schrack_Header_Renderer {
 	/**
 	 * Returns EU funding logo metadata.
 	 *
-	 * @return array<int,array{alt:string,class:string,src:string}>
+	 * @return array<int,array{alt:string,class:string,href:string,src:string}>
 	 */
 	private function eu_logos(): array {
 		return array(
 			array(
 				'alt'   => __( 'Cofinantat de Uniunea Europeana', 'schrack-woocommerce-sync' ),
 				'class' => 'is-eu',
+				'href'  => 'https://european-union.europa.eu/',
 				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat.png',
 			),
 			array(
 				'alt'   => __( 'Guvernul Romaniei', 'schrack-woocommerce-sync' ),
 				'class' => 'is-government',
+				'href'  => 'https://www.gov.ro/',
 				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei.png',
 			),
 			array(
 				'alt'   => 'REGIO Nord-Vest',
 				'class' => 'is-regio',
+				'href'  => 'https://regionordvest.ro/',
 				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest.png',
 			),
 			array(
 				'alt'   => __( 'Agentia de Dezvoltare Regionala Nord-Vest', 'schrack-woocommerce-sync' ),
 				'class' => 'is-adr',
+				'href'  => 'https://www.nord-vest.ro/',
 				'src'   => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/adr-nord-vest.svg',
 			),
 		);
