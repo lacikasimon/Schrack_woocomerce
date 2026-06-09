@@ -213,9 +213,7 @@ class Schrack_Header_Renderer {
 		<div class="schrack-header__eu-top">
 			<div class="schrack-header__eu-inner" aria-label="<?php esc_attr_e( 'Logo-uri finantare europeana', 'schrack-woocommerce-sync' ); ?>">
 				<?php foreach ( $this->eu_logos() as $logo ) : ?>
-					<span class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>">
-						<img src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
-					</span>
+					<img class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>" src="<?php echo esc_url( $logo['src'] ); ?>" alt="<?php echo esc_attr( $logo['alt'] ); ?>" loading="eager">
 				<?php endforeach; ?>
 			</div>
 		</div>

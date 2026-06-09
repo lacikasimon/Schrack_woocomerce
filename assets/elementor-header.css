@@ -39,7 +39,7 @@
 
 .schrack-header__eu-top {
 	background: #fff;
-	border-top: 1px solid color-mix(in srgb, var(--schrack-header-accent) 16%, var(--schrack-header-border));
+	border-top: 1px solid rgba(219, 234, 254, 0.8);
 	order: 2;
 	width: 100%;
 }
@@ -58,16 +58,26 @@
 }
 
 .schrack-header__eu-logo {
-	align-items: center;
 	cursor: default;
-	display: inline-flex;
-	flex: 0 1 auto;
-	justify-content: center;
+	flex: 0 0 auto;
 	line-height: 1;
-	min-width: 0;
-	overflow: hidden;
 	pointer-events: none;
 	text-decoration: none;
+}
+
+.schrack-header__eu-logo:not(img) {
+	align-items: center;
+	display: inline-flex;
+	justify-content: center;
+	overflow: hidden;
+}
+
+img.schrack-header__eu-logo {
+	border: 0;
+	display: block;
+	height: auto !important;
+	object-fit: contain;
+	width: auto !important;
 }
 
 .schrack-header__eu-logo img {
@@ -89,6 +99,11 @@
 	max-width: 13rem;
 }
 
+img.schrack-header__eu-logo.is-eu {
+	max-height: 48px !important;
+	max-width: 13rem;
+}
+
 .schrack-header__eu-logo.is-government,
 .schrack-header__eu-logo.is-regio {
 	flex: 0 0 48px;
@@ -103,12 +118,24 @@
 	width: 48px !important;
 }
 
+img.schrack-header__eu-logo.is-government,
+img.schrack-header__eu-logo.is-regio {
+	height: 48px !important;
+	max-height: 48px !important;
+	width: 48px !important;
+}
+
 .schrack-header__eu-logo.is-adr {
 	max-height: 48px;
 	max-width: 12rem;
 }
 
 .schrack-header__eu-logo.is-adr img {
+	max-height: 48px !important;
+	max-width: 12rem;
+}
+
+img.schrack-header__eu-logo.is-adr {
 	max-height: 48px !important;
 	max-width: 12rem;
 }
@@ -488,7 +515,8 @@
 	}
 
 	.schrack-header__eu-logo.is-eu,
-	.schrack-header__eu-logo.is-eu img {
+	.schrack-header__eu-logo.is-eu img,
+	img.schrack-header__eu-logo.is-eu {
 		max-height: 40px !important;
 		max-width: 10rem;
 	}
@@ -501,14 +529,17 @@
 	}
 
 	.schrack-header__eu-logo.is-government img,
-	.schrack-header__eu-logo.is-regio img {
+	.schrack-header__eu-logo.is-regio img,
+	img.schrack-header__eu-logo.is-government,
+	img.schrack-header__eu-logo.is-regio {
 		height: 40px !important;
 		max-height: 40px !important;
 		width: 40px !important;
 	}
 
 	.schrack-header__eu-logo.is-adr,
-	.schrack-header__eu-logo.is-adr img {
+	.schrack-header__eu-logo.is-adr img,
+	img.schrack-header__eu-logo.is-adr {
 		max-height: 40px !important;
 		max-width: 9rem;
 	}
@@ -543,7 +574,8 @@
 	}
 
 	.schrack-header__eu-logo.is-eu,
-	.schrack-header__eu-logo.is-eu img {
+	.schrack-header__eu-logo.is-eu img,
+	img.schrack-header__eu-logo.is-eu {
 		max-height: 32px !important;
 		max-width: 7rem;
 	}
@@ -556,14 +588,17 @@
 	}
 
 	.schrack-header__eu-logo.is-government img,
-	.schrack-header__eu-logo.is-regio img {
+	.schrack-header__eu-logo.is-regio img,
+	img.schrack-header__eu-logo.is-government,
+	img.schrack-header__eu-logo.is-regio {
 		height: 32px !important;
 		max-height: 32px !important;
 		width: 32px !important;
 	}
 
 	.schrack-header__eu-logo.is-adr,
-	.schrack-header__eu-logo.is-adr img {
+	.schrack-header__eu-logo.is-adr img,
+	img.schrack-header__eu-logo.is-adr {
 		max-height: 32px !important;
 		max-width: 6rem;
 	}
