@@ -268,6 +268,14 @@
 	padding: 32px 0;
 }
 
+.schrack-footer__eu {
+	display: none !important;
+}
+
+.schrack-footer__compliance:has(> .schrack-footer__eu:only-child) {
+	display: none !important;
+}
+
 .schrack-footer__service-tags {
 	text-align: center;
 }
