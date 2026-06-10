@@ -177,8 +177,8 @@ class Schrack_Funding_Renderer {
 		$defaults = array(
 			'eyebrow'                 => __( 'Proiect finanțat prin Programul Regional Nord-Vest 2021-2027', 'schrack-woocommerce-sync' ),
 			'project_title'           => __( 'Investiții pentru digitalizarea societății GENE SYS SECURITY SRL, cod SMIS 334780', 'schrack-woocommerce-sync' ),
-			'hero_image_url'          => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/electrical-engineer.jpg',
-			'hero_image_alt'          => __( 'Specialist GENE SYS SECURITY care lucrează cu infrastructură tehnică și echipamente digitale', 'schrack-woocommerce-sync' ),
+			'hero_image_url'          => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg',
+			'hero_image_alt'          => __( 'Tehnician GENE SYS SECURITY execută lucrări de instalare pentru infrastructură electrică', 'schrack-woocommerce-sync' ),
 			'description_text'        => implode(
 				"\n\n",
 				array(
@@ -194,8 +194,8 @@ class Schrack_Funding_Renderer {
 					__( 'realizarea unei investiții pentru creșterea utilizării tehnologiei digitale de către societate în scopul creșterii vizibilității, prin crearea unui website adaptat activității de e-commerce și cu un grad ridicat de interactivitate, crearea unei prezențe active pe rețelele sociale și implementarea unei soluții pentru promovarea online.', 'schrack-woocommerce-sync' ),
 				)
 			),
-			'video_url'               => SCHRACK_WC_SYNC_URL . 'assets/funding/videos/project-overview.mp4',
-			'video_poster_url'        => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/security-cctv.jpg',
+			'video_url'               => SCHRACK_WC_SYNC_URL . 'assets/funding/videos/syshub-project-work.mp4',
+			'video_poster_url'        => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg',
 			'show_oportunitati_note'  => 'yes',
 			'stages'                  => $this->default_stages(),
 			'gallery'                 => $this->default_gallery(),
@@ -218,9 +218,13 @@ class Schrack_Funding_Renderer {
 		$settings['hero_image_url']         = esc_url_raw( $this->setting_url( $settings['hero_image_url'] ) );
 		$settings['video_url']              = esc_url_raw( $this->setting_url( $settings['video_url'] ) );
 		$settings['video_poster_url']       = esc_url_raw( $this->setting_url( $settings['video_poster_url'] ) );
+		$settings['hero_image_url']         = $this->replace_legacy_media_url( $settings['hero_image_url'] );
+		$settings['video_url']              = $this->replace_legacy_media_url( $settings['video_url'] );
+		$settings['video_poster_url']       = $this->replace_legacy_media_url( $settings['video_poster_url'] );
 		$settings['show_oportunitati_note'] = 'yes' === (string) $settings['show_oportunitati_note'] ? 'yes' : 'no';
 		$settings['stages']                 = $this->sanitize_link_items( is_array( $settings['stages'] ) ? $settings['stages'] : $defaults['stages'] );
 		$settings['gallery']                = $this->sanitize_gallery( is_array( $settings['gallery'] ) ? $settings['gallery'] : $defaults['gallery'] );
+		$settings['gallery']                = $this->gallery_uses_legacy_media( $settings['gallery'] ) ? $this->default_gallery() : $settings['gallery'];
 		$settings['communications']         = $this->sanitize_link_items( is_array( $settings['communications'] ) ? $settings['communications'] : $defaults['communications'], true );
 		$settings['accent_color']           = sanitize_hex_color( (string) $settings['accent_color'] ) ?: $defaults['accent_color'];
 		$settings['max_width']              = max( 760, min( 1280, absint( $settings['max_width'] ) ) );
@@ -269,21 +273,60 @@ class Schrack_Funding_Renderer {
 	private function default_gallery(): array {
 		return array(
 			array(
-				'src'     => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/technical-maintenance.jpg',
-				'alt'     => __( 'Specialist tehnic care verifică echipamente digitale și infrastructură de mentenanță', 'schrack-woocommerce-sync' ),
-				'caption' => __( 'Echipamente și procese digitale pentru activitatea tehnică', 'schrack-woocommerce-sync' ),
+				'src'     => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg',
+				'alt'     => __( 'Tehnician GENE SYS SECURITY la lucrări de instalare pe șantier', 'schrack-woocommerce-sync' ),
+				'caption' => __( 'Lucrări de instalare pentru infrastructură electrică și sisteme tehnice', 'schrack-woocommerce-sync' ),
 			),
 			array(
-				'src'     => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/security-cctv.jpg',
-				'alt'     => __( 'Cameră de supraveghere video instalată pentru protecția unui obiectiv', 'schrack-woocommerce-sync' ),
-				'caption' => __( 'Soluții de securitate și monitorizare video', 'schrack-woocommerce-sync' ),
-			),
-			array(
-				'src'     => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/electrical-installation.jpg',
-				'alt'     => __( 'Lucrări de instalații electrice într-un spațiu tehnic', 'schrack-woocommerce-sync' ),
-				'caption' => __( 'Activități de instalații electrice și infrastructură', 'schrack-woocommerce-sync' ),
+				'src'     => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-cable-tray-installation.jpg',
+				'alt'     => __( 'Tehnician GENE SYS SECURITY montează cabluri într-o tavă de cabluri', 'schrack-woocommerce-sync' ),
+				'caption' => __( 'Montaj cabluri și pregătire trasee pentru infrastructură tehnică', 'schrack-woocommerce-sync' ),
 			),
 		);
+	}
+
+	/**
+	 * Replaces old placeholder media defaults with the client-provided media.
+	 */
+	private function replace_legacy_media_url( string $url ): string {
+		$replacements = array(
+			'assets/funding/photos/electrical-engineer.jpg'      => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg',
+			'assets/funding/photos/technical-maintenance.jpg'    => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg',
+			'assets/funding/photos/security-cctv.jpg'            => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg',
+			'assets/funding/photos/electrical-installation.jpg'  => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-cable-tray-installation.jpg',
+			'assets/funding/videos/project-overview.mp4'         => SCHRACK_WC_SYNC_URL . 'assets/funding/videos/syshub-project-work.mp4',
+		);
+
+		foreach ( $replacements as $legacy_path => $replacement ) {
+			if ( str_contains( $url, $legacy_path ) ) {
+				return $replacement;
+			}
+		}
+
+		return $url;
+	}
+
+	/**
+	 * Checks whether a saved Elementor gallery still points to old placeholders.
+	 *
+	 * @param array<int,array{src:string,alt:string,caption:string}> $gallery Sanitized gallery items.
+	 */
+	private function gallery_uses_legacy_media( array $gallery ): bool {
+		$legacy_paths = array(
+			'assets/funding/photos/technical-maintenance.jpg',
+			'assets/funding/photos/security-cctv.jpg',
+			'assets/funding/photos/electrical-installation.jpg',
+		);
+
+		foreach ( $gallery as $item ) {
+			foreach ( $legacy_paths as $legacy_path ) {
+				if ( str_contains( $item['src'], $legacy_path ) ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**

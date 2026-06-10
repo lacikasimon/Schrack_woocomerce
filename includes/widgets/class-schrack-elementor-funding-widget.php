@@ -100,7 +100,7 @@ class Schrack_Elementor_Funding_Widget extends \Elementor\Widget_Base {
 				'label'   => __( 'Imagine principala', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::MEDIA,
 				'default' => array(
-					'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/electrical-engineer.jpg',
+					'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg',
 				),
 			)
 		);
@@ -110,7 +110,7 @@ class Schrack_Elementor_Funding_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'       => __( 'Alt imagine principala', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::TEXT,
-				'default'     => __( 'Specialist GENE SYS SECURITY care lucrează cu infrastructură tehnică și echipamente digitale', 'schrack-woocommerce-sync' ),
+				'default'     => __( 'Tehnician GENE SYS SECURITY execută lucrări de instalare pentru infrastructură electrică', 'schrack-woocommerce-sync' ),
 				'label_block' => true,
 			)
 		);
@@ -280,19 +280,14 @@ class Schrack_Elementor_Funding_Widget extends \Elementor\Widget_Base {
 				'title_field' => '{{{ caption }}}',
 				'default'     => array(
 					array(
-						'src'     => array( 'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/technical-maintenance.jpg' ),
-						'alt'     => __( 'Specialist tehnic care verifică echipamente digitale și infrastructură de mentenanță', 'schrack-woocommerce-sync' ),
-						'caption' => __( 'Echipamente și procese digitale pentru activitatea tehnică', 'schrack-woocommerce-sync' ),
+						'src'     => array( 'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg' ),
+						'alt'     => __( 'Tehnician GENE SYS SECURITY la lucrări de instalare pe șantier', 'schrack-woocommerce-sync' ),
+						'caption' => __( 'Lucrări de instalare pentru infrastructură electrică și sisteme tehnice', 'schrack-woocommerce-sync' ),
 					),
 					array(
-						'src'     => array( 'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/security-cctv.jpg' ),
-						'alt'     => __( 'Cameră de supraveghere video instalată pentru protecția unui obiectiv', 'schrack-woocommerce-sync' ),
-						'caption' => __( 'Soluții de securitate și monitorizare video', 'schrack-woocommerce-sync' ),
-					),
-					array(
-						'src'     => array( 'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/electrical-installation.jpg' ),
-						'alt'     => __( 'Lucrări de instalații electrice într-un spațiu tehnic', 'schrack-woocommerce-sync' ),
-						'caption' => __( 'Activități de instalații electrice și infrastructură', 'schrack-woocommerce-sync' ),
+						'src'     => array( 'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-cable-tray-installation.jpg' ),
+						'alt'     => __( 'Tehnician GENE SYS SECURITY montează cabluri într-o tavă de cabluri', 'schrack-woocommerce-sync' ),
+						'caption' => __( 'Montaj cabluri și pregătire trasee pentru infrastructură tehnică', 'schrack-woocommerce-sync' ),
 					),
 				),
 			)
@@ -319,7 +314,7 @@ class Schrack_Elementor_Funding_Widget extends \Elementor\Widget_Base {
 				'label'       => __( 'URL clip video', 'schrack-woocommerce-sync' ),
 				'type'        => \Elementor\Controls_Manager::URL,
 				'default'     => array(
-					'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/videos/project-overview.mp4',
+					'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/videos/syshub-project-work.mp4',
 				),
 				'label_block' => true,
 			)
@@ -331,7 +326,7 @@ class Schrack_Elementor_Funding_Widget extends \Elementor\Widget_Base {
 				'label'   => __( 'Imagine poster video', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::MEDIA,
 				'default' => array(
-					'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/security-cctv.jpg',
+					'url' => SCHRACK_WC_SYNC_URL . 'assets/funding/photos/syshub-technician-installation.jpg',
 				),
 			)
 		);
