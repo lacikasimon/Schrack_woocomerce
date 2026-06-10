@@ -94,6 +94,9 @@ class Schrack_Plugin {
 		$this->elementor = new Schrack_Elementor();
 		$this->elementor->init();
 
+		add_action( 'wp_head', array( $this, 'render_favicons' ), 100 );
+		add_action( 'admin_head', array( $this, 'render_favicons' ), 100 );
+		add_action( 'login_head', array( $this, 'render_favicons' ), 100 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_support_widget_assets' ) );
 		add_action( 'wp_footer', array( $this, 'render_support_widget' ), 5 );
 
@@ -231,6 +234,16 @@ class Schrack_Plugin {
 		$renderer = new Schrack_Support_Renderer();
 
 		echo $renderer->render( array(), 'global' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Prints the Syshub favicon used by the React website.
+	 */
+	public function render_favicons(): void {
+		$svg_url = esc_url( SCHRACK_WC_SYNC_URL . 'assets/favicons/favicon.svg' );
+
+		printf( '<link rel="icon" href="%s" type="image/svg+xml">' . "\n", $svg_url );
+		printf( '<link rel="alternate icon" href="%s">' . "\n", $svg_url );
 	}
 
 	/**
