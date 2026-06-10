@@ -59,6 +59,7 @@
 
 .schrack-header__eu-item {
 	align-items: center;
+	cursor: pointer;
 	display: inline-flex;
 	flex: 0 0 auto;
 	justify-content: center;
@@ -85,7 +86,7 @@
 }
 
 .schrack-header__eu-logo {
-	cursor: default;
+	cursor: pointer;
 	flex: 0 0 auto;
 	line-height: 1;
 	text-decoration: none;
