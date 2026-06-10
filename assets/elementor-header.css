@@ -67,6 +67,19 @@
 	text-decoration: none;
 }
 
+.schrack-header__eu-item.is-eu {
+	width: 13rem;
+}
+
+.schrack-header__eu-item.is-government,
+.schrack-header__eu-item.is-regio {
+	width: 48px;
+}
+
+.schrack-header__eu-item.is-adr {
+	width: 12rem;
+}
+
 .schrack-header__eu-item:hover,
 .schrack-header__eu-item:focus {
 	outline: none;
@@ -104,18 +117,24 @@ img.schrack-header__eu-logo {
 }
 
 .schrack-header__eu-logo.is-eu {
+	height: 48px;
 	max-height: 48px;
 	max-width: 13rem;
+	width: 13rem;
 }
 
 .schrack-header__eu-logo.is-eu img {
+	height: 48px !important;
 	max-height: 48px !important;
 	max-width: 13rem;
+	width: 13rem !important;
 }
 
 img.schrack-header__eu-logo.is-eu {
+	height: 48px !important;
 	max-height: 48px !important;
 	max-width: 13rem;
+	width: 13rem !important;
 }
 
 .schrack-header__eu-logo.is-government,
@@ -140,18 +159,24 @@ img.schrack-header__eu-logo.is-regio {
 }
 
 .schrack-header__eu-logo.is-adr {
+	height: 48px;
 	max-height: 48px;
 	max-width: 12rem;
+	width: 12rem;
 }
 
 .schrack-header__eu-logo.is-adr img {
+	height: 48px !important;
 	max-height: 48px !important;
 	max-width: 12rem;
+	width: 12rem !important;
 }
 
 img.schrack-header__eu-logo.is-adr {
+	height: 48px !important;
 	max-height: 48px !important;
 	max-width: 12rem;
+	width: 12rem !important;
 }
 
 .schrack-header__inner {
@@ -528,11 +553,26 @@ img.schrack-header__eu-logo.is-adr {
 		min-height: 64px;
 	}
 
+	.schrack-header__eu-item.is-eu {
+		width: 10rem;
+	}
+
+	.schrack-header__eu-item.is-government,
+	.schrack-header__eu-item.is-regio {
+		width: 40px;
+	}
+
+	.schrack-header__eu-item.is-adr {
+		width: 9rem;
+	}
+
 	.schrack-header__eu-logo.is-eu,
 	.schrack-header__eu-logo.is-eu img,
 	img.schrack-header__eu-logo.is-eu {
+		height: 40px !important;
 		max-height: 40px !important;
 		max-width: 10rem;
+		width: 10rem !important;
 	}
 
 	.schrack-header__eu-logo.is-government,
@@ -554,8 +594,10 @@ img.schrack-header__eu-logo.is-adr {
 	.schrack-header__eu-logo.is-adr,
 	.schrack-header__eu-logo.is-adr img,
 	img.schrack-header__eu-logo.is-adr {
+		height: 40px !important;
 		max-height: 40px !important;
 		max-width: 9rem;
+		width: 9rem !important;
 	}
 
 	.schrack-header__inner {
@@ -587,11 +629,26 @@ img.schrack-header__eu-logo.is-adr {
 		padding: 8px 10px;
 	}
 
+	.schrack-header__eu-item.is-eu {
+		width: 5.5rem;
+	}
+
+	.schrack-header__eu-item.is-government,
+	.schrack-header__eu-item.is-regio {
+		width: 32px;
+	}
+
+	.schrack-header__eu-item.is-adr {
+		width: 4.25rem;
+	}
+
 	.schrack-header__eu-logo.is-eu,
 	.schrack-header__eu-logo.is-eu img,
 	img.schrack-header__eu-logo.is-eu {
+		height: 32px !important;
 		max-height: 32px !important;
-		max-width: 7rem;
+		max-width: 5.5rem;
+		width: 5.5rem !important;
 	}
 
 	.schrack-header__eu-logo.is-government,
@@ -613,8 +670,10 @@ img.schrack-header__eu-logo.is-adr {
 	.schrack-header__eu-logo.is-adr,
 	.schrack-header__eu-logo.is-adr img,
 	img.schrack-header__eu-logo.is-adr {
+		height: 32px !important;
 		max-height: 32px !important;
-		max-width: 6rem;
+		max-width: 4.25rem;
+		width: 4.25rem !important;
 	}
 
 	.schrack-header__inner {
@@ -664,15 +723,25 @@ img.schrack-header__eu-logo.is-adr {
 		padding-right: 8px;
 	}
 
+	.schrack-header__eu-item.is-eu {
+		width: 5.25rem;
+	}
+
 	.schrack-header__eu-logo.is-eu,
 	.schrack-header__eu-logo.is-eu img,
 	img.schrack-header__eu-logo.is-eu {
-		max-width: 6.4rem;
+		max-width: 5.25rem;
+		width: 5.25rem !important;
+	}
+
+	.schrack-header__eu-item.is-adr {
+		width: 4rem;
 	}
 
 	.schrack-header__eu-logo.is-adr,
 	.schrack-header__eu-logo.is-adr img,
 	img.schrack-header__eu-logo.is-adr {
-		max-width: 5.5rem;
+		max-width: 4rem;
+		width: 4rem !important;
 	}
 }
