@@ -63,6 +63,24 @@
 		});
 	}
 
+	function buildOpportunitiesNote() {
+		var opportunities = document.createElement('div');
+		var opportunitiesText = document.createElement('p');
+		var opportunitiesLink = document.createElement('a');
+
+		opportunities.className = 'schrack-footer__opportunities';
+		opportunitiesText.appendChild(document.createTextNode('Pentru informa\u021bii detaliate despre celelalte programe cofinan\u021bate de Uniunea European\u0103, v\u0103 invit\u0103m s\u0103 vizita\u021bi '));
+		opportunitiesLink.href = 'https://www.oportunitati-ue.gov.ro/';
+		opportunitiesLink.target = '_blank';
+		opportunitiesLink.rel = 'noopener noreferrer';
+		opportunitiesLink.textContent = 'www.oportunitati-ue.gov.ro';
+		opportunitiesText.appendChild(opportunitiesLink);
+		opportunitiesText.appendChild(document.createTextNode('.'));
+		opportunities.appendChild(opportunitiesText);
+
+		return opportunities;
+	}
+
 	function buildRegionalFooter() {
 		var counties = [
 			{ label: 'BH', color: '#84CDDD' },
@@ -84,6 +102,7 @@
 		section.className = 'schrack-footer__regional';
 		section.setAttribute('aria-label', 'Subsol obligatoriu Programul Regional Nord-Vest');
 
+		slogan.className = 'schrack-footer__regional-slogan';
 		slogan.textContent = 'Investim \u00een viitorul regiunii!';
 		section.appendChild(slogan);
 
@@ -120,6 +139,7 @@
 			linkWrap.appendChild(item);
 		});
 		section.appendChild(linkWrap);
+		section.appendChild(buildOpportunitiesNote());
 
 		return section;
 	}
@@ -128,7 +148,20 @@
 		var scope = context && context.querySelectorAll ? context : document;
 
 		Array.prototype.forEach.call(scope.querySelectorAll('.schrack-footer'), function (footer) {
-			if (footer.querySelector('.schrack-footer__regional')) {
+			var regional = footer.querySelector('.schrack-footer__regional');
+			var firstChild;
+
+			if (regional) {
+				firstChild = regional.firstElementChild;
+
+				if (firstChild && firstChild.tagName && firstChild.tagName.toLowerCase() === 'p') {
+					firstChild.classList.add('schrack-footer__regional-slogan');
+				}
+
+				if (!regional.querySelector('.schrack-footer__opportunities')) {
+					regional.appendChild(buildOpportunitiesNote());
+				}
+
 				return;
 			}
 

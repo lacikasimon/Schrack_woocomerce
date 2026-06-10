@@ -27,7 +27,8 @@
 	text-align: center;
 }
 
-.schrack-footer__regional p {
+.schrack-footer__regional-slogan,
+.schrack-footer__regional > p:first-child {
 	color: #020617;
 	font-size: 20px;
 	font-style: italic;
@@ -88,10 +89,36 @@
 	font-style: normal;
 }
 
+.schrack-footer__opportunities {
+	border-bottom: 1px solid #e5e7eb;
+	border-top: 1px solid #e5e7eb;
+	margin: 24px auto 0;
+	max-width: 930px;
+	padding: 16px 24px;
+	width: 100%;
+}
+
+.schrack-footer__opportunities p {
+	color: #334155;
+	font-size: 14px;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 1.45;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.schrack-footer__opportunities a {
+	color: #172554;
+	font-weight: 500;
+	text-decoration: none;
+	transition: color 160ms ease;
+}
+
 .schrack-footer:not(:has(.schrack-footer__regional))::before {
 	border-bottom: 1px solid #e2e8f0;
 	color: #020617;
-	content: "Investim \00een viitorul regiunii!\A BH BN CJ MM SJ SM\A www.regionordvest.ro | www.nord-vest.ro";
+	content: "Investim \00een viitorul regiunii!\A BH BN CJ MM SJ SM\A www.regionordvest.ro | www.nord-vest.ro\A\A Pentru informa\021Bii detaliate despre celelalte programe cofinan\021Bate de Uniunea European\0103, v\0103 invit\0103m s\0103 vizita\021Bi www.oportunitati-ue.gov.ro";
 	display: block;
 	font-size: 16px;
 	font-style: italic;
@@ -255,6 +282,8 @@
 .schrack-footer__contact a:focus,
 .schrack-footer__regional-links a:hover,
 .schrack-footer__regional-links a:focus,
+.schrack-footer__opportunities a:hover,
+.schrack-footer__opportunities a:focus,
 .schrack-footer__bottom a:hover,
 .schrack-footer__bottom a:focus {
 	color: var(--schrack-footer-slate);
@@ -516,8 +545,14 @@
 		padding: 24px 16px;
 	}
 
-	.schrack-footer__regional p {
+	.schrack-footer__regional-slogan,
+	.schrack-footer__regional > p:first-child {
 		font-size: 18px;
+	}
+
+	.schrack-footer__opportunities {
+		margin-top: 20px;
+		padding: 14px 12px;
 	}
 
 	.schrack-footer__county-band span {

@@ -186,7 +186,7 @@ class Schrack_Footer_Renderer {
 		ob_start();
 		?>
 		<section class="schrack-footer__regional" aria-label="<?php esc_attr_e( 'Subsol obligatoriu Programul Regional Nord-Vest', 'schrack-woocommerce-sync' ); ?>">
-			<p><?php esc_html_e( 'Investim în viitorul regiunii!', 'schrack-woocommerce-sync' ); ?></p>
+			<p class="schrack-footer__regional-slogan"><?php esc_html_e( 'Investim în viitorul regiunii!', 'schrack-woocommerce-sync' ); ?></p>
 			<div class="schrack-footer__county-band" aria-label="<?php esc_attr_e( 'Judetele Regiunii de Dezvoltare Nord-Vest', 'schrack-woocommerce-sync' ); ?>">
 				<?php foreach ( $this->county_band() as $county ) : ?>
 					<span style="<?php echo esc_attr( 'background-color:' . $county['color'] . ';' ); ?>"><?php echo esc_html( $county['label'] ); ?></span>
@@ -201,6 +201,12 @@ class Schrack_Footer_Renderer {
 						<?php endif; ?>
 					</span>
 				<?php endforeach; ?>
+			</div>
+			<div class="schrack-footer__opportunities">
+				<p>
+					<?php esc_html_e( 'Pentru informații detaliate despre celelalte programe cofinanțate de Uniunea Europeană, vă invităm să vizitați', 'schrack-woocommerce-sync' ); ?>
+					<a href="https://www.oportunitati-ue.gov.ro/" target="_blank" rel="noopener noreferrer">www.oportunitati-ue.gov.ro</a>.
+				</p>
 			</div>
 		</section>
 		<?php
