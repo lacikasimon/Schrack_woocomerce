@@ -150,10 +150,9 @@ class Schrack_Header_Renderer {
 			'show_search'         => 'yes',
 			'show_search_images'  => 'yes',
 			'show_search_price'   => 'yes',
-			'show_search_sku'     => 'yes',
 			'show_search_stock'   => 'yes',
 			'show_eu_logos'       => 'yes',
-			'search_placeholder'  => __( 'Cauta produse, coduri, SKU...', 'schrack-woocommerce-sync' ),
+			'search_placeholder'  => __( 'Cauta produse...', 'schrack-woocommerce-sync' ),
 			'search_button_text'  => __( 'Cauta', 'schrack-woocommerce-sync' ),
 			'search_min_chars'    => 3,
 			'search_max_results'  => 8,
@@ -176,7 +175,7 @@ class Schrack_Header_Renderer {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
-		foreach ( array( 'show_brand_text', 'show_account', 'show_cart', 'show_cart_total', 'show_search', 'show_search_images', 'show_search_price', 'show_search_sku', 'show_search_stock', 'show_eu_logos', 'search_enable_fuzzy', 'is_sticky' ) as $key ) {
+		foreach ( array( 'show_brand_text', 'show_account', 'show_cart', 'show_cart_total', 'show_search', 'show_search_images', 'show_search_price', 'show_search_stock', 'show_eu_logos', 'search_enable_fuzzy', 'is_sticky' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
 		}
 
@@ -243,7 +242,6 @@ class Schrack_Header_Renderer {
 			'max_width'    => 620,
 			'show_images'  => $settings['show_search_images'],
 			'show_price'   => $settings['show_search_price'],
-			'show_sku'     => $settings['show_search_sku'],
 			'show_stock'   => $settings['show_search_stock'],
 			'enable_fuzzy' => $settings['search_enable_fuzzy'],
 			'fuzzy_pool'   => $settings['search_fuzzy_pool'],

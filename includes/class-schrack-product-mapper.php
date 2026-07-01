@@ -410,6 +410,7 @@ class Schrack_Product_Mapper {
 		$product->set_regular_price( $price );
 		$product->set_price( $price );
 		$product->update_meta_data( '_schrack_purchase_price', $purchase_price );
+		$product->update_meta_data( '_schrack_vat_rate', $this->markup->vat_rate() );
 		$product->update_meta_data( '_schrack_last_price_sync', current_time( 'mysql' ) );
 		$product->save();
 
@@ -421,6 +422,7 @@ class Schrack_Product_Mapper {
 				'product_id'      => $product_id,
 				'purchase_price'  => $purchase_price,
 				'woocommerce_price' => $sale_price,
+				'vat_rate'        => $this->markup->vat_rate(),
 			)
 		);
 
@@ -439,6 +441,7 @@ class Schrack_Product_Mapper {
 		update_post_meta( $product_id, '_regular_price', $price );
 		update_post_meta( $product_id, '_price', $price );
 		update_post_meta( $product_id, '_schrack_purchase_price', $purchase_price );
+		update_post_meta( $product_id, '_schrack_vat_rate', $this->markup->vat_rate() );
 		update_post_meta( $product_id, '_schrack_last_price_sync', current_time( 'mysql' ) );
 
 		$this->update_price_lookup( $product_id, (float) $price );
@@ -452,6 +455,7 @@ class Schrack_Product_Mapper {
 				'product_id'         => $product_id,
 				'purchase_price'     => $purchase_price,
 				'woocommerce_price'  => $sale_price,
+				'vat_rate'           => $this->markup->vat_rate(),
 				'update_mode'        => 'fast_meta',
 			)
 		);

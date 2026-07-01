@@ -215,7 +215,6 @@ class Schrack_Elementor_Header_Search_Widget extends \Elementor\Widget_Base {
 		return array(
 			'show_images' => __( 'Imagini', 'schrack-woocommerce-sync' ),
 			'show_price'  => __( 'Pret', 'schrack-woocommerce-sync' ),
-			'show_sku'    => __( 'SKU / cod Schrack', 'schrack-woocommerce-sync' ),
 			'show_stock'  => __( 'Stoc', 'schrack-woocommerce-sync' ),
 		);
 	}

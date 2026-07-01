@@ -663,6 +663,7 @@ class Schrack_Telesystem_Importer {
 		$product->update_meta_data( '_telesystem_price_1', $price_1 > 0 ? $this->format_price( $price_1 ) : '' );
 		$product->update_meta_data( '_telesystem_price_2', $price_2 > 0 ? $this->format_price( $price_2 ) : '' );
 		$product->update_meta_data( '_telesystem_price_source', sanitize_key( (string) $this->settings->get( 'telesystem_price_source', 'pret2' ) ) );
+		$product->update_meta_data( '_telesystem_vat_rate', $this->markup->vat_rate() );
 		$product->update_meta_data( '_telesystem_stock_text', $stock_text );
 		$product->update_meta_data( '_telesystem_special_offer', sanitize_text_field( $this->string_value( $item['telesystem_special'] ?? '' ) ) );
 		$product->update_meta_data( '_telesystem_weight_grams', (float) ( $item['telesystem_weight_g'] ?? 0 ) );
@@ -678,6 +679,7 @@ class Schrack_Telesystem_Importer {
 			array(
 				'product_id'   => $product_id,
 				'price'        => $price,
+				'vat_rate'     => $this->markup->vat_rate(),
 				'stock_text'   => $stock_text,
 				'stock_status' => $stock_status,
 			)
@@ -700,10 +702,10 @@ class Schrack_Telesystem_Importer {
 		}
 
 		if ( 'pret1' === $source ) {
-			return $price_1 > 0 ? $price_1 : $price_2;
+			return $this->markup->apply_vat( $price_1 > 0 ? $price_1 : $price_2 );
 		}
 
-		return $price_2 > 0 ? $price_2 : $price_1;
+		return $this->markup->apply_vat( $price_2 > 0 ? $price_2 : $price_1 );
 	}
 
 	/**

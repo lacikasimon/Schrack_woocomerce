@@ -37,7 +37,6 @@ class Schrack_Header_Search_Renderer {
 			'max_results'  => $settings['max_results'],
 			'show_images'  => $settings['show_images'] ? 'yes' : 'no',
 			'show_price'   => $settings['show_price'] ? 'yes' : 'no',
-			'show_sku'     => $settings['show_sku'] ? 'yes' : 'no',
 			'show_stock'   => $settings['show_stock'] ? 'yes' : 'no',
 			'enable_fuzzy' => $settings['enable_fuzzy'] ? 'yes' : 'no',
 			'fuzzy_pool'   => $settings['fuzzy_pool'],
@@ -618,10 +617,6 @@ class Schrack_Header_Search_Renderer {
 	 * @param array<string,mixed> $settings Settings.
 	 */
 	private function result_item( WC_Product $product, array $settings ): string {
-		$item_number = $this->meta_text( $product, '_schrack_item_number' );
-		$sku         = $product->get_sku();
-		$code        = '' !== $item_number ? $item_number : $sku;
-
 		ob_start();
 		?>
 		<a class="schrack-header-search__item" href="<?php echo esc_url( $product->get_permalink() ); ?>" role="option">
@@ -632,9 +627,6 @@ class Schrack_Header_Search_Renderer {
 			<?php endif; ?>
 			<span class="schrack-header-search__body">
 				<span class="schrack-header-search__title"><?php echo esc_html( $product->get_name() ); ?></span>
-				<?php if ( $settings['show_sku'] && '' !== $code ) : ?>
-					<span class="schrack-header-search__sku"><?php echo esc_html( $code ); ?></span>
-				<?php endif; ?>
 			</span>
 			<?php if ( $settings['show_price'] || $settings['show_stock'] ) : ?>
 				<span class="schrack-header-search__meta">
@@ -699,7 +691,6 @@ class Schrack_Header_Search_Renderer {
 			'max_width'    => max( 240, min( 720, $this->slider_size( $settings['max_width'] ?? 460, 240, 720 ) ) ),
 			'show_images'  => $this->truthy( $settings['show_images'] ?? 'yes' ),
 			'show_price'   => $this->truthy( $settings['show_price'] ?? 'yes' ),
-			'show_sku'     => $this->truthy( $settings['show_sku'] ?? 'yes' ),
 			'show_stock'   => $this->truthy( $settings['show_stock'] ?? 'yes' ),
 			'enable_fuzzy' => $this->truthy( $settings['enable_fuzzy'] ?? 'yes' ),
 			'fuzzy_pool'   => max( 40, min( 240, absint( $settings['fuzzy_pool'] ?? 120 ) ) ),

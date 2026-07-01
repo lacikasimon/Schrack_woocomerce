@@ -68,6 +68,7 @@ The admin settings page stores values through the WordPress Options API:
 - Webshop password
 - Provider code
 - Default markup %
+- TVA %
 - Sync batch size
 - Retry count
 - Batch sleep seconds
@@ -143,10 +144,10 @@ Supported rounding:
 Price formula:
 
 ```text
-sale_price = purchase_price * (1 + markup / 100)
+sale_price = purchase_price * (1 + markup / 100) * (1 + vat_rate / 100)
 ```
 
-If a minimum margin is configured, the plugin uses the higher value.
+If a minimum margin is configured, the plugin uses the higher net value before applying TVA.
 
 ## Product Mapping
 

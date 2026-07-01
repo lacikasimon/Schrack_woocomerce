@@ -158,12 +158,27 @@
 
 .schrack-product-page__price {
 	color: var(--schrack-page-text);
+	display: grid;
 	font-size: 24px;
 	font-weight: 850;
+	gap: 3px;
 	line-height: 1.2;
 	min-width: 0;
 	overflow-wrap: anywhere;
 	word-break: normal;
+}
+
+.schrack-product-page__price-value {
+	display: block;
+}
+
+.schrack-product-page__price-tax-label {
+	color: var(--schrack-page-muted);
+	display: block;
+	font-size: 12px;
+	font-weight: 750;
+	line-height: 1.2;
+	text-transform: uppercase;
 }
 
 .schrack-product-page__price del {

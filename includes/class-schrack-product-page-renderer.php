@@ -77,13 +77,10 @@ class Schrack_Product_Page_Renderer {
 
 					<div class="schrack-product-page__headline">
 						<h1><?php echo esc_html( $product->get_name() ); ?></h1>
-						<?php if ( $settings['show_sku'] ) : ?>
-							<?php echo $this->identity_row( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-						<?php endif; ?>
 					</div>
 
 					<div class="schrack-product-page__commerce">
-						<div class="schrack-product-page__price"><?php echo wp_kses_post( $product->get_price_html() ); ?></div>
+						<?php echo $this->price_html( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 						<?php if ( $settings['show_stock'] ) : ?>
 							<?php echo $this->stock_badge( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 						<?php endif; ?>
@@ -202,36 +199,20 @@ class Schrack_Product_Page_Renderer {
 	}
 
 	/**
-	 * Renders SKU and Schrack item number.
+	 * Renders the product price with TVA context.
 	 */
-	private function identity_row( WC_Product $product ): string {
-		$sku         = $product->get_sku();
-		$source      = $this->catalog_source( $product );
-		$item_number = $this->source_meta_text( $product, 'item_number', '_schrack_item_number' );
-		$items       = array();
+	private function price_html( WC_Product $product ): string {
+		$price_html = $product->get_price_html();
 
-		if ( '' !== $item_number ) {
-			$items[] = array( $this->source_item_label( $source ), $item_number );
-		}
-
-		if ( '' !== $sku && $sku !== $item_number ) {
-			$items[] = array( __( 'SKU', 'schrack-woocommerce-sync' ), $sku );
-		}
-
-		if ( empty( $items ) ) {
+		if ( '' === trim( wp_strip_all_tags( $price_html ) ) ) {
 			return '';
 		}
 
-		ob_start();
-		?>
-		<div class="schrack-product-page__identity">
-			<?php foreach ( $items as $item ) : ?>
-				<span><strong><?php echo esc_html( $item[0] ); ?></strong><?php echo esc_html( $item[1] ); ?></span>
-			<?php endforeach; ?>
-		</div>
-		<?php
-
-		return (string) ob_get_clean();
+		return sprintf(
+			'<div class="schrack-product-page__price"><span class="schrack-product-page__price-value">%1$s</span><span class="schrack-product-page__price-tax-label">%2$s</span></div>',
+			wp_kses_post( $price_html ),
+			esc_html__( 'Pret cu TVA', 'schrack-woocommerce-sync' )
+		);
 	}
 
 	/**
@@ -366,11 +347,8 @@ class Schrack_Product_Page_Renderer {
 	 */
 	private function specifications( WC_Product $product, array $settings ): string {
 		$stock_html = wc_get_stock_html( $product );
-		$source     = $this->catalog_source( $product );
 		$items = array_filter(
 			array(
-				$this->meta_item( $this->source_item_label( $source ), $this->source_meta_text( $product, 'item_number', '_schrack_item_number' ) ),
-				$this->meta_item( __( 'SKU', 'schrack-woocommerce-sync' ), $product->get_sku() ),
 				$this->meta_item( __( 'Categorii', 'schrack-woocommerce-sync' ), $this->term_names( $product, 'product_cat' ) ),
 				$this->meta_item( __( 'Etichete', 'schrack-woocommerce-sync' ), $this->term_names( $product, 'product_tag' ) ),
 				$this->meta_item( __( 'EAN', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'ean', '_schrack_ean' ) ),
@@ -559,16 +537,6 @@ class Schrack_Product_Page_Renderer {
 		}
 
 		return $this->meta_text( $product, $fallback_key );
-	}
-
-	/**
-	 * Returns the source-specific product code label.
-	 */
-	private function source_item_label( string $source ): string {
-		return match ( sanitize_key( $source ) ) {
-			'telesystem' => __( 'Cod Telesystem', 'schrack-woocommerce-sync' ),
-			default      => __( 'Cod Schrack', 'schrack-woocommerce-sync' ),
-		};
 	}
 
 	/**
@@ -791,7 +759,6 @@ class Schrack_Product_Page_Renderer {
 			'product_lookup'           => sanitize_text_field( (string) ( $settings['product_lookup'] ?? '' ) ),
 			'show_gallery'             => $this->truthy( $settings['show_gallery'] ?? 'yes' ),
 			'show_categories'          => $this->truthy( $settings['show_categories'] ?? 'yes' ),
-			'show_sku'                 => $this->truthy( $settings['show_sku'] ?? 'yes' ),
 			'show_short_description'   => $this->truthy( $settings['show_short_description'] ?? 'yes' ),
 			'show_stock'               => $this->truthy( $settings['show_stock'] ?? 'yes' ),
 			'show_cart'                => $this->truthy( $settings['show_cart'] ?? 'yes' ),

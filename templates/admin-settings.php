@@ -82,6 +82,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<td><input id="schrack_default_markup" type="number" min="0" max="500" step="0.01" name="schrack_settings[default_markup]" value="<?php echo esc_attr( $settings['default_markup'] ); ?>"></td>
 			</tr>
 			<tr>
+				<th scope="row"><label for="schrack_vat_rate"><?php esc_html_e( 'TVA %', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<input id="schrack_vat_rate" type="number" min="0" max="100" step="0.01" name="schrack_settings[vat_rate]" value="<?php echo esc_attr( $settings['vat_rate'] ?? 19 ); ?>">
+					<p class="description"><?php esc_html_e( 'Applied after markup before the public WooCommerce price is saved.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="schrack_catalog_batch_size"><?php esc_html_e( 'Catalog batch size', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
 					<input id="schrack_catalog_batch_size" type="number" min="1" max="1000" step="1" name="schrack_settings[catalog_batch_size]" value="<?php echo esc_attr( min( 1000, max( 1, absint( $settings['catalog_batch_size'] ) ) ) ); ?>">

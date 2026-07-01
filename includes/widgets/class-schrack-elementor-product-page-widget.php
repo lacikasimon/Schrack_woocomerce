@@ -204,7 +204,6 @@ class Schrack_Elementor_Product_Page_Widget extends \Elementor\Widget_Base {
 		return array(
 			'show_gallery'              => __( 'Galerie imagini', 'schrack-woocommerce-sync' ),
 			'show_categories'           => __( 'Categorii', 'schrack-woocommerce-sync' ),
-			'show_sku'                  => __( 'Coduri produs', 'schrack-woocommerce-sync' ),
 			'show_short_description'    => __( 'Descriere scurta', 'schrack-woocommerce-sync' ),
 			'show_stock'                => __( 'Stoc', 'schrack-woocommerce-sync' ),
 			'show_cart'                 => __( 'Cos cumparaturi', 'schrack-woocommerce-sync' ),

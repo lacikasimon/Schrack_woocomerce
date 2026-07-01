@@ -71,7 +71,7 @@ class Schrack_Product_Filter_Renderer {
 							<?php if ( $settings['show_search'] ) : ?>
 							<label class="schrack-product-filter__field">
 								<span><?php esc_html_e( 'Cauta produse', 'schrack-woocommerce-sync' ); ?></span>
-								<input type="search" name="search" placeholder="<?php esc_attr_e( 'Nume, SKU, cod produs', 'schrack-woocommerce-sync' ); ?>">
+								<input type="search" name="search" placeholder="<?php esc_attr_e( 'Nume produs', 'schrack-woocommerce-sync' ); ?>">
 							</label>
 							<?php endif; ?>
 
@@ -683,10 +683,6 @@ class Schrack_Product_Filter_Renderer {
 			<?php endif; ?>
 
 			<div class="schrack-product-card__body">
-				<?php if ( '' !== $sku ) : ?>
-					<div class="schrack-product-card__sku"><?php echo esc_html( $sku ); ?></div>
-				<?php endif; ?>
-
 				<h3 class="schrack-product-card__title">
 					<a href="<?php echo esc_url( $permalink ); ?>"><?php echo esc_html( $product->get_name() ); ?></a>
 				</h3>

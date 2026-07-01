@@ -211,16 +211,6 @@
 	word-break: normal;
 }
 
-.schrack-header-search__sku {
-	color: var(--schrack-header-search-accent);
-	font-size: 11px;
-	font-weight: 800;
-	line-height: 1.2;
-	overflow-wrap: anywhere;
-	text-transform: uppercase;
-	word-break: normal;
-}
-
 .schrack-header-search__meta {
 	justify-items: end;
 	text-align: right;

@@ -951,7 +951,6 @@ class Schrack_Homepage_Renderer {
 	 */
 	private function product_card( WC_Product $product ): string {
 		$link       = $product->get_permalink();
-		$sku        = $product->get_sku();
 		$price_html = $product->get_price_html();
 
 		ob_start();
@@ -961,9 +960,6 @@ class Schrack_Homepage_Renderer {
 				<?php echo wp_kses_post( $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) ); ?>
 			</a>
 			<div class="schrack-home__product-body">
-				<?php if ( '' !== $sku ) : ?>
-					<small><?php echo esc_html( sprintf( __( 'Cod produs: %s', 'schrack-woocommerce-sync' ), $sku ) ); ?></small>
-				<?php endif; ?>
 				<a href="<?php echo esc_url( $link ); ?>"><?php echo esc_html( $product->get_name() ); ?></a>
 				<?php if ( '' !== $price_html ) : ?>
 					<span class="schrack-home__product-price"><?php echo wp_kses_post( $price_html ); ?></span>

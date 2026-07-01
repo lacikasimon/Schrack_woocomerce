@@ -536,15 +536,6 @@
 	padding: 10px 10px 8px;
 }
 
-.schrack-product-card__sku {
-	color: var(--schrack-filter-accent);
-	font-size: 10px;
-	font-weight: 800;
-	line-height: 1.25;
-	overflow-wrap: anywhere;
-	text-transform: uppercase;
-}
-
 .schrack-product-card__title {
 	font-size: 14px;
 	font-weight: 750;

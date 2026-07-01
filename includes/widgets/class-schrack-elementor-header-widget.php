@@ -183,7 +183,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Placeholder', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Cauta produse, coduri, SKU...', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Cauta produse...', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -248,7 +248,6 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'show_search_images' => __( 'Imagini in sugestii', 'schrack-woocommerce-sync' ),
 				'show_search_price'  => __( 'Pret in sugestii', 'schrack-woocommerce-sync' ),
-				'show_search_sku'    => __( 'SKU / cod Schrack', 'schrack-woocommerce-sync' ),
 				'show_search_stock'  => __( 'Stoc in sugestii', 'schrack-woocommerce-sync' ),
 			) as $key => $label
 		) {

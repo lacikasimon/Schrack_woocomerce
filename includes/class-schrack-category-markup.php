@@ -162,7 +162,33 @@ class Schrack_Category_Markup {
 			$price = max( $price, $purchase_price + $min_margin );
 		}
 
+		$price = $this->apply_vat( $price );
+
 		return $this->apply_rounding( $price, $rounding );
+	}
+
+	/**
+	 * Applies the configured TVA/VAT rate to a net public price.
+	 */
+	public function apply_vat( float $price ): float {
+		$price = max( 0.0, $price );
+		$rate  = $this->vat_rate();
+
+		if ( $rate <= 0.0 ) {
+			return $price;
+		}
+
+		return $price * ( 1 + ( $rate / 100 ) );
+	}
+
+	/**
+	 * Returns the configured TVA/VAT rate.
+	 */
+	public function vat_rate(): float {
+		$rate = (string) $this->settings->get( 'vat_rate', 19 );
+		$rate = str_replace( ',', '.', $rate );
+
+		return max( 0.0, min( 100.0, is_numeric( $rate ) ? (float) $rate : 19.0 ) );
 	}
 
 	/**
