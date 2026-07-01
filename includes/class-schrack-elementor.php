@@ -51,13 +51,6 @@ class Schrack_Elementor {
 		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
 		add_action( 'wp_ajax_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
-		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_shop_archive_assets' ), 30 );
-		add_filter( 'body_class', array( $this, 'shop_archive_body_class' ) );
-		add_filter( 'gettext', array( $this, 'translate_shop_archive_text' ), 20, 3 );
-		add_filter( 'the_title', array( $this, 'translate_shop_page_title' ), 20, 2 );
-		add_filter( 'widget_title', array( $this, 'translate_shop_widget_title' ), 20, 3 );
-		add_filter( 'woocommerce_page_title', array( $this, 'translate_woocommerce_page_title' ), 20, 1 );
-		add_filter( 'woocommerce_get_availability_text', array( $this, 'translate_availability_text' ), 20, 2 );
 		add_filter( 'woocommerce_add_to_cart_fragments', array( $this, 'cart_fragments' ) );
 		add_shortcode( 'schrack_account_page', array( $this, 'account_shortcode' ) );
 	}
@@ -78,21 +71,6 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-products.js',
 			array(),
 			SCHRACK_WC_SYNC_VERSION,
-			true
-		);
-
-		wp_register_style(
-			'schrack-wc-shop-archive',
-			SCHRACK_WC_SYNC_URL . 'assets/shop-archive.css',
-			array(),
-			$this->asset_version( 'assets/shop-archive.css' )
-		);
-
-		wp_register_script(
-			'schrack-wc-shop-archive',
-			SCHRACK_WC_SYNC_URL . 'assets/shop-archive.js',
-			array(),
-			$this->asset_version( 'assets/shop-archive.js' ),
 			true
 		);
 
