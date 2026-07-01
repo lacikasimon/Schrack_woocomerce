@@ -1,0 +1,405 @@
+body.schrack-shop-archive-page .title h1,
+body.schrack-shop-archive-page .title_outer h1 {
+	color: #17202a !important;
+	font-size: 34px !important;
+	font-weight: 850 !important;
+	letter-spacing: 0 !important;
+	line-height: 1.12 !important;
+	text-transform: none !important;
+}
+
+body.schrack-shop-archive-page .breadcrumb,
+body.schrack-shop-archive-page .breadcrumbs {
+	letter-spacing: 0 !important;
+	text-transform: none !important;
+}
+
+body.schrack-shop-archive-page .container_inner.default_template_holder {
+	padding-top: 28px !important;
+}
+
+body.schrack-shop-archive-page .two_columns_25_75 {
+	display: grid !important;
+	gap: 28px;
+	grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+}
+
+body.schrack-shop-archive-page .two_columns_25_75 .column1,
+body.schrack-shop-archive-page .two_columns_25_75 .column2 {
+	float: none !important;
+	min-width: 0;
+	width: auto !important;
+}
+
+body.schrack-shop-archive-page .two_columns_25_75 .column1 .column_inner,
+body.schrack-shop-archive-page .two_columns_25_75 .column2 .column_inner {
+	padding: 0 !important;
+}
+
+body.schrack-shop-archive-page .sidebar {
+	background: #fff;
+	border: 1px solid #d9dee7;
+	border-radius: 8px;
+	box-shadow: 0 14px 34px rgba(23, 32, 42, 0.07);
+	max-height: min(72vh, 760px);
+	overflow: auto !important;
+	padding: 14px;
+	position: sticky;
+	scrollbar-gutter: stable;
+	top: 18px;
+}
+
+body.admin-bar.schrack-shop-archive-page .sidebar {
+	top: 50px;
+}
+
+body.schrack-shop-archive-page .sidebar h4,
+body.schrack-shop-archive-page .sidebar .widgettitle {
+	color: #17202a;
+	font-size: 15px !important;
+	font-weight: 850 !important;
+	letter-spacing: 0 !important;
+	line-height: 1.2 !important;
+	margin: 0 0 12px !important;
+	text-transform: none !important;
+}
+
+body.schrack-shop-archive-page .schrack-shop-category-tools {
+	margin: 0 0 12px;
+}
+
+body.schrack-shop-archive-page .schrack-shop-category-tools input {
+	background: #f6f8fa;
+	border: 1px solid #d9dee7;
+	border-radius: 6px;
+	box-shadow: none;
+	color: #17202a;
+	font: inherit;
+	font-size: 13px;
+	min-height: 40px;
+	padding: 8px 10px;
+	width: 100%;
+}
+
+body.schrack-shop-archive-page .schrack-shop-category-tools input:focus {
+	border-color: #135e96;
+	box-shadow: 0 0 0 3px rgba(19, 94, 150, 0.14);
+	outline: 0;
+}
+
+body.schrack-shop-archive-page .sidebar ul,
+body.schrack-shop-archive-page .product-categories,
+body.schrack-shop-archive-page .wc-block-product-categories-list {
+	display: grid;
+	gap: 2px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+body.schrack-shop-archive-page .sidebar li {
+	list-style: none;
+	margin: 0 !important;
+	min-width: 0;
+	padding: 0 !important;
+}
+
+body.schrack-shop-archive-page .sidebar li[hidden] {
+	display: none !important;
+}
+
+body.schrack-shop-archive-page .sidebar .wp-block-spacer {
+	height: 8px !important;
+}
+
+body.schrack-shop-archive-page .product-categories ul,
+body.schrack-shop-archive-page .wc-block-product-categories-list ul,
+body.schrack-shop-archive-page .wc-block-product-categories-list .wc-block-product-categories-list {
+	border-left: 1px solid #e3e8ef;
+	margin: 5px 0 5px 10px;
+	padding-left: 10px;
+}
+
+body.schrack-shop-archive-page .sidebar a {
+	border-radius: 6px;
+	color: #334050;
+	display: block;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+	padding: 6px 7px;
+	text-decoration: none;
+	text-transform: none;
+	word-break: normal;
+}
+
+body.schrack-shop-archive-page .sidebar a:hover,
+body.schrack-shop-archive-page .sidebar a:focus {
+	background: #eef5fb;
+	color: #135e96;
+}
+
+body.schrack-shop-archive-page .sidebar .count,
+body.schrack-shop-archive-page .sidebar .wc-block-product-categories-list-item-count {
+	color: #65707c;
+	display: inline-flex;
+	font-size: 11px;
+	font-weight: 800;
+	margin-left: 6px;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products .woocommerce {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: minmax(0, 1fr) auto;
+	min-width: 0;
+}
+
+body.schrack-shop-archive-page .woocommerce-result-count,
+body.schrack-shop-archive-page .woocommerce-ordering {
+	float: none !important;
+	margin: 0 !important;
+	min-width: 0;
+}
+
+body.schrack-shop-archive-page .woocommerce-result-count {
+	align-self: center;
+	color: #65707c;
+	font-size: 13px;
+	font-weight: 750;
+	line-height: 1.3 !important;
+	order: 1;
+}
+
+body.schrack-shop-archive-page .woocommerce-ordering {
+	order: 2;
+	width: min(100%, 300px);
+}
+
+body.schrack-shop-archive-page .woocommerce-ordering select {
+	background: #fff;
+	border: 1px solid #d9dee7;
+	border-radius: 6px;
+	color: #17202a;
+	font-size: 13px;
+	font-weight: 700;
+	min-height: 42px;
+	padding: 8px 36px 8px 10px;
+	width: 100%;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products {
+	display: grid !important;
+	gap: 18px !important;
+	grid-column: 1 / -1;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)) !important;
+	margin: 0 !important;
+	min-width: 0;
+	padding: 0 !important;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product {
+	background: #fff;
+	border: 1px solid #d9dee7;
+	border-radius: 8px;
+	box-shadow: 0 14px 34px rgba(23, 32, 42, 0.07);
+	display: flex !important;
+	flex-direction: column;
+	float: none !important;
+	margin: 0 !important;
+	min-width: 0;
+	overflow: hidden;
+	padding: 0 !important;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+	width: auto !important;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product:hover {
+	border-color: #bfcbd9;
+	box-shadow: 0 18px 40px rgba(23, 32, 42, 0.11);
+	transform: translateY(-2px);
+}
+
+body.schrack-shop-archive-page .top-product-section {
+	aspect-ratio: 1 / 1;
+	background: #f6f8fa;
+	border-bottom: 1px solid #e3e8ef;
+	display: grid !important;
+	min-height: 0;
+	place-items: center;
+	position: relative;
+	width: 100%;
+}
+
+body.schrack-shop-archive-page .top-product-section .product-category,
+body.schrack-shop-archive-page .top-product-section .image-wrapper {
+	align-items: center;
+	display: flex !important;
+	height: 100%;
+	justify-content: center;
+	width: 100%;
+}
+
+body.schrack-shop-archive-page .top-product-section img {
+	display: block;
+	height: 100% !important;
+	object-fit: contain;
+	padding: 14px;
+	width: 100% !important;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product a.product-info {
+	color: #17202a;
+	display: grid !important;
+	flex: 1 1 auto;
+	gap: 9px;
+	min-width: 0;
+	padding: 12px;
+	text-decoration: none;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product h6,
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .woocommerce-loop-product__title {
+	color: #17202a;
+	display: -webkit-box;
+	font-size: 13px !important;
+	font-weight: 800 !important;
+	letter-spacing: 0 !important;
+	line-height: 1.3 !important;
+	margin: 0 !important;
+	min-height: calc(1.3em * 3);
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	text-transform: none !important;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+	word-break: normal;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .price {
+	color: #17202a !important;
+	display: block !important;
+	font-size: 18px !important;
+	font-weight: 850 !important;
+	letter-spacing: 0 !important;
+	line-height: 1.1 !important;
+	margin: auto 0 0 !important;
+	text-transform: none !important;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .price::after {
+	color: #65707c;
+	content: "Pret cu TVA";
+	display: block;
+	font-size: 10px;
+	font-weight: 750;
+	letter-spacing: 0;
+	line-height: 1.1;
+	margin-top: 4px;
+	text-transform: none;
+}
+
+body.schrack-shop-archive-page .out-of-stock-button {
+	align-items: center;
+	background: #fff5f5 !important;
+	border: 1px solid #efc5c5 !important;
+	border-radius: 999px !important;
+	box-shadow: 0 8px 20px rgba(23, 32, 42, 0.1);
+	color: #9f2426 !important;
+	display: inline-flex !important;
+	font-family: inherit !important;
+	font-size: 0 !important;
+	font-weight: 850 !important;
+	height: auto !important;
+	justify-content: center;
+	left: 10px !important;
+	letter-spacing: 0 !important;
+	line-height: 1 !important;
+	min-height: 28px;
+	min-width: 0 !important;
+	padding: 7px 9px !important;
+	position: absolute !important;
+	text-transform: none !important;
+	top: 10px !important;
+	width: auto !important;
+}
+
+body.schrack-shop-archive-page .out-of-stock-button-inner {
+	font-size: 0 !important;
+	line-height: 1 !important;
+}
+
+body.schrack-shop-archive-page .out-of-stock-button-inner::after {
+	content: "Stoc epuizat";
+	font-size: 11px;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .button,
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .added_to_cart {
+	align-items: center !important;
+	background: #b32d2e !important;
+	border: 1px solid #b32d2e !important;
+	border-radius: 6px !important;
+	color: #fff !important;
+	display: inline-flex !important;
+	font-size: 12px !important;
+	font-weight: 850 !important;
+	justify-content: center !important;
+	line-height: 1 !important;
+	min-height: 38px;
+	padding: 0 12px !important;
+	text-align: center !important;
+	text-decoration: none !important;
+	text-transform: uppercase !important;
+	white-space: normal;
+	width: 100%;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products .woocommerce-pagination {
+	grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+	body.schrack-shop-archive-page .two_columns_25_75 {
+		display: grid !important;
+		grid-template-columns: 1fr;
+	}
+
+	body.schrack-shop-archive-page .sidebar {
+		max-height: 360px;
+		position: relative;
+		top: auto;
+	}
+
+	body.schrack-shop-archive-page .elementor-widget-woocommerce-products .woocommerce {
+		grid-template-columns: 1fr;
+	}
+
+	body.schrack-shop-archive-page .woocommerce-ordering {
+		order: 1;
+		width: 100%;
+	}
+
+	body.schrack-shop-archive-page .woocommerce-result-count {
+		order: 2;
+	}
+}
+
+@media (max-width: 560px) {
+	body.schrack-shop-archive-page .container_inner.default_template_holder {
+		padding-top: 18px !important;
+	}
+
+	body.schrack-shop-archive-page .title h1,
+	body.schrack-shop-archive-page .title_outer h1 {
+		font-size: 28px !important;
+	}
+
+	body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products {
+		grid-template-columns: 1fr !important;
+	}
+}

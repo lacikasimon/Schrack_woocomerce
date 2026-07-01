@@ -51,6 +51,13 @@ class Schrack_Elementor {
 		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
 		add_action( 'wp_ajax_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_shop_archive_assets' ), 30 );
+		add_filter( 'body_class', array( $this, 'shop_archive_body_class' ) );
+		add_filter( 'gettext', array( $this, 'translate_shop_archive_text' ), 20, 3 );
+		add_filter( 'the_title', array( $this, 'translate_shop_page_title' ), 20, 2 );
+		add_filter( 'widget_title', array( $this, 'translate_shop_widget_title' ), 20, 3 );
+		add_filter( 'woocommerce_page_title', array( $this, 'translate_woocommerce_page_title' ), 20, 1 );
+		add_filter( 'woocommerce_get_availability_text', array( $this, 'translate_availability_text' ), 20, 2 );
 		add_filter( 'woocommerce_add_to_cart_fragments', array( $this, 'cart_fragments' ) );
 		add_shortcode( 'schrack_account_page', array( $this, 'account_shortcode' ) );
 	}
@@ -71,6 +78,21 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-products.js',
 			array(),
 			SCHRACK_WC_SYNC_VERSION,
+			true
+		);
+
+		wp_register_style(
+			'schrack-wc-shop-archive',
+			SCHRACK_WC_SYNC_URL . 'assets/shop-archive.css',
+			array(),
+			$this->asset_version( 'assets/shop-archive.css' )
+		);
+
+		wp_register_script(
+			'schrack-wc-shop-archive',
+			SCHRACK_WC_SYNC_URL . 'assets/shop-archive.js',
+			array(),
+			$this->asset_version( 'assets/shop-archive.js' ),
 			true
 		);
 
@@ -196,6 +218,144 @@ class Schrack_Elementor {
 		}
 
 		return SCHRACK_WC_SYNC_VERSION;
+	}
+
+	/**
+	 * Enqueues the shop/archive polish layer for WooCommerce listing screens.
+	 */
+	public function enqueue_shop_archive_assets(): void {
+		if ( ! $this->is_shop_archive_context() ) {
+			return;
+		}
+
+		wp_enqueue_style( 'schrack-wc-shop-archive' );
+		wp_enqueue_script( 'schrack-wc-shop-archive' );
+	}
+
+	/**
+	 * Adds a body class used by the shop/archive polish layer.
+	 *
+	 * @param array<int,string> $classes Body classes.
+	 * @return array<int,string>
+	 */
+	public function shop_archive_body_class( array $classes ): array {
+		if ( $this->is_shop_archive_context() ) {
+			$classes[] = 'schrack-shop-archive-page';
+		}
+
+		return $classes;
+	}
+
+	/**
+	 * Translates common shop archive strings left by the active theme/widgets.
+	 */
+	public function translate_shop_archive_text( string $translation, string $text, string $domain ): string {
+		if ( is_admin() ) {
+			return $translation;
+		}
+
+		$map = array(
+			'Out of stock' => 'Stoc epuizat',
+			'Read more' => 'Detalii produs',
+			'Add to cart' => 'Adauga in cos',
+			'Select options' => 'Alege optiuni',
+			'View cart' => 'Vezi cosul',
+		);
+
+		return $map[ $text ] ?? $translation;
+	}
+
+	/**
+	 * Translates the shop page title when the page is rendered in the frontend.
+	 */
+	public function translate_shop_page_title( string $title, int $post_id = 0 ): string {
+		if ( is_admin() || ! $this->is_shop_archive_context() ) {
+			return $title;
+		}
+
+		if ( 'Shop' === trim( wp_strip_all_tags( $title ) ) ) {
+			return __( 'Catalog produse', 'schrack-woocommerce-sync' );
+		}
+
+		return $title;
+	}
+
+	/**
+	 * Translates the product category widget title.
+	 *
+	 * @param string       $title Widget title.
+	 * @param mixed        $instance Widget instance.
+	 * @param string|mixed $id_base Widget base id.
+	 */
+	public function translate_shop_widget_title( string $title, mixed $instance = array(), mixed $id_base = '' ): string {
+		if ( is_admin() ) {
+			return $title;
+		}
+
+		if ( 'Category' === trim( wp_strip_all_tags( $title ) ) ) {
+			return __( 'Categorii', 'schrack-woocommerce-sync' );
+		}
+
+		return $title;
+	}
+
+	/**
+	 * Translates WooCommerce archive page titles.
+	 */
+	public function translate_woocommerce_page_title( string $title ): string {
+		if ( 'Shop' === trim( wp_strip_all_tags( $title ) ) ) {
+			return __( 'Catalog produse', 'schrack-woocommerce-sync' );
+		}
+
+		return $title;
+	}
+
+	/**
+	 * Translates stock availability labels.
+	 */
+	public function translate_availability_text( string $availability, WC_Product $product ): string {
+		if ( ! $product->is_in_stock() ) {
+			return __( 'Stoc epuizat', 'schrack-woocommerce-sync' );
+		}
+
+		return $availability;
+	}
+
+	/**
+	 * Returns whether the current frontend request is a WooCommerce listing screen.
+	 */
+	private function is_shop_archive_context(): bool {
+		if ( is_admin() ) {
+			return false;
+		}
+
+		if ( function_exists( 'is_shop' ) && is_shop() ) {
+			return true;
+		}
+
+		if ( function_exists( 'is_product_taxonomy' ) && is_product_taxonomy() ) {
+			return true;
+		}
+
+		if ( function_exists( 'is_product_category' ) && is_product_category() ) {
+			return true;
+		}
+
+		if ( function_exists( 'is_product_tag' ) && is_product_tag() ) {
+			return true;
+		}
+
+		if ( function_exists( 'is_page' ) && is_page( array( 'shop', 'shop-3' ) ) ) {
+			return true;
+		}
+
+		$queried = get_queried_object();
+
+		if ( is_object( $queried ) && isset( $queried->post_name ) ) {
+			return in_array( (string) $queried->post_name, array( 'shop', 'shop-3' ), true );
+		}
+
+		return false;
 	}
 
 	/**
