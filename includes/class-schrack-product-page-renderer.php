@@ -209,7 +209,7 @@ class Schrack_Product_Page_Renderer {
 		}
 
 		return sprintf(
-			'<div class="schrack-product-page__price"><span class="schrack-product-page__price-value">%1$s</span><span class="schrack-product-page__price-tax-label">%2$s</span></div>',
+			'<div class="schrack-product-page__price"><span class="schrack-product-page__price-value">%1$s</span><br class="schrack-product-page__price-break"><small class="schrack-product-page__price-tax-label">%2$s</small></div>',
 			wp_kses_post( $price_html ),
 			esc_html__( 'Pret cu TVA', 'schrack-woocommerce-sync' )
 		);

@@ -158,8 +158,10 @@
 
 .schrack-product-page__price {
 	align-content: start;
+	align-items: flex-start;
 	color: var(--schrack-page-text);
-	display: grid !important;
+	display: flex !important;
+	flex-direction: column !important;
 	flex: 1 1 auto;
 	font-size: 24px !important;
 	font-weight: 850;
@@ -171,20 +173,31 @@
 	word-break: normal;
 }
 
-.schrack-product-page__price-value {
+.schrack-product-page__price > .schrack-product-page__price-value {
+	clear: both;
 	display: block !important;
+	flex: 0 0 auto;
 	line-height: 1.15;
 	min-width: 0;
+	width: 100% !important;
 }
 
-.schrack-product-page__price-tax-label {
+.schrack-product-page__price-break {
+	display: none !important;
+}
+
+.schrack-product-page__price > .schrack-product-page__price-tax-label {
+	clear: both;
 	color: var(--schrack-page-muted);
 	display: block !important;
+	flex: 0 0 auto;
 	font-size: 11px !important;
 	font-weight: 700 !important;
 	letter-spacing: 0;
 	line-height: 1 !important;
+	margin-top: 1px !important;
 	text-transform: none !important;
+	width: 100% !important;
 }
 
 .schrack-product-page__price del {
