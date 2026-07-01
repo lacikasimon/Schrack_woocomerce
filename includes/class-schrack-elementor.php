@@ -132,6 +132,14 @@ class Schrack_Elementor {
 			$this->asset_version( 'assets/elementor-cart-checkout.css' )
 		);
 
+		wp_register_script(
+			'schrack-wc-cart-checkout',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-cart-checkout.js',
+			array(),
+			$this->asset_version( 'assets/elementor-cart-checkout.js' ),
+			true
+		);
+
 		wp_register_style(
 			'schrack-wc-support',
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-support.css',

@@ -20,6 +20,7 @@ class Schrack_Cart_Checkout_Renderer {
 		$instance_id = '' !== $instance_id ? 'schrack-cart-checkout-' . sanitize_html_class( $instance_id ) : wp_unique_id( 'schrack-cart-checkout-' );
 
 		wp_enqueue_style( 'schrack-wc-cart-checkout' );
+		wp_enqueue_script( 'schrack-wc-cart-checkout' );
 
 		if ( ! class_exists( 'WooCommerce' ) || ! function_exists( 'WC' ) ) {
 			return sprintf(
@@ -329,10 +330,12 @@ class Schrack_Cart_Checkout_Renderer {
 			$order_pay_button_text = $settings['order_pay_button_text'] ?? __( 'Plateste comanda', 'schrack-woocommerce-sync' );
 			$order_filter          = static fn( string $button_text = '' ): string => $order_button_text;
 			$order_pay_filter      = static fn( string $button_text = '' ): string => $order_pay_button_text;
+			$coupon_message_filter = fn( string $message = '' ): string => $this->checkout_coupon_message();
 
 			$filters[] = array( 'woocommerce_get_checkout_url', $url_filter, 10, 1 );
 			$filters[] = array( 'woocommerce_order_button_text', $order_filter, 10, 1 );
 			$filters[] = array( 'woocommerce_pay_order_button_text', $order_pay_filter, 10, 1 );
+			$filters[] = array( 'woocommerce_checkout_coupon_message', $coupon_message_filter, 10, 1 );
 			$filters[] = array( 'woocommerce_checkout_fields', $checkout_fields_filter, 10, 1 );
 			$filters[] = array( 'woocommerce_default_address_fields', $address_fields_filter, 10, 1 );
 		}
@@ -352,6 +355,17 @@ class Schrack_Cart_Checkout_Renderer {
 				remove_filter( $filter[0], $filter[1], $filter[2] );
 			}
 		}
+	}
+
+	/**
+	 * Returns the localized checkout coupon toggle message.
+	 */
+	private function checkout_coupon_message(): string {
+		return sprintf(
+			'%1$s <a href="#" class="showcoupon">%2$s</a>',
+			esc_html__( 'Ai un cupon?', 'schrack-woocommerce-sync' ),
+			esc_html__( 'Introdu codul cuponului', 'schrack-woocommerce-sync' )
+		);
 	}
 
 	/**
@@ -407,7 +421,7 @@ class Schrack_Cart_Checkout_Renderer {
 			'Update cart' => 'Actualizeaza cosul',
 			'Continue to checkout' => 'Continua cu finalizarea comenzii',
 			'Have a coupon?' => 'Ai un cupon?',
-			'Click here to enter your code' => 'Click aici pentru a introduce codul',
+			'Click here to enter your code' => 'Introdu codul cuponului',
 			'If you have a coupon code, please apply it below.' => 'Daca ai un cod de cupon, introdu-l mai jos.',
 			'Billing details' => 'Detalii pentru facturare',
 			'Shipping details' => 'Detalii livrare',
