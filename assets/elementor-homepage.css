@@ -1400,6 +1400,37 @@
 	line-height: 1.25;
 }
 
+.schrack-home__product-price .schrack-b2b-price {
+	display: grid;
+	gap: 2px;
+	max-width: 100%;
+}
+
+.schrack-home__product-price .schrack-b2b-price__current,
+.schrack-home__product-price .schrack-b2b-price__full {
+	display: block;
+	min-width: 0;
+}
+
+.schrack-home__product-price .schrack-b2b-price__break {
+	display: none;
+}
+
+.schrack-home__product-price .schrack-b2b-price__full {
+	color: var(--schrack-home-muted);
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+	word-break: normal;
+}
+
+.schrack-home__product-price .schrack-b2b-price__full del {
+	color: inherit;
+	font-size: 1em;
+	font-weight: 700;
+}
+
 .schrack-home__product-card .schrack-home__mini-button {
 	margin-top: auto;
 	width: 100%;

@@ -103,11 +103,11 @@ class Schrack_Cart_Checkout_Renderer {
 							<div class="schrack-cart-checkout__panel schrack-cart-checkout__panel--cart">
 								<div class="schrack-cart-checkout__panel-head">
 									<h2><?php echo esc_html( $settings['cart_heading'] ); ?></h2>
-									<span><?php echo esc_html( $this->cart_count_label() ); ?></span>
+									<span data-schrack-cart-count><?php echo esc_html( $this->cart_count_label() ); ?></span>
 								</div>
 
 								<div class="schrack-cart-checkout__woocommerce-cart">
-									<?php echo $this->render_shortcode( 'woocommerce_cart', $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+									<?php echo $this->render_cart_form( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 								</div>
 							</div>
 
@@ -283,6 +283,167 @@ class Schrack_Cart_Checkout_Renderer {
 	}
 
 	/**
+	 * Renders a controlled WooCommerce-compatible cart form for the one-page checkout.
+	 *
+	 * @param array<string,string> $settings Widget settings.
+	 */
+	private function render_cart_form( array $settings ): string {
+		$cart = $this->cart();
+
+		if ( ! $cart instanceof WC_Cart ) {
+			return '';
+		}
+
+		$notices = '';
+
+		if ( function_exists( 'wc_print_notices' ) ) {
+			$notices = (string) wc_print_notices( true );
+		}
+
+		ob_start();
+		?>
+		<div class="woocommerce">
+			<div class="woocommerce-notices-wrapper"><?php echo wp_kses_post( $notices ); ?></div>
+			<form class="woocommerce-cart-form schrack-cart-checkout__cart-form" action="<?php echo esc_url( $this->current_url() ); ?>" method="post">
+				<table class="shop_table shop_table_responsive cart woocommerce-cart-form__contents" cellspacing="0">
+					<thead>
+						<tr>
+							<th class="product-remove"><span class="screen-reader-text"><?php esc_html_e( 'Elimina produsul', 'schrack-woocommerce-sync' ); ?></span></th>
+							<th class="product-thumbnail"><span class="screen-reader-text"><?php esc_html_e( 'Imagine produs', 'schrack-woocommerce-sync' ); ?></span></th>
+							<th class="product-name"><?php esc_html_e( 'Produs', 'schrack-woocommerce-sync' ); ?></th>
+							<th class="product-price"><?php esc_html_e( 'Pret', 'schrack-woocommerce-sync' ); ?></th>
+							<th class="product-quantity"><?php esc_html_e( 'Cantitate', 'schrack-woocommerce-sync' ); ?></th>
+							<th class="product-subtotal"><?php esc_html_e( 'Subtotal', 'schrack-woocommerce-sync' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $cart->get_cart() as $cart_item_key => $cart_item ) : ?>
+							<?php echo $this->render_cart_row( (string) $cart_item_key, $cart_item ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+						<?php endforeach; ?>
+
+						<tr>
+							<td colspan="6" class="actions">
+								<?php if ( 'yes' === $settings['show_coupon'] && function_exists( 'wc_coupons_enabled' ) && wc_coupons_enabled() ) : ?>
+									<?php $coupon_id = wp_unique_id( 'schrack_coupon_code_' ); ?>
+									<div class="coupon">
+										<label for="<?php echo esc_attr( $coupon_id ); ?>" class="screen-reader-text"><?php esc_html_e( 'Cod cupon', 'schrack-woocommerce-sync' ); ?></label>
+										<input type="text" name="coupon_code" class="input-text" id="<?php echo esc_attr( $coupon_id ); ?>" value="" placeholder="<?php esc_attr_e( 'Cod cupon', 'schrack-woocommerce-sync' ); ?>">
+										<button type="submit" class="button" name="apply_coupon" value="<?php esc_attr_e( 'Aplica cuponul', 'schrack-woocommerce-sync' ); ?>"><?php esc_html_e( 'Aplica cuponul', 'schrack-woocommerce-sync' ); ?></button>
+									</div>
+								<?php endif; ?>
+
+								<button type="submit" class="button" name="update_cart" value="<?php esc_attr_e( 'Actualizeaza cosul', 'schrack-woocommerce-sync' ); ?>" disabled><?php esc_html_e( 'Actualizeaza cosul', 'schrack-woocommerce-sync' ); ?></button>
+
+								<?php wp_nonce_field( 'woocommerce-cart', 'woocommerce-cart-nonce' ); ?>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</form>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders one cart product row.
+	 *
+	 * @param array<string,mixed> $cart_item Cart item data.
+	 */
+	private function render_cart_row( string $cart_item_key, array $cart_item ): string {
+		$product = $cart_item['data'] ?? null;
+
+		if ( ! $product instanceof WC_Product || ! $product->exists() || (int) ( $cart_item['quantity'] ?? 0 ) <= 0 ) {
+			return '';
+		}
+
+		if ( ! apply_filters( 'woocommerce_cart_item_visible', true, $cart_item, $cart_item_key ) ) {
+			return '';
+		}
+
+		$cart       = $this->cart();
+		$product_id = apply_filters( 'woocommerce_cart_item_product_id', (int) ( $cart_item['product_id'] ?? $product->get_id() ), $cart_item, $cart_item_key );
+		$permalink  = apply_filters( 'woocommerce_cart_item_permalink', $product->is_visible() ? $product->get_permalink( $cart_item ) : '', $cart_item, $cart_item_key );
+		$name       = $permalink
+			? sprintf( '<a href="%1$s">%2$s</a>', esc_url( (string) $permalink ), esc_html( $product->get_name() ) )
+			: esc_html( $product->get_name() );
+		$name       = apply_filters( 'woocommerce_cart_item_name', $name, $cart_item, $cart_item_key );
+		$thumbnail  = apply_filters( 'woocommerce_cart_item_thumbnail', $product->get_image(), $cart_item, $cart_item_key );
+		$price      = $cart instanceof WC_Cart ? $cart->get_product_price( $product ) : '';
+		$subtotal   = $cart instanceof WC_Cart ? $cart->get_product_subtotal( $product, (int) $cart_item['quantity'] ) : '';
+		$item_class = apply_filters( 'woocommerce_cart_item_class', 'cart_item', $cart_item, $cart_item_key );
+
+		$price    = apply_filters( 'woocommerce_cart_item_price', $price, $cart_item, $cart_item_key );
+		$subtotal = apply_filters( 'woocommerce_cart_item_subtotal', $subtotal, $cart_item, $cart_item_key );
+
+		ob_start();
+		?>
+		<tr class="<?php echo esc_attr( $item_class ); ?>">
+			<td class="product-remove">
+				<a
+					href="<?php echo esc_url( wc_get_cart_remove_url( $cart_item_key ) ); ?>"
+					class="remove"
+					aria-label="<?php echo esc_attr( sprintf( __( 'Elimina %s din cos', 'schrack-woocommerce-sync' ), wp_strip_all_tags( (string) $name ) ) ); ?>"
+					data-product_id="<?php echo esc_attr( (string) $product_id ); ?>"
+					data-product_sku="<?php echo esc_attr( $product->get_sku() ); ?>"
+				>&times;</a>
+			</td>
+			<td class="product-thumbnail">
+				<?php if ( $permalink ) : ?>
+					<a href="<?php echo esc_url( (string) $permalink ); ?>"><?php echo wp_kses_post( $thumbnail ); ?></a>
+				<?php else : ?>
+					<?php echo wp_kses_post( $thumbnail ); ?>
+				<?php endif; ?>
+			</td>
+			<td class="product-name" data-title="<?php esc_attr_e( 'Produs', 'schrack-woocommerce-sync' ); ?>">
+				<?php echo wp_kses_post( $name ); ?>
+				<?php echo wp_kses_post( wc_get_formatted_cart_item_data( $cart_item ) ); ?>
+			</td>
+			<td class="product-price" data-title="<?php esc_attr_e( 'Pret', 'schrack-woocommerce-sync' ); ?>">
+				<?php echo wp_kses_post( $price ); ?>
+			</td>
+			<td class="product-quantity" data-title="<?php esc_attr_e( 'Cantitate', 'schrack-woocommerce-sync' ); ?>">
+				<?php echo $this->quantity_control( $product, $cart_item_key, (int) $cart_item['quantity'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			</td>
+			<td class="product-subtotal" data-title="<?php esc_attr_e( 'Subtotal', 'schrack-woocommerce-sync' ); ?>">
+				<?php echo wp_kses_post( $subtotal ); ?>
+			</td>
+		</tr>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders quantity controls that still submit with WooCommerce's cart form names.
+	 */
+	private function quantity_control( WC_Product $product, string $cart_item_key, int $quantity ): string {
+		if ( $product->is_sold_individually() ) {
+			return sprintf(
+				'<span class="quantity">%1$s<input type="hidden" class="qty" name="cart[%2$s][qty]" value="1"></span>',
+				esc_html__( '1', 'schrack-woocommerce-sync' ),
+				esc_attr( $cart_item_key )
+			);
+		}
+
+		$min = 0;
+		$max = $product->get_max_purchase_quantity();
+		$max = $max > 0 ? $max : '';
+
+		return sprintf(
+			'<div class="quantity"><button type="button" class="minus" aria-label="%1$s">-</button><input type="number" class="input-text qty text" step="1" min="%2$s" max="%3$s" name="cart[%4$s][qty]" value="%5$s" title="%6$s" size="4" inputmode="numeric" autocomplete="off"><button type="button" class="plus" aria-label="%7$s">+</button></div>',
+			esc_attr__( 'Scade cantitatea', 'schrack-woocommerce-sync' ),
+			esc_attr( (string) $min ),
+			esc_attr( (string) $max ),
+			esc_attr( $cart_item_key ),
+			esc_attr( (string) max( 0, $quantity ) ),
+			esc_attr__( 'Cantitate', 'schrack-woocommerce-sync' ),
+			esc_attr__( 'Creste cantitatea', 'schrack-woocommerce-sync' )
+		);
+	}
+
+	/**
 	 * Returns a compact cart count label.
 	 */
 	private function cart_count_label(): string {
@@ -418,7 +579,9 @@ class Schrack_Cart_Checkout_Renderer {
 			'Coupon code' => 'Cod cupon',
 			'Coupon:' => 'Cupon:',
 			'Apply coupon' => 'Aplica cuponul',
+			'APPLY COUPON' => 'APLICA CUPONUL',
 			'Update cart' => 'Actualizeaza cosul',
+			'UPDATE CART' => 'ACTUALIZEAZA COSUL',
 			'Continue to checkout' => 'Continua cu finalizarea comenzii',
 			'Have a coupon?' => 'Ai un cupon?',
 			'Click here to enter your code' => 'Introdu codul cuponului',
@@ -470,7 +633,11 @@ class Schrack_Cart_Checkout_Renderer {
 			'Login' => 'Autentificare',
 			'Lost your password?' => 'Ai uitat parola?',
 			'Remove this item' => 'Elimina acest produs',
+			'Remove item' => 'Elimina produsul',
 			'Shipping' => 'Livrare',
+			'Shipping to %s.' => 'Livrare la %s.',
+			'Shipping to %s' => 'Livrare la %s',
+			'Change address' => 'Schimba adresa',
 			'No shipping options were found.' => 'Nu au fost gasite optiuni de livrare.',
 			'Invalid payment method.' => 'Metoda de plata nu este valida.',
 			'%s is a required field.' => 'Campul %s este obligatoriu.',

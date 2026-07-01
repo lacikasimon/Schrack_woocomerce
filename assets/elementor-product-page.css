@@ -210,6 +210,38 @@
 	text-decoration: none;
 }
 
+.schrack-product-page__price .schrack-b2b-price {
+	display: grid;
+	gap: 4px;
+	max-width: 100%;
+}
+
+.schrack-product-page__price .schrack-b2b-price__current,
+.schrack-product-page__price .schrack-b2b-price__full {
+	display: block;
+	min-width: 0;
+}
+
+.schrack-product-page__price .schrack-b2b-price__break {
+	display: none;
+}
+
+.schrack-product-page__price .schrack-b2b-price__full {
+	color: var(--schrack-page-muted);
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+	word-break: normal;
+}
+
+.schrack-product-page__price .schrack-b2b-price__full del {
+	color: inherit;
+	font-size: 1em;
+	font-weight: 700;
+	opacity: 0.9;
+}
+
 .schrack-product-page__stock {
 	border: 1px solid var(--schrack-page-border);
 	border-radius: 999px;
@@ -474,12 +506,14 @@ body.single-product .woocommerce-notices-wrapper:empty {
 	display: none;
 }
 
+body.single-product .woocommerce-message,
 body.single-product .woocommerce-notices-wrapper .woocommerce-error,
 body.single-product .woocommerce-notices-wrapper .woocommerce-info,
 body.single-product .woocommerce-notices-wrapper .woocommerce-message {
 	align-items: center;
 	background: #f6fbf7 !important;
-	border: 1px solid #b8dfbd !important;
+	border: 2px solid #8fd3a0 !important;
+	border-left: 6px solid #24713b !important;
 	border-radius: 8px !important;
 	box-shadow: 0 12px 30px rgba(23, 32, 42, 0.08);
 	color: #17202a !important;
@@ -492,22 +526,33 @@ body.single-product .woocommerce-notices-wrapper .woocommerce-message {
 	justify-content: space-between;
 	letter-spacing: 0 !important;
 	line-height: 1.35 !important;
-	margin: 0 0 18px !important;
+	margin: 0 auto 18px !important;
+	max-width: min(calc(100% - 40px), 1280px);
 	min-height: 0;
 	padding: 12px 14px !important;
 	text-transform: none !important;
 }
 
+body.single-product .woocommerce-error,
 body.single-product .woocommerce-notices-wrapper .woocommerce-error {
 	background: #fff5f5 !important;
 	border-color: #efc5c5 !important;
+	border-left-color: #b32d2e !important;
 }
 
+body.single-product .woocommerce-info,
 body.single-product .woocommerce-notices-wrapper .woocommerce-info {
 	background: #f5f8ff !important;
 	border-color: #c8d5f2 !important;
+	border-left-color: #135e96 !important;
 }
 
+body.single-product .woocommerce-message::before,
+body.single-product .woocommerce-message::after,
+body.single-product .woocommerce-error::before,
+body.single-product .woocommerce-error::after,
+body.single-product .woocommerce-info::before,
+body.single-product .woocommerce-info::after,
 body.single-product .woocommerce-notices-wrapper .woocommerce-error::before,
 body.single-product .woocommerce-notices-wrapper .woocommerce-error::after,
 body.single-product .woocommerce-notices-wrapper .woocommerce-info::before,
@@ -518,6 +563,10 @@ body.single-product .woocommerce-notices-wrapper .woocommerce-message::after {
 	display: none !important;
 }
 
+body.single-product .woocommerce-message a.button,
+body.single-product .woocommerce-message a.wc-forward,
+body.single-product .woocommerce-info a.button,
+body.single-product .woocommerce-info a.wc-forward,
 body.single-product .woocommerce-notices-wrapper .woocommerce-message a.button,
 body.single-product .woocommerce-notices-wrapper .woocommerce-message a.wc-forward,
 body.single-product .woocommerce-notices-wrapper .woocommerce-info a.button,
@@ -545,6 +594,14 @@ body.single-product .woocommerce-notices-wrapper .woocommerce-info a.wc-forward 
 	white-space: nowrap;
 }
 
+body.single-product .woocommerce-message a.button:hover,
+body.single-product .woocommerce-message a.button:focus,
+body.single-product .woocommerce-message a.wc-forward:hover,
+body.single-product .woocommerce-message a.wc-forward:focus,
+body.single-product .woocommerce-info a.button:hover,
+body.single-product .woocommerce-info a.button:focus,
+body.single-product .woocommerce-info a.wc-forward:hover,
+body.single-product .woocommerce-info a.wc-forward:focus,
 body.single-product .woocommerce-notices-wrapper .woocommerce-message a.button:hover,
 body.single-product .woocommerce-notices-wrapper .woocommerce-message a.button:focus,
 body.single-product .woocommerce-notices-wrapper .woocommerce-message a.wc-forward:hover,

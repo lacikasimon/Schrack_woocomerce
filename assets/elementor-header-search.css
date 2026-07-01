@@ -235,6 +235,39 @@
 	text-decoration: none;
 }
 
+.schrack-header-search__price .schrack-b2b-price {
+	display: grid;
+	gap: 2px;
+	justify-items: end;
+	max-width: 100%;
+}
+
+.schrack-header-search__price .schrack-b2b-price__current,
+.schrack-header-search__price .schrack-b2b-price__full {
+	display: block;
+	min-width: 0;
+}
+
+.schrack-header-search__price .schrack-b2b-price__break {
+	display: none;
+}
+
+.schrack-header-search__price .schrack-b2b-price__full {
+	color: var(--schrack-header-search-muted);
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+	text-align: right;
+	word-break: normal;
+}
+
+.schrack-header-search__price .schrack-b2b-price__full del {
+	color: inherit;
+	font-size: 1em;
+	font-weight: 700;
+}
+
 .schrack-header-search__stock {
 	border: 1px solid var(--schrack-header-search-border);
 	border-radius: 999px;
