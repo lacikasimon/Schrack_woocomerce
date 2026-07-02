@@ -432,7 +432,7 @@ class Schrack_Cart_Checkout_Renderer {
 		$max = $max > 0 ? $max : '';
 
 		return sprintf(
-			'<div class="quantity"><button type="button" class="minus" aria-label="%1$s">-</button><input type="number" class="input-text qty text" step="1" min="%2$s" max="%3$s" name="cart[%4$s][qty]" value="%5$s" title="%6$s" size="4" inputmode="numeric" autocomplete="off"><button type="button" class="plus" aria-label="%7$s">+</button></div>',
+			'<div class="quantity"><button type="button" class="schrack-cart-qty-button schrack-cart-qty-button--minus" data-schrack-qty-action="decrease" aria-label="%1$s">-</button><input type="number" class="input-text qty text" step="1" min="%2$s" max="%3$s" name="cart[%4$s][qty]" value="%5$s" title="%6$s" size="4" inputmode="numeric" autocomplete="off"><button type="button" class="schrack-cart-qty-button schrack-cart-qty-button--plus" data-schrack-qty-action="increase" aria-label="%7$s">+</button></div>',
 			esc_attr__( 'Scade cantitatea', 'schrack-woocommerce-sync' ),
 			esc_attr( (string) $min ),
 			esc_attr( (string) $max ),

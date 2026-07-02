@@ -5,6 +5,7 @@
 	var toggleSelector = '.woocommerce-form-coupon-toggle';
 	var formSelector = 'form.checkout_coupon';
 	var checkoutRefreshTimer = null;
+	var cartUpdateDelay = 550;
 	var textMap = {
 		'Apply coupon': 'Aplica cuponul',
 		'APPLY COUPON': 'APLICA CUPONUL',
@@ -199,6 +200,37 @@
 		}
 	}
 
+	function scheduleCartUpdate(root, input) {
+		var form = input.closest('form.woocommerce-cart-form');
+		var button;
+
+		if (!form) {
+			return;
+		}
+
+		enableCartUpdate(input);
+		window.clearTimeout(form.schrackCartUpdateTimer);
+
+		form.schrackCartUpdateTimer = window.setTimeout(function () {
+			if (!document.documentElement.contains(form)) {
+				return;
+			}
+
+			button = form.querySelector('button[name="update_cart"], input[name="update_cart"]');
+
+			if (!button) {
+				return;
+			}
+
+			button.disabled = false;
+			button.removeAttribute('disabled');
+			button.setAttribute('aria-disabled', 'false');
+			form.classList.add('is-updating');
+			button.click();
+			requestCheckoutRefresh(root);
+		}, cartUpdateDelay);
+	}
+
 	function quantityNumber(input, fallback) {
 		var value = parseFloat(input.value);
 
@@ -214,8 +246,8 @@
 	function bindQuantityControls(root) {
 		root.querySelectorAll('.schrack-cart-checkout__woocommerce-cart .quantity').forEach(function (quantity) {
 			var input = quantity.querySelector('input.qty');
-			var minus = quantity.querySelector('.minus');
-			var plus = quantity.querySelector('.plus');
+			var minus = quantity.querySelector('[data-schrack-qty-action="decrease"]');
+			var plus = quantity.querySelector('[data-schrack-qty-action="increase"]');
 
 			if (!input) {
 				return;
@@ -226,10 +258,12 @@
 				input.addEventListener('input', function () {
 					enableCartUpdate(input);
 					updateCartCount(root);
+					scheduleCartUpdate(root, input);
 				});
 				input.addEventListener('change', function () {
 					enableCartUpdate(input);
 					updateCartCount(root);
+					scheduleCartUpdate(root, input);
 				});
 			}
 
@@ -239,12 +273,16 @@
 				}
 
 				button.dataset.schrackQtyBound = 'yes';
-				button.addEventListener('click', function () {
+				button.addEventListener('click', function (event) {
 					var step = quantityAttribute(input, 'step', 1);
 					var min = quantityAttribute(input, 'min', 0);
 					var max = input.max === '' ? Infinity : quantityAttribute(input, 'max', Infinity);
 					var current = quantityNumber(input, min);
-					var next = current + (button.classList.contains('minus') ? -step : step);
+					var next = current + (button.getAttribute('data-schrack-qty-action') === 'decrease' ? -step : step);
+
+					event.preventDefault();
+					event.stopPropagation();
+					event.stopImmediatePropagation();
 
 					next = Math.max(min, Math.min(max, next));
 					input.value = String(next);
