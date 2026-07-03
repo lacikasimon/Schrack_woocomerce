@@ -135,9 +135,50 @@ if ( ! defined( 'ABSPATH' ) ) {
 		</div>
 	</div>
 
+	<?php
+	$queue_by_task = array();
+
+	foreach ( $queue_status as $queue_row ) {
+		$queue_by_task[ (string) ( $queue_row['task'] ?? '' ) ] = $queue_row;
+	}
+
+	// Maps the per-operation status keys (used in $status/get_status()) to the
+	// queue_status() task keys, which use slightly different names (e.g. "price" vs "prices").
+	$operation_task_map = array(
+		'catalog'            => 'catalog',
+		'telesystem_catalog' => 'telesystem_catalog',
+		'price'              => 'prices',
+		'stock'              => 'stock',
+		'images'             => 'images',
+	);
+
+	$operation_labels = array(
+		'catalog'            => __( 'Catalog', 'schrack-woocommerce-sync' ),
+		'telesystem_catalog' => __( 'Telesystem catalog', 'schrack-woocommerce-sync' ),
+		'price'              => __( 'Prices', 'schrack-woocommerce-sync' ),
+		'stock'              => __( 'Stock', 'schrack-woocommerce-sync' ),
+		'images'             => __( 'Images', 'schrack-woocommerce-sync' ),
+	);
+
+	$any_active = false;
+
+	foreach ( $queue_status as $queue_row ) {
+		if ( ! empty( $queue_row['is_active'] ) ) {
+			$any_active = true;
+			break;
+		}
+	}
+	?>
+
 	<div class="schrack-panel">
 		<div class="schrack-panel-header">
-			<h2><?php esc_html_e( 'Active Queue', 'schrack-woocommerce-sync' ); ?></h2>
+			<h2><?php esc_html_e( 'Sync Progress', 'schrack-woocommerce-sync' ); ?></h2>
+			<div class="schrack-auto-refresh">
+				<label>
+					<input type="checkbox" id="schrack-auto-refresh-toggle" <?php checked( $any_active ); ?>>
+					<?php esc_html_e( 'Auto-refresh every 20s', 'schrack-woocommerce-sync' ); ?>
+				</label>
+			</div>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="schrack_wc_sync_stop_syncs">
 				<input type="hidden" name="redirect_page" value="schrack-sync-status">
@@ -153,51 +194,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<tr>
 					<th><?php esc_html_e( 'Operation', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'State', 'schrack-woocommerce-sync' ); ?></th>
-					<th><?php esc_html_e( 'Pending', 'schrack-woocommerce-sync' ); ?></th>
-					<th><?php esc_html_e( 'Running', 'schrack-woocommerce-sync' ); ?></th>
-					<th><?php esc_html_e( 'Next run', 'schrack-woocommerce-sync' ); ?></th>
-					<th><?php esc_html_e( 'Hook', 'schrack-woocommerce-sync' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php foreach ( $queue_status as $row ) : ?>
-					<?php
-					$state      = (string) ( $row['state'] ?? 'idle' );
-					$next_run   = absint( $row['next_run'] ?? 0 );
-					$state_text = (string) ( $queue_state_labels[ $state ] ?? ucfirst( $state ) );
-					$state_class = (string) ( $queue_state_classes[ $state ] ?? 'is-warning' );
-					?>
-					<tr>
-						<td><?php echo esc_html( (string) ( $row['label'] ?? '' ) ); ?></td>
-						<td><span class="schrack-status-pill <?php echo esc_attr( $state_class ); ?>"><?php echo esc_html( $state_text ); ?></span></td>
-						<td><?php echo esc_html( (string) absint( $row['pending'] ?? 0 ) ); ?></td>
-						<td><?php echo esc_html( (string) absint( $row['running'] ?? 0 ) ); ?></td>
-						<td><?php echo $next_run > 0 ? esc_html( wp_date( 'Y-m-d H:i:s', $next_run ) ) : esc_html__( '-', 'schrack-woocommerce-sync' ); ?></td>
-						<td><code><?php echo esc_html( (string) ( $row['hook'] ?? '' ) ); ?></code></td>
-					</tr>
-				<?php endforeach; ?>
-			</tbody>
-		</table>
-	</div>
-
-	<div class="schrack-panel">
-		<h2><?php esc_html_e( 'Last Runs', 'schrack-woocommerce-sync' ); ?></h2>
-		<table class="widefat striped">
-			<thead>
-				<tr>
-					<th><?php esc_html_e( 'Operation', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Progress', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'This run', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Last run', 'schrack-woocommerce-sync' ); ?></th>
-					<th><?php esc_html_e( 'Processed', 'schrack-woocommerce-sync' ); ?></th>
-					<th><?php esc_html_e( 'Batches', 'schrack-woocommerce-sync' ); ?></th>
-					<th><?php esc_html_e( 'Errors', 'schrack-woocommerce-sync' ); ?></th>
+					<th><?php esc_html_e( 'Next check', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Details', 'schrack-woocommerce-sync' ); ?></th>
-					<th><?php esc_html_e( 'Batch cursor', 'schrack-woocommerce-sync' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
-				<?php foreach ( array( 'catalog', 'telesystem_catalog', 'price', 'stock', 'images' ) as $operation ) : ?>
+				<?php foreach ( $operation_task_map as $operation => $task ) : ?>
 					<?php
-					$row     = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
+					$row         = isset( $status[ $operation ] ) && is_array( $status[ $operation ] ) ? $status[ $operation ] : array();
+					$queue_row   = $queue_by_task[ $task ] ?? array();
+					$state       = (string) ( $queue_row['state'] ?? 'idle' );
+					$state_text  = (string) ( $queue_state_labels[ $state ] ?? ucfirst( $state ) );
+					$state_class = (string) ( $queue_state_classes[ $state ] ?? 'is-warning' );
+					$pending     = absint( $queue_row['pending'] ?? 0 );
+					$running     = absint( $queue_row['running'] ?? 0 );
+					$next_run    = absint( $queue_row['next_run'] ?? 0 );
+
+					$total  = absint( $row['total_items'] ?? ( $row['total_products'] ?? 0 ) );
+					$cursor = absint( $row['cursor'] ?? 0 );
+					$pct    = $total > 0 ? min( 100, (int) round( ( $cursor / $total ) * 100 ) ) : 0;
+
+					$last_run_raw = (string) ( $row['last_run'] ?? '' );
+					$last_run_ts  = '' !== $last_run_raw ? strtotime( $last_run_raw ) : false;
+
 					$details = array();
 
 					if ( 'catalog' === $operation ) {
@@ -245,30 +267,133 @@ if ( ! defined( 'ABSPATH' ) ) {
 					}
 					?>
 					<tr>
-						<td><?php echo esc_html( 'telesystem_catalog' === $operation ? __( 'Telesystem catalog', 'schrack-woocommerce-sync' ) : ucfirst( $operation ) ); ?></td>
-						<td><?php echo esc_html( (string) ( $row['last_run'] ?? '-' ) ); ?></td>
-						<td><?php echo esc_html( (string) ( $row['processed'] ?? 0 ) ); ?></td>
-						<td><?php echo esc_html( (string) ( $row['batches_processed'] ?? '-' ) ); ?></td>
-						<td><?php echo esc_html( (string) ( $row['errors'] ?? 0 ) ); ?></td>
-						<td><?php echo ! empty( $details ) ? esc_html( implode( ', ', $details ) ) : esc_html__( '-', 'schrack-woocommerce-sync' ); ?></td>
+						<td><?php echo esc_html( (string) ( $operation_labels[ $operation ] ?? ucfirst( $operation ) ) ); ?></td>
+						<td>
+							<span class="schrack-status-pill <?php echo esc_attr( $state_class ); ?>"><?php echo esc_html( $state_text ); ?></span>
+							<?php if ( $pending > 0 || $running > 0 ) : ?>
+								<span class="schrack-sync-meta">
+									<?php
+									printf(
+										/* translators: 1: running batch count, 2: pending batch count. */
+										esc_html__( '%1$d running, %2$d pending', 'schrack-woocommerce-sync' ),
+										$running,
+										$pending
+									);
+									?>
+								</span>
+							<?php endif; ?>
+						</td>
+						<td>
+							<?php if ( $total > 0 ) : ?>
+								<div class="schrack-progress-cell">
+									<progress class="schrack-progress-bar" value="<?php echo esc_attr( (string) $cursor ); ?>" max="<?php echo esc_attr( (string) $total ); ?>"></progress>
+									<span class="schrack-progress-text">
+										<?php
+										printf(
+											/* translators: 1: cursor, 2: total items, 3: percentage. */
+											esc_html__( '%1$s / %2$s (%3$s%%)', 'schrack-woocommerce-sync' ),
+											esc_html( number_format_i18n( $cursor ) ),
+											esc_html( number_format_i18n( $total ) ),
+											esc_html( (string) $pct )
+										);
+										?>
+									</span>
+								</div>
+							<?php else : ?>
+								<?php esc_html_e( '-', 'schrack-woocommerce-sync' ); ?>
+							<?php endif; ?>
+						</td>
 						<td>
 							<?php
-							$total = $row['total_items'] ?? ( $row['total_products'] ?? 0 );
-
-							if ( ! empty( $total ) ) {
-								printf(
-									'%s / %s',
-									esc_html( (string) ( $row['cursor'] ?? 0 ) ),
-									esc_html( (string) $total )
-								);
-							} else {
-								echo esc_html( '-' );
-							}
+							printf(
+								/* translators: 1: processed count, 2: error count. */
+								esc_html__( '%1$s processed, %2$s errors', 'schrack-woocommerce-sync' ),
+								esc_html( (string) absint( $row['processed'] ?? 0 ) ),
+								esc_html( (string) absint( $row['errors'] ?? 0 ) )
+							);
 							?>
+							<?php if ( isset( $row['batches_processed'] ) ) : ?>
+								<span class="schrack-sync-meta">
+									<?php
+									printf(
+										/* translators: %s: batch count. */
+										esc_html__( '%s batches this run', 'schrack-woocommerce-sync' ),
+										esc_html( (string) absint( $row['batches_processed'] ) )
+									);
+									?>
+								</span>
+							<?php endif; ?>
 						</td>
+						<td>
+							<?php if ( false !== $last_run_ts ) : ?>
+								<span title="<?php echo esc_attr( $last_run_raw ); ?>">
+									<?php
+									printf(
+										/* translators: %s: relative time. */
+										esc_html__( '%s ago', 'schrack-woocommerce-sync' ),
+										esc_html( human_time_diff( $last_run_ts, current_time( 'timestamp' ) ) )
+									);
+									?>
+								</span>
+							<?php else : ?>
+								<?php esc_html_e( 'Never', 'schrack-woocommerce-sync' ); ?>
+							<?php endif; ?>
+						</td>
+						<td>
+							<?php if ( $running > 0 ) : ?>
+								<?php esc_html_e( 'Now', 'schrack-woocommerce-sync' ); ?>
+							<?php elseif ( $next_run > 0 && $next_run <= time() ) : ?>
+								<?php esc_html_e( 'Due now', 'schrack-woocommerce-sync' ); ?>
+							<?php elseif ( $next_run > 0 ) : ?>
+								<span title="<?php echo esc_attr( wp_date( 'Y-m-d H:i:s', $next_run ) ); ?>">
+									<?php
+									printf(
+										/* translators: %s: relative time. */
+										esc_html__( 'in %s', 'schrack-woocommerce-sync' ),
+										esc_html( human_time_diff( time(), $next_run ) )
+									);
+									?>
+								</span>
+							<?php else : ?>
+								<?php esc_html_e( '-', 'schrack-woocommerce-sync' ); ?>
+							<?php endif; ?>
+						</td>
+						<td><?php echo ! empty( $details ) ? esc_html( implode( ', ', $details ) ) : esc_html__( '-', 'schrack-woocommerce-sync' ); ?></td>
 					</tr>
 				<?php endforeach; ?>
 			</tbody>
 		</table>
+		<?php if ( ! $action_scheduler_available && $any_active ) : ?>
+			<p class="description"><?php esc_html_e( 'Rows shown as "Queued" or "Scheduled" are waiting for the next WP-Cron tick (an incoming site visit), not running continuously. See the WP-Cron note above the Environment table.', 'schrack-woocommerce-sync' ); ?></p>
+		<?php endif; ?>
 	</div>
 </div>
+
+<script>
+( function () {
+	var toggle = document.getElementById( 'schrack-auto-refresh-toggle' );
+
+	if ( ! toggle ) {
+		return;
+	}
+
+	var storageKey = 'schrackSyncAutoRefresh';
+	var stored = window.sessionStorage ? sessionStorage.getItem( storageKey ) : null;
+
+	if ( null !== stored ) {
+		toggle.checked = '1' === stored;
+	}
+
+	toggle.addEventListener( 'change', function () {
+		if ( window.sessionStorage ) {
+			sessionStorage.setItem( storageKey, toggle.checked ? '1' : '0' );
+		}
+	} );
+
+	if ( toggle.checked ) {
+		window.setTimeout( function () {
+			window.location.reload();
+		}, 20000 );
+	}
+} )();
+</script>
