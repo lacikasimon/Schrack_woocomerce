@@ -68,6 +68,7 @@ class Schrack_Header_Renderer {
 				<div class="schrack-header__actions">
 					<?php echo $this->account_link( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<?php echo $this->cart_link( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->offer_link( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<button class="schrack-header__menu-toggle" type="button" aria-expanded="false" aria-controls="<?php echo esc_attr( $panel_id ); ?>" data-header-menu-toggle>
 						<span class="schrack-header__hamburger" aria-hidden="true">
 							<span></span>
@@ -79,6 +80,7 @@ class Schrack_Header_Renderer {
 				</div>
 			</div>
 
+			<?php echo $this->desktop_navigation( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php echo $this->eu_top_bar( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 
 			<div class="schrack-header__backdrop" hidden data-header-menu-close></div>
@@ -101,7 +103,7 @@ class Schrack_Header_Renderer {
 				</div>
 
 				<nav class="schrack-header__menu" aria-label="<?php echo esc_attr( $settings['menu_label'] ); ?>">
-					<?php echo $this->menu_html( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $this->menu_html( $settings, false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</nav>
 
 				<div class="schrack-header__panel-actions">
@@ -147,44 +149,75 @@ class Schrack_Header_Renderer {
 			'show_account'        => 'yes',
 			'show_cart'           => 'yes',
 			'show_cart_total'     => 'yes',
+			'show_offer'          => 'yes',
 			'show_search'         => 'yes',
 			'show_search_images'  => 'yes',
 			'show_search_price'   => 'yes',
 			'show_search_stock'   => 'yes',
 			'show_eu_logos'       => 'yes',
-			'search_placeholder'  => __( 'Cauta produse...', 'schrack-woocommerce-sync' ),
-			'search_button_text'  => __( 'Cauta', 'schrack-woocommerce-sync' ),
+			'search_placeholder'  => __( 'Caută produse, coduri, categorii...', 'schrack-woocommerce-sync' ),
+			'search_button_text'  => __( 'Caută', 'schrack-woocommerce-sync' ),
 			'search_min_chars'    => 3,
 			'search_max_results'  => 8,
 			'search_enable_fuzzy' => 'yes',
 			'search_fuzzy_pool'   => 120,
 			'is_sticky'           => 'no',
-			'cart_label'          => __( 'Cos', 'schrack-woocommerce-sync' ),
-			'account_label'       => __( 'Contul meu', 'schrack-woocommerce-sync' ),
-			'login_label'         => __( 'Autentificare', 'schrack-woocommerce-sync' ),
-			'menu_label'          => __( 'Meniu', 'schrack-woocommerce-sync' ),
-			'accent_color'        => '#135e96',
-			'action_color'        => '#b32d2e',
-			'max_width'           => 1280,
+			'cart_label'          => __( 'Coș', 'schrack-woocommerce-sync' ),
+			'account_label'       => __( 'Cont', 'schrack-woocommerce-sync' ),
+			'login_label'         => __( 'Cont', 'schrack-woocommerce-sync' ),
+			'menu_label'          => __( 'Toate categoriile', 'schrack-woocommerce-sync' ),
+			'offer_label'         => __( 'Cere ofertă', 'schrack-woocommerce-sync' ),
+			'offer_url'           => home_url( '/contact/' ),
+			'accent_color'        => '#102033',
+			'action_color'        => '#f15a0a',
+			'max_width'           => 1840,
 			'radius'              => 8,
 		);
 
 		$settings = wp_parse_args( $settings, $defaults );
 
-		foreach ( array( 'company_name', 'brand_name', 'brand_suffix', 'cart_label', 'account_label', 'login_label', 'menu_label', 'search_placeholder', 'search_button_text' ) as $key ) {
+		foreach ( array( 'company_name', 'brand_name', 'brand_suffix', 'cart_label', 'account_label', 'login_label', 'menu_label', 'offer_label', 'search_placeholder', 'search_button_text' ) as $key ) {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
-		foreach ( array( 'show_brand_text', 'show_account', 'show_cart', 'show_cart_total', 'show_search', 'show_search_images', 'show_search_price', 'show_search_stock', 'show_eu_logos', 'search_enable_fuzzy', 'is_sticky' ) as $key ) {
+		$legacy_labels = array(
+			'search_placeholder' => array(
+				'Cauta produse...' => $defaults['search_placeholder'],
+			),
+			'search_button_text' => array(
+				'Cauta' => $defaults['search_button_text'],
+			),
+			'cart_label' => array(
+				'Cos' => $defaults['cart_label'],
+			),
+			'account_label' => array(
+				'Contul meu' => $defaults['account_label'],
+			),
+			'login_label' => array(
+				'Autentificare' => $defaults['login_label'],
+			),
+			'menu_label' => array(
+				'Meniu' => $defaults['menu_label'],
+			),
+		);
+
+		foreach ( $legacy_labels as $key => $labels ) {
+			if ( isset( $labels[ $settings[ $key ] ] ) ) {
+				$settings[ $key ] = $labels[ $settings[ $key ] ];
+			}
+		}
+
+		foreach ( array( 'show_brand_text', 'show_account', 'show_cart', 'show_cart_total', 'show_offer', 'show_search', 'show_search_images', 'show_search_price', 'show_search_stock', 'show_eu_logos', 'search_enable_fuzzy', 'is_sticky' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
 		}
 
 		$settings['logo_url']           = esc_url_raw( (string) $settings['logo_url'] );
 		$settings['site_url']           = esc_url_raw( (string) $settings['site_url'] );
+		$settings['offer_url']          = esc_url_raw( (string) $settings['offer_url'] );
 		$settings['menu_id']            = absint( $settings['menu_id'] );
 		$settings['accent_color']       = sanitize_hex_color( (string) $settings['accent_color'] ) ?: $defaults['accent_color'];
 		$settings['action_color']       = sanitize_hex_color( (string) $settings['action_color'] ) ?: $defaults['action_color'];
-		$settings['max_width']          = $this->slider_size( $settings['max_width'], 960, 1440 );
+		$settings['max_width']          = $this->slider_size( $settings['max_width'], 960, 1920 );
 		$settings['radius']             = $this->slider_size( $settings['radius'], 0, 8 );
 		$settings['search_min_chars']   = max( 3, min( 5, absint( $settings['search_min_chars'] ) ) );
 		$settings['search_max_results'] = max( 3, min( 12, absint( $settings['search_max_results'] ) ) );
@@ -194,7 +227,31 @@ class Schrack_Header_Renderer {
 			$settings['site_url'] = home_url( '/' );
 		}
 
+		if ( '' === $settings['offer_url'] ) {
+			$settings['offer_url'] = home_url( '/contact/' );
+		}
+
 		return $settings;
+	}
+
+	/**
+	 * Renders the desktop navigation row below the main header.
+	 *
+	 * @param array<string,string|int> $settings Sanitized settings.
+	 */
+	private function desktop_navigation( array $settings ): string {
+		ob_start();
+		?>
+		<nav class="schrack-header__nav" aria-label="<?php echo esc_attr( $settings['menu_label'] ); ?>">
+			<div class="schrack-header__nav-inner">
+				<div class="schrack-header__desktop-menu">
+					<?php echo $this->menu_html( $settings, true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				</div>
+			</div>
+		</nav>
+		<?php
+
+		return (string) ob_get_clean();
 	}
 
 	/**
@@ -239,14 +296,14 @@ class Schrack_Header_Renderer {
 			'button_text'  => $settings['search_button_text'],
 			'min_chars'    => $settings['search_min_chars'],
 			'max_results'  => $settings['search_max_results'],
-			'max_width'    => 620,
+			'max_width'    => 820,
 			'show_images'  => $settings['show_search_images'],
 			'show_price'   => $settings['show_search_price'],
 			'show_stock'   => $settings['show_search_stock'],
 			'enable_fuzzy' => $settings['search_enable_fuzzy'],
 			'fuzzy_pool'   => $settings['search_fuzzy_pool'],
 			'accent_color' => $settings['accent_color'],
-			'action_color' => $settings['action_color'],
+			'action_color' => $settings['accent_color'],
 			'radius'       => $settings['radius'],
 		);
 
@@ -313,37 +370,213 @@ class Schrack_Header_Renderer {
 	}
 
 	/**
-	 * Renders the selected WordPress menu or a compact fallback.
+	 * Renders the offer request action.
 	 *
 	 * @param array<string,string|int> $settings Sanitized settings.
 	 */
-	private function menu_html( array $settings ): string {
-		$menu = '';
-
-		if ( (int) $settings['menu_id'] > 0 ) {
-			$menu = wp_nav_menu(
-				array(
-					'container'      => false,
-					'depth'          => 3,
-					'echo'           => false,
-					'fallback_cb'    => false,
-					'item_spacing'   => 'discard',
-					'menu'           => (int) $settings['menu_id'],
-					'menu_class'     => 'schrack-header__menu-list',
-					'theme_location' => '',
-				)
-			);
-		}
-
-		if ( is_string( $menu ) && '' !== trim( $menu ) ) {
-			return $menu;
+	private function offer_link( array $settings ): string {
+		if ( 'yes' !== $settings['show_offer'] || '' === $settings['offer_url'] ) {
+			return '';
 		}
 
 		ob_start();
 		?>
-		<ul class="schrack-header__menu-list">
-			<?php foreach ( $this->fallback_links() as $link ) : ?>
-				<li><a href="<?php echo esc_url( $link['href'] ); ?>"><?php echo esc_html( $link['label'] ); ?></a></li>
+		<a class="schrack-header__action schrack-header__offer" href="<?php echo esc_url( $settings['offer_url'] ); ?>">
+			<span class="schrack-header__action-label"><?php echo esc_html( $settings['offer_label'] ); ?></span>
+		</a>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the selected WordPress menu or a compact fallback.
+	 *
+	 * @param array<string,string|int> $settings Sanitized settings.
+	 */
+	private function menu_html( array $settings, bool $desktop ): string {
+		$nodes = array();
+
+		if ( (int) $settings['menu_id'] > 0 ) {
+			$nodes = $this->menu_nodes( (int) $settings['menu_id'] );
+		}
+
+		if ( empty( $nodes ) ) {
+			$nodes = $this->fallback_links();
+		}
+
+		return $this->render_menu_nodes( $nodes, 0, $desktop );
+	}
+
+	/**
+	 * Returns fallback links for sites that have not selected a menu yet.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function fallback_links(): array {
+		return array(
+			array(
+				'label'    => __( 'Toate categoriile', 'schrack-woocommerce-sync' ),
+				'href'     => $this->shop_url(),
+				'children' => array(),
+			),
+			array(
+				'label'    => __( 'Electric', 'schrack-woocommerce-sync' ),
+				'href'     => $this->product_category_url( 'electric', '/product-category/electric/' ),
+				'children' => array(),
+			),
+			array(
+				'label'    => __( 'Securitate', 'schrack-woocommerce-sync' ),
+				'href'     => $this->product_category_url( 'securitate', '/product-category/securitate/' ),
+				'children' => array(),
+			),
+			array(
+				'label'    => __( 'Fotovoltaice', 'schrack-woocommerce-sync' ),
+				'href'     => $this->product_category_url( 'fotovoltaice', '/product-category/fotovoltaice/' ),
+				'children' => array(),
+			),
+			array(
+				'label'    => __( 'Automatizări', 'schrack-woocommerce-sync' ),
+				'href'     => $this->product_category_url( 'automatizari', '/product-category/automatizari/' ),
+				'children' => array(),
+			),
+			array(
+				'label'    => __( 'Rack & rețelistică', 'schrack-woocommerce-sync' ),
+				'href'     => $this->product_category_url( 'rack-retelistica', '/product-category/rack-retelistica/' ),
+				'children' => array(),
+			),
+			array(
+				'label'    => __( 'B2B', 'schrack-woocommerce-sync' ),
+				'href'     => home_url( '/b2b/' ),
+				'children' => array(),
+			),
+			array(
+				'label'    => __( 'Contact', 'schrack-woocommerce-sync' ),
+				'href'     => home_url( '/contact/' ),
+				'children' => array(),
+			),
+		);
+	}
+
+	/**
+	 * Builds a menu tree from a selected WordPress menu.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function menu_nodes( int $menu_id ): array {
+		if ( ! function_exists( 'wp_get_nav_menu_items' ) ) {
+			return array();
+		}
+
+		$items = wp_get_nav_menu_items(
+			$menu_id,
+			array(
+				'update_post_term_cache' => false,
+			)
+		);
+
+		if ( empty( $items ) || ! is_array( $items ) ) {
+			return array();
+		}
+
+		$nodes_by_id        = array();
+		$children_by_parent = array();
+
+		foreach ( $items as $item ) {
+			if ( ! $item instanceof WP_Post || ! empty( $item->_invalid ) ) {
+				continue;
+			}
+
+			$item_id   = (int) $item->ID;
+			$parent_id = absint( $item->menu_item_parent );
+			$classes   = is_array( $item->classes ) ? array_filter( array_map( 'sanitize_html_class', $item->classes ) ) : array();
+
+			$nodes_by_id[ $item_id ] = array(
+				'label'      => (string) $item->title,
+				'href'       => '' !== (string) $item->url ? (string) $item->url : '#',
+				'target'     => (string) $item->target,
+				'rel'        => (string) $item->xfn,
+				'title_attr' => (string) $item->attr_title,
+				'classes'    => $classes,
+				'children'   => array(),
+			);
+
+			$children_by_parent[ $parent_id ][] = $item_id;
+		}
+
+		$build = function ( int $parent_id, int $depth ) use ( &$build, $nodes_by_id, $children_by_parent ): array {
+			if ( $depth >= 3 || empty( $children_by_parent[ $parent_id ] ) ) {
+				return array();
+			}
+
+			$nodes = array();
+
+			foreach ( $children_by_parent[ $parent_id ] as $child_id ) {
+				if ( empty( $nodes_by_id[ $child_id ] ) ) {
+					continue;
+				}
+
+				$node             = $nodes_by_id[ $child_id ];
+				$node['children'] = $build( $child_id, $depth + 1 );
+				$nodes[]          = $node;
+			}
+
+			return $nodes;
+		};
+
+		return $build( 0, 0 );
+	}
+
+	/**
+	 * Renders a menu tree without duplicate WordPress menu item IDs.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes Menu nodes.
+	 */
+	private function render_menu_nodes( array $nodes, int $depth, bool $desktop ): string {
+		if ( empty( $nodes ) ) {
+			return '';
+		}
+
+		$list_classes = array( 'schrack-header__menu-list' );
+
+		if ( $depth > 0 ) {
+			$list_classes[] = 'sub-menu';
+		}
+
+		ob_start();
+		?>
+		<ul class="<?php echo esc_attr( implode( ' ', $list_classes ) ); ?>">
+			<?php foreach ( $nodes as $index => $node ) : ?>
+				<?php
+				$children     = is_array( $node['children'] ?? null ) ? $node['children'] : array();
+				$item_classes = array( 'schrack-header__menu-item' );
+
+				if ( ! empty( $node['classes'] ) && is_array( $node['classes'] ) ) {
+					$item_classes = array_merge( $item_classes, $node['classes'] );
+				}
+
+				if ( ! empty( $children ) ) {
+					$item_classes[] = 'menu-item-has-children';
+				}
+
+				if ( $desktop && 0 === $depth && 0 === $index ) {
+					$item_classes[] = 'is-primary-trigger';
+				}
+
+				if ( $desktop && 0 === $depth && count( $nodes ) > 5 && $index >= count( $nodes ) - 2 ) {
+					$item_classes[] = 'is-secondary';
+
+					if ( $index === count( $nodes ) - 2 ) {
+						$item_classes[] = 'is-secondary-start';
+					}
+				}
+				?>
+				<li class="<?php echo esc_attr( implode( ' ', array_unique( array_filter( $item_classes ) ) ) ); ?>">
+					<a<?php echo $this->menu_link_attributes( $node, ! empty( $children ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+						<?php echo esc_html( (string) $node['label'] ); ?>
+					</a>
+					<?php echo $this->render_menu_nodes( $children, $depth + 1, $desktop ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				</li>
 			<?php endforeach; ?>
 		</ul>
 		<?php
@@ -352,29 +585,45 @@ class Schrack_Header_Renderer {
 	}
 
 	/**
-	 * Returns fallback links for sites that have not selected a menu yet.
+	 * Returns escaped attributes for a menu link.
 	 *
-	 * @return array<int,array{label:string,href:string}>
+	 * @param array<string,mixed> $node Menu node.
 	 */
-	private function fallback_links(): array {
-		return array(
-			array(
-				'label' => __( 'Acasa', 'schrack-woocommerce-sync' ),
-				'href'  => home_url( '/' ),
-			),
-			array(
-				'label' => __( 'Magazin', 'schrack-woocommerce-sync' ),
-				'href'  => $this->shop_url(),
-			),
-			array(
-				'label' => __( 'Contul meu', 'schrack-woocommerce-sync' ),
-				'href'  => $this->account_url(),
-			),
-			array(
-				'label' => __( 'Cos', 'schrack-woocommerce-sync' ),
-				'href'  => $this->cart_url(),
-			),
+	private function menu_link_attributes( array $node, bool $has_children ): string {
+		$target = (string) ( $node['target'] ?? '' );
+		$rel    = trim( (string) ( $node['rel'] ?? '' ) );
+
+		if ( '_blank' === $target && false === strpos( $rel, 'noopener' ) ) {
+			$rel = trim( $rel . ' noopener noreferrer' );
+		}
+
+		$attributes = array(
+			'href' => esc_url( (string) ( $node['href'] ?? '#' ) ),
 		);
+
+		if ( '' !== $target ) {
+			$attributes['target'] = esc_attr( $target );
+		}
+
+		if ( '' !== $rel ) {
+			$attributes['rel'] = esc_attr( $rel );
+		}
+
+		if ( '' !== (string) ( $node['title_attr'] ?? '' ) ) {
+			$attributes['title'] = esc_attr( (string) $node['title_attr'] );
+		}
+
+		if ( $has_children ) {
+			$attributes['aria-haspopup'] = 'true';
+		}
+
+		$output = '';
+
+		foreach ( $attributes as $name => $value ) {
+			$output .= sprintf( ' %s="%s"', esc_attr( $name ), $value );
+		}
+
+		return $output;
 	}
 
 	/**
@@ -493,6 +742,25 @@ class Schrack_Header_Renderer {
 		}
 
 		return home_url( '/shop/' );
+	}
+
+	/**
+	 * Returns a product category URL with a stable fallback path.
+	 */
+	private function product_category_url( string $slug, string $fallback_path ): string {
+		if ( taxonomy_exists( 'product_cat' ) ) {
+			$term = get_term_by( 'slug', $slug, 'product_cat' );
+
+			if ( $term instanceof WP_Term ) {
+				$link = get_term_link( $term );
+
+				if ( is_string( $link ) ) {
+					return $link;
+				}
+			}
+		}
+
+		return home_url( $fallback_path );
 	}
 
 	/**

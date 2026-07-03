@@ -183,7 +183,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Placeholder', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Cauta produse...', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Caută produse, coduri, categorii...', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -192,7 +192,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Text buton', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Cauta', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Caută', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -289,7 +289,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Eticheta meniu', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Meniu', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Toate categoriile', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -308,6 +308,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 				'show_account'    => __( 'Cont utilizator', 'schrack-woocommerce-sync' ),
 				'show_cart'       => __( 'Cos cumparaturi', 'schrack-woocommerce-sync' ),
 				'show_cart_total' => __( 'Total cos', 'schrack-woocommerce-sync' ),
+				'show_offer'      => __( 'Buton cere oferta', 'schrack-woocommerce-sync' ),
 			) as $key => $label
 		) {
 			$this->add_control(
@@ -328,7 +329,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Eticheta cos', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Cos', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Coș', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -337,7 +338,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Eticheta cont', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Contul meu', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Cont', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -346,7 +347,29 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Eticheta autentificare', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Autentificare', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Cont', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'offer_label',
+			array(
+				'label'   => __( 'Eticheta oferta', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::TEXT,
+				'default' => __( 'Cere ofertă', 'schrack-woocommerce-sync' ),
+			)
+		);
+
+		$this->add_control(
+			'offer_url',
+			array(
+				'label'         => __( 'URL oferta', 'schrack-woocommerce-sync' ),
+				'type'          => \Elementor\Controls_Manager::URL,
+				'default'       => array(
+					'url' => home_url( '/contact/' ),
+				),
+				'label_block'   => true,
+				'show_external' => false,
 			)
 		);
 
@@ -369,13 +392,13 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 				'range'      => array(
 					'px' => array(
 						'min'  => 960,
-						'max'  => 1440,
+						'max'  => 1920,
 						'step' => 20,
 					),
 				),
 				'default'    => array(
 					'unit' => 'px',
-					'size' => 1280,
+					'size' => 1840,
 				),
 			)
 		);
@@ -385,7 +408,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Culoare accent', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::COLOR,
-				'default' => '#135e96',
+				'default' => '#102033',
 			)
 		);
 
@@ -394,7 +417,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Culoare actiune', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::COLOR,
-				'default' => '#b32d2e',
+				'default' => '#f15a0a',
 			)
 		);
 
@@ -439,7 +462,7 @@ class Schrack_Elementor_Header_Widget extends \Elementor\Widget_Base {
 	protected function render(): void {
 		$settings = $this->get_settings_for_display();
 
-		foreach ( array( 'logo_url', 'site_url' ) as $url_key ) {
+		foreach ( array( 'logo_url', 'site_url', 'offer_url' ) as $url_key ) {
 			if ( isset( $settings[ $url_key ] ) && is_array( $settings[ $url_key ] ) ) {
 				$settings[ $url_key ] = (string) ( $settings[ $url_key ]['url'] ?? '' );
 			}

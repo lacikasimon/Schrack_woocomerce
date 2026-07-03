@@ -98,6 +98,7 @@ class Schrack_Catalog_Importer {
 		$image_url_meta_errors = 0;
 
 		$this->mapper->prime_product_ids_by_skus( $this->item_skus( $items ) );
+		$this->mapper->prime_category_cache();
 
 		foreach ( $items as $item ) {
 			try {

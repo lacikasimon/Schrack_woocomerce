@@ -143,13 +143,15 @@ class Schrack_Telesystem_Importer {
 		$image_urls_seen = 0;
 
 		$this->mapper->prime_product_ids_by_skus( $this->item_skus( $items ) );
+		$this->mapper->prime_product_ids_by_source_item_numbers( self::SOURCE, $this->item_source_item_numbers( $items ) );
+		$this->mapper->prime_category_cache();
 
 		foreach ( $items as $item ) {
 			try {
-				$product_id = $this->mapper->upsert( $item );
+				$product = $this->mapper->upsert_product( $item );
 				++$processed;
 
-				$commercial = $this->apply_feed_commercial_data( $product_id, $item );
+				$commercial = $this->apply_feed_commercial_data( $product, $item );
 
 				if ( ! empty( $commercial['price_synced'] ) ) {
 					++$prices_synced;
@@ -624,17 +626,15 @@ class Schrack_Telesystem_Importer {
 	}
 
 	/**
-	 * Applies Telesystem price, stock, and supplier-specific metadata.
+	 * Applies Telesystem price, stock, and supplier-specific metadata to an already
+	 * loaded/saved product object (avoids a redundant wc_get_product() reload).
 	 *
-	 * @param array<string,mixed> $item Normalized feed item.
+	 * @param WC_Product           $product Product already created/updated by upsert_product().
+	 * @param array<string,mixed>  $item Normalized feed item.
 	 * @return array{price_synced:bool,stock_synced:bool}
 	 */
-	private function apply_feed_commercial_data( int $product_id, array $item ): array {
-		$product = wc_get_product( $product_id );
-
-		if ( ! $product instanceof WC_Product ) {
-			throw new RuntimeException( 'WooCommerce product was not found.' );
-		}
+	private function apply_feed_commercial_data( WC_Product $product, array $item ): array {
+		$product_id = $product->get_id();
 
 		$price_1 = isset( $item['telesystem_price_1'] ) ? (float) $item['telesystem_price_1'] : 0.0;
 		$price_2 = isset( $item['telesystem_price_2'] ) ? (float) $item['telesystem_price_2'] : 0.0;
@@ -1290,6 +1290,26 @@ class Schrack_Telesystem_Importer {
 		}
 
 		return $skus;
+	}
+
+	/**
+	 * Extracts source item numbers from a normalized batch for lookup priming.
+	 *
+	 * @param array<int,array<string,mixed>> $items Normalized items.
+	 * @return array<int,string>
+	 */
+	private function item_source_item_numbers( array $items ): array {
+		$item_numbers = array();
+
+		foreach ( $items as $item ) {
+			$item_number = $this->source_item_number( $item );
+
+			if ( '' !== $item_number ) {
+				$item_numbers[] = $item_number;
+			}
+		}
+
+		return $item_numbers;
 	}
 
 	/**

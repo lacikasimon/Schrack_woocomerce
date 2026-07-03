@@ -46,11 +46,13 @@ class Schrack_Footer_Renderer {
 			<div class="schrack-footer__inner">
 				<div class="schrack-footer__grid">
 					<div class="schrack-footer__brand">
-						<a class="schrack-footer__logo-link" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['company_name'] ); ?>">
-							<img src="<?php echo esc_url( $settings['logo_url'] ); ?>" alt="<?php echo esc_attr( $settings['company_name'] ); ?>" loading="lazy">
+						<a class="schrack-footer__logo-link" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['brand_name'] ); ?>">
+							<img src="<?php echo esc_url( $settings['logo_url'] ); ?>" alt="<?php echo esc_attr( $settings['brand_name'] ); ?>" loading="lazy">
 							<span>
 								<strong><?php echo esc_html( $settings['brand_name'] ); ?></strong>
-								<small><?php echo esc_html( $settings['brand_suffix'] ); ?></small>
+								<?php if ( '' !== $settings['brand_suffix'] ) : ?>
+									<small><?php echo esc_html( $settings['brand_suffix'] ); ?></small>
+								<?php endif; ?>
 							</span>
 						</a>
 
@@ -160,7 +162,7 @@ class Schrack_Footer_Renderer {
 					</p>
 
 					<div class="schrack-footer__bottom-row">
-						<p><?php echo esc_html( sprintf( __( '© %1$d GENE SYS SECURITY SRL. Toate drepturile rezervate.', 'schrack-woocommerce-sync' ), (int) gmdate( 'Y' ) ) ); ?></p>
+						<p><?php echo esc_html( sprintf( __( '© %1$d %2$s. Toate drepturile rezervate.', 'schrack-woocommerce-sync' ), (int) gmdate( 'Y' ), $settings['brand_name'] ) ); ?></p>
 						<nav aria-label="<?php esc_attr_e( 'Linkuri legale', 'schrack-woocommerce-sync' ); ?>">
 							<?php foreach ( $this->legal_links() as $link ) : ?>
 								<a href="<?php echo esc_url( $link['href'] ); ?>" <?php echo $link['external'] ? 'target="_blank" rel="noopener noreferrer"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
@@ -224,8 +226,8 @@ class Schrack_Footer_Renderer {
 		$defaults = array(
 			'top_message'   => __( 'Instalatii electrice · Fotovoltaice · Securitate — solutii integrate pentru proiectul tau', 'schrack-woocommerce-sync' ),
 			'company_name'  => 'GENE SYS SECURITY SRL',
-			'brand_name'    => 'GENE SYS SECURITY',
-			'brand_suffix'  => 'SRL',
+			'brand_name'    => 'syshub',
+			'brand_suffix'  => '',
 			'brand_lead'    => __( 'Proiectare, executie si mentenanta pentru instalatii electrice, fotovoltaice si sisteme de securitate.', 'schrack-woocommerce-sync' ),
 			'brand_text'    => __( 'Lucram cu beneficiari privati, firme de constructii si administratori de patrimoniu — oferte clare, documentatie conforma si suport dupa receptie.', 'schrack-woocommerce-sync' ),
 			'logo_url'      => 'https://syshub.ro/assets/genesys-logo-D16z0xlU.svg',
@@ -253,6 +255,8 @@ class Schrack_Footer_Renderer {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
 
+		$settings = $this->normalize_brand_display( $settings );
+
 		foreach ( array( 'show_social', 'show_anpc', 'show_payments' ) as $key ) {
 			$settings[ $key ] = 'yes' === (string) $settings[ $key ] ? 'yes' : 'no';
 		}
@@ -270,6 +274,26 @@ class Schrack_Footer_Renderer {
 
 		if ( '' === $settings['site_url'] ) {
 			$settings['site_url'] = $defaults['site_url'];
+		}
+
+		return $settings;
+	}
+
+	/**
+	 * Keeps older Elementor instances aligned with the current public brand name.
+	 *
+	 * @param array<string,string|int> $settings Sanitized settings.
+	 * @return array<string,string|int>
+	 */
+	private function normalize_brand_display( array $settings ): array {
+		$legacy_brand_names = array( 'GENE SYS SECURITY', 'GENE SYS SECURITY SRL' );
+
+		if ( in_array( strtoupper( (string) $settings['brand_name'] ), $legacy_brand_names, true ) ) {
+			$settings['brand_name'] = 'syshub';
+		}
+
+		if ( 'syshub' === strtolower( (string) $settings['brand_name'] ) ) {
+			$settings['brand_suffix'] = '';
 		}
 
 		return $settings;

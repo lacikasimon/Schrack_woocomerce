@@ -85,7 +85,7 @@ class Schrack_Elementor_Footer_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Nume brand', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => 'GENE SYS SECURITY',
+				'default' => 'syshub',
 			)
 		);
 
@@ -94,7 +94,7 @@ class Schrack_Elementor_Footer_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Sufix brand', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => 'SRL',
+				'default' => '',
 			)
 		);
 

@@ -1,12 +1,12 @@
 .schrack-header {
-	--schrack-header-accent: #135e96;
-	--schrack-header-action: #b32d2e;
+	--schrack-header-accent: #102033;
+	--schrack-header-action: #f15a0a;
 	--schrack-header-border: #dbe4ee;
 	--schrack-header-muted: #647180;
 	--schrack-header-radius: 8px;
 	--schrack-header-slate: #17202a;
 	--schrack-header-surface: #fff;
-	--schrack-header-width: 1280px;
+	--schrack-header-width: 1840px;
 	background: rgba(255, 255, 255, 0.98);
 	border-bottom: 1px solid var(--schrack-header-border);
 	color: var(--schrack-header-slate);
@@ -40,7 +40,7 @@
 .schrack-header__eu-top {
 	background: #fff;
 	border-top: 1px solid rgba(219, 234, 254, 0.8);
-	order: 2;
+	order: 3;
 	width: 100%;
 }
 
@@ -182,14 +182,14 @@ img.schrack-header__eu-logo.is-adr {
 .schrack-header__inner {
 	align-items: center;
 	display: flex;
-	flex-wrap: wrap;
-	gap: 16px;
+	flex-wrap: nowrap;
+	gap: 24px;
 	justify-content: space-between;
 	margin: 0 auto;
-	max-width: min(100%, var(--schrack-header-width));
-	min-height: 78px;
+	max-width: min(calc(100% - 48px), var(--schrack-header-width));
+	min-height: 98px;
 	order: 1;
-	padding: 12px 16px;
+	padding: 16px 0;
 	width: 100%;
 }
 
@@ -199,6 +199,7 @@ img.schrack-header__eu-logo.is-adr {
 	color: var(--schrack-header-slate);
 	display: inline-flex;
 	gap: 12px;
+	flex: 0 0 auto;
 	min-width: 0;
 	text-decoration: none;
 }
@@ -214,9 +215,9 @@ img.schrack-header__eu-logo.is-adr {
 .schrack-header__logo,
 .schrack-header__panel-logo {
 	align-items: center;
-	background: color-mix(in srgb, var(--schrack-header-accent) 8%, #fff);
-	border: 1px solid color-mix(in srgb, var(--schrack-header-accent) 18%, #fff);
-	border-radius: var(--schrack-header-radius);
+	background: transparent;
+	border: 0;
+	border-radius: 0;
 	display: inline-flex;
 	flex: 0 0 auto;
 	height: 48px;
@@ -230,7 +231,7 @@ img.schrack-header__eu-logo.is-adr {
 	display: block;
 	height: 100%;
 	object-fit: contain;
-	padding: 5px;
+	padding: 0;
 	width: 100%;
 }
 
@@ -250,11 +251,11 @@ img.schrack-header__eu-logo.is-adr {
 
 .schrack-header__brand-text strong {
 	color: var(--schrack-header-slate);
-	font-size: 17px;
+	font-size: 22px;
 	font-weight: 800;
 	letter-spacing: 0;
 	line-height: 1.12;
-	max-width: 260px;
+	max-width: 300px;
 }
 
 .schrack-header__brand-text small {
@@ -268,31 +269,33 @@ img.schrack-header__eu-logo.is-adr {
 
 .schrack-header__search {
 	display: flex;
-	flex: 1 1 420px;
+	flex: 1 1 620px;
 	justify-content: center;
-	min-width: 240px;
+	margin: 0 auto;
+	max-width: 820px;
+	min-width: 280px;
 	position: relative;
 }
 
 .schrack-header__search .schrack-header-search {
-	max-width: min(100%, 620px);
+	max-width: min(100%, 820px);
 	width: 100%;
 	z-index: 145;
 }
 
 .schrack-header__search .schrack-header-search__form {
-	box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+	box-shadow: none;
 }
 
 .schrack-header__search .schrack-header-search__button {
-	min-width: 68px;
+	min-width: 96px;
 }
 
 .schrack-header__actions {
 	align-items: center;
 	display: flex;
 	flex: 0 0 auto;
-	gap: 8px;
+	gap: 18px;
 	justify-content: flex-end;
 	min-width: 0;
 }
@@ -308,7 +311,7 @@ img.schrack-header__eu-logo.is-adr {
 	cursor: pointer;
 	display: inline-flex;
 	font: inherit;
-	font-size: 13px;
+	font-size: 15px;
 	font-weight: 800;
 	gap: 8px;
 	justify-content: center;
@@ -319,6 +322,22 @@ img.schrack-header__eu-logo.is-adr {
 	position: relative;
 	text-decoration: none;
 	transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.schrack-header__actions > .schrack-header__action:not(.schrack-header__offer) {
+	background: transparent;
+	border-color: transparent;
+	color: var(--schrack-header-slate);
+	font-size: 16px;
+	min-height: 44px;
+	padding: 8px 0;
+}
+
+.schrack-header__actions > .schrack-header__action:not(.schrack-header__offer):hover,
+.schrack-header__actions > .schrack-header__action:not(.schrack-header__offer):focus {
+	background: transparent;
+	border-color: transparent;
+	color: var(--schrack-header-action);
 }
 
 .schrack-header__action:hover,
@@ -335,6 +354,24 @@ img.schrack-header__eu-logo.is-adr {
 
 .schrack-header__cart {
 	border-color: color-mix(in srgb, var(--schrack-header-action) 26%, var(--schrack-header-border));
+}
+
+.schrack-header__offer {
+	background: var(--schrack-header-action);
+	border-color: var(--schrack-header-action);
+	border-radius: var(--schrack-header-radius);
+	color: #fff;
+	font-size: 16px;
+	min-height: 52px;
+	min-width: 128px;
+	padding: 14px 24px;
+}
+
+.schrack-header__offer:hover,
+.schrack-header__offer:focus {
+	background: color-mix(in srgb, var(--schrack-header-action) 88%, #000);
+	border-color: color-mix(in srgb, var(--schrack-header-action) 88%, #000);
+	color: #fff;
 }
 
 .schrack-header__icon {
@@ -380,10 +417,22 @@ img.schrack-header__eu-logo.is-adr {
 
 .schrack-header__cart-total {
 	color: var(--schrack-header-slate);
-	font-size: 12px;
+	font-size: 16px;
 	font-weight: 850;
-	max-width: 115px;
+	max-width: 140px;
 	overflow-wrap: anywhere;
+}
+
+.schrack-header__actions .schrack-header__cart-count {
+	display: none;
+}
+
+.schrack-header__actions .schrack-header__cart-total::before {
+	color: var(--schrack-header-slate);
+	content: "•";
+	display: inline-block;
+	font-weight: 800;
+	margin: 0 7px 0 1px;
 }
 
 .schrack-header__cart-total:empty {
@@ -404,11 +453,143 @@ img.schrack-header__eu-logo.is-adr {
 	width: 20px;
 }
 
+.schrack-header__menu-toggle {
+	display: none;
+}
+
+.schrack-header__nav {
+	background: #fff;
+	border-top: 1px solid #eef2f6;
+	border-bottom: 1px solid #e2e8f0;
+	order: 2;
+	width: 100%;
+}
+
+.schrack-header__nav-inner {
+	align-items: center;
+	display: flex;
+	margin: 0 auto;
+	max-width: min(calc(100% - 48px), var(--schrack-header-width));
+	min-height: 56px;
+	width: 100%;
+}
+
+.schrack-header__desktop-menu {
+	min-width: 0;
+	width: 100%;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-list {
+	align-items: stretch;
+	display: flex;
+	gap: 22px;
+	list-style: none;
+	margin: 0;
+	min-width: 0;
+	padding: 0;
+	width: 100%;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-list.sub-menu {
+	background: #fff;
+	border: 1px solid var(--schrack-header-border);
+	border-radius: var(--schrack-header-radius);
+	box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+	display: none;
+	gap: 2px;
+	left: 0;
+	min-width: 220px;
+	padding: 8px;
+	position: absolute;
+	top: calc(100% + 1px);
+	width: max-content;
+	z-index: 160;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-list.sub-menu .sub-menu {
+	left: calc(100% + 8px);
+	top: -8px;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-item {
+	align-items: stretch;
+	display: flex;
+	margin: 0;
+	min-width: 0;
+	padding: 0;
+	position: relative;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-item:hover > .sub-menu,
+.schrack-header__desktop-menu .schrack-header__menu-item:focus-within > .sub-menu {
+	display: grid;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-item.is-secondary-start {
+	margin-left: auto;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-list a {
+	align-items: center;
+	color: #374151;
+	display: inline-flex;
+	font-size: 16px;
+	font-weight: 800;
+	line-height: 1.2;
+	min-height: 56px;
+	padding: 0;
+	text-decoration: none;
+	transition: color 160ms ease;
+	white-space: nowrap;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-list a:hover,
+.schrack-header__desktop-menu .schrack-header__menu-list a:focus {
+	color: var(--schrack-header-action);
+	outline: none;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-list.sub-menu a {
+	border-radius: var(--schrack-header-radius);
+	color: #334155;
+	display: flex;
+	font-size: 14px;
+	font-weight: 750;
+	min-height: 38px;
+	padding: 8px 10px;
+	white-space: normal;
+	width: 100%;
+}
+
+.schrack-header__desktop-menu .schrack-header__menu-list.sub-menu a:hover,
+.schrack-header__desktop-menu .schrack-header__menu-list.sub-menu a:focus {
+	background: color-mix(in srgb, var(--schrack-header-accent) 7%, #fff);
+	color: var(--schrack-header-slate);
+}
+
+.schrack-header__desktop-menu .is-primary-trigger > a {
+	color: var(--schrack-header-action);
+	gap: 6px;
+}
+
+.schrack-header__desktop-menu .is-primary-trigger > a::before {
+	content: "≡";
+	display: inline-block;
+	font-size: 16px;
+	font-weight: 900;
+	line-height: 1;
+	transform: translateY(-1px);
+}
+
+.schrack-header__desktop-menu .is-secondary > a {
+	color: #374151;
+}
+
 .schrack-header__backdrop {
 	background: rgba(15, 23, 42, 0.42);
 	bottom: 0;
 	left: 0;
-	order: 3;
+	order: 4;
 	position: fixed;
 	right: 0;
 	top: 0;
@@ -423,7 +604,7 @@ img.schrack-header__eu-logo.is-adr {
 	grid-template-rows: auto minmax(0, 1fr) auto;
 	height: 100dvh;
 	max-width: min(420px, calc(100vw - 28px));
-	order: 3;
+	order: 4;
 	position: fixed;
 	right: 0;
 	top: 0;
@@ -547,6 +728,29 @@ img.schrack-header__eu-logo.is-adr {
 	overflow: hidden;
 }
 
+@container schrack-header (max-width: 1180px) {
+	.schrack-header__inner {
+		flex-wrap: wrap;
+		gap: 14px;
+		min-height: 78px;
+	}
+
+	.schrack-header__nav {
+		display: none;
+	}
+
+	.schrack-header__menu-toggle {
+		display: inline-flex;
+	}
+
+	.schrack-header__search {
+		flex-basis: 100%;
+		margin: 0;
+		max-width: none;
+		order: 3;
+	}
+}
+
 @container schrack-header (max-width: 780px) {
 	.schrack-header__eu-inner {
 		gap: 0 16px;
@@ -615,9 +819,9 @@ img.schrack-header__eu-logo.is-adr {
 		max-width: 180px;
 	}
 
-	.schrack-header__account .schrack-header__action-label,
-	.schrack-header__cart .schrack-header__action-label,
-	.schrack-header__cart-total {
+	.schrack-header__actions .schrack-header__account .schrack-header__action-label,
+	.schrack-header__actions .schrack-header__cart .schrack-header__action-label,
+	.schrack-header__actions .schrack-header__cart-total {
 		display: none;
 	}
 }
@@ -694,11 +898,17 @@ img.schrack-header__eu-logo.is-adr {
 		gap: 6px;
 	}
 
-	.schrack-header__action,
+	.schrack-header__actions > .schrack-header__action,
 	.schrack-header__menu-toggle {
 		min-height: 42px;
 		min-width: 42px;
 		padding: 9px;
+	}
+
+	.schrack-header__offer {
+		font-size: 14px;
+		min-width: 104px;
+		padding: 10px 14px;
 	}
 
 	.schrack-header__menu-toggle .schrack-header__action-label {

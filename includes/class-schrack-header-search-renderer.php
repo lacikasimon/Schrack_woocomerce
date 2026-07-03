@@ -67,8 +67,14 @@ class Schrack_Header_Search_Renderer {
 		>
 			<form class="schrack-header-search__form" role="search" method="get" action="<?php echo esc_url( $this->product_search_url() ); ?>">
 				<label class="schrack-header-search__label" for="<?php echo esc_attr( $instance_id . '-input' ); ?>">
-					<?php esc_html_e( 'Cauta produse', 'schrack-woocommerce-sync' ); ?>
+					<?php esc_html_e( 'Caută produse', 'schrack-woocommerce-sync' ); ?>
 				</label>
+				<span class="schrack-header-search__icon" aria-hidden="true">
+					<svg viewBox="0 0 24 24" focusable="false">
+						<circle cx="11" cy="11" r="7"></circle>
+						<path d="m16.5 16.5 4 4"></path>
+					</svg>
+				</span>
 				<input
 					id="<?php echo esc_attr( $instance_id . '-input' ); ?>"
 					class="schrack-header-search__input"
@@ -684,18 +690,18 @@ class Schrack_Header_Search_Renderer {
 	 */
 	private function sanitize_settings( array $settings ): array {
 		return array(
-			'placeholder'  => sanitize_text_field( (string) ( $settings['placeholder'] ?? __( 'Cauta produse...', 'schrack-woocommerce-sync' ) ) ),
-			'button_text'  => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Cauta', 'schrack-woocommerce-sync' ) ) ),
+			'placeholder'  => sanitize_text_field( (string) ( $settings['placeholder'] ?? __( 'Caută produse, coduri, categorii...', 'schrack-woocommerce-sync' ) ) ),
+			'button_text'  => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Caută', 'schrack-woocommerce-sync' ) ) ),
 			'min_chars'    => max( 3, min( 5, absint( $settings['min_chars'] ?? 3 ) ) ),
 			'max_results'  => max( 3, min( 12, absint( $settings['max_results'] ?? 6 ) ) ),
-			'max_width'    => max( 240, min( 720, $this->slider_size( $settings['max_width'] ?? 460, 240, 720 ) ) ),
+			'max_width'    => max( 240, min( 920, $this->slider_size( $settings['max_width'] ?? 820, 240, 920 ) ) ),
 			'show_images'  => $this->truthy( $settings['show_images'] ?? 'yes' ),
 			'show_price'   => $this->truthy( $settings['show_price'] ?? 'yes' ),
 			'show_stock'   => $this->truthy( $settings['show_stock'] ?? 'yes' ),
 			'enable_fuzzy' => $this->truthy( $settings['enable_fuzzy'] ?? 'yes' ),
 			'fuzzy_pool'   => max( 40, min( 240, absint( $settings['fuzzy_pool'] ?? 120 ) ) ),
-			'accent_color' => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#135e96' ) ) ?: '#135e96',
-			'action_color' => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#b32d2e' ) ) ?: '#b32d2e',
+			'accent_color' => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#102033' ) ) ?: '#102033',
+			'action_color' => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#102033' ) ) ?: '#102033',
 			'radius'       => $this->slider_size( $settings['radius'] ?? 8, 0, 12 ),
 		);
 	}

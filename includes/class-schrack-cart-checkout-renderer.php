@@ -323,15 +323,6 @@ class Schrack_Cart_Checkout_Renderer {
 
 						<tr>
 							<td colspan="6" class="actions">
-								<?php if ( 'yes' === $settings['show_coupon'] && function_exists( 'wc_coupons_enabled' ) && wc_coupons_enabled() ) : ?>
-									<?php $coupon_id = wp_unique_id( 'schrack_coupon_code_' ); ?>
-									<div class="coupon">
-										<label for="<?php echo esc_attr( $coupon_id ); ?>" class="screen-reader-text"><?php esc_html_e( 'Cod cupon', 'schrack-woocommerce-sync' ); ?></label>
-										<input type="text" name="coupon_code" class="input-text" id="<?php echo esc_attr( $coupon_id ); ?>" value="" placeholder="<?php esc_attr_e( 'Cod cupon', 'schrack-woocommerce-sync' ); ?>">
-										<button type="submit" class="button" name="apply_coupon" value="<?php esc_attr_e( 'Aplica cuponul', 'schrack-woocommerce-sync' ); ?>"><?php esc_html_e( 'Aplica cuponul', 'schrack-woocommerce-sync' ); ?></button>
-									</div>
-								<?php endif; ?>
-
 								<button type="submit" class="button" name="update_cart" value="<?php esc_attr_e( 'Actualizeaza cosul', 'schrack-woocommerce-sync' ); ?>" disabled><?php esc_html_e( 'Actualizeaza cosul', 'schrack-woocommerce-sync' ); ?></button>
 
 								<?php wp_nonce_field( 'woocommerce-cart', 'woocommerce-cart-nonce' ); ?>
