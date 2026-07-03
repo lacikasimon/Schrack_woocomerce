@@ -65,6 +65,8 @@ class Schrack_Product_Page_Renderer {
 			class="<?php echo esc_attr( implode( ' ', $classes ) ); ?>"
 			style="<?php echo esc_attr( $style ); ?>"
 		>
+			<?php echo $this->breadcrumb( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+
 			<div class="schrack-product-page__layout">
 				<?php if ( $settings['show_gallery'] ) : ?>
 					<?php echo $this->gallery( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -107,6 +109,135 @@ class Schrack_Product_Page_Renderer {
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the product breadcrumb as a list.
+	 */
+	private function breadcrumb( WC_Product $product ): string {
+		$items = $this->breadcrumb_items( $product );
+
+		if ( empty( $items ) ) {
+			return '';
+		}
+
+		ob_start();
+		?>
+		<nav class="schrack-product-page__breadcrumb" aria-label="<?php esc_attr_e( 'Navigare produs', 'schrack-woocommerce-sync' ); ?>">
+			<ol>
+				<?php foreach ( $items as $index => $item ) : ?>
+					<?php $is_current = $index === count( $items ) - 1; ?>
+					<li>
+						<?php if ( ! $is_current && '' !== $item['url'] ) : ?>
+							<a href="<?php echo esc_url( $item['url'] ); ?>"><?php echo esc_html( $item['label'] ); ?></a>
+						<?php else : ?>
+							<span <?php echo $is_current ? 'aria-current="page"' : ''; ?>><?php echo esc_html( $item['label'] ); ?></span>
+						<?php endif; ?>
+					</li>
+				<?php endforeach; ?>
+			</ol>
+		</nav>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Builds breadcrumb items for the current product.
+	 *
+	 * @return array<int,array{label:string,url:string}>
+	 */
+	private function breadcrumb_items( WC_Product $product ): array {
+		$items = array(
+			array(
+				'label' => __( 'Acasa', 'schrack-woocommerce-sync' ),
+				'url'   => home_url( '/' ),
+			),
+			array(
+				'label' => __( 'Catalog produse', 'schrack-woocommerce-sync' ),
+				'url'   => $this->shop_url(),
+			),
+		);
+		$category = $this->primary_product_category( $product );
+
+		if ( $category instanceof WP_Term ) {
+			$ancestor_ids = array_reverse( get_ancestors( (int) $category->term_id, 'product_cat', 'taxonomy' ) );
+
+			foreach ( $ancestor_ids as $ancestor_id ) {
+				$ancestor = get_term( (int) $ancestor_id, 'product_cat' );
+
+				if ( ! $ancestor instanceof WP_Term ) {
+					continue;
+				}
+
+				$link = get_term_link( $ancestor );
+
+				if ( is_wp_error( $link ) ) {
+					continue;
+				}
+
+				$items[] = array(
+					'label' => $ancestor->name,
+					'url'   => (string) $link,
+				);
+			}
+
+			$link = get_term_link( $category );
+
+			if ( ! is_wp_error( $link ) ) {
+				$items[] = array(
+					'label' => $category->name,
+					'url'   => (string) $link,
+				);
+			}
+		}
+
+		$items[] = array(
+			'label' => $product->get_name(),
+			'url'   => '',
+		);
+
+		return $items;
+	}
+
+	/**
+	 * Returns the deepest product category available for breadcrumb context.
+	 */
+	private function primary_product_category( WC_Product $product ): ?WP_Term {
+		$terms = get_the_terms( $product->get_id(), 'product_cat' );
+
+		if ( is_wp_error( $terms ) || ! is_array( $terms ) || empty( $terms ) ) {
+			return null;
+		}
+
+		usort(
+			$terms,
+			static function ( WP_Term $left, WP_Term $right ): int {
+				$left_depth  = count( get_ancestors( (int) $left->term_id, 'product_cat', 'taxonomy' ) );
+				$right_depth = count( get_ancestors( (int) $right->term_id, 'product_cat', 'taxonomy' ) );
+
+				if ( $left_depth === $right_depth ) {
+					return strcasecmp( $left->name, $right->name );
+				}
+
+				return $right_depth <=> $left_depth;
+			}
+		);
+
+		return $terms[0] instanceof WP_Term ? $terms[0] : null;
+	}
+
+	/**
+	 * Returns the WooCommerce shop URL.
+	 */
+	private function shop_url(): string {
+		$shop_url = function_exists( 'wc_get_page_id' ) ? get_permalink( wc_get_page_id( 'shop' ) ) : '';
+
+		if ( ! is_string( $shop_url ) || '' === $shop_url ) {
+			return home_url( '/' );
+		}
+
+		return $shop_url;
 	}
 
 	/**
