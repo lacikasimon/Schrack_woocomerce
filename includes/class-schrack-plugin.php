@@ -123,6 +123,7 @@ class Schrack_Plugin {
 			'class-schrack-soap-client.php',
 			'class-schrack-product-mapper.php',
 			'class-schrack-frontend-image-loader.php',
+			'class-schrack-stock-label.php',
 			'class-schrack-b2b-pricing.php',
 			'class-schrack-catalog-importer.php',
 			'class-schrack-telesystem-importer.php',

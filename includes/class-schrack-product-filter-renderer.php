@@ -934,6 +934,7 @@ class Schrack_Product_Filter_Renderer {
 		$image      = $settings['show_images'] ? $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) : '';
 		$cart_class = 'schrack-product-card__cart button add_to_cart_button';
 		$show_cart_button = $settings['show_add_to_cart'] && $product->is_purchasable() && $product->is_in_stock();
+		$stock_badge = Schrack_Stock_Label::badge( $product );
 
 		if ( $product->supports( 'ajax_add_to_cart' ) ) {
 			$cart_class .= ' ajax_add_to_cart';
@@ -968,8 +969,8 @@ class Schrack_Product_Filter_Renderer {
 				<div class="schrack-product-card__meta">
 					<div class="schrack-product-card__price"><?php echo wp_kses_post( $product->get_price_html() ); ?></div>
 					<?php if ( $settings['show_stock'] ) : ?>
-						<span class="schrack-product-card__stock <?php echo $product->is_in_stock() ? 'is-in-stock' : 'is-out-of-stock'; ?>">
-							<?php echo $product->is_in_stock() ? esc_html__( 'In stoc', 'schrack-woocommerce-sync' ) : esc_html__( 'Stoc epuizat', 'schrack-woocommerce-sync' ); ?>
+						<span class="schrack-product-card__stock <?php echo esc_attr( $stock_badge['class'] ); ?>">
+							<?php echo esc_html( $stock_badge['text'] ); ?>
 						</span>
 					<?php endif; ?>
 				</div>

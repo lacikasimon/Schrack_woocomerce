@@ -8,6 +8,14 @@
 	max-width: 1320px;
 }
 
+.schrack-category-csv-admin {
+	margin: 12px 0 18px;
+}
+
+.schrack-category-csv-admin .notice {
+	margin: 0 0 12px;
+}
+
 .schrack-sync-admin h1 {
 	align-items: center;
 	display: flex;
@@ -387,6 +395,38 @@
 .schrack-sync-admin .widefat th {
 	padding: 11px 12px;
 	vertical-align: middle;
+}
+
+.schrack-markups-csv__intro {
+	min-width: 260px;
+}
+
+.schrack-markups-csv__intro p {
+	color: var(--schrack-text-muted);
+	margin: 4px 0 0;
+	max-width: 780px;
+}
+
+.schrack-markups-csv__import {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin: 14px 0 8px;
+}
+
+.schrack-markups-csv__import label {
+	font-weight: 600;
+}
+
+.schrack-markups-csv__import input[type="file"] {
+	max-width: 360px;
+}
+
+.schrack-markups-csv .description code {
+	background: #f0f0f1;
+	border-radius: 4px;
+	padding: 2px 5px;
 }
 
 .schrack-markups-bulk {

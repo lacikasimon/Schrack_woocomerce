@@ -622,6 +622,8 @@ class Schrack_Header_Search_Renderer {
 	 * @param array<string,mixed> $settings Settings.
 	 */
 	private function result_item( WC_Product $product, array $settings ): string {
+		$stock_badge = Schrack_Stock_Label::badge( $product );
+
 		ob_start();
 		?>
 		<a class="schrack-header-search__item" href="<?php echo esc_url( $product->get_permalink() ); ?>" role="option">
@@ -639,8 +641,8 @@ class Schrack_Header_Search_Renderer {
 						<span class="schrack-header-search__price"><?php echo wp_kses_post( $product->get_price_html() ); ?></span>
 					<?php endif; ?>
 					<?php if ( $settings['show_stock'] ) : ?>
-						<span class="schrack-header-search__stock <?php echo $product->is_in_stock() ? 'is-in-stock' : 'is-out-of-stock'; ?>">
-							<?php echo $product->is_in_stock() ? esc_html__( 'In stoc', 'schrack-woocommerce-sync' ) : esc_html__( 'Stoc epuizat', 'schrack-woocommerce-sync' ); ?>
+						<span class="schrack-header-search__stock <?php echo esc_attr( $stock_badge['class'] ); ?>">
+							<?php echo esc_html( $stock_badge['text'] ); ?>
 						</span>
 					<?php endif; ?>
 				</span>

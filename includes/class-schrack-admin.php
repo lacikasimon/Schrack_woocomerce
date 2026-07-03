@@ -59,6 +59,10 @@ class Schrack_Admin {
 
 		add_action( 'admin_post_schrack_wc_sync_save_settings', array( $this, 'save_settings' ) );
 		add_action( 'admin_post_schrack_wc_sync_save_markups', array( $this, 'save_markups' ) );
+		add_action( 'admin_post_schrack_wc_sync_export_markups', array( $this, 'export_markups' ) );
+		add_action( 'admin_post_schrack_wc_sync_import_markups', array( $this, 'import_markups' ) );
+		add_action( 'admin_post_schrack_wc_sync_export_categories', array( $this, 'export_categories' ) );
+		add_action( 'admin_post_schrack_wc_sync_import_categories', array( $this, 'import_categories' ) );
 		add_action( 'admin_post_schrack_wc_sync_save_b2b_customers', array( $this, 'save_b2b_customers' ) );
 		add_action( 'admin_post_schrack_wc_sync_soap_debug', array( $this, 'soap_debug' ) );
 		add_action( 'admin_post_schrack_wc_sync_manual_sync', array( $this, 'manual_sync' ) );
@@ -69,6 +73,7 @@ class Schrack_Admin {
 		add_action( 'edit_user_profile', array( $this, 'render_user_b2b_fields' ) );
 		add_action( 'personal_options_update', array( $this, 'save_user_b2b_fields' ) );
 		add_action( 'edit_user_profile_update', array( $this, 'save_user_b2b_fields' ) );
+		add_action( 'admin_notices', array( $this, 'render_category_csv_tools' ) );
 	}
 
 	/**
@@ -134,7 +139,10 @@ class Schrack_Admin {
 	 * Enqueues admin assets.
 	 */
 	public function enqueue_assets( string $hook_suffix ): void {
-		if ( ! str_contains( $hook_suffix, 'schrack-sync' ) ) {
+		$screen                   = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		$is_product_category_page = $screen && ( 'edit-product_cat' === $screen->id || 'product_cat' === (string) $screen->taxonomy );
+
+		if ( ! str_contains( $hook_suffix, 'schrack-sync' ) && ! $is_product_category_page ) {
 			return;
 		}
 
@@ -182,6 +190,460 @@ class Schrack_Admin {
 		$this->logger->info( 'admin', 'Schrack category markup rules were updated.' );
 		$this->set_notice( 'success', __( 'Category markups saved.', 'schrack-woocommerce-sync' ) );
 		$this->redirect( 'schrack-sync-markups' );
+	}
+
+	/**
+	 * Exports all WooCommerce category markup rows as CSV.
+	 */
+	public function export_markups(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_markups_csv' );
+
+		$tree         = $this->product_category_tree();
+		$rules        = $this->markups->all();
+		$default_rule = array( 'markup' => '', 'min_margin' => '', 'rounding' => 'none' );
+		$filename     = 'schrack-category-markups-' . gmdate( 'Y-m-d' ) . '.csv';
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+
+		$output = fopen( 'php://output', 'w' );
+
+		if ( false === $output ) {
+			wp_die( esc_html__( 'Could not create CSV export.', 'schrack-woocommerce-sync' ) );
+		}
+
+		fwrite( $output, "\xEF\xBB\xBF" );
+		fputcsv( $output, array( 'term_id', 'slug', 'path', 'name', 'markup', 'min_margin', 'rounding' ), ',', '"', '\\' );
+
+		foreach ( $tree['terms'] as $term ) {
+			if ( ! $term instanceof WP_Term ) {
+				continue;
+			}
+
+			$term_id = (int) $term->term_id;
+			$rule    = isset( $rules[ $term_id ] ) && is_array( $rules[ $term_id ] )
+				? wp_parse_args( $rules[ $term_id ], $default_rule )
+				: $default_rule;
+
+			fputcsv(
+				$output,
+				array(
+					$term_id,
+					$term->slug,
+					(string) ( $tree['paths'][ $term_id ] ?? $term->name ),
+					$term->name,
+					(string) $rule['markup'],
+					(string) $rule['min_margin'],
+					(string) $rule['rounding'],
+				),
+				',',
+				'"',
+				'\\'
+			);
+		}
+
+		fclose( $output );
+		exit;
+	}
+
+	/**
+	 * Imports category markup rows from CSV.
+	 */
+	public function import_markups(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_markups_csv' );
+
+		$file = isset( $_FILES['schrack_markups_csv'] ) && is_array( $_FILES['schrack_markups_csv'] )
+			? $_FILES['schrack_markups_csv']
+			: array();
+
+		$error = isset( $file['error'] ) ? (int) $file['error'] : UPLOAD_ERR_NO_FILE;
+
+		if ( UPLOAD_ERR_OK !== $error ) {
+			$this->set_notice( 'error', $this->markup_csv_upload_error_message( $error ) );
+			$this->redirect( 'schrack-sync-markups' );
+		}
+
+		$tmp_name = isset( $file['tmp_name'] ) ? (string) $file['tmp_name'] : '';
+
+		if ( '' === $tmp_name || ! is_uploaded_file( $tmp_name ) || ! is_readable( $tmp_name ) ) {
+			$this->set_notice( 'error', __( 'CSV upload could not be read.', 'schrack-woocommerce-sync' ) );
+			$this->redirect( 'schrack-sync-markups' );
+		}
+
+		$handle = fopen( $tmp_name, 'r' );
+
+		if ( false === $handle ) {
+			$this->set_notice( 'error', __( 'CSV upload could not be opened.', 'schrack-woocommerce-sync' ) );
+			$this->redirect( 'schrack-sync-markups' );
+		}
+
+		$first_line = fgets( $handle );
+
+		if ( false === $first_line ) {
+			fclose( $handle );
+			$this->set_notice( 'error', __( 'CSV file is empty.', 'schrack-woocommerce-sync' ) );
+			$this->redirect( 'schrack-sync-markups' );
+		}
+
+		$delimiter  = $this->detect_markup_csv_delimiter( $first_line );
+		$headers    = str_getcsv( $this->strip_utf8_bom( $first_line ), $delimiter, '"', '\\' );
+		$header_map = $this->markup_csv_header_map( $headers );
+
+		if ( empty( array_intersect( array_keys( $header_map ), array( 'term_id', 'slug', 'path' ) ) ) ) {
+			fclose( $handle );
+			$this->set_notice( 'error', __( 'CSV must include term_id, slug, or path column.', 'schrack-woocommerce-sync' ) );
+			$this->redirect( 'schrack-sync-markups' );
+		}
+
+		if ( empty( array_intersect( array_keys( $header_map ), array( 'markup', 'min_margin', 'rounding' ) ) ) ) {
+			fclose( $handle );
+			$this->set_notice( 'error', __( 'CSV must include markup, min_margin, or rounding column.', 'schrack-woocommerce-sync' ) );
+			$this->redirect( 'schrack-sync-markups' );
+		}
+
+		$tree             = $this->product_category_tree();
+		$lookup           = $this->product_category_lookup( $tree['terms'], $tree['paths'] );
+		$merged           = $this->markups->all();
+		$updated_term_ids = array();
+		$imported_rows    = 0;
+		$skipped_rows     = 0;
+		$warnings         = array();
+		$line_number      = 1;
+
+		while ( false !== ( $row = fgetcsv( $handle, 0, $delimiter, '"', '\\' ) ) ) {
+			$line_number++;
+
+			if ( $this->is_empty_csv_row( $row ) ) {
+				continue;
+			}
+
+			$term_id = $this->resolve_markup_csv_term_id( $row, $header_map, $lookup );
+
+			if ( $term_id <= 0 ) {
+				$skipped_rows++;
+
+				if ( count( $warnings ) < 10 ) {
+					$warnings[] = sprintf(
+						/* translators: %d: CSV line number. */
+						__( 'Line %d skipped: category was not found.', 'schrack-woocommerce-sync' ),
+						$line_number
+					);
+				}
+
+				continue;
+			}
+
+			$rule = isset( $merged[ $term_id ] ) && is_array( $merged[ $term_id ] )
+				? $merged[ $term_id ]
+				: array( 'markup' => '', 'min_margin' => '', 'rounding' => 'none' );
+
+			if ( isset( $header_map['markup'] ) ) {
+				$rule['markup'] = $this->markup_csv_cell( $row, $header_map, 'markup' );
+			}
+
+			if ( isset( $header_map['min_margin'] ) ) {
+				$rule['min_margin'] = $this->markup_csv_cell( $row, $header_map, 'min_margin' );
+			}
+
+			if ( isset( $header_map['rounding'] ) ) {
+				$rule['rounding'] = $this->normalize_markup_csv_rounding( $this->markup_csv_cell( $row, $header_map, 'rounding' ) );
+			}
+
+			$merged[ $term_id ]           = $rule;
+			$updated_term_ids[ $term_id ] = true;
+			$imported_rows++;
+		}
+
+		fclose( $handle );
+
+		if ( 0 === $imported_rows ) {
+			$this->set_notice(
+				empty( $warnings ) ? 'warning' : 'error',
+				__( 'No category markup rows were imported.', 'schrack-woocommerce-sync' ),
+				$warnings
+			);
+			$this->redirect( 'schrack-sync-markups' );
+		}
+
+		$this->markups->update( $merged );
+		$this->logger->info(
+			'admin',
+			'Schrack category markup CSV was imported.',
+			'',
+			array(
+				'imported_rows'      => $imported_rows,
+				'updated_categories' => count( $updated_term_ids ),
+				'skipped_rows'       => $skipped_rows,
+			)
+		);
+
+		$message = sprintf(
+			/* translators: 1: imported CSV rows, 2: updated categories, 3: skipped rows. */
+			__( 'CSV import finished. Imported %1$d row(s), updated %2$d categories, skipped %3$d row(s).', 'schrack-woocommerce-sync' ),
+			$imported_rows,
+			count( $updated_term_ids ),
+			$skipped_rows
+		);
+
+		if ( count( $warnings ) >= 10 && $skipped_rows > count( $warnings ) ) {
+			$warnings[] = sprintf(
+				/* translators: %d: omitted warning count. */
+				__( '%d additional skipped rows are not shown.', 'schrack-woocommerce-sync' ),
+				$skipped_rows - count( $warnings )
+			);
+		}
+
+		$this->set_notice( $skipped_rows > 0 ? 'warning' : 'success', $message, $warnings );
+		$this->redirect( 'schrack-sync-markups' );
+	}
+
+	/**
+	 * Renders CSV tools on the WooCommerce product category admin screen.
+	 */
+	public function render_category_csv_tools(): void {
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+
+		if ( ! $screen || ( 'edit-product_cat' !== $screen->id && 'product_cat' !== (string) $screen->taxonomy ) || ! current_user_can( self::CAPABILITY ) ) {
+			return;
+		}
+
+		$notice = $this->get_notice();
+		?>
+		<div class="schrack-sync-admin schrack-category-csv-admin">
+			<?php $this->render_notice( $notice ); ?>
+
+			<section class="schrack-panel schrack-markups-csv schrack-category-csv-tools">
+				<div class="schrack-panel-header">
+					<div class="schrack-markups-csv__intro">
+						<h2><?php esc_html_e( 'Category CSV import / export', 'schrack-woocommerce-sync' ); ?></h2>
+						<p><?php esc_html_e( 'Export WooCommerce product categories, edit the CSV, then import it back. New hierarchy can be created from the path column.', 'schrack-woocommerce-sync' ); ?></p>
+					</div>
+
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<input type="hidden" name="action" value="schrack_wc_sync_export_categories">
+						<?php wp_nonce_field( 'schrack_wc_sync_categories_csv' ); ?>
+						<button type="submit" class="button button-secondary"><?php esc_html_e( 'Export categories CSV', 'schrack-woocommerce-sync' ); ?></button>
+					</form>
+				</div>
+
+				<form class="schrack-markups-csv__import" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
+					<input type="hidden" name="action" value="schrack_wc_sync_import_categories">
+					<?php wp_nonce_field( 'schrack_wc_sync_categories_csv' ); ?>
+					<label for="schrack_categories_csv"><?php esc_html_e( 'CSV file', 'schrack-woocommerce-sync' ); ?></label>
+					<input id="schrack_categories_csv" type="file" name="schrack_categories_csv" accept=".csv,text/csv">
+					<button type="submit" class="button"><?php esc_html_e( 'Import categories CSV', 'schrack-woocommerce-sync' ); ?></button>
+				</form>
+
+				<p class="description">
+					<?php esc_html_e( 'Supported columns:', 'schrack-woocommerce-sync' ); ?>
+					<code>term_id</code>, <code>parent_id</code>, <code>parent_slug</code>, <code>parent_path</code>, <code>path</code>, <code>name</code>, <code>slug</code>, <code>description</code>, <code>display_type</code>, <code>image_id</code>, <code>image_url</code>, <code>menu_order</code>.
+				</p>
+			</section>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Exports WooCommerce product categories as CSV.
+	 */
+	public function export_categories(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_categories_csv' );
+
+		$tree     = $this->product_category_tree();
+		$filename = 'schrack-product-categories-' . gmdate( 'Y-m-d' ) . '.csv';
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+
+		$output = fopen( 'php://output', 'w' );
+
+		if ( false === $output ) {
+			wp_die( esc_html__( 'Could not create CSV export.', 'schrack-woocommerce-sync' ) );
+		}
+
+		fwrite( $output, "\xEF\xBB\xBF" );
+		fputcsv(
+			$output,
+			array( 'term_id', 'parent_id', 'parent_slug', 'parent_path', 'path', 'name', 'slug', 'description', 'display_type', 'image_id', 'image_url', 'menu_order', 'count' ),
+			',',
+			'"',
+			'\\'
+		);
+
+		foreach ( $tree['terms'] as $term ) {
+			if ( ! $term instanceof WP_Term ) {
+				continue;
+			}
+
+			$term_id      = (int) $term->term_id;
+			$parent_id    = absint( $term->parent );
+			$parent_term  = $parent_id > 0 ? get_term( $parent_id, 'product_cat' ) : null;
+			$image_id     = absint( get_term_meta( $term_id, 'thumbnail_id', true ) );
+			$image_url    = $image_id > 0 ? wp_get_attachment_url( $image_id ) : '';
+			$display_type = (string) get_term_meta( $term_id, 'display_type', true );
+
+			fputcsv(
+				$output,
+				array(
+					$term_id,
+					$parent_id > 0 ? $parent_id : '',
+					$parent_term instanceof WP_Term ? $parent_term->slug : '',
+					$parent_id > 0 ? (string) ( $tree['paths'][ $parent_id ] ?? '' ) : '',
+					(string) ( $tree['paths'][ $term_id ] ?? $term->name ),
+					$term->name,
+					$term->slug,
+					$term->description,
+					'' === $display_type ? 'default' : $display_type,
+					$image_id > 0 ? $image_id : '',
+					is_string( $image_url ) ? $image_url : '',
+					(string) get_term_meta( $term_id, 'order', true ),
+					(int) $term->count,
+				),
+				',',
+				'"',
+				'\\'
+			);
+		}
+
+		fclose( $output );
+		exit;
+	}
+
+	/**
+	 * Imports WooCommerce product categories from CSV.
+	 */
+	public function import_categories(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_categories_csv' );
+
+		$file = isset( $_FILES['schrack_categories_csv'] ) && is_array( $_FILES['schrack_categories_csv'] )
+			? $_FILES['schrack_categories_csv']
+			: array();
+
+		$error = isset( $file['error'] ) ? (int) $file['error'] : UPLOAD_ERR_NO_FILE;
+
+		if ( UPLOAD_ERR_OK !== $error ) {
+			$this->set_notice( 'error', $this->markup_csv_upload_error_message( $error ) );
+			$this->redirect_categories_page();
+		}
+
+		$tmp_name = isset( $file['tmp_name'] ) ? (string) $file['tmp_name'] : '';
+
+		if ( '' === $tmp_name || ! is_uploaded_file( $tmp_name ) || ! is_readable( $tmp_name ) ) {
+			$this->set_notice( 'error', __( 'CSV upload could not be read.', 'schrack-woocommerce-sync' ) );
+			$this->redirect_categories_page();
+		}
+
+		$handle = fopen( $tmp_name, 'r' );
+
+		if ( false === $handle ) {
+			$this->set_notice( 'error', __( 'CSV upload could not be opened.', 'schrack-woocommerce-sync' ) );
+			$this->redirect_categories_page();
+		}
+
+		$first_line = fgets( $handle );
+
+		if ( false === $first_line ) {
+			fclose( $handle );
+			$this->set_notice( 'error', __( 'CSV file is empty.', 'schrack-woocommerce-sync' ) );
+			$this->redirect_categories_page();
+		}
+
+		$delimiter  = $this->detect_markup_csv_delimiter( $first_line );
+		$headers    = str_getcsv( $this->strip_utf8_bom( $first_line ), $delimiter, '"', '\\' );
+		$header_map = $this->category_csv_header_map( $headers );
+
+		if ( empty( array_intersect( array_keys( $header_map ), array( 'term_id', 'slug', 'path', 'name' ) ) ) ) {
+			fclose( $handle );
+			$this->set_notice( 'error', __( 'CSV must include term_id, slug, path, or name column.', 'schrack-woocommerce-sync' ) );
+			$this->redirect_categories_page();
+		}
+
+		$tree         = $this->product_category_tree();
+		$lookup       = $this->product_category_lookup( $tree['terms'], $tree['paths'] );
+		$created      = 0;
+		$updated      = 0;
+		$skipped      = 0;
+		$warnings     = array();
+		$line_number  = 1;
+
+		while ( false !== ( $row = fgetcsv( $handle, 0, $delimiter, '"', '\\' ) ) ) {
+			$line_number++;
+
+			if ( $this->is_empty_csv_row( $row ) ) {
+				continue;
+			}
+
+			$result = $this->import_category_csv_row( $row, $header_map, $lookup );
+
+			if ( ! empty( $result['warning'] ) && count( $warnings ) < 10 ) {
+				$warnings[] = sprintf(
+					/* translators: 1: CSV line number, 2: warning message. */
+					__( 'Line %1$d: %2$s', 'schrack-woocommerce-sync' ),
+					$line_number,
+					(string) $result['warning']
+				);
+			}
+
+			if ( 'created' === (string) ( $result['status'] ?? '' ) ) {
+				$created++;
+			} elseif ( 'updated' === (string) ( $result['status'] ?? '' ) ) {
+				$updated++;
+			} else {
+				$skipped++;
+			}
+
+			if ( ! empty( $result['term_id'] ) ) {
+				$tree   = $this->product_category_tree();
+				$lookup = $this->product_category_lookup( $tree['terms'], $tree['paths'] );
+			}
+		}
+
+		fclose( $handle );
+
+		if ( 0 === $created && 0 === $updated ) {
+			$this->set_notice(
+				empty( $warnings ) ? 'warning' : 'error',
+				__( 'No product categories were imported.', 'schrack-woocommerce-sync' ),
+				$warnings
+			);
+			$this->redirect_categories_page();
+		}
+
+		$this->logger->info(
+			'admin',
+			'Schrack product category CSV was imported.',
+			'',
+			array(
+				'created' => $created,
+				'updated' => $updated,
+				'skipped' => $skipped,
+			)
+		);
+
+		$message = sprintf(
+			/* translators: 1: created categories, 2: updated categories, 3: skipped rows. */
+			__( 'Category CSV import finished. Created %1$d, updated %2$d, skipped %3$d row(s).', 'schrack-woocommerce-sync' ),
+			$created,
+			$updated,
+			$skipped
+		);
+
+		if ( count( $warnings ) >= 10 && $skipped > count( $warnings ) ) {
+			$warnings[] = sprintf(
+				/* translators: %d: omitted warning count. */
+				__( '%d additional warnings are not shown.', 'schrack-woocommerce-sync' ),
+				$skipped - count( $warnings )
+			);
+		}
+
+		$this->set_notice( ! empty( $warnings ) || $skipped > 0 ? 'warning' : 'success', $message, $warnings );
+		$this->redirect_categories_page();
 	}
 
 	/**
@@ -1251,6 +1713,683 @@ class Schrack_Admin {
 	}
 
 	/**
+	 * Returns WooCommerce product categories in tree order with display paths.
+	 *
+	 * @return array{terms:array<int,WP_Term>,paths:array<int,string>}
+	 */
+	private function product_category_tree(): array {
+		$terms = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+			)
+		);
+
+		if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
+			return array( 'terms' => array(), 'paths' => array() );
+		}
+
+		$terms_by_id     = array();
+		$terms_by_parent = array();
+
+		foreach ( $terms as $term ) {
+			if ( ! $term instanceof WP_Term ) {
+				continue;
+			}
+
+			$term_id                         = (int) $term->term_id;
+			$parent_id                       = absint( $term->parent );
+			$terms_by_id[ $term_id ]         = $term;
+			$terms_by_parent[ $parent_id ]   = $terms_by_parent[ $parent_id ] ?? array();
+			$terms_by_parent[ $parent_id ][] = $term;
+		}
+
+		foreach ( $terms_by_parent as $parent_id => $children ) {
+			usort(
+				$children,
+				static function ( WP_Term $left, WP_Term $right ): int {
+					return strnatcasecmp( $left->name, $right->name );
+				}
+			);
+			$terms_by_parent[ $parent_id ] = $children;
+		}
+
+		$paths   = array();
+		$ordered = array();
+		$append  = static function ( int $parent_id, string $parent_path ) use ( &$append, &$ordered, &$paths, $terms_by_parent ): void {
+			foreach ( $terms_by_parent[ $parent_id ] ?? array() as $term ) {
+				$term_id           = (int) $term->term_id;
+				$path              = '' === $parent_path ? $term->name : $parent_path . ' > ' . $term->name;
+				$paths[ $term_id ] = $path;
+				$ordered[]         = $term;
+
+				$append( $term_id, $path );
+			}
+		};
+
+		$append( 0, '' );
+
+		foreach ( $terms_by_id as $term_id => $term ) {
+			if ( isset( $paths[ $term_id ] ) ) {
+				continue;
+			}
+
+			$paths[ $term_id ] = $term->name;
+			$ordered[]         = $term;
+			$append( $term_id, $term->name );
+		}
+
+		return array( 'terms' => $ordered, 'paths' => $paths );
+	}
+
+	/**
+	 * Builds lookup maps for CSV category matching.
+	 *
+	 * @param array<int,WP_Term> $terms Product category terms.
+	 * @param array<int,string>  $paths Category paths by term ID.
+	 * @return array{ids:array<int,bool>,slugs:array<string,int>,paths:array<string,int>}
+	 */
+	private function product_category_lookup( array $terms, array $paths ): array {
+		$lookup = array(
+			'ids'   => array(),
+			'slugs' => array(),
+			'paths' => array(),
+		);
+
+		foreach ( $terms as $term ) {
+			if ( ! $term instanceof WP_Term ) {
+				continue;
+			}
+
+			$term_id                         = (int) $term->term_id;
+			$lookup['ids'][ $term_id ]      = true;
+			$lookup['slugs'][ $term->slug ] = $term_id;
+
+			$path_key = $this->markup_category_path_key( (string) ( $paths[ $term_id ] ?? $term->name ) );
+
+			if ( '' !== $path_key && ! isset( $lookup['paths'][ $path_key ] ) ) {
+				$lookup['paths'][ $path_key ] = $term_id;
+			}
+		}
+
+		return $lookup;
+	}
+
+	/**
+	 * Maps category CSV header labels to importer fields.
+	 *
+	 * @param array<int,string> $headers CSV headers.
+	 * @return array<string,int>
+	 */
+	private function category_csv_header_map( array $headers ): array {
+		$aliases = array(
+			'term_id'      => array( 'termid', 'id', 'categoryid', 'categorytermid' ),
+			'parent_id'    => array( 'parentid', 'parenttermid', 'parentcategoryid' ),
+			'parent_slug'  => array( 'parentslug', 'parentcategoryslug' ),
+			'parent_path'  => array( 'parentpath', 'parentcategorypath' ),
+			'path'         => array( 'path', 'categorypath', 'productcatpath', 'categoriepath' ),
+			'name'         => array( 'name', 'categoryname', 'nume', 'nev' ),
+			'slug'         => array( 'slug', 'categoryslug', 'productcatslug' ),
+			'description'  => array( 'description', 'desc', 'categorydescription', 'descriere' ),
+			'display_type' => array( 'displaytype', 'display', 'woodisplaytype' ),
+			'image_id'     => array( 'imageid', 'thumbnailid', 'thumbnail_id', 'imageattachmentid' ),
+			'image_url'    => array( 'imageurl', 'thumbnailurl', 'thumbnail_url' ),
+			'menu_order'   => array( 'menuorder', 'order', 'sortorder', 'position' ),
+		);
+		$map     = array();
+
+		foreach ( $headers as $index => $header ) {
+			$key = $this->markup_csv_key( (string) $header );
+
+			if ( '' === $key ) {
+				continue;
+			}
+
+			foreach ( $aliases as $field => $field_aliases ) {
+				if ( isset( $map[ $field ] ) || ! in_array( $key, $field_aliases, true ) ) {
+					continue;
+				}
+
+				$map[ $field ] = (int) $index;
+				break;
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Imports one product category CSV row.
+	 *
+	 * @param array<int,string|null> $row CSV row.
+	 * @param array<string,int>      $header_map Header map.
+	 * @param array{ids:array<int,bool>,slugs:array<string,int>,paths:array<string,int>} $lookup Category lookup.
+	 * @return array{status:string,term_id?:int,warning?:string}
+	 */
+	private function import_category_csv_row( array $row, array $header_map, array $lookup ): array {
+		$path       = $this->markup_csv_cell( $row, $header_map, 'path' );
+		$path_parts = $this->product_category_path_parts( $path );
+		$name       = $this->markup_csv_cell( $row, $header_map, 'name' );
+		$slug       = sanitize_title( $this->markup_csv_cell( $row, $header_map, 'slug' ) );
+
+		if ( '' === $name && ! empty( $path_parts ) ) {
+			$name = (string) end( $path_parts );
+		}
+
+		if ( '' === $name && '' !== $slug ) {
+			$name = ucwords( str_replace( '-', ' ', $slug ) );
+		}
+
+		$term_id = $this->resolve_category_csv_term_id( $row, $header_map, $lookup, $path_parts );
+
+		if ( '' === $name && $term_id > 0 ) {
+			$existing_term = get_term( $term_id, 'product_cat' );
+			$name          = $existing_term instanceof WP_Term ? $existing_term->name : '';
+		}
+
+		if ( '' === $name ) {
+			return array(
+				'status'  => 'skipped',
+				'warning' => __( 'missing category name or path.', 'schrack-woocommerce-sync' ),
+			);
+		}
+
+		$parent_id = $this->category_csv_parent_id( $row, $header_map, $path_parts );
+		$args      = array();
+
+		if ( isset( $header_map['name'] ) || ! empty( $path_parts ) || 0 === $term_id ) {
+			$args['name'] = $name;
+		}
+
+		if ( isset( $header_map['slug'] ) && '' !== $slug ) {
+			$args['slug'] = $slug;
+		}
+
+		if ( isset( $header_map['description'] ) ) {
+			$args['description'] = wp_kses_post( $this->markup_csv_cell( $row, $header_map, 'description' ) );
+		}
+
+		if ( $parent_id > 0 && $parent_id !== $term_id ) {
+			$args['parent'] = $parent_id;
+		} elseif ( isset( $header_map['parent_id'] ) || isset( $header_map['parent_slug'] ) || isset( $header_map['parent_path'] ) || count( $path_parts ) > 1 ) {
+			$args['parent'] = 0;
+		}
+
+		if ( $term_id > 0 ) {
+			$result = empty( $args ) ? array( 'term_id' => $term_id ) : wp_update_term( $term_id, 'product_cat', $args );
+
+			if ( is_wp_error( $result ) ) {
+				return array(
+					'status'  => 'skipped',
+					'warning' => $result->get_error_message(),
+				);
+			}
+
+			$this->update_category_csv_meta( $term_id, $row, $header_map );
+
+			return array(
+				'status'  => 'updated',
+				'term_id' => $term_id,
+			);
+		}
+
+		$result = wp_insert_term( $name, 'product_cat', $args );
+
+		if ( is_wp_error( $result ) ) {
+			$existing_id = absint( $result->get_error_data( 'term_exists' ) );
+
+			if ( $existing_id > 0 ) {
+				$this->update_category_csv_meta( $existing_id, $row, $header_map );
+
+				return array(
+					'status'  => 'updated',
+					'term_id' => $existing_id,
+					'warning' => __( 'existing category was updated instead of created.', 'schrack-woocommerce-sync' ),
+				);
+			}
+
+			return array(
+				'status'  => 'skipped',
+				'warning' => $result->get_error_message(),
+			);
+		}
+
+		$created_id = absint( $result['term_id'] ?? 0 );
+		$this->update_category_csv_meta( $created_id, $row, $header_map );
+
+		return array(
+			'status'  => 'created',
+			'term_id' => $created_id,
+		);
+	}
+
+	/**
+	 * Resolves the target category for a CSV row.
+	 *
+	 * @param array<int,string|null> $row CSV row.
+	 * @param array<string,int>      $header_map Header map.
+	 * @param array{ids:array<int,bool>,slugs:array<string,int>,paths:array<string,int>} $lookup Category lookup.
+	 * @param array<int,string>      $path_parts Category path parts.
+	 */
+	private function resolve_category_csv_term_id( array $row, array $header_map, array $lookup, array $path_parts ): int {
+		$term_id = absint( $this->markup_csv_cell( $row, $header_map, 'term_id' ) );
+
+		if ( $term_id > 0 && isset( $lookup['ids'][ $term_id ] ) ) {
+			return $term_id;
+		}
+
+		$slug = sanitize_title( $this->markup_csv_cell( $row, $header_map, 'slug' ) );
+
+		if ( '' !== $slug ) {
+			if ( isset( $lookup['slugs'][ $slug ] ) ) {
+				return (int) $lookup['slugs'][ $slug ];
+			}
+
+			$term = get_term_by( 'slug', $slug, 'product_cat' );
+
+			if ( $term instanceof WP_Term ) {
+				return (int) $term->term_id;
+			}
+		}
+
+		if ( ! empty( $path_parts ) ) {
+			$term_id = $this->find_product_category_path( $path_parts );
+
+			if ( $term_id > 0 ) {
+				return $term_id;
+			}
+		}
+
+		$path_key = $this->markup_category_path_key( $this->markup_csv_cell( $row, $header_map, 'path' ) );
+
+		return '' !== $path_key && isset( $lookup['paths'][ $path_key ] ) ? (int) $lookup['paths'][ $path_key ] : 0;
+	}
+
+	/**
+	 * Resolves or creates the parent category for a CSV row.
+	 *
+	 * @param array<int,string|null> $row CSV row.
+	 * @param array<string,int>      $header_map Header map.
+	 * @param array<int,string>      $path_parts Category path parts.
+	 */
+	private function category_csv_parent_id( array $row, array $header_map, array $path_parts ): int {
+		if ( count( $path_parts ) > 1 ) {
+			return $this->ensure_product_category_path( array_slice( $path_parts, 0, -1 ) );
+		}
+
+		$parent_path = $this->markup_csv_cell( $row, $header_map, 'parent_path' );
+
+		if ( '' !== $parent_path ) {
+			return $this->ensure_product_category_path( $this->product_category_path_parts( $parent_path ) );
+		}
+
+		$parent_id = absint( $this->markup_csv_cell( $row, $header_map, 'parent_id' ) );
+
+		if ( $parent_id > 0 && get_term( $parent_id, 'product_cat' ) instanceof WP_Term ) {
+			return $parent_id;
+		}
+
+		$parent_slug = sanitize_title( $this->markup_csv_cell( $row, $header_map, 'parent_slug' ) );
+
+		if ( '' !== $parent_slug ) {
+			$parent = get_term_by( 'slug', $parent_slug, 'product_cat' );
+
+			if ( $parent instanceof WP_Term ) {
+				return (int) $parent->term_id;
+			}
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Finds a product category by hierarchical path.
+	 *
+	 * @param array<int,string> $parts Category path parts.
+	 */
+	private function find_product_category_path( array $parts ): int {
+		$parent_id = 0;
+		$term_id   = 0;
+
+		foreach ( $parts as $part ) {
+			$term = $this->product_category_term_by_name( $part, $parent_id );
+
+			if ( ! $term instanceof WP_Term ) {
+				return 0;
+			}
+
+			$term_id   = (int) $term->term_id;
+			$parent_id = $term_id;
+		}
+
+		return $term_id;
+	}
+
+	/**
+	 * Ensures a hierarchical product category path exists.
+	 *
+	 * @param array<int,string> $parts Category path parts.
+	 */
+	private function ensure_product_category_path( array $parts ): int {
+		$parent_id = 0;
+		$term_id   = 0;
+
+		foreach ( $parts as $part ) {
+			$name = sanitize_text_field( $part );
+
+			if ( '' === $name ) {
+				continue;
+			}
+
+			$term = $this->product_category_term_by_name( $name, $parent_id );
+
+			if ( $term instanceof WP_Term ) {
+				$term_id   = (int) $term->term_id;
+				$parent_id = $term_id;
+				continue;
+			}
+
+			$result = wp_insert_term( $name, 'product_cat', array( 'parent' => $parent_id ) );
+
+			if ( is_wp_error( $result ) ) {
+				$existing_id = absint( $result->get_error_data( 'term_exists' ) );
+
+				if ( $existing_id <= 0 ) {
+					return 0;
+				}
+
+				$term_id = $existing_id;
+			} else {
+				$term_id = absint( $result['term_id'] ?? 0 );
+			}
+
+			$parent_id = $term_id;
+		}
+
+		return $term_id;
+	}
+
+	/**
+	 * Finds one product category by name and parent.
+	 */
+	private function product_category_term_by_name( string $name, int $parent_id ): ?WP_Term {
+		$terms = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'name'       => $name,
+				'parent'     => $parent_id,
+				'number'     => 1,
+			)
+		);
+
+		if ( is_wp_error( $terms ) || empty( $terms ) || ! $terms[0] instanceof WP_Term ) {
+			return null;
+		}
+
+		return $terms[0];
+	}
+
+	/**
+	 * Splits a category path into clean parts.
+	 *
+	 * @return array<int,string>
+	 */
+	private function product_category_path_parts( string $path ): array {
+		if ( '' === trim( $path ) ) {
+			return array();
+		}
+
+		$parts = preg_split( '/\s*(?:>|\/|\|)\s*/', $path );
+
+		return array_values(
+			array_filter(
+				array_map(
+					static fn ( mixed $part ): string => sanitize_text_field( is_scalar( $part ) ? (string) $part : '' ),
+					is_array( $parts ) ? $parts : array()
+				),
+				static fn ( string $part ): bool => '' !== $part
+			)
+		);
+	}
+
+	/**
+	 * Updates WooCommerce product category meta from CSV fields.
+	 *
+	 * @param array<int,string|null> $row CSV row.
+	 * @param array<string,int>      $header_map Header map.
+	 */
+	private function update_category_csv_meta( int $term_id, array $row, array $header_map ): void {
+		if ( $term_id <= 0 ) {
+			return;
+		}
+
+		if ( isset( $header_map['display_type'] ) ) {
+			$display_type = $this->normalize_category_display_type( $this->markup_csv_cell( $row, $header_map, 'display_type' ) );
+
+			if ( '' === $display_type ) {
+				delete_term_meta( $term_id, 'display_type' );
+			} else {
+				update_term_meta( $term_id, 'display_type', $display_type );
+			}
+		}
+
+		if ( isset( $header_map['image_id'] ) || isset( $header_map['image_url'] ) ) {
+			$image_id_value  = $this->markup_csv_cell( $row, $header_map, 'image_id' );
+			$image_url_value = $this->markup_csv_cell( $row, $header_map, 'image_url' );
+			$image_id        = absint( $image_id_value );
+
+			if ( $image_id <= 0 ) {
+				$image_id = '' !== $image_url_value && function_exists( 'attachment_url_to_postid' ) ? absint( attachment_url_to_postid( $image_url_value ) ) : 0;
+			}
+
+			if ( $image_id > 0 ) {
+				update_term_meta( $term_id, 'thumbnail_id', $image_id );
+			} elseif ( isset( $header_map['image_id'] ) && '' === $image_id_value && '' === $image_url_value ) {
+				delete_term_meta( $term_id, 'thumbnail_id' );
+			}
+		}
+
+		if ( isset( $header_map['menu_order'] ) ) {
+			$order = $this->markup_csv_cell( $row, $header_map, 'menu_order' );
+
+			if ( '' === $order ) {
+				delete_term_meta( $term_id, 'order' );
+			} else {
+				update_term_meta( $term_id, 'order', max( 0, (int) $order ) );
+			}
+		}
+	}
+
+	/**
+	 * Normalizes WooCommerce category display type.
+	 */
+	private function normalize_category_display_type( string $display_type ): string {
+		$key = sanitize_key( $display_type );
+
+		return in_array( $key, array( 'products', 'subcategories', 'both' ), true ) ? $key : '';
+	}
+
+	/**
+	 * Returns a friendly CSV upload error.
+	 */
+	private function markup_csv_upload_error_message( int $error ): string {
+		return match ( $error ) {
+			UPLOAD_ERR_NO_FILE => __( 'Choose a CSV file before importing.', 'schrack-woocommerce-sync' ),
+			UPLOAD_ERR_INI_SIZE,
+			UPLOAD_ERR_FORM_SIZE => __( 'CSV file is larger than the allowed upload size.', 'schrack-woocommerce-sync' ),
+			default => __( 'CSV upload failed.', 'schrack-woocommerce-sync' ),
+		};
+	}
+
+	/**
+	 * Detects common CSV delimiters from the header line.
+	 */
+	private function detect_markup_csv_delimiter( string $line ): string {
+		$best_delimiter = ',';
+		$best_columns   = 0;
+
+		foreach ( array( ',', ';', "\t" ) as $delimiter ) {
+			$columns = count( str_getcsv( $line, $delimiter, '"', '\\' ) );
+
+			if ( $columns > $best_columns ) {
+				$best_columns   = $columns;
+				$best_delimiter = $delimiter;
+			}
+		}
+
+		return $best_delimiter;
+	}
+
+	/**
+	 * Removes UTF-8 BOM from a CSV header line.
+	 */
+	private function strip_utf8_bom( string $line ): string {
+		return str_starts_with( $line, "\xEF\xBB\xBF" ) ? substr( $line, 3 ) : $line;
+	}
+
+	/**
+	 * Maps CSV header labels to importer fields.
+	 *
+	 * @param array<int,string> $headers CSV headers.
+	 * @return array<string,int>
+	 */
+	private function markup_csv_header_map( array $headers ): array {
+		$aliases = array(
+			'term_id'    => array( 'termid', 'id', 'categoryid', 'categorytermid' ),
+			'slug'       => array( 'slug', 'categoryslug', 'productcatslug' ),
+			'path'       => array( 'path', 'categorypath', 'productcatpath', 'categoriepath' ),
+			'markup'     => array( 'markup', 'markuppercent', 'markuppct', 'markuppercentage', 'adaos', 'adaospercent' ),
+			'min_margin' => array( 'minmargin', 'minimummargin', 'minimumprofit', 'marjaminima', 'profitminim' ),
+			'rounding'   => array( 'rounding', 'roundingrule', 'rotunjire' ),
+		);
+		$map     = array();
+
+		foreach ( $headers as $index => $header ) {
+			$key = $this->markup_csv_key( (string) $header );
+
+			if ( '' === $key ) {
+				continue;
+			}
+
+			foreach ( $aliases as $field => $field_aliases ) {
+				if ( isset( $map[ $field ] ) || ! in_array( $key, $field_aliases, true ) ) {
+					continue;
+				}
+
+				$map[ $field ] = (int) $index;
+				break;
+			}
+		}
+
+		return $map;
+	}
+
+	/**
+	 * Resolves the category term ID for one CSV row.
+	 *
+	 * @param array<int,string|null>               $row CSV row.
+	 * @param array<string,int>                    $header_map Header map.
+	 * @param array{ids:array<int,bool>,slugs:array<string,int>,paths:array<string,int>} $lookup Category lookup.
+	 */
+	private function resolve_markup_csv_term_id( array $row, array $header_map, array $lookup ): int {
+		$term_id = absint( $this->markup_csv_cell( $row, $header_map, 'term_id' ) );
+
+		if ( $term_id > 0 && isset( $lookup['ids'][ $term_id ] ) ) {
+			return $term_id;
+		}
+
+		$slug = sanitize_title( $this->markup_csv_cell( $row, $header_map, 'slug' ) );
+
+		if ( '' !== $slug && isset( $lookup['slugs'][ $slug ] ) ) {
+			return (int) $lookup['slugs'][ $slug ];
+		}
+
+		$path_key = $this->markup_category_path_key( $this->markup_csv_cell( $row, $header_map, 'path' ) );
+
+		if ( '' !== $path_key && isset( $lookup['paths'][ $path_key ] ) ) {
+			return (int) $lookup['paths'][ $path_key ];
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Returns one CSV cell by mapped field.
+	 *
+	 * @param array<int,string|null> $row CSV row.
+	 * @param array<string,int>      $header_map Header map.
+	 */
+	private function markup_csv_cell( array $row, array $header_map, string $field ): string {
+		if ( ! isset( $header_map[ $field ] ) ) {
+			return '';
+		}
+
+		$index = (int) $header_map[ $field ];
+		$value = $row[ $index ] ?? '';
+
+		return trim( wp_check_invalid_utf8( is_scalar( $value ) ? (string) $value : '' ) );
+	}
+
+	/**
+	 * Checks whether a parsed CSV row is empty.
+	 *
+	 * @param array<int,string|null> $row CSV row.
+	 */
+	private function is_empty_csv_row( array $row ): bool {
+		foreach ( $row as $value ) {
+			if ( '' !== trim( is_scalar( $value ) ? (string) $value : '' ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Normalizes imported rounding values to supported keys.
+	 */
+	private function normalize_markup_csv_rounding( string $value ): string {
+		$key = $this->markup_csv_key( $value );
+
+		return match ( $key ) {
+			'', 'none', 'no', 'fara', 'fararotunjire' => 'none',
+			'ending99', 'roundto99', 'rotunjire99' => 'ending_99',
+			'integerron', 'wholeron', 'roundtowholeron', 'ronintreg' => 'integer_ron',
+			'fiveron', '5ron', 'roundto5ron', 'rotunjire5ron' => 'five_ron',
+			default => sanitize_key( $value ),
+		};
+	}
+
+	/**
+	 * Builds a normalized CSV/key lookup token.
+	 */
+	private function markup_csv_key( string $value ): string {
+		if ( function_exists( 'remove_accents' ) ) {
+			$value = remove_accents( $value );
+		}
+
+		$value = strtolower( $value );
+
+		return (string) preg_replace( '/[^a-z0-9]+/', '', $value );
+	}
+
+	/**
+	 * Normalizes category paths for CSV matching.
+	 */
+	private function markup_category_path_key( string $path ): string {
+		if ( function_exists( 'remove_accents' ) ) {
+			$path = remove_accents( $path );
+		}
+
+		$path = strtolower( $path );
+		$path = preg_replace( '/\s*>\s*/', '>', $path );
+		$path = preg_replace( '/\s+/', ' ', (string) $path );
+
+		return trim( (string) $path );
+	}
+
+	/**
 	 * Returns a masked configured label.
 	 */
 	public function configured_label( string $value ): string {
@@ -1384,6 +2523,24 @@ class Schrack_Admin {
 	 */
 	private function redirect( string $page ): void {
 		wp_safe_redirect( admin_url( 'admin.php?page=' . $page ) );
+		exit;
+	}
+
+	/**
+	 * Redirects back to the WooCommerce product categories screen.
+	 */
+	private function redirect_categories_page(): void {
+		wp_safe_redirect(
+			admin_url(
+				add_query_arg(
+					array(
+						'taxonomy'  => 'product_cat',
+						'post_type' => 'product',
+					),
+					'edit-tags.php'
+				)
+			)
+		);
 		exit;
 	}
 

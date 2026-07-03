@@ -116,6 +116,34 @@ $render_bulk_category_nodes = static function ( int $parent_id ) use ( &$render_
 	<?php $this->render_tabs( 'markups' ); ?>
 	<?php $this->render_notice( $notice ); ?>
 
+	<section class="schrack-panel schrack-markups-csv">
+		<div class="schrack-panel-header">
+			<div class="schrack-markups-csv__intro">
+				<h2><?php esc_html_e( 'CSV import / export', 'schrack-woocommerce-sync' ); ?></h2>
+				<p><?php esc_html_e( 'Export the current category markup table, edit markup values in CSV, then import it back. Rows are matched by term_id first, then slug, then category path.', 'schrack-woocommerce-sync' ); ?></p>
+			</div>
+
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="schrack_wc_sync_export_markups">
+				<?php wp_nonce_field( 'schrack_wc_sync_markups_csv' ); ?>
+				<button type="submit" class="button button-secondary"><?php esc_html_e( 'Export CSV', 'schrack-woocommerce-sync' ); ?></button>
+			</form>
+		</div>
+
+		<form class="schrack-markups-csv__import" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data">
+			<input type="hidden" name="action" value="schrack_wc_sync_import_markups">
+			<?php wp_nonce_field( 'schrack_wc_sync_markups_csv' ); ?>
+			<label for="schrack_markups_csv"><?php esc_html_e( 'CSV file', 'schrack-woocommerce-sync' ); ?></label>
+			<input id="schrack_markups_csv" type="file" name="schrack_markups_csv" accept=".csv,text/csv">
+			<button type="submit" class="button"><?php esc_html_e( 'Import CSV', 'schrack-woocommerce-sync' ); ?></button>
+		</form>
+
+		<p class="description">
+			<?php esc_html_e( 'Supported columns:', 'schrack-woocommerce-sync' ); ?>
+			<code>term_id</code>, <code>slug</code>, <code>path</code>, <code>markup</code>, <code>min_margin</code>, <code>rounding</code>.
+		</p>
+	</section>
+
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 		<input type="hidden" name="action" value="schrack_wc_sync_save_markups">
 		<?php wp_nonce_field( 'schrack_wc_sync_markups' ); ?>

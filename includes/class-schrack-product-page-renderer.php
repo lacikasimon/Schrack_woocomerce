@@ -129,7 +129,12 @@ class Schrack_Product_Page_Renderer {
 					<?php $is_current = $index === count( $items ) - 1; ?>
 					<li>
 						<?php if ( ! $is_current && '' !== $item['url'] ) : ?>
-							<a href="<?php echo esc_url( $item['url'] ); ?>"><?php echo esc_html( $item['label'] ); ?></a>
+							<a href="<?php echo esc_url( $item['url'] ); ?>">
+								<?php if ( 0 === $index ) : ?>
+									<svg class="schrack-product-page__breadcrumb-home" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11.47 3.84a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 1 1-1.06 1.06l-.47-.47V19.5a1.5 1.5 0 0 1-1.5 1.5H15a.75.75 0 0 1-.75-.75V16.5a2.25 2.25 0 0 0-4.5 0v3.75a.75.75 0 0 1-.75.75H6.5A1.5 1.5 0 0 1 5 19.5v-7.57l-.47.47a.75.75 0 1 1-1.06-1.06z"/></svg>
+								<?php endif; ?>
+								<span class="schrack-product-page__breadcrumb-label"><?php echo esc_html( $item['label'] ); ?></span>
+							</a>
 						<?php else : ?>
 							<span <?php echo $is_current ? 'aria-current="page"' : ''; ?>><?php echo esc_html( $item['label'] ); ?></span>
 						<?php endif; ?>
@@ -350,22 +355,12 @@ class Schrack_Product_Page_Renderer {
 	 * Renders stock badge.
 	 */
 	private function stock_badge( WC_Product $product ): string {
-		$is_in_stock = $product->is_in_stock();
-		$quantity    = $product->managing_stock() ? $product->get_stock_quantity() : null;
-		$text        = $is_in_stock ? __( 'In stoc', 'schrack-woocommerce-sync' ) : __( 'Stoc epuizat', 'schrack-woocommerce-sync' );
-
-		if ( $is_in_stock && null !== $quantity ) {
-			$text = sprintf(
-				/* translators: %d: stock quantity. */
-				__( 'In stoc: %d buc.', 'schrack-woocommerce-sync' ),
-				(int) $quantity
-			);
-		}
+		$stock_badge = Schrack_Stock_Label::badge( $product );
 
 		return sprintf(
 			'<div class="schrack-product-page__stock %1$s">%2$s</div>',
-			$is_in_stock ? 'is-in-stock' : 'is-out-of-stock',
-			esc_html( $text )
+			esc_attr( $stock_badge['class'] ),
+			esc_html( $stock_badge['text'] )
 		);
 	}
 

@@ -802,6 +802,18 @@
 	color: #24713b;
 }
 
+.schrack-product-card__stock.is-low-stock {
+	background: #fff7e5;
+	border-color: #efcf87;
+	color: #8a5a00;
+}
+
+.schrack-product-card__stock.is-on-request {
+	background: #eef6fc;
+	border-color: #b9d8ef;
+	color: #135e96;
+}
+
 .schrack-product-card__stock.is-out-of-stock {
 	background: #fff1f1;
 	border-color: #efc5c5;
