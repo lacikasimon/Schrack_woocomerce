@@ -554,6 +554,7 @@ class Schrack_Homepage_Renderer {
 					'title'   => __( 'Electric', 'schrack-woocommerce-sync' ),
 					'text'    => __( 'Cabluri, tablouri, protecții, aparataj și accesorii de montaj.', 'schrack-woocommerce-sync' ),
 					'variant' => 'electric',
+					'category_slug' => 'cabluri-conductori-si-conectica',
 					'keywords' => array( 'electric', 'cabluri', 'conductori', 'protectii', 'protecții', 'tablouri', 'tablou', 'aparataj', 'prize', 'montaj' ),
 					'category_setting' => 'hero_electric_category_id',
 				),
@@ -561,6 +562,7 @@ class Schrack_Homepage_Renderer {
 					'title'   => __( 'Securitate', 'schrack-woocommerce-sync' ),
 					'text'    => __( 'CCTV, alarmare, control acces și infrastructură pentru clădiri.', 'schrack-woocommerce-sync' ),
 					'variant' => 'security',
+					'category_slug' => 'securitate-detectie-si-control-acces',
 					'keywords' => array( 'securitate', 'cctv', 'camera', 'camere', 'nvr', 'alarma', 'alarmare', 'control acces', 'acces' ),
 					'category_setting' => 'hero_security_category_id',
 				),
@@ -568,6 +570,7 @@ class Schrack_Homepage_Renderer {
 					'title'   => __( 'Fotovoltaice', 'schrack-woocommerce-sync' ),
 					'text'    => __( 'Componente pentru protecție, cablare, conectare și integrare solară.', 'schrack-woocommerce-sync' ),
 					'variant' => 'solar',
+					'category_slug' => 'energie-ups-si-fotovoltaice',
 					'keywords' => array( 'fotovoltaic', 'solar', 'panou', 'invertor', 'invertoare', 'pv', 'conector', 'protectii', 'protecții', 'cabluri' ),
 					'category_setting' => 'hero_solar_category_id',
 				),
@@ -575,6 +578,7 @@ class Schrack_Homepage_Renderer {
 					'title'   => __( 'Automatizări', 'schrack-woocommerce-sync' ),
 					'text'    => __( 'Distribuție, comandă și control pentru aplicații tehnice.', 'schrack-woocommerce-sync' ),
 					'variant' => 'automation',
+					'category_slug' => 'automatizari-control-si-masurare',
 					'keywords' => array( 'automatizare', 'automatizari', 'comanda', 'comandă', 'control', 'distributie', 'distribuție', 'tablouri', 'tablou' ),
 					'category_setting' => 'hero_automation_category_id',
 				),
@@ -592,6 +596,7 @@ class Schrack_Homepage_Renderer {
 					array(
 						'title'    => __( 'Instalații electrice rezidențiale', 'schrack-woocommerce-sync' ),
 						'text'     => __( 'Produse pentru locuințe, apartamente și case: cabluri, protecții, tablouri, aparataj și accesorii de montaj.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'aparataj-terminal-prize-si-intrerupatoare',
 						'keywords' => array( 'electric', 'cabluri', 'conductori', 'protectii', 'protecții', 'tablouri', 'tablou', 'aparataj', 'prize', 'montaj' ),
 						'variant'  => 'home',
 						'category_setting' => 'project_residential_category_id',
@@ -599,6 +604,7 @@ class Schrack_Homepage_Renderer {
 					array(
 						'title'    => __( 'Clădiri comerciale și birouri', 'schrack-woocommerce-sync' ),
 						'text'     => __( 'Soluții pentru spații cu consum mai mare, distribuție electrică, iluminat, rețelistică și securitate.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'iluminat-si-surse-de-lumina',
 						'keywords' => array( 'comercial', 'birouri', 'distributie', 'distribuție', 'iluminat', 'retea', 'rețea', 'retelistica', 'securitate' ),
 						'variant'  => 'retail',
 						'category_setting' => 'project_commercial_category_id',
@@ -606,6 +612,7 @@ class Schrack_Homepage_Renderer {
 					array(
 						'title'    => __( 'Sisteme de supraveghere video', 'schrack-woocommerce-sync' ),
 						'text'     => __( 'Camere, NVR-uri, surse, cabluri și accesorii pentru proiecte CCTV complete.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'securitate-detectie-si-control-acces',
 						'keywords' => array( 'cctv', 'camera', 'camere', 'nvr', 'supraveghere', 'video', 'surse', 'cabluri' ),
 						'variant'  => 'security',
 						'category_setting' => 'project_video_category_id',
@@ -613,6 +620,7 @@ class Schrack_Homepage_Renderer {
 					array(
 						'title'    => __( 'Sisteme de alarmare și control acces', 'schrack-woocommerce-sync' ),
 						'text'     => __( 'Echipamente pentru protecția clădirilor, detecție, avertizare și acces securizat.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'securitate-detectie-si-control-acces',
 						'keywords' => array( 'alarma', 'alarmare', 'efractie', 'efracție', 'control acces', 'acces', 'senzor', 'sirena', 'detector' ),
 						'variant'  => 'alarm',
 						'category_setting' => 'project_alarm_category_id',
@@ -620,6 +628,7 @@ class Schrack_Homepage_Renderer {
 					array(
 						'title'    => __( 'Proiecte fotovoltaice', 'schrack-woocommerce-sync' ),
 						'text'     => __( 'Componente pentru instalații solare: protecții, cabluri, conectori, invertoare și accesorii dedicate.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'energie-ups-si-fotovoltaice',
 						'keywords' => array( 'fotovoltaic', 'solar', 'panou', 'invertor', 'invertoare', 'pv', 'conector', 'protectii', 'protecții', 'cabluri' ),
 						'variant'  => 'solar',
 						'category_setting' => 'project_solar_category_id',
@@ -627,6 +636,7 @@ class Schrack_Homepage_Renderer {
 					array(
 						'title'    => __( 'Tablouri electrice și automatizări', 'schrack-woocommerce-sync' ),
 						'text'     => __( 'Componente pentru distribuție, protecție, comandă și automatizare în proiecte tehnice.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'tablouri-dulapuri-si-distributie',
 						'keywords' => array( 'tablouri', 'tablou', 'automatizare', 'automatizari', 'comanda', 'comandă', 'distributie', 'protecție', 'protectii' ),
 						'variant'  => 'industrial',
 						'category_setting' => 'project_automation_category_id',
@@ -638,54 +648,64 @@ class Schrack_Homepage_Renderer {
 				'subtitle' => __( 'Produsele sunt organizate pe domenii tehnice, pentru ca instalatorii, firmele și beneficiarii să poată găsi rapid componentele necesare.', 'schrack-woocommerce-sync' ),
 				'cards'    => array(
 					array(
-						'title'    => __( 'Cabluri și conductori', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Cabluri electrice, conductori și soluții de cablare pentru instalații tehnice.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'cabluri', 'cablu', 'conductori', 'conductor' ),
+						'title'    => __( 'Iluminat si surse de lumina', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Corpuri de iluminat, surse de lumina, sisteme LED si iluminat de siguranta.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'iluminat-si-surse-de-lumina',
+						'keywords' => array( 'iluminat', 'surse de lumina', 'led', 'corpuri de iluminat' ),
 					),
 					array(
-						'title'    => __( 'Tablouri electrice', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Tablouri, carcase și componente pentru distribuție electrică.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'tablouri', 'tablou', 'carcase', 'distributie', 'distribuție' ),
+						'title'    => __( 'Cabluri, conductori si conectica', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Cabluri, conductori, cleme, papuci, presetupe si accesorii de conectare.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'cabluri-conductori-si-conectica',
+						'keywords' => array( 'cabluri', 'cablu', 'conductori', 'conectica', 'cleme', 'papuci' ),
 					),
 					array(
-						'title'    => __( 'Protecții electrice', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Siguranțe, întrerupătoare, protecții diferențiale și protecții pentru circuite.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'protectii', 'protecții', 'sigurante', 'siguranțe', 'intrerupatoare', 'întrerupătoare', 'diferential' ),
+						'title'    => __( 'Instalatii, trasee cabluri si scule', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Doze, tuburi, canale, tavi, fixare, scule si materiale auxiliare.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'instalatii-trasee-cabluri-si-scule',
+						'keywords' => array( 'instalatii', 'trasee cabluri', 'doze', 'tuburi', 'canale', 'scule' ),
 					),
 					array(
-						'title'    => __( 'Aparataj și prize', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Prize, întrerupătoare, rame și aparataj pentru clădiri rezidențiale sau comerciale.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'aparataj', 'prize', 'intrerupatoare', 'întrerupătoare', 'rame' ),
+						'title'    => __( 'Protectie electrica si comutatie', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Intreruptoare, sigurante, descarcatoare, separatoare si comutatoare de sarcina.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'protectie-electrica-si-comutatie',
+						'keywords' => array( 'protectie electrica', 'comutatie', 'intrerupatoare', 'sigurante', 'descarcatoare' ),
 					),
 					array(
-						'title'    => __( 'Iluminat tehnic', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Corpuri de iluminat și componente pentru aplicații tehnice.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'iluminat', 'corpuri', 'led', 'lampa', 'lampă' ),
+						'title'    => __( 'Tablouri, dulapuri si distributie', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Tablouri, dulapuri, cofrete, carcase, sisteme de bare si accesorii de distributie.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'tablouri-dulapuri-si-distributie',
+						'keywords' => array( 'tablouri', 'dulapuri', 'distributie', 'cofrete', 'carcase' ),
 					),
 					array(
-						'title'    => __( 'CCTV și securitate', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Camere, NVR-uri, stocare și accesorii pentru supraveghere video.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'cctv', 'securitate', 'camera', 'camere', 'nvr', 'supraveghere', 'video' ),
+						'title'    => __( 'Aparataj terminal, prize si intrerupatoare', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Aparataj terminal, prize, intrerupatoare, rame, module si accesorii de montaj terminal.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'aparataj-terminal-prize-si-intrerupatoare',
+						'keywords' => array( 'aparataj terminal', 'prize', 'intrerupatoare', 'rame', 'module' ),
 					),
 					array(
-						'title'    => __( 'Control acces și alarmare', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Echipamente pentru control acces, detecție, avertizare și protecție la efracție.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'control acces', 'acces', 'alarmare', 'alarma', 'efractie', 'efracție', 'senzor', 'sirena' ),
+						'title'    => __( 'Automatizari, control si masurare', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Contactoare, relee, KNX, senzori, actionari, masurare, semnalizare si control industrial.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'automatizari-control-si-masurare',
+						'keywords' => array( 'automatizari', 'control', 'masurare', 'knx', 'senzori', 'relee' ),
 					),
 					array(
-						'title'    => __( 'Fotovoltaice', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Componente pentru instalații solare, cablare, protecție și conectare.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'fotovoltaic', 'solar', 'panou', 'invertor', 'pv', 'conector', 'protectii' ),
+						'title'    => __( 'Retelistica, date si telecomunicatii', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Cablare structurata, fibra optica, rack-uri, patching, SAT, telefonie si echipamente de retea.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'retelistica-date-si-telecomunicatii',
+						'keywords' => array( 'retelistica', 'date', 'telecomunicatii', 'fibra optica', 'rack', 'patch' ),
 					),
 					array(
-						'title'    => __( 'Rack-uri și rețelistică', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Rack-uri, componente de rețea și accesorii pentru infrastructură tehnică.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'rack', 'rack-uri', 'retelistica', 'rețelistică', 'retea', 'rețea', 'patch' ),
+						'title'    => __( 'Securitate, detectie si control acces', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'Supraveghere video, detectie incendiu/efractie, interfoane, control acces si sisteme speciale.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'securitate-detectie-si-control-acces',
+						'keywords' => array( 'securitate', 'detectie', 'control acces', 'supraveghere video', 'interfoane' ),
 					),
 					array(
-						'title'    => __( 'Accesorii de montaj', 'schrack-woocommerce-sync' ),
-						'text'     => __( 'Doze, cleme, șine, conectori și consumabile pentru montaj corect.', 'schrack-woocommerce-sync' ),
-						'keywords' => array( 'montaj', 'accesorii montaj', 'doze', 'cleme', 'sina', 'șină', 'conectori' ),
+						'title'    => __( 'Energie, UPS si fotovoltaice', 'schrack-woocommerce-sync' ),
+						'text'     => __( 'UPS, baterii, PDU, e-mobility, management energie si sisteme fotovoltaice.', 'schrack-woocommerce-sync' ),
+						'category_slug' => 'energie-ups-si-fotovoltaice',
+						'keywords' => array( 'energie', 'ups', 'fotovoltaice', 'baterii', 'pdu', 'solar' ),
 					),
 				),
 			),
@@ -831,7 +851,7 @@ class Schrack_Homepage_Renderer {
 
 			<div class="schrack-home__curated-grid">
 				<?php foreach ( $copy['cards'] as $index => $card ) : ?>
-					<?php $url = $this->curated_term_url( $terms, $card['keywords'], $shop_url ); ?>
+					<?php $url = $this->category_card_url( $card, $terms, $shop_url ); ?>
 					<a class="schrack-home__curated-card" href="<?php echo esc_url( $url ); ?>">
 						<span class="schrack-home__curated-marker" aria-hidden="true"><?php echo esc_html( str_pad( (string) ( $index + 1 ), 2, '0', STR_PAD_LEFT ) ); ?></span>
 						<strong><?php echo esc_html( $card['title'] ); ?></strong>
@@ -936,6 +956,13 @@ class Schrack_Homepage_Renderer {
 		$slugs = array();
 
 		foreach ( $copy['categories']['cards'] as $card ) {
+			$category_slug = isset( $card['category_slug'] ) ? sanitize_title( (string) $card['category_slug'] ) : '';
+
+			if ( '' !== $category_slug ) {
+				$slugs[] = $category_slug;
+				continue;
+			}
+
 			$term = $this->best_term_for_keywords( $terms, $card['keywords'] );
 
 			if ( $term instanceof WP_Term && '' !== $term->slug ) {
@@ -1064,6 +1091,16 @@ class Schrack_Homepage_Renderer {
 			}
 		}
 
+		$category_slug = isset( $card['category_slug'] ) ? sanitize_title( (string) $card['category_slug'] ) : '';
+
+		if ( '' !== $category_slug ) {
+			$url = $this->category_url_by_slug( $category_slug, $terms );
+
+			if ( '' !== $url ) {
+				return $url;
+			}
+		}
+
 		$keywords = isset( $card['keywords'] ) && is_array( $card['keywords'] ) ? $card['keywords'] : array();
 
 		return ! empty( $keywords ) ? $this->curated_term_url( $terms, $keywords, $shop_url ) : $shop_url;
@@ -1086,6 +1123,68 @@ class Schrack_Homepage_Renderer {
 		$link = get_term_link( $term );
 
 		return is_wp_error( $link ) ? '' : (string) $link;
+	}
+
+	/**
+	 * Returns a product category URL by slug.
+	 *
+	 * @param array<int,WP_Term> $terms Already loaded terms.
+	 */
+	private function category_url_by_slug( string $slug, array $terms = array() ): string {
+		$term = $this->category_term_by_slug( $slug, $terms );
+
+		if ( ! $term instanceof WP_Term ) {
+			return '';
+		}
+
+		$link = get_term_link( $term );
+
+		return is_wp_error( $link ) ? '' : (string) $link;
+	}
+
+	/**
+	 * Returns a loaded or queried product category term by slug.
+	 *
+	 * @param array<int,WP_Term> $terms Already loaded terms.
+	 */
+	private function category_term_by_slug( string $slug, array $terms = array() ): ?WP_Term {
+		$slug = sanitize_title( $slug );
+
+		if ( '' === $slug || ! taxonomy_exists( 'product_cat' ) ) {
+			return null;
+		}
+
+		foreach ( $terms as $term ) {
+			if ( $term instanceof WP_Term && $slug === $term->slug ) {
+				return $term;
+			}
+		}
+
+		$term = get_term_by( 'slug', $slug, 'product_cat' );
+
+		return $term instanceof WP_Term ? $term : null;
+	}
+
+	/**
+	 * Returns the configured category URL for one curated category card.
+	 *
+	 * @param array<string,mixed> $card Card copy and category mapping.
+	 * @param array<int,WP_Term>  $terms Loaded product category terms.
+	 */
+	private function category_card_url( array $card, array $terms, string $shop_url ): string {
+		$category_slug = isset( $card['category_slug'] ) ? sanitize_title( (string) $card['category_slug'] ) : '';
+
+		if ( '' !== $category_slug ) {
+			$url = $this->category_url_by_slug( $category_slug, $terms );
+
+			if ( '' !== $url ) {
+				return $url;
+			}
+		}
+
+		$keywords = isset( $card['keywords'] ) && is_array( $card['keywords'] ) ? $card['keywords'] : array();
+
+		return ! empty( $keywords ) ? $this->curated_term_url( $terms, $keywords, $shop_url ) : $shop_url;
 	}
 
 	/**

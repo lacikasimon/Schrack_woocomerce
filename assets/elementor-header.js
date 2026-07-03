@@ -47,14 +47,46 @@
 
 		root.setAttribute('data-header-ready', 'yes');
 
+		function toggleSubmenu(submenuToggle) {
+			var menuItem = submenuToggle.closest('.schrack-header__menu-item');
+			var open = submenuToggle.getAttribute('aria-expanded') !== 'true';
+
+			if (!menuItem) {
+				return;
+			}
+
+			menuItem.classList.toggle('is-submenu-open', open);
+			submenuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+		}
+
 		root.addEventListener('click', function (event) {
 			var toggle = event.target.closest('[data-header-menu-toggle]');
+			var submenuToggle = event.target.closest('[data-header-submenu-toggle]');
 			var close = event.target.closest('[data-header-menu-close]');
 			var panelLink = event.target.closest('[data-header-menu-panel] a');
+			var panelMenuItem;
+			var panelSubmenuToggle;
 
 			if (toggle && root.contains(toggle)) {
 				setMenu(root, toggle.getAttribute('aria-expanded') !== 'true');
 				return;
+			}
+
+			if (submenuToggle && root.contains(submenuToggle)) {
+				event.preventDefault();
+				toggleSubmenu(submenuToggle);
+				return;
+			}
+
+			if (panelLink && root.contains(panelLink)) {
+				panelMenuItem = panelLink.closest('.schrack-header__menu-item');
+				panelSubmenuToggle = panelMenuItem ? panelMenuItem.querySelector('[data-header-submenu-toggle]') : null;
+
+				if (panelSubmenuToggle) {
+					event.preventDefault();
+					toggleSubmenu(panelSubmenuToggle);
+					return;
+				}
 			}
 
 			if ((close && root.contains(close)) || (panelLink && root.contains(panelLink))) {

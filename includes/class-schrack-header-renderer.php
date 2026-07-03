@@ -427,6 +427,8 @@ class Schrack_Header_Renderer {
 			$nodes = $this->fallback_links();
 		}
 
+		$nodes = $this->with_product_catalog_node( $nodes );
+
 		return $this->render_menu_nodes( $nodes, 0, $desktop );
 	}
 
@@ -438,36 +440,6 @@ class Schrack_Header_Renderer {
 	private function fallback_links(): array {
 		return array(
 			array(
-				'label'    => __( 'Toate categoriile', 'schrack-woocommerce-sync' ),
-				'href'     => $this->shop_url(),
-				'children' => array(),
-			),
-			array(
-				'label'    => __( 'Electric', 'schrack-woocommerce-sync' ),
-				'href'     => $this->product_category_url( 'electric', '/product-category/electric/' ),
-				'children' => array(),
-			),
-			array(
-				'label'    => __( 'Securitate', 'schrack-woocommerce-sync' ),
-				'href'     => $this->product_category_url( 'securitate', '/product-category/securitate/' ),
-				'children' => array(),
-			),
-			array(
-				'label'    => __( 'Fotovoltaice', 'schrack-woocommerce-sync' ),
-				'href'     => $this->product_category_url( 'fotovoltaice', '/product-category/fotovoltaice/' ),
-				'children' => array(),
-			),
-			array(
-				'label'    => __( 'Automatizări', 'schrack-woocommerce-sync' ),
-				'href'     => $this->product_category_url( 'automatizari', '/product-category/automatizari/' ),
-				'children' => array(),
-			),
-			array(
-				'label'    => __( 'Rack & rețelistică', 'schrack-woocommerce-sync' ),
-				'href'     => $this->product_category_url( 'rack-retelistica', '/product-category/rack-retelistica/' ),
-				'children' => array(),
-			),
-			array(
 				'label'    => __( 'B2B', 'schrack-woocommerce-sync' ),
 				'href'     => home_url( '/b2b/' ),
 				'children' => array(),
@@ -477,6 +449,223 @@ class Schrack_Header_Renderer {
 				'href'     => home_url( '/contact/' ),
 				'children' => array(),
 			),
+		);
+	}
+
+	/**
+	 * Prepends the automatic product-category menu unless the selected menu already has it.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes Existing top-level menu nodes.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function with_product_catalog_node( array $nodes ): array {
+		foreach ( $nodes as $index => $node ) {
+			$label = strtolower( remove_accents( (string) ( $node['label'] ?? '' ) ) );
+
+			if ( in_array( $label, array( 'produse', 'products' ), true ) ) {
+				$nodes[ $index ]['children'] = $this->product_category_menu_nodes();
+				$nodes[ $index ]['classes'] = array_values(
+					array_unique(
+						array_merge(
+							is_array( $nodes[ $index ]['classes'] ?? null ) ? $nodes[ $index ]['classes'] : array(),
+							array( 'is-products-menu' )
+						)
+					)
+				);
+
+				return $nodes;
+			}
+		}
+
+		array_unshift( $nodes, $this->product_catalog_menu_node() );
+
+		return $nodes;
+	}
+
+	/**
+	 * Builds the Products menu from the 10 curated WooCommerce root categories.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function product_catalog_menu_node(): array {
+		return array(
+			'label'    => __( 'Produse', 'schrack-woocommerce-sync' ),
+			'href'     => $this->shop_url(),
+			'classes'  => array( 'is-products-menu' ),
+			'children' => $this->product_category_menu_nodes(),
+		);
+	}
+
+	/**
+	 * Returns the 10 main product categories used by the shop navigation.
+	 *
+	 * @return array<int,array{name:string,slug:string}>
+	 */
+	private function main_product_categories(): array {
+		return array(
+			array(
+				'name' => __( 'Iluminat si surse de lumina', 'schrack-woocommerce-sync' ),
+				'slug' => 'iluminat-si-surse-de-lumina',
+			),
+			array(
+				'name' => __( 'Cabluri, conductori si conectica', 'schrack-woocommerce-sync' ),
+				'slug' => 'cabluri-conductori-si-conectica',
+			),
+			array(
+				'name' => __( 'Instalatii, trasee cabluri si scule', 'schrack-woocommerce-sync' ),
+				'slug' => 'instalatii-trasee-cabluri-si-scule',
+			),
+			array(
+				'name' => __( 'Protectie electrica si comutatie', 'schrack-woocommerce-sync' ),
+				'slug' => 'protectie-electrica-si-comutatie',
+			),
+			array(
+				'name' => __( 'Tablouri, dulapuri si distributie', 'schrack-woocommerce-sync' ),
+				'slug' => 'tablouri-dulapuri-si-distributie',
+			),
+			array(
+				'name' => __( 'Aparataj terminal, prize si intrerupatoare', 'schrack-woocommerce-sync' ),
+				'slug' => 'aparataj-terminal-prize-si-intrerupatoare',
+			),
+			array(
+				'name' => __( 'Automatizari, control si masurare', 'schrack-woocommerce-sync' ),
+				'slug' => 'automatizari-control-si-masurare',
+			),
+			array(
+				'name' => __( 'Retelistica, date si telecomunicatii', 'schrack-woocommerce-sync' ),
+				'slug' => 'retelistica-date-si-telecomunicatii',
+			),
+			array(
+				'name' => __( 'Securitate, detectie si control acces', 'schrack-woocommerce-sync' ),
+				'slug' => 'securitate-detectie-si-control-acces',
+			),
+			array(
+				'name' => __( 'Energie, UPS si fotovoltaice', 'schrack-woocommerce-sync' ),
+				'slug' => 'energie-ups-si-fotovoltaice',
+			),
+		);
+	}
+
+	/**
+	 * Builds menu nodes for the configured product-category tree.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function product_category_menu_nodes(): array {
+		$definitions = $this->main_product_categories();
+
+		if ( ! taxonomy_exists( 'product_cat' ) ) {
+			return $this->fallback_product_category_nodes( $definitions );
+		}
+
+		$all_terms = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'number'     => 0,
+				'orderby'    => 'name',
+				'order'      => 'ASC',
+			)
+		);
+
+		if ( is_wp_error( $all_terms ) || ! is_array( $all_terms ) ) {
+			return $this->fallback_product_category_nodes( $definitions );
+		}
+
+		$terms_by_slug      = array();
+		$children_by_parent = array();
+
+		foreach ( $all_terms as $term ) {
+			if ( ! $term instanceof WP_Term ) {
+				continue;
+			}
+
+			$terms_by_slug[ $term->slug ]                = $term;
+			$children_by_parent[ (int) $term->parent ][] = $term;
+		}
+
+		foreach ( $children_by_parent as $parent_id => $children ) {
+			usort(
+				$children,
+				static function ( WP_Term $a, WP_Term $b ): int {
+					return strnatcasecmp( $a->name, $b->name );
+				}
+			);
+
+			$children_by_parent[ $parent_id ] = $children;
+		}
+
+		$nodes = array();
+
+		foreach ( $definitions as $definition ) {
+			$slug = (string) $definition['slug'];
+			$term = $terms_by_slug[ $slug ] ?? null;
+
+			if ( ! $term instanceof WP_Term ) {
+				$nodes[] = $this->fallback_product_category_node( $definition );
+				continue;
+			}
+
+			$nodes[] = $this->product_category_term_node( $term, $children_by_parent, 0 );
+		}
+
+		return $nodes;
+	}
+
+	/**
+	 * Builds a menu node from a WooCommerce product category term.
+	 *
+	 * @param array<int,array<int,WP_Term>> $children_by_parent Terms grouped by parent term ID.
+	 * @return array<string,mixed>
+	 */
+	private function product_category_term_node( WP_Term $term, array $children_by_parent, int $depth ): array {
+		$children = array();
+
+		if ( $depth < 7 && ! empty( $children_by_parent[ (int) $term->term_id ] ) ) {
+			foreach ( $children_by_parent[ (int) $term->term_id ] as $child ) {
+				if ( $child instanceof WP_Term ) {
+					$children[] = $this->product_category_term_node( $child, $children_by_parent, $depth + 1 );
+				}
+			}
+		}
+
+		$link = get_term_link( $term );
+
+		return array(
+			'label'    => $term->name,
+			'href'     => is_wp_error( $link ) ? $this->product_category_url( $term->slug, '/product-category/' . $term->slug . '/' ) : (string) $link,
+			'classes'  => array( 0 === $depth ? 'is-product-root-category' : 'is-product-child-category' ),
+			'children' => $children,
+		);
+	}
+
+	/**
+	 * Builds fallback nodes when the 10 categories have not been imported yet.
+	 *
+	 * @param array<int,array{name:string,slug:string}> $definitions Main category definitions.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function fallback_product_category_nodes( array $definitions ): array {
+		return array_map(
+			fn( array $definition ): array => $this->fallback_product_category_node( $definition ),
+			$definitions
+		);
+	}
+
+	/**
+	 * Builds one fallback node for a configured main category.
+	 *
+	 * @param array{name:string,slug:string} $definition Main category definition.
+	 * @return array<string,mixed>
+	 */
+	private function fallback_product_category_node( array $definition ): array {
+		$slug = (string) $definition['slug'];
+
+		return array(
+			'label'    => (string) $definition['name'],
+			'href'     => $this->product_category_url( $slug, '/product-category/' . $slug . '/' ),
+			'classes'  => array( 'is-product-root-category' ),
+			'children' => array(),
 		);
 	}
 
@@ -597,6 +786,15 @@ class Schrack_Header_Renderer {
 					<a<?php echo $this->menu_link_attributes( $node, ! empty( $children ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
 						<?php echo esc_html( (string) $node['label'] ); ?>
 					</a>
+					<?php if ( ! $desktop && ! empty( $children ) ) : ?>
+						<button
+							class="schrack-header__submenu-toggle"
+							type="button"
+							aria-expanded="false"
+							aria-label="<?php echo esc_attr( sprintf( __( 'Deschide submeniul %s', 'schrack-woocommerce-sync' ), (string) $node['label'] ) ); ?>"
+							data-header-submenu-toggle
+						></button>
+					<?php endif; ?>
 					<?php echo $this->render_menu_nodes( $children, $depth + 1, $desktop ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</li>
 			<?php endforeach; ?>
