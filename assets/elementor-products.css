@@ -488,6 +488,158 @@
 	pointer-events: none;
 }
 
+.schrack-category-explorer {
+	background: var(--schrack-filter-surface);
+	border: 1px solid var(--schrack-filter-border);
+	border-radius: 8px;
+	box-shadow: 0 8px 22px rgba(23, 32, 42, 0.06);
+	display: grid;
+	gap: 12px;
+	margin: 0 0 14px;
+	min-width: 0;
+	padding: 14px;
+}
+
+.schrack-category-explorer__head {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+	min-width: 0;
+}
+
+.schrack-category-explorer__head > div {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+
+.schrack-category-explorer__head span {
+	color: var(--schrack-filter-muted);
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: 0;
+	line-height: 1.2;
+	text-transform: uppercase;
+}
+
+.schrack-category-explorer__head h2 {
+	color: var(--schrack-filter-text);
+	font-size: 20px;
+	font-weight: 850;
+	letter-spacing: 0;
+	line-height: 1.15;
+	margin: 0;
+	overflow-wrap: anywhere;
+	word-break: normal;
+}
+
+.schrack-category-explorer__back {
+	align-items: center;
+	background: #f7fafc;
+	border: 1px solid var(--schrack-filter-border);
+	border-radius: 6px;
+	color: var(--schrack-filter-accent);
+	display: inline-flex;
+	flex: 0 0 auto;
+	font-size: 12px;
+	font-weight: 800;
+	justify-content: center;
+	line-height: 1.2;
+	max-width: 100%;
+	min-height: 32px;
+	overflow-wrap: anywhere;
+	padding: 7px 10px;
+	text-decoration: none;
+	word-break: normal;
+}
+
+.schrack-category-explorer__back:hover,
+.schrack-category-explorer__back:focus {
+	background: #eef6fc;
+	border-color: var(--schrack-filter-accent);
+	color: var(--schrack-filter-accent);
+	outline: none;
+}
+
+.schrack-category-explorer__description,
+.schrack-category-explorer__leaf {
+	color: var(--schrack-filter-muted);
+	font-size: 13px;
+	font-weight: 650;
+	line-height: 1.45;
+	margin: 0;
+	overflow-wrap: anywhere;
+	word-break: normal;
+}
+
+.schrack-category-explorer__grid {
+	display: grid;
+	gap: 9px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.schrack-category-explorer__card {
+	align-items: center;
+	background: #fbfcfe;
+	border: 1px solid var(--schrack-filter-border);
+	border-radius: 8px;
+	color: var(--schrack-filter-text);
+	display: grid;
+	gap: 3px 8px;
+	grid-template-columns: minmax(0, 1fr) auto;
+	min-height: 68px;
+	min-width: 0;
+	padding: 11px 12px;
+	text-decoration: none;
+	transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.schrack-category-explorer__card:hover,
+.schrack-category-explorer__card:focus {
+	background: color-mix(in srgb, var(--schrack-filter-accent) 7%, #fff);
+	border-color: color-mix(in srgb, var(--schrack-filter-accent) 42%, var(--schrack-filter-border));
+	box-shadow: 0 8px 18px rgba(23, 32, 42, 0.08);
+	color: var(--schrack-filter-text);
+	outline: none;
+	transform: translateY(-1px);
+}
+
+.schrack-category-explorer__name {
+	font-size: 14px;
+	font-weight: 800;
+	grid-column: 1;
+	line-height: 1.25;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: normal;
+}
+
+.schrack-category-explorer__meta {
+	color: var(--schrack-filter-muted);
+	font-size: 12px;
+	font-weight: 700;
+	grid-column: 1;
+	line-height: 1.2;
+	min-width: 0;
+}
+
+.schrack-category-explorer__arrow {
+	align-items: center;
+	background: color-mix(in srgb, var(--schrack-filter-accent) 10%, #fff);
+	border-radius: 999px;
+	color: var(--schrack-filter-accent);
+	display: inline-flex;
+	font-size: 20px;
+	font-weight: 700;
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	height: 28px;
+	justify-content: center;
+	line-height: 1;
+	width: 28px;
+}
+
 .schrack-product-filter__grid {
 	display: grid;
 	gap: 12px;
@@ -768,6 +920,10 @@
 		position: static;
 	}
 
+	.schrack-category-explorer__grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
 	.schrack-product-filter__grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -778,7 +934,13 @@
 		padding: 14px;
 	}
 
+	.schrack-category-explorer__head {
+		align-items: stretch;
+		display: grid;
+	}
+
 	.schrack-product-filter__price-row,
+	.schrack-category-explorer__grid,
 	.schrack-product-filter__grid {
 		grid-template-columns: 1fr;
 	}

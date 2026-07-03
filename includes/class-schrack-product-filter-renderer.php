@@ -225,6 +225,8 @@ class Schrack_Product_Filter_Renderer {
 
 		ob_start();
 		?>
+		<?php echo $this->category_explorer( $filters ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+
 		<div class="schrack-product-filter__summary">
 			<?php echo esc_html( $summary ); ?>
 		</div>
@@ -720,6 +722,168 @@ class Schrack_Product_Filter_Renderer {
 		}
 
 		return $args;
+	}
+
+	/**
+	 * Renders a step-by-step category navigation block for category pages.
+	 *
+	 * @param array<string,mixed> $filters Filters.
+	 */
+	private function category_explorer( array $filters ): string {
+		if ( ! taxonomy_exists( 'product_cat' ) ) {
+			return '';
+		}
+
+		if ( '' !== trim( (string) ( $filters['search'] ?? '' ) ) ) {
+			return '';
+		}
+
+		$current_id       = absint( $filters['category'] ?? 0 );
+		$current_category = $current_id > 0 ? get_term( $current_id, 'product_cat' ) : null;
+
+		if ( $current_id <= 0 && '' !== trim( (string) ( $filters['category_search'] ?? '' ) ) ) {
+			return '';
+		}
+
+		$child_categories = $this->direct_child_categories( $current_id );
+
+		if ( ! $current_category instanceof WP_Term && empty( $child_categories ) ) {
+			return '';
+		}
+
+		$title       = $current_category instanceof WP_Term ? $current_category->name : __( 'Categorii produse', 'schrack-woocommerce-sync' );
+		$eyebrow     = $current_category instanceof WP_Term ? __( 'Categoria curenta', 'schrack-woocommerce-sync' ) : __( 'Catalog produse', 'schrack-woocommerce-sync' );
+		$description = $current_category instanceof WP_Term ? trim( wp_strip_all_tags( (string) $current_category->description ) ) : '';
+		$parent_link = $current_category instanceof WP_Term ? $this->category_parent_link( $current_category ) : null;
+
+		ob_start();
+		?>
+		<section class="schrack-category-explorer" aria-label="<?php esc_attr_e( 'Navigare categorii produse', 'schrack-woocommerce-sync' ); ?>">
+			<div class="schrack-category-explorer__head">
+				<div>
+					<span><?php echo esc_html( $eyebrow ); ?></span>
+					<h2><?php echo esc_html( $title ); ?></h2>
+				</div>
+				<?php if ( is_array( $parent_link ) ) : ?>
+					<a class="schrack-category-explorer__back" href="<?php echo esc_url( $parent_link['url'] ); ?>">
+						<?php echo esc_html( $parent_link['label'] ); ?>
+					</a>
+				<?php endif; ?>
+			</div>
+
+			<?php if ( '' !== $description ) : ?>
+				<p class="schrack-category-explorer__description"><?php echo esc_html( wp_trim_words( $description, 28 ) ); ?></p>
+			<?php endif; ?>
+
+			<?php if ( ! empty( $child_categories ) ) : ?>
+				<div class="schrack-category-explorer__grid">
+					<?php foreach ( $child_categories as $category ) : ?>
+						<?php $link = get_term_link( $category ); ?>
+						<?php if ( is_wp_error( $link ) ) : ?>
+							<?php continue; ?>
+						<?php endif; ?>
+						<a class="schrack-category-explorer__card" href="<?php echo esc_url( $link ); ?>">
+							<span class="schrack-category-explorer__name"><?php echo esc_html( $category->name ); ?></span>
+							<span class="schrack-category-explorer__meta">
+								<?php
+								echo esc_html(
+									sprintf(
+										/* translators: %s: product count. */
+										__( '%s produse', 'schrack-woocommerce-sync' ),
+										number_format_i18n( (int) $category->count )
+									)
+								);
+								?>
+							</span>
+							<span class="schrack-category-explorer__arrow" aria-hidden="true">&rsaquo;</span>
+						</a>
+					<?php endforeach; ?>
+				</div>
+			<?php elseif ( $current_category instanceof WP_Term ) : ?>
+				<p class="schrack-category-explorer__leaf">
+					<?php esc_html_e( 'Aceasta este ultima categorie din ramura. Produsele potrivite sunt afisate mai jos.', 'schrack-woocommerce-sync' ); ?>
+				</p>
+			<?php endif; ?>
+		</section>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Returns direct child product categories for one parent category.
+	 *
+	 * @return array<int,WP_Term>
+	 */
+	private function direct_child_categories( int $parent_id ): array {
+		$terms = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'orderby'    => 'name',
+				'order'      => 'ASC',
+				'parent'     => max( 0, $parent_id ),
+			)
+		);
+
+		if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_filter(
+				$terms,
+				static fn ( mixed $term ): bool => $term instanceof WP_Term
+			)
+		);
+	}
+
+	/**
+	 * Returns the parent category link, or the catalog link for top-level terms.
+	 *
+	 * @return array{label:string,url:string}|null
+	 */
+	private function category_parent_link( WP_Term $category ): ?array {
+		if ( (int) $category->parent <= 0 ) {
+			return array(
+				'label' => __( 'Inapoi la catalog', 'schrack-woocommerce-sync' ),
+				'url'   => $this->shop_url(),
+			);
+		}
+
+		$parent = get_term( (int) $category->parent, 'product_cat' );
+
+		if ( ! $parent instanceof WP_Term ) {
+			return null;
+		}
+
+		$link = get_term_link( $parent );
+
+		if ( is_wp_error( $link ) ) {
+			return null;
+		}
+
+		return array(
+			'label' => sprintf(
+				/* translators: %s: parent category name. */
+				__( 'Inapoi la %s', 'schrack-woocommerce-sync' ),
+				$parent->name
+			),
+			'url'   => (string) $link,
+		);
+	}
+
+	/**
+	 * Returns the WooCommerce shop URL.
+	 */
+	private function shop_url(): string {
+		$shop_url = function_exists( 'wc_get_page_id' ) ? get_permalink( wc_get_page_id( 'shop' ) ) : '';
+
+		if ( ! is_string( $shop_url ) || '' === $shop_url ) {
+			return home_url( '/' );
+		}
+
+		return $shop_url;
 	}
 
 	/**
