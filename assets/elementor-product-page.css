@@ -19,35 +19,40 @@
 
 .schrack-product-page__breadcrumb {
 	--schrack-crumb-fade: color-mix(in srgb, var(--schrack-page-muted) 62%, #fff);
-	color: var(--schrack-page-muted);
-	font-size: 13px;
-	font-weight: 700;
-	margin: 0 0 18px;
+	color: var(--schrack-page-muted) !important;
+	font-size: 13px !important;
+	font-weight: 700 !important;
+	margin: 0 0 18px !important;
 	min-width: 0;
 }
 
 .schrack-product-page__breadcrumb ol {
-	align-items: center;
-	display: flex;
-	flex-wrap: wrap;
-	gap: 2px;
-	list-style: none;
-	margin: 0;
-	padding: 0;
+	align-items: center !important;
+	display: flex !important;
+	flex-wrap: wrap !important;
+	gap: 2px !important;
+	list-style: none !important;
+	margin: 0 !important;
+	padding: 0 !important;
 }
 
 .schrack-product-page__breadcrumb li {
-	align-items: center;
-	display: inline-flex;
-	gap: 6px;
-	line-height: 1.35;
+	align-items: center !important;
+	display: inline-flex !important;
+	gap: 6px !important;
+	line-height: 1.35 !important;
+	list-style: none !important;
 	min-width: 0;
+}
+
+.schrack-product-page__breadcrumb li::marker {
+	content: "" !important;
 }
 
 .schrack-product-page__breadcrumb li:not(:last-child)::after {
 	border-right: 1.5px solid var(--schrack-crumb-fade);
 	border-top: 1.5px solid var(--schrack-crumb-fade);
-	content: "";
+	content: "" !important;
 	flex: none;
 	height: 6px;
 	margin: 0 4px 0 2px;
@@ -58,7 +63,7 @@
 
 .schrack-product-page__breadcrumb a,
 .schrack-product-page__breadcrumb li > span {
-	display: inline-flex;
+	display: inline-flex !important;
 	max-width: min(100%, 34ch);
 }
 
@@ -71,14 +76,14 @@
 }
 
 .schrack-product-page__breadcrumb a {
-	align-items: center;
+	align-items: center !important;
 	border-radius: 999px;
-	color: var(--schrack-page-muted);
-	gap: 5px;
+	color: var(--schrack-page-muted) !important;
+	gap: 5px !important;
 	margin: -5px -8px;
 	min-width: 0;
 	padding: 5px 8px;
-	text-decoration: none;
+	text-decoration: none !important;
 	transition: background-color .18s ease, color .18s ease, transform .18s ease;
 }
 
@@ -90,7 +95,7 @@
 .schrack-product-page__breadcrumb a:hover,
 .schrack-product-page__breadcrumb a:focus-visible {
 	background: color-mix(in srgb, var(--schrack-page-accent) 10%, #fff);
-	color: var(--schrack-page-accent);
+	color: var(--schrack-page-accent) !important;
 	transform: translateY(-1px);
 }
 
@@ -106,8 +111,8 @@
 .schrack-product-page__breadcrumb span[aria-current="page"] {
 	background: var(--schrack-page-panel);
 	border-radius: 999px;
-	color: var(--schrack-page-text);
-	font-weight: 800;
+	color: var(--schrack-page-text) !important;
+	font-weight: 800 !important;
 	padding: 5px 10px;
 }
 
