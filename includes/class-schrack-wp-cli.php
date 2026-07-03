@@ -59,8 +59,68 @@ class Schrack_WP_CLI {
 
 	/**
 	 * Imports a Telesystem feed batch.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--drain]
+	 * : Keep running Telesystem import cycles in this WP-CLI process until the feed is
+	 * fully imported, bypassing Action Scheduler follow-up latency. Each cycle already
+	 * processes up to the configured "Telesystem batches per run" setting.
+	 *
+	 * [--max-batches=<count>]
+	 * : Stop drain mode after this many import cycles. Omit or pass 0 for no limit.
+	 *
+	 * [--time-limit=<seconds>]
+	 * : Stop drain mode after this many seconds. Omit or pass 0 for no time limit.
 	 */
-	public function telesystem(): void {
+	public function telesystem( array $args = array(), array $assoc_args = array() ): void {
+		if ( isset( $assoc_args['drain'] ) ) {
+			$max_runs   = isset( $assoc_args['max-batches'] ) ? absint( $assoc_args['max-batches'] ) : 0;
+			$time_limit = isset( $assoc_args['time-limit'] ) ? absint( $assoc_args['time-limit'] ) : 0;
+			$deadline   = $time_limit > 0 ? time() + $time_limit : 0;
+			$runs       = 0;
+			$totals     = array(
+				'processed'     => 0,
+				'errors'        => 0,
+				'prices_synced' => 0,
+				'stock_synced'  => 0,
+			);
+			$result     = array();
+
+			while ( 0 === $max_runs || $runs < $max_runs ) {
+				if ( $deadline > 0 && time() >= $deadline ) {
+					break;
+				}
+
+				$result = $this->cron->run_telesystem_catalog_import( false );
+				++$runs;
+
+				foreach ( array_keys( $totals ) as $key ) {
+					$totals[ $key ] += absint( $result[ $key ] ?? 0 );
+				}
+
+				if (
+					'yes' === (string) ( $result['completed_cycle'] ?? 'yes' )
+					|| 'yes' === (string) ( $result['stopped'] ?? 'no' )
+				) {
+					break;
+				}
+			}
+
+			WP_CLI::success(
+				sprintf(
+					'Telesystem drain finished. Runs: %d, processed: %d, errors: %d, prices synced: %d, stock synced: %d, complete: %s.',
+					$runs,
+					$totals['processed'],
+					$totals['errors'],
+					$totals['prices_synced'],
+					$totals['stock_synced'],
+					(string) ( $result['completed_cycle'] ?? 'no' )
+				)
+			);
+			return;
+		}
+
 		$this->cron->run_telesystem_catalog_import();
 		WP_CLI::success( 'Telesystem catalog import batch finished.' );
 	}

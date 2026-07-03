@@ -108,6 +108,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</tr>
 				</tbody>
 			</table>
+			<?php if ( ! $action_scheduler_available ) : ?>
+				<p class="description">
+					<?php esc_html_e( 'Action Scheduler is not available, so sync batches run through WP-Cron instead. WP-Cron only fires on incoming site visits, which can make sync noticeably slower on low-traffic stores. Activating WooCommerce (which bundles Action Scheduler) and/or pointing a real system cron at wp-cron.php is the single biggest speed-up available for this sync.', 'schrack-woocommerce-sync' ); ?>
+				</p>
+			<?php endif; ?>
 		</div>
 
 		<div class="schrack-panel">

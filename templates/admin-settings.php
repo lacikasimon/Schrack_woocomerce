@@ -91,27 +91,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<tr>
 				<th scope="row"><label for="schrack_catalog_batch_size"><?php esc_html_e( 'Catalog batch size', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
-					<input id="schrack_catalog_batch_size" type="number" min="1" max="1000" step="1" name="schrack_settings[catalog_batch_size]" value="<?php echo esc_attr( min( 1000, max( 1, absint( $settings['catalog_batch_size'] ) ) ) ); ?>">
+					<input id="schrack_catalog_batch_size" type="number" min="1" max="5000" step="1" name="schrack_settings[catalog_batch_size]" value="<?php echo esc_attr( min( 5000, max( 1, absint( $settings['catalog_batch_size'] ) ) ) ); ?>">
 					<p class="description"><?php esc_html_e( 'For 2 GB cPanel hosting, 500 is the recommended value. Runtime protection caps this automatically on low-memory hosts.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_catalog_batches_per_run"><?php esc_html_e( 'Catalog batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
-					<input id="schrack_catalog_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[catalog_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['catalog_batches_per_run'] ) ) ) ); ?>">
-					<p class="description"><?php esc_html_e( 'For 2 GB cPanel hosting, 3 is now the recommended value. Runtime protection stops before memory or execution time gets risky.', 'schrack-woocommerce-sync' ); ?></p>
+					<input id="schrack_catalog_batches_per_run" type="number" min="1" max="20" step="1" name="schrack_settings[catalog_batches_per_run]" value="<?php echo esc_attr( min( 20, max( 1, absint( $settings['catalog_batches_per_run'] ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'For 2 GB cPanel hosting, 3 is now the recommended value. Runtime protection stops before memory or execution time gets risky; raise this on capable hosts to finish full syncs in fewer cron ticks.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_telesystem_batch_size"><?php esc_html_e( 'Telesystem batch size', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
-					<input id="schrack_telesystem_batch_size" type="number" min="1" max="1000" step="1" name="schrack_settings[telesystem_batch_size]" value="<?php echo esc_attr( min( 1000, max( 1, absint( $settings['telesystem_batch_size'] ?? 500 ) ) ) ); ?>">
+					<input id="schrack_telesystem_batch_size" type="number" min="1" max="5000" step="1" name="schrack_settings[telesystem_batch_size]" value="<?php echo esc_attr( min( 5000, max( 1, absint( $settings['telesystem_batch_size'] ?? 500 ) ) ) ); ?>">
 				</td>
 			</tr>
 			<tr>
 				<th scope="row"><label for="schrack_telesystem_batches_per_run"><?php esc_html_e( 'Telesystem batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
-					<input id="schrack_telesystem_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[telesystem_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['telesystem_batches_per_run'] ?? 3 ) ) ) ); ?>">
+					<input id="schrack_telesystem_batches_per_run" type="number" min="1" max="20" step="1" name="schrack_settings[telesystem_batches_per_run]" value="<?php echo esc_attr( min( 20, max( 1, absint( $settings['telesystem_batches_per_run'] ?? 3 ) ) ) ); ?>">
 				</td>
 			</tr>
 			<tr>
@@ -134,8 +134,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<tr>
 				<th scope="row"><label for="schrack_sync_batches_per_run"><?php esc_html_e( 'Price/stock batches per run', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
-					<input id="schrack_sync_batches_per_run" type="number" min="1" max="5" step="1" name="schrack_settings[sync_batches_per_run]" value="<?php echo esc_attr( min( 5, max( 1, absint( $settings['sync_batches_per_run'] ) ) ) ); ?>">
-					<p class="description"><?php esc_html_e( 'Use 1 on 2 GB hosting. Follow-up batches are queued instead of being chained in one PHP request.', 'schrack-woocommerce-sync' ); ?></p>
+					<input id="schrack_sync_batches_per_run" type="number" min="1" max="20" step="1" name="schrack_settings[sync_batches_per_run]" value="<?php echo esc_attr( min( 20, max( 1, absint( $settings['sync_batches_per_run'] ) ) ) ); ?>">
+					<p class="description"><?php esc_html_e( 'Use 1 on 2 GB hosting. Raise this on capable hosts to chain more price/stock batches per PHP request instead of waiting for queued follow-ups.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>

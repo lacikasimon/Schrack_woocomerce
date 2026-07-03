@@ -45,7 +45,7 @@ class Schrack_Header_Renderer {
 			data-schrack-header
 		>
 			<div class="schrack-header__inner">
-				<a class="schrack-header__brand" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['company_name'] ); ?>">
+				<a class="schrack-header__brand" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['brand_name'] ); ?>">
 					<span class="schrack-header__logo" aria-hidden="true">
 						<?php if ( '' !== $settings['logo_url'] ) : ?>
 							<img src="<?php echo esc_url( $settings['logo_url'] ); ?>" alt="" loading="eager">
@@ -87,7 +87,7 @@ class Schrack_Header_Renderer {
 
 			<aside id="<?php echo esc_attr( $panel_id ); ?>" class="schrack-header__panel" role="dialog" aria-modal="true" aria-label="<?php echo esc_attr( $settings['menu_label'] ); ?>" hidden data-header-menu-panel>
 				<div class="schrack-header__panel-head">
-					<a class="schrack-header__panel-brand" href="<?php echo esc_url( $settings['site_url'] ); ?>">
+					<a class="schrack-header__panel-brand" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['brand_name'] ); ?>">
 						<span class="schrack-header__panel-logo" aria-hidden="true">
 							<?php if ( '' !== $settings['logo_url'] ) : ?>
 								<img src="<?php echo esc_url( $settings['logo_url'] ); ?>" alt="" loading="lazy">
@@ -140,8 +140,8 @@ class Schrack_Header_Renderer {
 	private function sanitize_settings( array $settings ): array {
 		$defaults = array(
 			'company_name'        => 'GENE SYS SECURITY SRL',
-			'brand_name'          => 'GENE SYS SECURITY',
-			'brand_suffix'        => 'SHOP',
+			'brand_name'          => 'SysHUB',
+			'brand_suffix'        => '',
 			'logo_url'            => $this->default_logo_url(),
 			'site_url'            => home_url( '/' ),
 			'menu_id'             => 0,
@@ -179,6 +179,8 @@ class Schrack_Header_Renderer {
 		foreach ( array( 'company_name', 'brand_name', 'brand_suffix', 'cart_label', 'account_label', 'login_label', 'menu_label', 'offer_label', 'search_placeholder', 'search_button_text' ) as $key ) {
 			$settings[ $key ] = sanitize_text_field( (string) $settings[ $key ] );
 		}
+
+		$settings = $this->normalize_brand_display( $settings );
 
 		$legacy_labels = array(
 			'search_placeholder' => array(
@@ -229,6 +231,26 @@ class Schrack_Header_Renderer {
 
 		if ( '' === $settings['offer_url'] ) {
 			$settings['offer_url'] = home_url( '/contact/' );
+		}
+
+		return $settings;
+	}
+
+	/**
+	 * Keeps older Elementor instances aligned with the current public brand name.
+	 *
+	 * @param array<string,string|int> $settings Sanitized settings.
+	 * @return array<string,string|int>
+	 */
+	private function normalize_brand_display( array $settings ): array {
+		$legacy_brand_names = array( 'GENE SYS SECURITY', 'GENE SYS SECURITY SRL', 'SYSHUB' );
+
+		if ( in_array( strtoupper( (string) $settings['brand_name'] ), $legacy_brand_names, true ) ) {
+			$settings['brand_name'] = 'SysHUB';
+		}
+
+		if ( 'syshub' === strtolower( (string) $settings['brand_name'] ) ) {
+			$settings['brand_suffix'] = '';
 		}
 
 		return $settings;

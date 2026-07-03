@@ -226,7 +226,7 @@ class Schrack_Footer_Renderer {
 		$defaults = array(
 			'top_message'   => __( 'Instalatii electrice · Fotovoltaice · Securitate — solutii integrate pentru proiectul tau', 'schrack-woocommerce-sync' ),
 			'company_name'  => 'GENE SYS SECURITY SRL',
-			'brand_name'    => 'syshub',
+			'brand_name'    => 'SysHUB',
 			'brand_suffix'  => '',
 			'brand_lead'    => __( 'Proiectare, executie si mentenanta pentru instalatii electrice, fotovoltaice si sisteme de securitate.', 'schrack-woocommerce-sync' ),
 			'brand_text'    => __( 'Lucram cu beneficiari privati, firme de constructii si administratori de patrimoniu — oferte clare, documentatie conforma si suport dupa receptie.', 'schrack-woocommerce-sync' ),
@@ -286,10 +286,10 @@ class Schrack_Footer_Renderer {
 	 * @return array<string,string|int>
 	 */
 	private function normalize_brand_display( array $settings ): array {
-		$legacy_brand_names = array( 'GENE SYS SECURITY', 'GENE SYS SECURITY SRL' );
+		$legacy_brand_names = array( 'GENE SYS SECURITY', 'GENE SYS SECURITY SRL', 'SYSHUB' );
 
 		if ( in_array( strtoupper( (string) $settings['brand_name'] ), $legacy_brand_names, true ) ) {
-			$settings['brand_name'] = 'syshub';
+			$settings['brand_name'] = 'SysHUB';
 		}
 
 		if ( 'syshub' === strtolower( (string) $settings['brand_name'] ) ) {

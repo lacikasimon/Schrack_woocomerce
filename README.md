@@ -202,6 +202,7 @@ Commands:
 ```bash
 wp schrack-sync catalog
 wp schrack-sync telesystem
+wp schrack-sync telesystem --drain --max-batches=20 --time-limit=1800
 wp schrack-sync prices
 wp schrack-sync stock
 wp schrack-sync images
@@ -209,7 +210,7 @@ wp schrack-sync images --drain --batch-size=50 --time-limit=1800
 wp schrack-sync full
 ```
 
-Use `wp schrack-sync images --drain` for a large initial media backlog when SSH/WP-CLI is available. It bypasses Action Scheduler follow-up latency and keeps processing image batches in the same CLI process until the backlog is clear or the optional batch/time limit is reached.
+Use `wp schrack-sync images --drain` for a large initial media backlog when SSH/WP-CLI is available. It bypasses Action Scheduler follow-up latency and keeps processing image batches in the same CLI process until the backlog is clear or the optional batch/time limit is reached. `wp schrack-sync telesystem --drain` does the same for a large initial Telesystem feed import, running consecutive import cycles until the feed is fully imported or the optional run/time limit is reached.
 
 ## Logging
 

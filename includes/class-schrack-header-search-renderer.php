@@ -79,7 +79,7 @@ class Schrack_Header_Search_Renderer {
 					id="<?php echo esc_attr( $instance_id . '-input' ); ?>"
 					class="schrack-header-search__input"
 					type="search"
-					name="s"
+					name="search"
 					placeholder="<?php echo esc_attr( $settings['placeholder'] ); ?>"
 					autocomplete="off"
 					data-header-search-input
@@ -89,7 +89,6 @@ class Schrack_Header_Search_Renderer {
 					aria-expanded="false"
 					aria-haspopup="listbox"
 				>
-				<input type="hidden" name="post_type" value="product">
 				<button class="schrack-header-search__button" type="submit">
 					<span class="schrack-header-search__button-text"><?php echo esc_html( $settings['button_text'] ); ?></span>
 					<span class="schrack-header-search__spinner" aria-hidden="true"></span>
@@ -675,8 +674,7 @@ class Schrack_Header_Search_Renderer {
 
 		return add_query_arg(
 			array(
-				's'         => $search,
-				'post_type' => 'product',
+				'search' => $search,
 			),
 			$shop_url
 		);

@@ -37,14 +37,12 @@ class Schrack_Product_Filter_Renderer {
 		$settings    = $this->sanitize_settings( $settings );
 		$settings    = $this->settings_with_request_category( $settings );
 		$instance_id = '' !== $instance_id ? sanitize_html_class( $instance_id ) : 'schrack-products-' . wp_rand( 1000, 999999 );
-		$filters     = array(
-			'category' => $settings['default_category'],
-			'orderby'  => $settings['default_orderby'],
-			'paged'    => 1,
-		);
-		$results       = $this->render_results( $settings, $filters );
-		$config        = $this->public_settings( $settings );
-		$category      = $this->category_for_picker( $settings['default_category'] );
+		$filters     = $this->sanitize_filters( $this->request_filters( $settings ) );
+		$results     = $this->render_results( $settings, $filters );
+		$config      = $this->public_settings( $settings );
+		$category    = $this->category_for_picker( $filters['category'] );
+		$default_category = $this->category_for_picker( $settings['default_category'] );
+		$category_search_value = $category['id'] > 0 ? $category['label'] : $filters['category_search'];
 		$manufacturers = $settings['show_manufacturer_filter'] ? $this->manufacturer_options() : array();
 		$style         = $this->inline_style( $settings );
 
@@ -71,13 +69,13 @@ class Schrack_Product_Filter_Renderer {
 							<?php if ( $settings['show_search'] ) : ?>
 							<label class="schrack-product-filter__field">
 								<span><?php esc_html_e( 'Cauta produse', 'schrack-woocommerce-sync' ); ?></span>
-								<input type="search" name="search" placeholder="<?php esc_attr_e( 'Nume produs', 'schrack-woocommerce-sync' ); ?>">
+								<input type="search" name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="<?php esc_attr_e( 'Nume produs', 'schrack-woocommerce-sync' ); ?>">
 							</label>
 							<?php endif; ?>
 
 							<?php if ( $settings['show_stock_filter'] ) : ?>
 							<label class="schrack-product-filter__check">
-								<input type="checkbox" name="include_out_of_stock" value="yes">
+								<input type="checkbox" name="include_out_of_stock" value="yes" <?php checked( $filters['include_out_of_stock'] ); ?>>
 								<span><?php esc_html_e( 'Afiseaza si produsele fara stoc', 'schrack-woocommerce-sync' ); ?></span>
 							</label>
 							<?php endif; ?>
@@ -86,8 +84,8 @@ class Schrack_Product_Filter_Renderer {
 							<div
 								class="schrack-category-picker"
 								data-category-picker
-								data-default-category-id="<?php echo esc_attr( (string) $category['id'] ); ?>"
-								data-default-category-label="<?php echo esc_attr( $category['label'] ); ?>"
+								data-default-category-id="<?php echo esc_attr( (string) $default_category['id'] ); ?>"
+								data-default-category-label="<?php echo esc_attr( $default_category['label'] ); ?>"
 							>
 								<?php if ( $settings['show_category_search'] ) : ?>
 									<label class="schrack-product-filter__field">
@@ -95,7 +93,7 @@ class Schrack_Product_Filter_Renderer {
 										<input
 											type="search"
 											name="category_search"
-											value="<?php echo esc_attr( $category['label'] ); ?>"
+											value="<?php echo esc_attr( $category_search_value ); ?>"
 											data-category-search
 											autocomplete="off"
 											placeholder="<?php esc_attr_e( 'Cauta categorie', 'schrack-woocommerce-sync' ); ?>"
@@ -118,7 +116,7 @@ class Schrack_Product_Filter_Renderer {
 								<select name="manufacturer">
 									<option value=""><?php esc_html_e( 'Toti producatorii', 'schrack-woocommerce-sync' ); ?></option>
 									<?php foreach ( $manufacturers as $manufacturer ) : ?>
-										<option value="<?php echo esc_attr( $manufacturer['name'] ); ?>">
+										<option value="<?php echo esc_attr( $manufacturer['name'] ); ?>" <?php selected( $filters['manufacturer'], $manufacturer['name'] ); ?>>
 											<?php
 											echo esc_html(
 												sprintf(
@@ -141,14 +139,14 @@ class Schrack_Product_Filter_Renderer {
 									<label class="schrack-product-filter__field schrack-product-filter__field--price">
 										<span><?php esc_html_e( 'Pret minim', 'schrack-woocommerce-sync' ); ?></span>
 										<div class="schrack-product-filter__money-input">
-											<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" placeholder="0">
+											<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" value="<?php echo esc_attr( $this->decimal_input_value( $filters['min_price'] ) ); ?>" placeholder="0">
 											<b><?php esc_html_e( 'lei', 'schrack-woocommerce-sync' ); ?></b>
 										</div>
 									</label>
 									<label class="schrack-product-filter__field schrack-product-filter__field--price">
 										<span><?php esc_html_e( 'Pret maxim', 'schrack-woocommerce-sync' ); ?></span>
 										<div class="schrack-product-filter__money-input">
-											<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal">
+											<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal" value="<?php echo esc_attr( $this->decimal_input_value( $filters['max_price'] ) ); ?>">
 											<b><?php esc_html_e( 'lei', 'schrack-woocommerce-sync' ); ?></b>
 										</div>
 									</label>
@@ -173,7 +171,7 @@ class Schrack_Product_Filter_Renderer {
 								<span><?php esc_html_e( 'Sorteaza dupa', 'schrack-woocommerce-sync' ); ?></span>
 								<select name="orderby">
 									<?php foreach ( $this->orderby_options() as $value => $label ) : ?>
-										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $settings['default_orderby'], $value ); ?>>
+										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $filters['orderby'], $value ); ?>>
 											<?php echo esc_html( $label ); ?>
 										</option>
 									<?php endforeach; ?>
@@ -322,6 +320,104 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
+	 * Builds the initial frontend filters from query parameters.
+	 *
+	 * @param array<string,mixed> $settings Sanitized settings.
+	 * @return array<string,mixed>
+	 */
+	private function request_filters( array $settings ): array {
+		$filters = array(
+			'search'               => '',
+			'category'             => (int) $settings['default_category'],
+			'category_search'      => '',
+			'min_price'            => '',
+			'max_price'            => '',
+			'include_out_of_stock' => 'no',
+			'manufacturer'         => '',
+			'orderby'              => $settings['default_orderby'],
+			'paged'                => 1,
+		);
+
+		$search = $this->request_value( 'search' );
+
+		if ( '' === $search ) {
+			$search = $this->request_value( 's' );
+		}
+
+		$filters['search'] = $search;
+
+		$category = $this->request_value( 'category' );
+
+		if ( '' !== $category ) {
+			$category_id = $this->category_id_from_request_value( $category );
+
+			if ( $category_id > 0 ) {
+				$filters['category'] = $category_id;
+			}
+		} else {
+			$product_cat = $this->request_value( 'product_cat' );
+
+			if ( '' !== $product_cat ) {
+				$category_id = $this->category_id_from_request_value( $product_cat );
+
+				if ( $category_id > 0 ) {
+					$filters['category'] = $category_id;
+				}
+			}
+		}
+
+		foreach ( array( 'category_search', 'min_price', 'max_price', 'include_out_of_stock', 'manufacturer', 'orderby', 'paged' ) as $key ) {
+			$value = $this->request_value( $key );
+
+			if ( '' !== $value ) {
+				$filters[ $key ] = $value;
+			}
+		}
+
+		return $filters;
+	}
+
+	/**
+	 * Returns one scalar query parameter value.
+	 */
+	private function request_value( string $key ): string {
+		if ( ! isset( $_GET[ $key ] ) ) {
+			return '';
+		}
+
+		$value = wp_unslash( $_GET[ $key ] );
+
+		if ( is_array( $value ) ) {
+			$value = reset( $value );
+		}
+
+		return is_scalar( $value ) ? trim( (string) $value ) : '';
+	}
+
+	/**
+	 * Converts a category query parameter into a product category ID.
+	 */
+	private function category_id_from_request_value( string $value ): int {
+		if ( '' === $value || ! taxonomy_exists( 'product_cat' ) ) {
+			return 0;
+		}
+
+		if ( is_numeric( $value ) ) {
+			return absint( $value );
+		}
+
+		$term = get_term_by( 'slug', sanitize_title( rawurldecode( $value ) ), 'product_cat' );
+
+		if ( $term instanceof WP_Term ) {
+			return (int) $term->term_id;
+		}
+
+		$term = get_term_by( 'name', sanitize_text_field( $value ), 'product_cat' );
+
+		return $term instanceof WP_Term ? (int) $term->term_id : 0;
+	}
+
+	/**
 	 * Returns the product category represented by the current request URL.
 	 */
 	private function current_request_category_id(): int {
@@ -394,6 +490,9 @@ class Schrack_Product_Filter_Renderer {
 
 		if ( $this->uses_item_number_join( $query ) ) {
 			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_item_meta ON ({$wpdb->posts}.ID = schrack_filter_item_meta.post_id AND schrack_filter_item_meta.meta_key = '_schrack_item_number')";
+			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_ean_meta ON ({$wpdb->posts}.ID = schrack_filter_ean_meta.post_id AND schrack_filter_ean_meta.meta_key = '_schrack_ean')";
+			$join .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_filter_item_meta ON ({$wpdb->posts}.ID = telesystem_filter_item_meta.post_id AND telesystem_filter_item_meta.meta_key = '_telesystem_item_number')";
+			$join .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_filter_ean_meta ON ({$wpdb->posts}.ID = telesystem_filter_ean_meta.post_id AND telesystem_filter_ean_meta.meta_key = '_telesystem_ean')";
 		}
 
 		return $join;
@@ -411,7 +510,10 @@ class Schrack_Product_Filter_Renderer {
 			$like = '%' . $wpdb->esc_like( $search ) . '%';
 
 			$where .= $wpdb->prepare(
-				" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_filter_lookup.sku LIKE %s OR schrack_filter_item_meta.meta_value LIKE %s)",
+				" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_filter_lookup.sku LIKE %s OR schrack_filter_item_meta.meta_value LIKE %s OR schrack_filter_ean_meta.meta_value LIKE %s OR telesystem_filter_item_meta.meta_value LIKE %s OR telesystem_filter_ean_meta.meta_value LIKE %s)",
+				$like,
+				$like,
+				$like,
 				$like,
 				$like,
 				$like,
@@ -1519,6 +1621,19 @@ class Schrack_Product_Filter_Renderer {
 		$value = str_replace( ',', '.', sanitize_text_field( (string) $value ) );
 
 		return is_numeric( $value ) ? max( 0.0, (float) $value ) : null;
+	}
+
+	/**
+	 * Formats a sanitized decimal filter value for number inputs.
+	 */
+	private function decimal_input_value( ?float $value ): string {
+		if ( null === $value ) {
+			return '';
+		}
+
+		$formatted = rtrim( rtrim( sprintf( '%.2F', $value ), '0' ), '.' );
+
+		return '' !== $formatted ? $formatted : '0';
 	}
 
 	/**

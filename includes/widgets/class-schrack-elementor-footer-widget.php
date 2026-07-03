@@ -85,7 +85,7 @@ class Schrack_Elementor_Footer_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Nume brand', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => 'syshub',
+				'default' => 'SysHUB',
 			)
 		);
 
