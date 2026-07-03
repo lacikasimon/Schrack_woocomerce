@@ -41,6 +41,13 @@ class Schrack_Admin {
 	private Schrack_Category_Markup $markups;
 
 	/**
+	 * Whether product category CSV tools have already been rendered this request.
+	 *
+	 * @var bool
+	 */
+	private bool $category_csv_tools_rendered = false;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct( Schrack_Settings $settings, Schrack_Logger $logger, Schrack_Cron $cron ) {
@@ -74,6 +81,8 @@ class Schrack_Admin {
 		add_action( 'personal_options_update', array( $this, 'save_user_b2b_fields' ) );
 		add_action( 'edit_user_profile_update', array( $this, 'save_user_b2b_fields' ) );
 		add_action( 'admin_notices', array( $this, 'render_category_csv_tools' ) );
+		add_action( 'product_cat_pre_add_form', array( $this, 'render_category_csv_tools' ), 10, 0 );
+		add_action( 'after-product_cat-table', array( $this, 'render_category_csv_tools' ), 10, 0 );
 	}
 
 	/**
@@ -140,7 +149,7 @@ class Schrack_Admin {
 	 */
 	public function enqueue_assets( string $hook_suffix ): void {
 		$screen                   = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-		$is_product_category_page = $screen && ( 'edit-product_cat' === $screen->id || 'product_cat' === (string) $screen->taxonomy );
+		$is_product_category_page = $this->is_product_category_admin_screen( $screen );
 
 		if ( ! str_contains( $hook_suffix, 'schrack-sync' ) && ! $is_product_category_page ) {
 			return;
@@ -406,9 +415,11 @@ class Schrack_Admin {
 	public function render_category_csv_tools(): void {
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 
-		if ( ! $screen || ( 'edit-product_cat' !== $screen->id && 'product_cat' !== (string) $screen->taxonomy ) || ! current_user_can( self::CAPABILITY ) ) {
+		if ( $this->category_csv_tools_rendered || ! $this->is_product_category_admin_screen( $screen ) || ! $this->can_manage_product_categories() ) {
 			return;
 		}
+
+		$this->category_csv_tools_rendered = true;
 
 		$notice = $this->get_notice();
 		?>
@@ -450,7 +461,7 @@ class Schrack_Admin {
 	 * Exports WooCommerce product categories as CSV.
 	 */
 	public function export_categories(): void {
-		$this->assert_can_manage();
+		$this->assert_can_manage_product_categories();
 		check_admin_referer( 'schrack_wc_sync_categories_csv' );
 
 		$tree     = $this->product_category_tree();
@@ -518,7 +529,7 @@ class Schrack_Admin {
 	 * Imports WooCommerce product categories from CSV.
 	 */
 	public function import_categories(): void {
-		$this->assert_can_manage();
+		$this->assert_can_manage_product_categories();
 		check_admin_referer( 'schrack_wc_sync_categories_csv' );
 
 		$file = isset( $_FILES['schrack_categories_csv'] ) && is_array( $_FILES['schrack_categories_csv'] )
@@ -2542,6 +2553,41 @@ class Schrack_Admin {
 			)
 		);
 		exit;
+	}
+
+	/**
+	 * Detects the WooCommerce product category admin screen.
+	 */
+	private function is_product_category_admin_screen( mixed $screen ): bool {
+		if ( is_object( $screen ) ) {
+			$screen_id = isset( $screen->id ) ? (string) $screen->id : '';
+			$taxonomy  = isset( $screen->taxonomy ) ? (string) $screen->taxonomy : '';
+
+			if ( 'edit-product_cat' === $screen_id || 'product_cat' === $taxonomy ) {
+				return true;
+			}
+		}
+
+		$taxonomy  = isset( $_GET['taxonomy'] ) ? sanitize_key( wp_unslash( (string) $_GET['taxonomy'] ) ) : '';
+		$post_type = isset( $_GET['post_type'] ) ? sanitize_key( wp_unslash( (string) $_GET['post_type'] ) ) : '';
+
+		return 'product_cat' === $taxonomy && ( '' === $post_type || 'product' === $post_type );
+	}
+
+	/**
+	 * Checks whether the current user can manage WooCommerce product categories.
+	 */
+	private function can_manage_product_categories(): bool {
+		return current_user_can( 'manage_product_terms' ) || current_user_can( 'manage_categories' ) || current_user_can( self::CAPABILITY );
+	}
+
+	/**
+	 * Capability guard for product category CSV actions.
+	 */
+	private function assert_can_manage_product_categories(): void {
+		if ( ! $this->can_manage_product_categories() ) {
+			wp_die( esc_html__( 'You do not have permission to manage product categories.', 'schrack-woocommerce-sync' ) );
+		}
 	}
 
 	/**
