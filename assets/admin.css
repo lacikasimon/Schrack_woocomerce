@@ -749,6 +749,57 @@
 	color: #755100;
 }
 
+.schrack-progress-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 150px;
+}
+
+.schrack-progress-bar {
+	background: #edf0f2;
+	border: 0;
+	border-radius: 999px;
+	display: block;
+	height: 7px;
+	overflow: hidden;
+	width: 100%;
+}
+
+.schrack-progress-bar::-webkit-progress-bar {
+	background: #edf0f2;
+	border-radius: 999px;
+}
+
+.schrack-progress-bar::-webkit-progress-value {
+	background: var(--schrack-blue);
+	border-radius: 999px;
+}
+
+.schrack-progress-bar::-moz-progress-bar {
+	background: var(--schrack-blue);
+	border-radius: 999px;
+}
+
+.schrack-progress-text {
+	color: #50575e;
+	font-size: 12px;
+}
+
+.schrack-sync-meta {
+	color: #50575e;
+	display: block;
+	font-size: 12px;
+	margin-top: 2px;
+}
+
+.schrack-auto-refresh {
+	align-items: center;
+	display: flex;
+	font-size: 13px;
+	gap: 6px;
+}
+
 .schrack-log-level {
 	border-radius: 4px;
 	color: #fff;
