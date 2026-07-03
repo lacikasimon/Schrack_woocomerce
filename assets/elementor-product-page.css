@@ -64,15 +64,20 @@
 .schrack-product-page__breadcrumb a,
 .schrack-product-page__breadcrumb li > span {
 	display: inline-flex !important;
-	max-width: min(100%, 34ch);
+	max-width: min(100%, 20ch) !important;
+	min-width: 0 !important;
+}
+
+.schrack-product-page__breadcrumb li:last-child > span {
+	max-width: min(100%, 46ch) !important;
 }
 
 .schrack-product-page__breadcrumb-label,
 .schrack-product-page__breadcrumb li > span {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	min-width: 0 !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	white-space: nowrap !important;
 }
 
 .schrack-product-page__breadcrumb a {
@@ -81,7 +86,6 @@
 	color: var(--schrack-page-muted) !important;
 	gap: 5px !important;
 	margin: -5px -8px;
-	min-width: 0;
 	padding: 5px 8px;
 	text-decoration: none !important;
 	transition: background-color .18s ease, color .18s ease, transform .18s ease;
