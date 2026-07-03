@@ -321,7 +321,7 @@
 
 	function setCouponFormOpen(form, isOpen) {
 		form.hidden = !isOpen;
-		form.style.display = isOpen ? 'block' : 'none';
+		form.style.display = isOpen ? 'grid' : 'none';
 		form.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
 		form.classList.toggle('is-open', isOpen);
 	}
