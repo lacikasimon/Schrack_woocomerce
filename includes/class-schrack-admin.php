@@ -80,7 +80,6 @@ class Schrack_Admin {
 		add_action( 'edit_user_profile', array( $this, 'render_user_b2b_fields' ) );
 		add_action( 'personal_options_update', array( $this, 'save_user_b2b_fields' ) );
 		add_action( 'edit_user_profile_update', array( $this, 'save_user_b2b_fields' ) );
-		add_action( 'admin_notices', array( $this, 'render_category_csv_tools' ) );
 		add_action( 'product_cat_pre_add_form', array( $this, 'render_category_csv_tools' ), 10, 0 );
 		add_action( 'after-product_cat-table', array( $this, 'render_category_csv_tools' ), 10, 0 );
 	}
