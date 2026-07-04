@@ -129,15 +129,19 @@ class Schrack_Telesystem_Importer {
 	}
 
 	/**
-	 * Fetches a small raw sample directly from the Telesystem feed for debugging
+	 * Fetches a raw sample directly from the Telesystem feed for debugging
 	 * attribute/filter handling. Does not import or cache anything. Each row is run
 	 * through the normal normalize_telesystem_row() mapping so the raw feed columns
 	 * and the resulting technical_attributes can be compared side by side.
 	 *
+	 * The row count is capped well above typical exploratory samples so a "full"
+	 * export can cover most/all of the feed's category diversity, while still
+	 * bounding memory/response size for a manual, one-off admin action.
+	 *
 	 * @return array<string,mixed>
 	 */
 	public function debug_raw_rows( int $limit = 10 ): array {
-		$limit    = max( 1, min( 50, $limit ) );
+		$limit    = max( 1, min( 5000, $limit ) );
 		$feed_url = $this->feed_url();
 
 		if ( '' === $feed_url ) {

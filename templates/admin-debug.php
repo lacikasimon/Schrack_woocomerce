@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<div class="schrack-panel">
 		<h2><?php esc_html_e( 'Raw feed sample', 'schrack-woocommerce-sync' ); ?></h2>
 		<p class="description">
-			<?php esc_html_e( 'Fetches a small sample directly from the selected feed without importing or caching anything. Each row is shown as the raw feed columns alongside the technical_attributes the current mapping would extract from it, so category/filter attribute handling can be tuned against real data.', 'schrack-woocommerce-sync' ); ?>
+			<?php esc_html_e( 'Fetches a sample directly from the selected feed without importing or caching anything. Each row is shown as the raw feed columns alongside the technical_attributes the current mapping would extract from it, so category/filter attribute handling can be tuned against real data. Rows are capped at 5000 to keep a single fetch fast and light on memory; that already covers most/all category diversity in the catalog, but is not a guaranteed full dump of every SKU.', 'schrack-woocommerce-sync' ); ?>
 		</p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schrack-inline-actions">
 			<input type="hidden" name="action" value="schrack_wc_sync_debug_fetch">
@@ -36,12 +36,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</select>
 			<label>
 				<?php esc_html_e( 'Rows', 'schrack-woocommerce-sync' ); ?>
-				<input type="number" name="debug_limit" value="10" min="1" max="50" step="1" class="small-text">
+				<input type="number" id="schrack-debug-limit" name="debug_limit" value="10" min="1" max="5000" step="1" class="small-text">
 			</label>
+			<button type="button" class="button" id="schrack-debug-limit-max"><?php esc_html_e( 'Full export (5000)', 'schrack-woocommerce-sync' ); ?></button>
 			<button type="submit" class="button button-primary"><?php esc_html_e( 'Fetch raw sample', 'schrack-woocommerce-sync' ); ?></button>
 		</form>
 	</div>
 </div>
+<script>
+( function () {
+	var limitInput = document.getElementById( 'schrack-debug-limit' );
+	var maxButton   = document.getElementById( 'schrack-debug-limit-max' );
+
+	if ( maxButton && limitInput ) {
+		maxButton.addEventListener( 'click', function () {
+			limitInput.value = limitInput.max;
+		} );
+	}
+} )();
+</script>
 <?php if ( ! empty( $notice['data'] ) ) : ?>
 <script>
 ( function () {

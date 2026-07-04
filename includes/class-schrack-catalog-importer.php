@@ -11,6 +11,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Catalog_Importer {
 	/**
+	 * XPath matching individual product rows in the XML catalog.
+	 *
+	 * Uses an exact (case-insensitive) tag-name match rather than a substring
+	 * match so it selects only real <Item>/<Product> rows: a loose
+	 * contains(name(),"product") match also picks up sibling <ProductReference>
+	 * lookup rows (which carry no Properties/Facets) and, since XPath returns
+	 * ancestors before descendants in document order, an outer wrapper element
+	 * whose own name happens to contain "product" or "item" too. The
+	 * not(.//*[...]) guard keeps only leaf-level matches, dropping that wrapper.
+	 */
+	private const CATALOG_ITEM_XPATH = '//*[' .
+		'(translate(name(), "ITEMPRODUCT", "itemproduct") = "item" or translate(name(), "ITEMPRODUCT", "itemproduct") = "product")' .
+		' and not(.//*[translate(name(), "ITEMPRODUCT", "itemproduct") = "item" or translate(name(), "ITEMPRODUCT", "itemproduct") = "product"])' .
+		']';
+
+	/**
 	 * Settings service.
 	 *
 	 * @var Schrack_Settings
@@ -1261,16 +1277,20 @@ class Schrack_Catalog_Importer {
 	}
 
 	/**
-	 * Fetches a small raw sample directly from the Schrack SOAP feed for debugging
+	 * Fetches a raw sample directly from the Schrack SOAP feed for debugging
 	 * attribute/filter handling. Does not import or cache anything. Each row is run
 	 * through the normal normalize_catalog_row() mapping so the raw feed columns and
 	 * the resulting technical_attributes can be compared side by side.
+	 *
+	 * The row count is capped well above typical exploratory samples so a "full"
+	 * export can cover most/all of the catalog's category diversity, while still
+	 * bounding memory/response size for a manual, one-off admin action.
 	 *
 	 * @return array<string,mixed>
 	 */
 	public function debug_raw_rows( string $format, int $limit = 10 ): array {
 		$format = strtoupper( $format );
-		$limit  = max( 1, min( 50, $limit ) );
+		$limit  = max( 1, min( 5000, $limit ) );
 
 		try {
 			$raw = $this->client->get_catalog_as( $format );
@@ -1381,9 +1401,16 @@ class Schrack_Catalog_Importer {
 			return array( 'error' => __( 'Unable to parse the Schrack XML catalog.', 'schrack-woocommerce-sync' ) );
 		}
 
-		$rows = array();
+		$rows            = array();
+		$facets_raw_xml  = null;
+		$root_structure  = array();
 
-		foreach ( $xml->xpath( '//*[contains(translate(name(), "ITEMPRODUCT", "itemproduct"), "item") or contains(translate(name(), "PRODUCT", "product"), "product")]' ) ?: array() as $node ) {
+		foreach ( $xml->children() as $child ) {
+			$name                    = $child->getName();
+			$root_structure[ $name ] = ( $root_structure[ $name ] ?? 0 ) + 1;
+		}
+
+		foreach ( $xml->xpath( self::CATALOG_ITEM_XPATH ) ?: array() as $node ) {
 			if ( count( $rows ) >= $limit ) {
 				break;
 			}
@@ -1396,6 +1423,10 @@ class Schrack_Catalog_Importer {
 				continue;
 			}
 
+			if ( null === $facets_raw_xml && isset( $node->Facets ) ) {
+				$facets_raw_xml = $node->Facets->asXML();
+			}
+
 			$rows[] = array(
 				'raw'                  => $row,
 				'sku'                  => $item['sku'],
@@ -1405,8 +1436,10 @@ class Schrack_Catalog_Importer {
 		}
 
 		return array(
-			'format' => 'XML',
-			'rows'   => $rows,
+			'format'          => 'XML',
+			'root_structure'  => $root_structure,
+			'facets_raw_xml'  => $facets_raw_xml,
+			'rows'            => $rows,
 		);
 	}
 
@@ -1766,7 +1799,7 @@ class Schrack_Catalog_Importer {
 
 		$items = array();
 
-		foreach ( $xml->xpath( '//*[contains(translate(name(), "ITEMPRODUCT", "itemproduct"), "item") or contains(translate(name(), "PRODUCT", "product"), "product")]' ) ?: array() as $node ) {
+		foreach ( $xml->xpath( self::CATALOG_ITEM_XPATH ) ?: array() as $node ) {
 			$row  = json_decode( wp_json_encode( $node ), true );
 			$item = $this->normalize_catalog_row( is_array( $row ) ? $row : array() );
 
