@@ -129,6 +129,110 @@ class Schrack_Telesystem_Importer {
 	}
 
 	/**
+	 * Fetches a small raw sample directly from the Telesystem feed for debugging
+	 * attribute/filter handling. Does not import or cache anything. Each row is run
+	 * through the normal normalize_telesystem_row() mapping so the raw feed columns
+	 * and the resulting technical_attributes can be compared side by side.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function debug_raw_rows( int $limit = 10 ): array {
+		$limit    = max( 1, min( 50, $limit ) );
+		$feed_url = $this->feed_url();
+
+		if ( '' === $feed_url ) {
+			return array( 'error' => __( 'Telesystem feed URL is not configured.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$download = $this->download_feed_file( $feed_url );
+
+		if ( null === $download ) {
+			return array( 'error' => __( 'Could not download the Telesystem feed.', 'schrack-woocommerce-sync' ) );
+		}
+
+		try {
+			return $this->read_debug_feed_rows( (string) $download['path'], $limit );
+		} finally {
+			$this->delete_temp_files( array( (string) $download['path'] ) );
+		}
+	}
+
+	/**
+	 * Parses a raw Telesystem feed sample without importing, pairing each raw row
+	 * with the technical_attributes the current mapping would extract from it.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function read_debug_feed_rows( string $path, int $limit ): array {
+		if ( ! is_readable( $path ) ) {
+			return array( 'error' => __( 'Downloaded Telesystem feed file was unreadable.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$handle = fopen( $path, 'rb' );
+
+		if ( false === $handle ) {
+			return array( 'error' => __( 'Could not open the downloaded Telesystem feed file.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$first_line = fgets( $handle );
+
+		if ( false === $first_line || '' === trim( $first_line ) ) {
+			fclose( $handle );
+			return array( 'error' => __( 'Telesystem feed content was empty.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$delimiter  = $this->detect_csv_delimiter_from_line( $first_line );
+		$header_map = $this->normalize_csv_headers( str_getcsv( $first_line, $delimiter, '"', '\\' ) );
+		$headers    = array_column( $header_map, 'key' );
+		$labels     = array();
+
+		foreach ( $header_map as $column ) {
+			$labels[ (string) $column['key'] ] = (string) $column['label'];
+		}
+
+		if ( empty( $headers ) ) {
+			fclose( $handle );
+			return array( 'error' => __( 'Telesystem feed did not contain readable headers.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$rows = array();
+
+		while ( false !== ( $values = fgetcsv( $handle, 0, $delimiter, '"', '\\' ) ) ) {
+			if ( count( $rows ) >= $limit ) {
+				break;
+			}
+
+			if ( $this->csv_values_are_blank( $values ) || $this->csv_values_are_footer( $values ) ) {
+				continue;
+			}
+
+			$row = $this->combine_csv_row( $headers, $values );
+
+			if ( empty( $row ) ) {
+				continue;
+			}
+
+			$item = $this->normalize_telesystem_row( $row, $labels );
+
+			$rows[] = array(
+				'raw'                  => $row,
+				'sku'                  => $item['sku'],
+				'name'                 => $item['name'],
+				'technical_attributes' => $item['technical_attributes'],
+			);
+		}
+
+		fclose( $handle );
+
+		return array(
+			'format'  => 'CSV',
+			'headers' => $headers,
+			'labels'  => $labels,
+			'rows'    => $rows,
+		);
+	}
+
+	/**
 	 * Imports normalized Telesystem rows.
 	 *
 	 * @param array<int,array<string,mixed>> $items Items.

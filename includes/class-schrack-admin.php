@@ -72,6 +72,7 @@ class Schrack_Admin {
 		add_action( 'admin_post_schrack_wc_sync_import_categories', array( $this, 'import_categories' ) );
 		add_action( 'admin_post_schrack_wc_sync_save_b2b_customers', array( $this, 'save_b2b_customers' ) );
 		add_action( 'admin_post_schrack_wc_sync_soap_debug', array( $this, 'soap_debug' ) );
+		add_action( 'admin_post_schrack_wc_sync_debug_fetch', array( $this, 'debug_fetch' ) );
 		add_action( 'admin_post_schrack_wc_sync_manual_sync', array( $this, 'manual_sync' ) );
 		add_action( 'admin_post_schrack_wc_sync_stop_syncs', array( $this, 'stop_syncs' ) );
 		add_action( 'admin_post_schrack_wc_sync_sku_action', array( $this, 'sku_action' ) );
@@ -140,6 +141,15 @@ class Schrack_Admin {
 			self::CAPABILITY,
 			'schrack-sync-status',
 			array( $this, 'render_status_page' )
+		);
+
+		add_submenu_page(
+			'woocommerce',
+			__( 'Schrack Debug', 'schrack-woocommerce-sync' ),
+			__( 'Schrack Debug', 'schrack-woocommerce-sync' ),
+			self::CAPABILITY,
+			'schrack-sync-debug',
+			array( $this, 'render_debug_page' )
 		);
 	}
 
@@ -759,6 +769,49 @@ class Schrack_Admin {
 	}
 
 	/**
+	 * Fetches a small raw sample directly from a feed for attribute/filter debugging.
+	 */
+	public function debug_fetch(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_debug_fetch' );
+
+		$source = isset( $_POST['debug_source'] ) ? sanitize_key( wp_unslash( (string) $_POST['debug_source'] ) ) : 'schrack_csv';
+		$limit  = isset( $_POST['debug_limit'] ) ? max( 1, min( 50, absint( $_POST['debug_limit'] ) ) ) : 10;
+
+		try {
+			if ( 'telesystem' === $source ) {
+				$importer = new Schrack_Telesystem_Importer( $this->settings, $this->logger );
+				$data     = $importer->debug_raw_rows( $limit );
+			} else {
+				$format   = 'schrack_xml' === $source ? 'XML' : 'CSV';
+				$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
+				$data     = $importer->debug_raw_rows( $format, $limit );
+			}
+
+			$data['source'] = $source;
+
+			if ( ! empty( $data['error'] ) ) {
+				$this->set_notice( 'error', (string) $data['error'], $data );
+			} else {
+				$this->set_notice(
+					'success',
+					sprintf(
+						/* translators: %d: number of raw rows fetched. */
+						__( 'Fetched %d raw row(s).', 'schrack-woocommerce-sync' ),
+						count( $data['rows'] ?? array() )
+					),
+					$data
+				);
+			}
+		} catch ( Throwable $exception ) {
+			$this->logger->error( 'debug', 'Failed to fetch raw feed sample.', null, array( 'error' => $exception->getMessage() ) );
+			$this->set_notice( 'error', $exception->getMessage() );
+		}
+
+		$this->redirect( 'schrack-sync-debug' );
+	}
+
+	/**
 	 * Queues manual sync tasks.
 	 */
 	public function manual_sync(): void {
@@ -1253,6 +1306,17 @@ class Schrack_Admin {
 	}
 
 	/**
+	 * Renders the raw feed debug page.
+	 */
+	public function render_debug_page(): void {
+		$this->assert_can_manage();
+
+		$notice = $this->get_notice();
+
+		include SCHRACK_WC_SYNC_PATH . 'templates/admin-debug.php';
+	}
+
+	/**
 	 * Returns sync coverage counters for the admin dashboard.
 	 *
 	 * @return array<string,mixed>
@@ -1681,6 +1745,7 @@ class Schrack_Admin {
 			'manual'   => array( 'label' => __( 'Manual Sync', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-manual' ),
 			'logs'     => array( 'label' => __( 'Logs', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-logs' ),
 			'status'   => array( 'label' => __( 'Status', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-status' ),
+			'debug'    => array( 'label' => __( 'Debug', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-debug' ),
 		);
 
 		echo '<nav class="nav-tab-wrapper schrack-sync-tabs">';

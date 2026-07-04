@@ -1261,6 +1261,156 @@ class Schrack_Catalog_Importer {
 	}
 
 	/**
+	 * Fetches a small raw sample directly from the Schrack SOAP feed for debugging
+	 * attribute/filter handling. Does not import or cache anything. Each row is run
+	 * through the normal normalize_catalog_row() mapping so the raw feed columns and
+	 * the resulting technical_attributes can be compared side by side.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function debug_raw_rows( string $format, int $limit = 10 ): array {
+		$format = strtoupper( $format );
+		$limit  = max( 1, min( 50, $limit ) );
+
+		try {
+			$raw = $this->client->get_catalog_as( $format );
+		} catch ( Throwable $exception ) {
+			return array( 'error' => $exception->getMessage() );
+		}
+
+		$content = $this->extract_catalog_content( $raw );
+
+		if ( '' === $content ) {
+			return array( 'error' => __( 'Schrack returned an empty catalog response.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( filter_var( $content, FILTER_VALIDATE_URL ) ) {
+			$content = $this->download_catalog_content( $content );
+		}
+
+		if ( '' === $content ) {
+			return array( 'error' => __( 'Could not download the Schrack catalog file.', 'schrack-woocommerce-sync' ) );
+		}
+
+		return 'XML' === $format
+			? $this->debug_raw_xml_rows( $content, $limit )
+			: $this->debug_raw_csv_rows( $content, $limit );
+	}
+
+	/**
+	 * Parses a raw CSV catalog sample without importing, pairing each raw row with
+	 * the technical_attributes the current mapping would extract from it.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function debug_raw_csv_rows( string $content, int $limit ): array {
+		if ( $this->looks_like_markup( $content ) ) {
+			return array(
+				'error'   => __( 'Schrack returned markup instead of CSV.', 'schrack-woocommerce-sync' ),
+				'preview' => $this->content_preview( $content ),
+			);
+		}
+
+		$lines = preg_split( '/\r\n|\n|\r/', trim( $content ) );
+
+		if ( empty( $lines ) ) {
+			return array( 'error' => __( 'Schrack CSV catalog was empty.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$delimiter   = $this->detect_csv_delimiter( $lines );
+		$raw_headers = str_getcsv( array_shift( $lines ), $delimiter );
+		$headers     = $this->normalize_csv_headers( $raw_headers );
+
+		if ( empty( $headers ) ) {
+			return array( 'error' => __( 'Schrack CSV catalog did not contain readable headers.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$rows = array();
+
+		foreach ( $lines as $line ) {
+			if ( count( $rows ) >= $limit ) {
+				break;
+			}
+
+			if ( '' === trim( $line ) ) {
+				continue;
+			}
+
+			$row = $this->combine_csv_row( $headers, str_getcsv( $line, $delimiter ) );
+
+			if ( empty( $row ) || $this->is_csv_header_continuation_row( $row ) ) {
+				continue;
+			}
+
+			$item = $this->normalize_catalog_row( $row );
+
+			$rows[] = array(
+				'raw'                  => $row,
+				'sku'                  => $item['sku'],
+				'name'                 => $item['name'],
+				'technical_attributes' => $item['technical_attributes'],
+			);
+		}
+
+		return array(
+			'format'      => 'CSV',
+			'delimiter'   => $delimiter,
+			'raw_headers' => array_values( array_map( static fn ( mixed $header ): string => (string) $header, $raw_headers ) ),
+			'headers'     => $headers,
+			'rows'        => $rows,
+		);
+	}
+
+	/**
+	 * Parses a raw XML catalog sample without importing, pairing each raw node with
+	 * the technical_attributes the current mapping would extract from it.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function debug_raw_xml_rows( string $content, int $limit ): array {
+		if ( ! function_exists( 'simplexml_load_string' ) ) {
+			return array( 'error' => __( 'PHP SimpleXML extension is not available.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$previous = libxml_use_internal_errors( true );
+		$xml      = simplexml_load_string( $content, 'SimpleXMLElement', LIBXML_NONET );
+		libxml_clear_errors();
+		libxml_use_internal_errors( $previous );
+
+		if ( false === $xml ) {
+			return array( 'error' => __( 'Unable to parse the Schrack XML catalog.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$rows = array();
+
+		foreach ( $xml->xpath( '//*[contains(translate(name(), "ITEMPRODUCT", "itemproduct"), "item") or contains(translate(name(), "PRODUCT", "product"), "product")]' ) ?: array() as $node ) {
+			if ( count( $rows ) >= $limit ) {
+				break;
+			}
+
+			$row  = json_decode( wp_json_encode( $node ), true );
+			$row  = is_array( $row ) ? $row : array();
+			$item = $this->normalize_catalog_row( $row );
+
+			if ( '' === $item['sku'] ) {
+				continue;
+			}
+
+			$rows[] = array(
+				'raw'                  => $row,
+				'sku'                  => $item['sku'],
+				'name'                 => $item['name'],
+				'technical_attributes' => $item['technical_attributes'],
+			);
+		}
+
+		return array(
+			'format' => 'XML',
+			'rows'   => $rows,
+		);
+	}
+
+	/**
 	 * Parser boundary for future CSV/XML/DATANORM implementations.
 	 *
 	 * @param mixed  $raw Raw SOAP response.
