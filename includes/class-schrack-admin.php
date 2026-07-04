@@ -73,6 +73,7 @@ class Schrack_Admin {
 		add_action( 'admin_post_schrack_wc_sync_save_b2b_customers', array( $this, 'save_b2b_customers' ) );
 		add_action( 'admin_post_schrack_wc_sync_soap_debug', array( $this, 'soap_debug' ) );
 		add_action( 'admin_post_schrack_wc_sync_debug_fetch', array( $this, 'debug_fetch' ) );
+		add_action( 'admin_post_schrack_wc_sync_debug_download', array( $this, 'debug_download' ) );
 		add_action( 'admin_post_schrack_wc_sync_manual_sync', array( $this, 'manual_sync' ) );
 		add_action( 'admin_post_schrack_wc_sync_stop_syncs', array( $this, 'stop_syncs' ) );
 		add_action( 'admin_post_schrack_wc_sync_sku_action', array( $this, 'sku_action' ) );
@@ -769,7 +770,8 @@ class Schrack_Admin {
 	}
 
 	/**
-	 * Fetches a small raw sample directly from a feed for attribute/filter debugging.
+	 * Queues a raw feed debug export in the background, so a large row count
+	 * can never time out the request (fetch + parse can take a while).
 	 */
 	public function debug_fetch(): void {
 		$this->assert_can_manage();
@@ -778,37 +780,45 @@ class Schrack_Admin {
 		$source = isset( $_POST['debug_source'] ) ? sanitize_key( wp_unslash( (string) $_POST['debug_source'] ) ) : 'schrack_csv';
 		$limit  = isset( $_POST['debug_limit'] ) ? max( 1, min( 5000, absint( $_POST['debug_limit'] ) ) ) : 10;
 
-		try {
-			if ( 'telesystem' === $source ) {
-				$importer = new Schrack_Telesystem_Importer( $this->settings, $this->logger );
-				$data     = $importer->debug_raw_rows( $limit );
-			} else {
-				$format   = 'schrack_xml' === $source ? 'XML' : 'CSV';
-				$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
-				$data     = $importer->debug_raw_rows( $format, $limit );
-			}
+		$queued = $this->cron->queue_debug_export( $source, $limit );
 
-			$data['source'] = $source;
-
-			if ( ! empty( $data['error'] ) ) {
-				$this->set_notice( 'error', (string) $data['error'], $data );
-			} else {
-				$this->set_notice(
-					'success',
-					sprintf(
-						/* translators: %d: number of raw rows fetched. */
-						__( 'Fetched %d raw row(s).', 'schrack-woocommerce-sync' ),
-						count( $data['rows'] ?? array() )
-					),
-					$data
-				);
-			}
-		} catch ( Throwable $exception ) {
-			$this->logger->error( 'debug', 'Failed to fetch raw feed sample.', null, array( 'error' => $exception->getMessage() ) );
-			$this->set_notice( 'error', $exception->getMessage() );
+		if ( ! empty( $queued['queued'] ) ) {
+			$this->set_notice( 'success', __( 'Debug export queued. This page will refresh automatically while it runs.', 'schrack-woocommerce-sync' ) );
+		} else {
+			$this->set_notice( 'error', __( 'Could not queue the debug export. Please check Action Scheduler/WP-Cron.', 'schrack-woocommerce-sync' ) );
 		}
 
 		$this->redirect( 'schrack-sync-debug' );
+	}
+
+	/**
+	 * Streams a completed debug export file for download.
+	 */
+	public function debug_download(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_debug_download' );
+
+		$status = $this->settings->get_status();
+		$export = isset( $status['debug_export'] ) && is_array( $status['debug_export'] ) ? $status['debug_export'] : array();
+		$path   = isset( $export['file'] ) ? (string) $export['file'] : '';
+		$upload = wp_upload_dir( null, false );
+		$dir    = ! empty( $upload['basedir'] ) ? trailingslashit( (string) $upload['basedir'] ) . 'schrack-wc-sync/debug' : '';
+
+		if (
+			'' === $path ||
+			'' === $dir ||
+			! is_file( $path ) ||
+			0 !== strpos( wp_normalize_path( $path ), wp_normalize_path( $dir ) )
+		) {
+			wp_die( esc_html__( 'The debug export file was not found. Run a new export first.', 'schrack-woocommerce-sync' ) );
+		}
+
+		nocache_headers();
+		header( 'Content-Type: application/json' );
+		header( 'Content-Disposition: attachment; filename="' . basename( $path ) . '"' );
+		header( 'Content-Length: ' . (string) filesize( $path ) );
+		readfile( $path );
+		exit;
 	}
 
 	/**
@@ -1311,7 +1321,9 @@ class Schrack_Admin {
 	public function render_debug_page(): void {
 		$this->assert_can_manage();
 
-		$notice = $this->get_notice();
+		$notice        = $this->get_notice();
+		$status        = $this->settings->get_status();
+		$debug_export  = isset( $status['debug_export'] ) && is_array( $status['debug_export'] ) ? $status['debug_export'] : array();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-debug.php';
 	}

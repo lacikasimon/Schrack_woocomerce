@@ -18,6 +18,7 @@ class Schrack_Cron {
 	public const HOOK_FULL    = 'schrack_wc_sync_full';
 	public const HOOK_IMAGES  = 'schrack_wc_sync_images';
 	public const HOOK_IMAGE_WORKER = 'schrack_wc_sync_image_worker';
+	public const HOOK_DEBUG_EXPORT = 'schrack_wc_sync_debug_export';
 
 	/**
 	 * Settings.
@@ -54,6 +55,7 @@ class Schrack_Cron {
 		add_action( self::HOOK_IMAGES, array( $this, 'run_image_sync' ) );
 		add_action( self::HOOK_IMAGE_WORKER, array( $this, 'run_image_worker' ), 10, 3 );
 		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
+		add_action( self::HOOK_DEBUG_EXPORT, array( $this, 'run_debug_export' ), 10, 2 );
 	}
 
 	/**
@@ -277,6 +279,192 @@ class Schrack_Cron {
 		}
 
 		return array( 'queued' => false );
+	}
+
+	/**
+	 * Queues a raw feed debug export in the background so a large row count can
+	 * never time out the triggering HTTP request. Runs independently of the
+	 * Schrack-enabled/active-sync-conflict gating used for real sync tasks, since
+	 * it never touches WooCommerce product data.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function queue_debug_export( string $source, int $limit ): array {
+		$this->settings->update_status(
+			'debug_export',
+			array(
+				'state'  => 'queued',
+				'source' => $source,
+				'limit'  => $limit,
+			)
+		);
+
+		$queued = $this->queue_manual_action( self::HOOK_DEBUG_EXPORT, array( $source, $limit ) );
+
+		if ( empty( $queued['queued'] ) ) {
+			$this->settings->update_status(
+				'debug_export',
+				array(
+					'state'   => 'error',
+					'source'  => $source,
+					'limit'   => $limit,
+					'message' => __( 'Could not queue the debug export. Please check Action Scheduler/WP-Cron.', 'schrack-woocommerce-sync' ),
+				)
+			);
+
+			return array( 'queued' => false );
+		}
+
+		$this->logger->info( 'debug', 'Queued raw feed debug export.', null, array_merge( array( 'source' => $source, 'limit' => $limit ), $queued ) );
+
+		return $queued;
+	}
+
+	/**
+	 * Runs a queued raw feed debug export and writes the result to a file so it
+	 * can be downloaded once ready, instead of holding an HTTP request open.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function run_debug_export( string $source, int $limit ): array {
+		$this->settings->update_status(
+			'debug_export',
+			array(
+				'state'  => 'running',
+				'source' => $source,
+				'limit'  => $limit,
+			)
+		);
+
+		try {
+			if ( 'telesystem' === $source ) {
+				$importer = new Schrack_Telesystem_Importer( $this->settings, $this->logger );
+				$data     = $importer->debug_raw_rows( $limit );
+			} else {
+				$format   = 'schrack_xml' === $source ? 'XML' : 'CSV';
+				$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
+				$data     = $importer->debug_raw_rows( $format, $limit );
+			}
+
+			$data['source'] = $source;
+
+			if ( ! empty( $data['error'] ) ) {
+				$result = array(
+					'state'   => 'error',
+					'source'  => $source,
+					'limit'   => $limit,
+					'message' => (string) $data['error'],
+				);
+				$this->settings->update_status( 'debug_export', $result );
+
+				return $result;
+			}
+
+			$file = $this->write_debug_export_file( $source, $data );
+
+			if ( null === $file ) {
+				$result = array(
+					'state'   => 'error',
+					'source'  => $source,
+					'limit'   => $limit,
+					'message' => __( 'Could not write the debug export file.', 'schrack-woocommerce-sync' ),
+				);
+				$this->settings->update_status( 'debug_export', $result );
+
+				return $result;
+			}
+
+			$result = array(
+				'state'      => 'done',
+				'source'     => $source,
+				'limit'      => $limit,
+				'rows'       => count( $data['rows'] ?? array() ),
+				'file'       => $file['path'],
+				'file_name'  => $file['name'],
+				'bytes'      => $file['bytes'],
+			);
+			$this->settings->update_status( 'debug_export', $result );
+			$this->logger->info( 'debug', 'Finished raw feed debug export.', null, $result );
+
+			return $result;
+		} catch ( Throwable $exception ) {
+			$result = array(
+				'state'   => 'error',
+				'source'  => $source,
+				'limit'   => $limit,
+				'message' => $exception->getMessage(),
+			);
+			$this->settings->update_status( 'debug_export', $result );
+			$this->logger->error( 'debug', 'Raw feed debug export failed.', null, array( 'error' => $exception->getMessage() ) );
+
+			return $result;
+		}
+	}
+
+	/**
+	 * Writes a debug export result to a file under the uploads directory.
+	 *
+	 * @param array<string,mixed> $data Export data.
+	 * @return array{path:string,name:string,bytes:int}|null
+	 */
+	private function write_debug_export_file( string $source, array $data ): ?array {
+		$dir = $this->debug_export_dir();
+
+		if ( '' === $dir ) {
+			return null;
+		}
+
+		$this->cleanup_debug_export_files( $dir );
+
+		$name = 'schrack-debug-' . sanitize_key( $source ) . '-' . time() . '.json';
+		$path = trailingslashit( $dir ) . $name;
+		$json = wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+
+		if ( ! is_string( $json ) || false === file_put_contents( $path, $json ) ) {
+			return null;
+		}
+
+		return array(
+			'path'  => $path,
+			'name'  => $name,
+			'bytes' => (int) filesize( $path ),
+		);
+	}
+
+	/**
+	 * Returns the debug export directory, creating it if needed.
+	 */
+	private function debug_export_dir(): string {
+		$upload = wp_upload_dir( null, false );
+
+		if ( ! empty( $upload['error'] ) || empty( $upload['basedir'] ) ) {
+			return '';
+		}
+
+		$dir = trailingslashit( (string) $upload['basedir'] ) . 'schrack-wc-sync/debug';
+
+		if ( ! wp_mkdir_p( $dir ) ) {
+			return '';
+		}
+
+		$index = trailingslashit( $dir ) . 'index.php';
+
+		if ( ! file_exists( $index ) ) {
+			file_put_contents( $index, "<?php\n// Silence is golden.\n" );
+		}
+
+		return $dir;
+	}
+
+	/**
+	 * Removes previous debug export files before writing a new one.
+	 */
+	private function cleanup_debug_export_files( string $dir ): void {
+		foreach ( glob( trailingslashit( $dir ) . 'schrack-debug-*.json' ) ?: array() as $path ) {
+			if ( is_file( $path ) ) {
+				wp_delete_file( $path );
+			}
+		}
 	}
 
 	/**
