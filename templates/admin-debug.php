@@ -13,6 +13,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<h1><?php esc_html_e( 'Schrack Debug', 'schrack-woocommerce-sync' ); ?></h1>
 	<?php $this->render_tabs( 'debug' ); ?>
 	<?php $this->render_notice( $notice ); ?>
+	<?php if ( ! empty( $notice['data'] ) ) : ?>
+		<p class="schrack-inline-actions">
+			<button type="button" class="button" id="schrack-debug-copy"><?php esc_html_e( 'Copy to clipboard', 'schrack-woocommerce-sync' ); ?></button>
+			<button type="button" class="button" id="schrack-debug-download"><?php esc_html_e( 'Download as JSON', 'schrack-woocommerce-sync' ); ?></button>
+			<span id="schrack-debug-copy-status" class="description"></span>
+		</p>
+	<?php endif; ?>
 
 	<div class="schrack-panel">
 		<h2><?php esc_html_e( 'Raw feed sample', 'schrack-woocommerce-sync' ); ?></h2>
@@ -35,3 +42,50 @@ if ( ! defined( 'ABSPATH' ) ) {
 		</form>
 	</div>
 </div>
+<?php if ( ! empty( $notice['data'] ) ) : ?>
+<script>
+( function () {
+	var copyButton     = document.getElementById( 'schrack-debug-copy' );
+	var downloadButton = document.getElementById( 'schrack-debug-download' );
+	var status         = document.getElementById( 'schrack-debug-copy-status' );
+	var pre            = document.querySelector( '.schrack-debug-output pre' );
+
+	if ( ! pre ) {
+		return;
+	}
+
+	if ( copyButton ) {
+		copyButton.addEventListener( 'click', function () {
+			if ( ! navigator.clipboard ) {
+				status.textContent = <?php echo wp_json_encode( __( 'Clipboard access is unavailable; select the text below and copy manually.', 'schrack-woocommerce-sync' ) ); ?>;
+				return;
+			}
+
+			navigator.clipboard.writeText( pre.textContent ).then(
+				function () {
+					status.textContent = <?php echo wp_json_encode( __( 'Copied.', 'schrack-woocommerce-sync' ) ); ?>;
+				},
+				function () {
+					status.textContent = <?php echo wp_json_encode( __( 'Could not copy automatically; select the text below and copy manually.', 'schrack-woocommerce-sync' ) ); ?>;
+				}
+			);
+		} );
+	}
+
+	if ( downloadButton ) {
+		downloadButton.addEventListener( 'click', function () {
+			var blob = new Blob( [ pre.textContent ], { type: 'application/json' } );
+			var url  = URL.createObjectURL( blob );
+			var link = document.createElement( 'a' );
+
+			link.href = url;
+			link.download = 'schrack-debug-' + Date.now() + '.json';
+			document.body.appendChild( link );
+			link.click();
+			document.body.removeChild( link );
+			URL.revokeObjectURL( url );
+		} );
+	}
+} )();
+</script>
+<?php endif; ?>
