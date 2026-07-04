@@ -11,6 +11,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Header_Renderer {
 	/**
+	 * Per-request category thumbnail cache.
+	 *
+	 * @var array<int,int>
+	 */
+	private array $term_thumbnail_ids = array();
+
+	/**
 	 * Renders the header module.
 	 *
 	 * @param array<string,mixed> $settings Widget settings.
@@ -633,7 +640,8 @@ class Schrack_Header_Renderer {
 
 		return array(
 			'label'    => $term->name,
-			'href'     => is_wp_error( $link ) ? $this->product_category_url( $term->slug, '/product-category/' . $term->slug . '/' ) : (string) $link,
+			'href'     => is_wp_error( $link ) ? $this->shop_url() : (string) $link,
+			'image'    => 0 === $depth ? $this->category_menu_image( $term, true ) : '',
 			'classes'  => array( 0 === $depth ? 'is-product-root-category' : 'is-product-child-category' ),
 			'children' => $children,
 		);
@@ -659,14 +667,82 @@ class Schrack_Header_Renderer {
 	 * @return array<string,mixed>
 	 */
 	private function fallback_product_category_node( array $definition ): array {
-		$slug = (string) $definition['slug'];
-
 		return array(
 			'label'    => (string) $definition['name'],
-			'href'     => $this->product_category_url( $slug, '/product-category/' . $slug . '/' ),
+			'href'     => $this->shop_url(),
 			'classes'  => array( 'is-product-root-category' ),
 			'children' => array(),
 		);
+	}
+
+	/**
+	 * Returns an image for a category when WooCommerce has one available.
+	 */
+	private function category_menu_image( WP_Term $term, bool $allow_product_fallback ): string {
+		$term_id = (int) $term->term_id;
+
+		if ( isset( $this->term_thumbnail_ids[ $term_id ] ) ) {
+			$thumbnail_id = $this->term_thumbnail_ids[ $term_id ];
+		} else {
+			$thumbnail_id = absint( get_term_meta( $term_id, 'thumbnail_id', true ) );
+
+			if ( 0 === $thumbnail_id && $allow_product_fallback ) {
+				$thumbnail_id = $this->first_product_thumbnail_id( $term );
+			}
+
+			$this->term_thumbnail_ids[ $term_id ] = $thumbnail_id;
+		}
+
+		if ( $thumbnail_id <= 0 ) {
+			return '';
+		}
+
+		return wp_get_attachment_image(
+			$thumbnail_id,
+			'woocommerce_thumbnail',
+			false,
+			array(
+				'decoding' => 'async',
+				'loading'  => 'lazy',
+			)
+		);
+	}
+
+	/**
+	 * Finds the first product thumbnail in a category without loading products.
+	 */
+	private function first_product_thumbnail_id( WP_Term $term ): int {
+		$posts = get_posts(
+			array(
+				'post_type'              => 'product',
+				'post_status'            => 'publish',
+				'posts_per_page'         => 1,
+				'fields'                 => 'ids',
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'meta_query'             => array(
+					array(
+						'key'     => '_thumbnail_id',
+						'compare' => 'EXISTS',
+					),
+				),
+				'tax_query'              => array(
+					array(
+						'taxonomy'         => 'product_cat',
+						'field'            => 'term_id',
+						'terms'            => array( (int) $term->term_id ),
+						'include_children' => true,
+					),
+				),
+			)
+		);
+
+		if ( empty( $posts ) ) {
+			return 0;
+		}
+
+		return absint( get_post_thumbnail_id( (int) $posts[0] ) );
 	}
 
 	/**
@@ -761,6 +837,7 @@ class Schrack_Header_Renderer {
 				<?php
 				$children     = is_array( $node['children'] ?? null ) ? $node['children'] : array();
 				$item_classes = array( 'schrack-header__menu-item' );
+				$is_mega_menu = $desktop && 0 === $depth && $this->is_products_menu_node( $node );
 
 				if ( ! empty( $node['classes'] ) && is_array( $node['classes'] ) ) {
 					$item_classes = array_merge( $item_classes, $node['classes'] );
@@ -795,7 +872,107 @@ class Schrack_Header_Renderer {
 							data-header-submenu-toggle
 						></button>
 					<?php endif; ?>
-					<?php echo $this->render_menu_nodes( $children, $depth + 1, $desktop ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php if ( $is_mega_menu && ! empty( $children ) ) : ?>
+						<?php echo $this->render_product_mega_menu( $children ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php else : ?>
+						<?php echo $this->render_menu_nodes( $children, $depth + 1, $desktop ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php endif; ?>
+				</li>
+			<?php endforeach; ?>
+		</ul>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Checks whether a menu node is the automatic Products entry.
+	 *
+	 * @param array<string,mixed> $node Menu node.
+	 */
+	private function is_products_menu_node( array $node ): bool {
+		$classes = is_array( $node['classes'] ?? null ) ? $node['classes'] : array();
+
+		return in_array( 'is-products-menu', $classes, true );
+	}
+
+	/**
+	 * Renders the desktop mega menu for product categories.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes Product category nodes.
+	 */
+	private function render_product_mega_menu( array $nodes ): string {
+		if ( empty( $nodes ) ) {
+			return '';
+		}
+
+		ob_start();
+		?>
+		<div class="schrack-header__mega" role="group" aria-label="<?php esc_attr_e( 'Categorii produse', 'schrack-woocommerce-sync' ); ?>">
+			<div class="schrack-header__mega-inner">
+				<ul class="schrack-header__mega-grid">
+					<?php foreach ( $nodes as $node ) : ?>
+						<?php
+						$children = is_array( $node['children'] ?? null ) ? $node['children'] : array();
+						$image    = is_string( $node['image'] ?? null ) ? $node['image'] : '';
+						?>
+						<li class="schrack-header__mega-card">
+							<a class="schrack-header__mega-head"<?php echo $this->menu_link_attributes( $node, ! empty( $children ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+								<?php if ( '' !== $image ) : ?>
+									<span class="schrack-header__mega-image" aria-hidden="true">
+										<?php echo $image; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+									</span>
+								<?php endif; ?>
+								<span class="schrack-header__mega-title">
+									<strong><?php echo esc_html( (string) $node['label'] ); ?></strong>
+									<?php if ( ! empty( $children ) ) : ?>
+										<small><?php echo esc_html( sprintf( _n( '%d subcategorie', '%d subcategorii', count( $children ), 'schrack-woocommerce-sync' ), count( $children ) ) ); ?></small>
+									<?php endif; ?>
+								</span>
+							</a>
+							<?php echo $this->render_product_mega_branch( $children, 1 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders nested category levels inside the product mega menu.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes Product category nodes.
+	 */
+	private function render_product_mega_branch( array $nodes, int $level ): string {
+		if ( empty( $nodes ) || $level > 5 ) {
+			return '';
+		}
+
+		$list_classes = array(
+			'schrack-header__mega-list',
+			'is-level-' . $level,
+		);
+
+		if ( $level > 1 ) {
+			$list_classes[] = 'is-nested';
+		}
+
+		ob_start();
+		?>
+		<ul class="<?php echo esc_attr( implode( ' ', $list_classes ) ); ?>">
+			<?php foreach ( $nodes as $node ) : ?>
+				<?php
+				$children   = is_array( $node['children'] ?? null ) ? $node['children'] : array();
+				$has_branch = ! empty( $children ) && $level < 5;
+				?>
+				<li class="<?php echo esc_attr( $has_branch ? 'has-branch' : '' ); ?>">
+					<a class="schrack-header__mega-link"<?php echo $this->menu_link_attributes( $node, $has_branch ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+						<span><?php echo esc_html( (string) $node['label'] ); ?></span>
+					</a>
+					<?php echo $has_branch ? $this->render_product_mega_branch( $children, $level + 1 ) : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</li>
 			<?php endforeach; ?>
 		</ul>
@@ -962,25 +1139,6 @@ class Schrack_Header_Renderer {
 		}
 
 		return home_url( '/shop/' );
-	}
-
-	/**
-	 * Returns a product category URL with a stable fallback path.
-	 */
-	private function product_category_url( string $slug, string $fallback_path ): string {
-		if ( taxonomy_exists( 'product_cat' ) ) {
-			$term = get_term_by( 'slug', $slug, 'product_cat' );
-
-			if ( $term instanceof WP_Term ) {
-				$link = get_term_link( $term );
-
-				if ( is_string( $link ) ) {
-					return $link;
-				}
-			}
-		}
-
-		return home_url( $fallback_path );
 	}
 
 	/**
