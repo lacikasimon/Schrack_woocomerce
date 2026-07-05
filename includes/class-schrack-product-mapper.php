@@ -875,6 +875,7 @@ class Schrack_Product_Mapper {
 			$this->update_optional_meta( $product, '_schrack_manufacturer', $data, 'manufacturer', $is_new );
 			$this->update_optional_meta( $product, '_schrack_unit', $data, 'unit', $is_new );
 			$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
+			$this->update_optional_meta( $product, '_schrack_product_line', $data, 'product_line', $is_new );
 		} else {
 			$product->update_meta_data( $this->source_meta_key( $source, 'item_number' ), $source_item );
 			$this->update_optional_meta( $product, $this->source_meta_key( $source, 'ean' ), $data, 'ean', $is_new );

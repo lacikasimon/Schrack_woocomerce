@@ -418,6 +418,8 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 			'show_price_filter'        => __( 'Interval pret', 'schrack-woocommerce-sync' ),
 			'show_stock_filter'        => __( 'Comutator produse fara stoc', 'schrack-woocommerce-sync' ),
 			'show_manufacturer_filter' => __( 'Filtru producator', 'schrack-woocommerce-sync' ),
+			'show_product_line_filter' => __( 'Filtru serie/gama produs', 'schrack-woocommerce-sync' ),
+			'show_special_offer_filter' => __( 'Filtru oferte speciale Telesystem', 'schrack-woocommerce-sync' ),
 			'show_attribute_filters'   => __( 'Filtre tehnice (IP, tensiune, putere...)', 'schrack-woocommerce-sync' ),
 			'show_sort'                => __( 'Sortare', 'schrack-woocommerce-sync' ),
 		);

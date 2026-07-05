@@ -2003,6 +2003,10 @@ class Schrack_Catalog_Importer {
 			'category_path'     => sanitize_text_field( '' !== $category_path ? $category_path : $get( array( 'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup' ) ) ),
 			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit' ) ) ),
 			'catalog_status'    => sanitize_text_field( $get( array( 'catalog_status', 'status' ) ) ),
+			// The merchandising "discount group" name (e.g. "EGLO Light", "Eglo Connect") is really a
+			// product series/collection label, not pricing data — only the numeric code and the actual
+			// discount percentage stay hidden as commercially sensitive (see catalog_sensitive_technical_keys()).
+			'product_line'      => sanitize_text_field( $get( array( 'discountgrouptext', 'businesslinetext', 'productline', 'serietext', 'seriestext' ) ) ),
 		);
 
 		$item['technical_attributes'] = $this->catalog_technical_attributes( $row, $item );
@@ -2108,7 +2112,7 @@ class Schrack_Catalog_Importer {
 	private function catalog_core_values( array $item ): array {
 		$values = array();
 
-		foreach ( array( 'sku', 'name', 'short_description', 'description', 'manufacturer', 'ean', 'image_url', 'category_path', 'unit', 'catalog_status' ) as $key ) {
+		foreach ( array( 'sku', 'name', 'short_description', 'description', 'manufacturer', 'ean', 'image_url', 'category_path', 'unit', 'catalog_status', 'product_line' ) as $key ) {
 			if ( isset( $item[ $key ] ) && is_scalar( $item[ $key ] ) ) {
 				$value = $this->catalog_key( wp_strip_all_tags( (string) $item[ $key ] ) );
 
@@ -2137,6 +2141,7 @@ class Schrack_Catalog_Importer {
 			'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup', 'maingroup', 'group',
 			'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit',
 			'catalog_status', 'status',
+			'discountgrouptext', 'businesslinetext', 'productline', 'serietext', 'seriestext',
 			'import', 'imported', 'importstatus', 'sync', 'syncstatus', 'lastsync', 'lastupdate', 'lastupdated', 'updated', 'updatedat', 'created', 'createdat', 'timestamp', 'cache', 'cursor',
 			'source', 'resulttype', 'download', 'downloadurl', 'file', 'filename', 'path',
 			'soap', 'wsdl', 'endpoint', 'token', 'password', 'username', 'userid', 'session',

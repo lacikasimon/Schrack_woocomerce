@@ -43,7 +43,9 @@ class Schrack_Product_Filter_Renderer {
 		$category    = $this->category_for_picker( $filters['category'] );
 		$default_category = $this->category_for_picker( $settings['default_category'] );
 		$category_search_value = $category['id'] > 0 ? $category['label'] : $filters['category_search'];
+		$active_filter_count = $this->active_filter_count( $filters );
 		$manufacturers = $settings['show_manufacturer_filter'] ? $this->manufacturer_options() : array();
+		$product_lines = $settings['show_product_line_filter'] ? $this->product_line_options() : array();
 		$attribute_filter_groups = $settings['show_attribute_filters'] ? $this->attribute_filter_options() : array();
 		$style         = $this->inline_style( $settings );
 
@@ -64,6 +66,7 @@ class Schrack_Product_Filter_Renderer {
 					<form class="schrack-product-filter__form" method="get">
 						<div class="schrack-product-filter__sidebar-head">
 							<span><?php esc_html_e( 'Filtre', 'schrack-woocommerce-sync' ); ?></span>
+							<span class="schrack-product-filter__active-count" data-active-filter-count <?php echo $active_filter_count > 0 ? '' : 'hidden'; ?>><?php echo esc_html( (string) $active_filter_count ); ?></span>
 						</div>
 
 						<div class="schrack-product-filter__controls">
@@ -78,6 +81,13 @@ class Schrack_Product_Filter_Renderer {
 							<label class="schrack-product-filter__check">
 								<input type="checkbox" name="include_out_of_stock" value="yes" <?php checked( $filters['include_out_of_stock'] ); ?>>
 								<span><?php esc_html_e( 'Afiseaza si produsele fara stoc', 'schrack-woocommerce-sync' ); ?></span>
+							</label>
+							<?php endif; ?>
+
+							<?php if ( $settings['show_special_offer_filter'] && $this->has_special_offer_products() ) : ?>
+							<label class="schrack-product-filter__check">
+								<input type="checkbox" name="special_offer_only" value="yes" <?php checked( $filters['special_offer_only'] ); ?>>
+								<span><?php esc_html_e( 'Doar oferte speciale Telesystem', 'schrack-woocommerce-sync' ); ?></span>
 							</label>
 							<?php endif; ?>
 
@@ -125,6 +135,29 @@ class Schrack_Product_Filter_Renderer {
 													__( '%1$s (%2$d)', 'schrack-woocommerce-sync' ),
 													$manufacturer['name'],
 													$manufacturer['count']
+												)
+											);
+											?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+							</label>
+							<?php endif; ?>
+
+							<?php if ( $settings['show_product_line_filter'] && ! empty( $product_lines ) ) : ?>
+							<label class="schrack-product-filter__field">
+								<span><?php esc_html_e( 'Serie / gama produs', 'schrack-woocommerce-sync' ); ?></span>
+								<select name="product_line">
+									<option value=""><?php esc_html_e( 'Toate seriile', 'schrack-woocommerce-sync' ); ?></option>
+									<?php foreach ( $product_lines as $product_line ) : ?>
+										<option value="<?php echo esc_attr( $product_line['name'] ); ?>" <?php selected( $filters['product_line'], $product_line['name'] ); ?>>
+											<?php
+											echo esc_html(
+												sprintf(
+													/* translators: 1: product line name, 2: product count. */
+													__( '%1$s (%2$d)', 'schrack-woocommerce-sync' ),
+													$product_line['name'],
+													$product_line['count']
 												)
 											);
 											?>
@@ -325,6 +358,8 @@ class Schrack_Product_Filter_Renderer {
 			'show_price_filter'        => $settings['show_price_filter'] ? 'yes' : 'no',
 			'show_stock_filter'        => $settings['show_stock_filter'] ? 'yes' : 'no',
 			'show_manufacturer_filter' => $settings['show_manufacturer_filter'] ? 'yes' : 'no',
+			'show_product_line_filter' => $settings['show_product_line_filter'] ? 'yes' : 'no',
+			'show_special_offer_filter' => $settings['show_special_offer_filter'] ? 'yes' : 'no',
 			'show_attribute_filters'   => $settings['show_attribute_filters'] ? 'yes' : 'no',
 			'show_sort'                => $settings['show_sort'] ? 'yes' : 'no',
 			'show_images'              => $settings['show_images'] ? 'yes' : 'no',
@@ -373,6 +408,8 @@ class Schrack_Product_Filter_Renderer {
 			'max_price'            => '',
 			'include_out_of_stock' => 'no',
 			'manufacturer'         => '',
+			'product_line'         => '',
+			'special_offer_only'   => 'no',
 			'orderby'              => $settings['default_orderby'],
 			'paged'                => 1,
 		);
@@ -405,7 +442,7 @@ class Schrack_Product_Filter_Renderer {
 			}
 		}
 
-		foreach ( array( 'category_search', 'min_price', 'max_price', 'include_out_of_stock', 'manufacturer', 'orderby', 'paged' ) as $key ) {
+		foreach ( array( 'category_search', 'min_price', 'max_price', 'include_out_of_stock', 'manufacturer', 'product_line', 'special_offer_only', 'orderby', 'paged' ) as $key ) {
 			$value = $this->request_value( $key );
 
 			if ( '' !== $value ) {
@@ -724,6 +761,22 @@ class Schrack_Product_Filter_Renderer {
 			);
 		}
 
+		if ( $settings['show_product_line_filter'] && '' !== $filters['product_line'] ) {
+			$meta_query[] = array(
+				'key'     => '_schrack_product_line',
+				'value'   => $filters['product_line'],
+				'compare' => '=',
+			);
+		}
+
+		if ( $settings['show_special_offer_filter'] && $filters['special_offer_only'] ) {
+			$meta_query[] = array(
+				'key'     => '_telesystem_special_offer',
+				'value'   => '',
+				'compare' => '!=',
+			);
+		}
+
 		if ( $settings['show_attribute_filters'] && ! empty( $filters['attributes'] ) ) {
 			foreach ( $filters['attributes'] as $taxonomy => $term_ids ) {
 				if ( ! taxonomy_exists( $taxonomy ) || empty( $term_ids ) ) {
@@ -846,6 +899,21 @@ class Schrack_Product_Filter_Renderer {
 			return '';
 		}
 
+		$child_available_counts = $this->available_term_counts(
+			'product_cat',
+			array_map( static fn ( WP_Term $category ): int => (int) $category->term_id, $child_categories )
+		);
+
+		// Show the most-stocked categories first so the default (collapsed) view is
+		// useful instead of an alphabetical slice of a very flat, ~200-category catalog.
+		usort(
+			$child_categories,
+			static fn ( WP_Term $a, WP_Term $b ): int => ( $child_available_counts[ (int) $b->term_id ] ?? 0 ) <=> ( $child_available_counts[ (int) $a->term_id ] ?? 0 )
+		);
+
+		$visible_category_limit = 12;
+		$hidden_category_count  = max( 0, count( $child_categories ) - $visible_category_limit );
+
 		$title       = $current_category instanceof WP_Term ? $current_category->name : __( 'Categorii produse', 'schrack-woocommerce-sync' );
 		$eyebrow     = $current_category instanceof WP_Term ? __( 'Categoria curenta', 'schrack-woocommerce-sync' ) : __( 'Catalog produse', 'schrack-woocommerce-sync' );
 		$description = $current_category instanceof WP_Term ? trim( wp_strip_all_tags( (string) $current_category->description ) ) : '';
@@ -871,21 +939,25 @@ class Schrack_Product_Filter_Renderer {
 			<?php endif; ?>
 
 			<?php if ( ! empty( $child_categories ) ) : ?>
-				<div class="schrack-category-explorer__grid">
-					<?php foreach ( $child_categories as $category ) : ?>
+				<div class="schrack-category-explorer__grid" data-category-explorer-grid>
+					<?php foreach ( $child_categories as $index => $category ) : ?>
 						<?php $link = get_term_link( $category ); ?>
 						<?php if ( is_wp_error( $link ) ) : ?>
 							<?php continue; ?>
 						<?php endif; ?>
-						<a class="schrack-category-explorer__card" href="<?php echo esc_url( $link ); ?>">
+						<a
+							class="schrack-category-explorer__card"
+							href="<?php echo esc_url( $link ); ?>"
+							<?php echo $index >= $visible_category_limit ? 'hidden' : ''; ?>
+						>
 							<span class="schrack-category-explorer__name"><?php echo esc_html( $category->name ); ?></span>
 							<span class="schrack-category-explorer__meta">
 								<?php
 								echo esc_html(
 									sprintf(
-										/* translators: %s: product count. */
-										__( '%s produse', 'schrack-woocommerce-sync' ),
-										number_format_i18n( (int) $category->count )
+										/* translators: %s: available product count. */
+										__( '%s produse disponibile', 'schrack-woocommerce-sync' ),
+										number_format_i18n( $child_available_counts[ (int) $category->term_id ] ?? 0 )
 									)
 								);
 								?>
@@ -894,6 +966,19 @@ class Schrack_Product_Filter_Renderer {
 						</a>
 					<?php endforeach; ?>
 				</div>
+				<?php if ( $hidden_category_count > 0 ) : ?>
+					<button type="button" class="schrack-category-explorer__toggle" data-category-explorer-expand>
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: %s: number of hidden categories. */
+								__( 'Vezi toate categoriile (+%s)', 'schrack-woocommerce-sync' ),
+								number_format_i18n( $hidden_category_count )
+							)
+						);
+						?>
+					</button>
+				<?php endif; ?>
 			<?php elseif ( $current_category instanceof WP_Term ) : ?>
 				<p class="schrack-category-explorer__leaf">
 					<?php esc_html_e( 'Aceasta este ultima categorie din ramura. Produsele potrivite sunt afisate mai jos.', 'schrack-woocommerce-sync' ); ?>
@@ -1460,9 +1545,14 @@ class Schrack_Product_Filter_Renderer {
 
 		$views = array();
 
+		$available_counts = $this->available_term_counts(
+			'product_cat',
+			array_map( static fn ( WP_Term $term ): int => (int) $term->term_id, array_filter( $terms, static fn ( mixed $term ): bool => $term instanceof WP_Term ) )
+		);
+
 		foreach ( $terms as $term ) {
 			if ( $term instanceof WP_Term ) {
-				$view            = $this->category_term_view( $term );
+				$view            = $this->category_term_view( $term, $available_counts[ (int) $term->term_id ] ?? 0 );
 				$view['parent']   = (int) $term->parent;
 				$view['match']    = isset( $match_ids[ (int) $view['id'] ] );
 				$view['children'] = array();
@@ -1569,11 +1659,13 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
-	 * Converts a product category term into picker display data.
+	 * Converts a product category term into picker display data. Pass the
+	 * available (in-stock) product count so it matches every other facet;
+	 * omitting it falls back to the raw WooCommerce term count.
 	 *
 	 * @return array{id:int,name:string,path:string,depth:int,count:int}
 	 */
-	private function category_term_view( WP_Term $term ): array {
+	private function category_term_view( WP_Term $term, ?int $available_count = null ): array {
 		$ancestors = array_reverse( get_ancestors( (int) $term->term_id, 'product_cat', 'taxonomy' ) );
 		$parts     = array();
 
@@ -1592,7 +1684,7 @@ class Schrack_Product_Filter_Renderer {
 			'name'  => $term->name,
 			'path'  => implode( ' / ', $parts ),
 			'depth' => count( $ancestors ),
-			'count' => (int) $term->count,
+			'count' => $available_count ?? (int) $term->count,
 		);
 	}
 
@@ -1653,7 +1745,73 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
-	 * Returns manufacturer options collected from imported Schrack product metadata.
+	 * Counts products per taxonomy term, restricted to products that are
+	 * published AND currently available (in stock or on backorder). This is
+	 * the single definition of "available" used across every filter facet, so
+	 * a shown option always matches what the default (in-stock) listing would
+	 * actually return.
+	 *
+	 * @param array<int,int> $term_ids Optional term IDs to restrict the count to.
+	 * @return array<int,int> Term ID => available product count.
+	 */
+	private function available_term_counts( string $taxonomy, array $term_ids = array() ): array {
+		global $wpdb;
+
+		static $cache = array();
+
+		$cache_key = $taxonomy . ':' . implode( ',', array_map( 'absint', $term_ids ) );
+
+		if ( isset( $cache[ $cache_key ] ) ) {
+			return $cache[ $cache_key ];
+		}
+
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			$cache[ $cache_key ] = array();
+
+			return $cache[ $cache_key ];
+		}
+
+		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+		$params       = array( $taxonomy );
+		$term_clause  = '';
+
+		if ( ! empty( $term_ids ) ) {
+			$term_ids     = array_map( 'absint', $term_ids );
+			$placeholders = implode( ',', array_fill( 0, count( $term_ids ), '%d' ) );
+			$term_clause  = " AND term_taxonomy.term_id IN ({$placeholders})";
+			$params       = array_merge( $params, $term_ids );
+		}
+
+		$sql = "SELECT term_taxonomy.term_id AS term_id, COUNT(DISTINCT term_relationships.object_id) AS total
+			FROM {$wpdb->term_relationships} AS term_relationships
+			INNER JOIN {$wpdb->term_taxonomy} AS term_taxonomy ON term_taxonomy.term_taxonomy_id = term_relationships.term_taxonomy_id
+			INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = term_relationships.object_id
+			INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = term_relationships.object_id
+			WHERE term_taxonomy.taxonomy = %s
+				AND product_posts.post_type = 'product'
+				AND product_posts.post_status = 'publish'
+				AND lookup.stock_status <> 'outofstock'
+				{$term_clause}
+			GROUP BY term_taxonomy.term_id";
+
+		$rows = $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A );
+
+		$counts = array();
+
+		if ( is_array( $rows ) ) {
+			foreach ( $rows as $row ) {
+				$counts[ absint( $row['term_id'] ?? 0 ) ] = absint( $row['total'] ?? 0 );
+			}
+		}
+
+		$cache[ $cache_key ] = $counts;
+
+		return $counts;
+	}
+
+	/**
+	 * Returns manufacturer options collected from imported Schrack product metadata,
+	 * restricted to products that are currently available (see available_term_counts()).
 	 *
 	 * @return array<int,array{name:string,count:int}>
 	 */
@@ -1666,15 +1824,19 @@ class Schrack_Product_Filter_Renderer {
 			return $options;
 		}
 
+		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT manufacturer_meta.meta_value AS name, COUNT(DISTINCT manufacturer_meta.post_id) AS total
 				FROM {$wpdb->postmeta} AS manufacturer_meta
 				INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = manufacturer_meta.post_id
+				INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = manufacturer_meta.post_id
 				WHERE manufacturer_meta.meta_key = %s
 					AND manufacturer_meta.meta_value <> ''
 					AND product_posts.post_type = 'product'
 					AND product_posts.post_status = 'publish'
+					AND lookup.stock_status <> 'outofstock'
 				GROUP BY manufacturer_meta.meta_value
 				ORDER BY manufacturer_meta.meta_value ASC",
 				'_schrack_manufacturer'
@@ -1704,6 +1866,103 @@ class Schrack_Product_Filter_Renderer {
 		}
 
 		return $options;
+	}
+
+	/**
+	 * Returns product line/series options (e.g. "EGLO Light", "Eglo Connect") collected
+	 * from the Schrack catalog's merchandising group name, restricted to products that
+	 * are currently available (see available_term_counts() for the same definition).
+	 *
+	 * @return array<int,array{name:string,count:int}>
+	 */
+	private function product_line_options(): array {
+		global $wpdb;
+
+		static $options = null;
+
+		if ( null !== $options ) {
+			return $options;
+		}
+
+		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT product_line_meta.meta_value AS name, COUNT(DISTINCT product_line_meta.post_id) AS total
+				FROM {$wpdb->postmeta} AS product_line_meta
+				INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = product_line_meta.post_id
+				INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = product_line_meta.post_id
+				WHERE product_line_meta.meta_key = %s
+					AND product_line_meta.meta_value <> ''
+					AND product_posts.post_type = 'product'
+					AND product_posts.post_status = 'publish'
+					AND lookup.stock_status <> 'outofstock'
+				GROUP BY product_line_meta.meta_value
+				ORDER BY product_line_meta.meta_value ASC",
+				'_schrack_product_line'
+			),
+			ARRAY_A
+		);
+
+		if ( ! is_array( $rows ) ) {
+			$options = array();
+
+			return $options;
+		}
+
+		$options = array();
+
+		foreach ( $rows as $row ) {
+			$name = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
+
+			if ( '' === $name ) {
+				continue;
+			}
+
+			$options[] = array(
+				'name'  => $name,
+				'count' => max( 0, absint( $row['total'] ?? 0 ) ),
+			);
+		}
+
+		return $options;
+	}
+
+	/**
+	 * Returns whether at least one currently available Telesystem product is
+	 * flagged as a special offer, so the checkbox only appears once the feed
+	 * has actually populated it.
+	 */
+	private function has_special_offer_products(): bool {
+		global $wpdb;
+
+		static $has_offers = null;
+
+		if ( null !== $has_offers ) {
+			return $has_offers;
+		}
+
+		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+
+		$found = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT special_offer_meta.post_id
+				FROM {$wpdb->postmeta} AS special_offer_meta
+				INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = special_offer_meta.post_id
+				INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = special_offer_meta.post_id
+				WHERE special_offer_meta.meta_key = %s
+					AND special_offer_meta.meta_value <> ''
+					AND product_posts.post_type = 'product'
+					AND product_posts.post_status = 'publish'
+					AND lookup.stock_status <> 'outofstock'
+				LIMIT 1",
+				'_telesystem_special_offer'
+			)
+		);
+
+		$has_offers = null !== $found;
+
+		return $has_offers;
 	}
 
 	/**
@@ -1744,6 +2003,11 @@ class Schrack_Product_Filter_Renderer {
 				continue;
 			}
 
+			$available_counts = $this->available_term_counts(
+				$taxonomy,
+				array_map( static fn ( WP_Term $term ): int => (int) $term->term_id, array_filter( $terms, static fn ( mixed $term ): bool => $term instanceof WP_Term ) )
+			);
+
 			$term_options = array();
 
 			foreach ( $terms as $term ) {
@@ -1751,10 +2015,16 @@ class Schrack_Product_Filter_Renderer {
 					continue;
 				}
 
+				$available = $available_counts[ (int) $term->term_id ] ?? 0;
+
+				if ( $available <= 0 ) {
+					continue;
+				}
+
 				$term_options[] = array(
 					'id'    => (int) $term->term_id,
 					'name'  => $term->name,
-					'count' => (int) $term->count,
+					'count' => $available,
 				);
 			}
 
@@ -1819,6 +2089,8 @@ class Schrack_Product_Filter_Renderer {
 			'show_price_filter'        => $this->truthy( $settings['show_price_filter'] ?? 'yes' ),
 			'show_stock_filter'        => $this->truthy( $settings['show_stock_filter'] ?? 'yes' ),
 			'show_manufacturer_filter' => $this->truthy( $settings['show_manufacturer_filter'] ?? 'yes' ),
+			'show_product_line_filter' => $this->truthy( $settings['show_product_line_filter'] ?? 'yes' ),
+			'show_special_offer_filter' => $this->truthy( $settings['show_special_offer_filter'] ?? 'yes' ),
 			'show_attribute_filters'   => $this->truthy( $settings['show_attribute_filters'] ?? 'yes' ),
 			'show_sort'                => $this->truthy( $settings['show_sort'] ?? 'yes' ),
 			'show_images'              => $this->truthy( $settings['show_images'] ?? 'yes' ),
@@ -1930,12 +2202,46 @@ class Schrack_Product_Filter_Renderer {
 			'max_price'            => $max_price,
 			'include_out_of_stock' => $this->truthy( $filters['include_out_of_stock'] ?? 'no' ),
 			'manufacturer'         => sanitize_text_field( (string) ( $filters['manufacturer'] ?? '' ) ),
+			'product_line'         => sanitize_text_field( (string) ( $filters['product_line'] ?? '' ) ),
+			'special_offer_only'   => $this->truthy( $filters['special_offer_only'] ?? 'no' ),
 			'paged'                => max( 1, absint( $filters['paged'] ?? 1 ) ),
 			'orderby'              => $orderby,
 			'attributes'           => is_array( $filters['attributes'] ?? null )
 				? $this->attribute_filters_from_array( $filters['attributes'] )
 				: array(),
 		);
+	}
+
+	/**
+	 * Counts how many filter dimensions are currently narrowing the result set, so
+	 * the sidebar header can show shoppers an at-a-glance "3 filters active" badge.
+	 *
+	 * @param array<string,mixed> $filters Sanitized filters.
+	 */
+	private function active_filter_count( array $filters ): int {
+		$count = 0;
+
+		foreach ( array( 'search', 'category_search', 'manufacturer', 'product_line' ) as $key ) {
+			if ( '' !== (string) ( $filters[ $key ] ?? '' ) ) {
+				++$count;
+			}
+		}
+
+		if ( absint( $filters['category'] ?? 0 ) > 0 ) {
+			++$count;
+		}
+
+		if ( null !== ( $filters['min_price'] ?? null ) || null !== ( $filters['max_price'] ?? null ) ) {
+			++$count;
+		}
+
+		if ( ! empty( $filters['special_offer_only'] ) ) {
+			++$count;
+		}
+
+		$count += count( $filters['attributes'] ?? array() );
+
+		return $count;
 	}
 
 	/**

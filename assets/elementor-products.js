@@ -63,7 +63,61 @@
 		inputs.min.value = isActive ? '' : button.getAttribute('data-price-min') || '';
 		inputs.max.value = isActive ? '' : button.getAttribute('data-price-max') || '';
 		syncPricePresetState(root);
+		updateActiveFilterCount(root);
 		requestProducts(root, 1);
+	}
+
+	function updateActiveFilterCount(root) {
+		var badge = root.querySelector('[data-active-filter-count]');
+		var form = root.querySelector('.schrack-product-filter__form');
+
+		if (!badge || !form) {
+			return;
+		}
+
+		var count = 0;
+		var search = form.querySelector('input[name="search"]');
+		var categoryId = form.querySelector('[data-category-id]');
+		var categorySearch = form.querySelector('input[name="category_search"]');
+		var minPrice = form.querySelector('input[name="min_price"]');
+		var maxPrice = form.querySelector('input[name="max_price"]');
+		var manufacturer = form.querySelector('select[name="manufacturer"]');
+		var productLine = form.querySelector('select[name="product_line"]');
+		var specialOffer = form.querySelector('input[name="special_offer_only"]');
+		var attrGroups = {};
+
+		if (search && search.value.trim() !== '') {
+			count++;
+		}
+
+		if ((categoryId && parseInt(categoryId.value, 10) > 0) || (categorySearch && categorySearch.value.trim() !== '')) {
+			count++;
+		}
+
+		if ((minPrice && minPrice.value.trim() !== '') || (maxPrice && maxPrice.value.trim() !== '')) {
+			count++;
+		}
+
+		if (manufacturer && manufacturer.value !== '') {
+			count++;
+		}
+
+		if (productLine && productLine.value !== '') {
+			count++;
+		}
+
+		if (specialOffer && specialOffer.checked) {
+			count++;
+		}
+
+		Array.prototype.forEach.call(form.querySelectorAll('input[name^="attr["]:checked'), function (input) {
+			attrGroups[input.name] = true;
+		});
+
+		count += Object.keys(attrGroups).length;
+
+		badge.textContent = String(count);
+		badge.hidden = count === 0;
 	}
 
 	function appendResults(results, html) {
@@ -301,6 +355,7 @@
 		root.setAttribute('data-filter-ready', 'yes');
 		syncSelectedCategory(root);
 		syncPricePresetState(root);
+		updateActiveFilterCount(root);
 
 		form.addEventListener('submit', function (event) {
 			event.preventDefault();
@@ -309,6 +364,7 @@
 
 		form.addEventListener('change', function (event) {
 			if (event.target && event.target.matches('select, input[type="checkbox"]')) {
+				updateActiveFilterCount(root);
 				requestProducts(root, 1);
 			}
 		});
@@ -320,11 +376,13 @@
 
 			if (event.target === categorySearch) {
 				setSelectedCategory(root, '', event.target.value);
+				updateActiveFilterCount(root);
 				delayedCategoryRequest();
 				return;
 			}
 
 			syncPricePresetState(root);
+			updateActiveFilterCount(root);
 			delayedRequest();
 		});
 
@@ -340,6 +398,22 @@
 			var categoryOption = event.target.closest('[data-category-option]');
 			var categoryClear = event.target.closest('[data-category-clear]');
 			var pricePreset = event.target.closest('[data-price-min]');
+			var categoryExplorerExpand = event.target.closest('[data-category-explorer-expand]');
+
+			if (categoryExplorerExpand) {
+				event.preventDefault();
+				var explorerSection = categoryExplorerExpand.closest('.schrack-category-explorer');
+				var grid = explorerSection ? explorerSection.querySelector('[data-category-explorer-grid]') : null;
+
+				if (grid) {
+					Array.prototype.forEach.call(grid.querySelectorAll('[hidden]'), function (card) {
+						card.hidden = false;
+					});
+				}
+
+				categoryExplorerExpand.remove();
+				return;
+			}
 
 			if (pricePreset) {
 				event.preventDefault();
@@ -350,6 +424,7 @@
 			if (categoryOption) {
 				event.preventDefault();
 				setSelectedCategory(root, categoryOption.getAttribute('data-category-id'), categoryOption.getAttribute('data-category-label'));
+				updateActiveFilterCount(root);
 				requestProducts(root, 1);
 				return;
 			}
@@ -357,6 +432,7 @@
 			if (categoryClear) {
 				event.preventDefault();
 				setSelectedCategory(root, '', '');
+				updateActiveFilterCount(root);
 				requestProducts(root, 1);
 				return;
 			}
@@ -378,6 +454,7 @@
 				form.reset();
 				resetSelectedCategory(root);
 				syncPricePresetState(root);
+				updateActiveFilterCount(root);
 				requestProducts(root, 1);
 			}
 		});
