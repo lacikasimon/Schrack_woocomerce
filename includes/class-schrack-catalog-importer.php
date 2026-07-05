@@ -1417,6 +1417,7 @@ class Schrack_Catalog_Importer {
 				'sku'                  => $item['sku'],
 				'name'                 => $item['name'],
 				'technical_attributes' => $item['technical_attributes'],
+				'extracted_attributes' => $item['extracted_attributes'],
 			);
 		}
 
@@ -1546,6 +1547,7 @@ class Schrack_Catalog_Importer {
 				'sku'                  => $item['sku'],
 				'name'                 => $item['name'],
 				'technical_attributes' => $item['technical_attributes'],
+				'extracted_attributes' => $item['extracted_attributes'],
 			);
 		}
 
@@ -2004,6 +2006,7 @@ class Schrack_Catalog_Importer {
 		);
 
 		$item['technical_attributes'] = $this->catalog_technical_attributes( $row, $item );
+		$item['extracted_attributes'] = Schrack_Attribute_Extractor::extract( $item['name'] );
 
 		return $item;
 	}

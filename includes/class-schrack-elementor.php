@@ -531,6 +531,9 @@ class Schrack_Elementor {
 			'manufacturer'         => isset( $_POST['manufacturer'] ) ? wp_unslash( (string) $_POST['manufacturer'] ) : '',
 			'orderby'              => isset( $_POST['orderby'] ) ? wp_unslash( (string) $_POST['orderby'] ) : '',
 			'paged'                => isset( $_POST['paged'] ) ? wp_unslash( (string) $_POST['paged'] ) : 1,
+			'attributes'           => isset( $_POST['attr'] ) && is_array( $_POST['attr'] )
+				? $this->renderer->attribute_filters_from_array( wp_unslash( $_POST['attr'] ) )
+				: array(),
 		);
 
 		wp_send_json_success( $this->renderer->render_results( $config, $filters ) );

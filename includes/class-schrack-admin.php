@@ -2515,6 +2515,8 @@ class Schrack_Admin {
 			'unit'              => isset( $_POST['unit'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['unit'] ) ) : '',
 		);
 
+		$data['extracted_attributes'] = Schrack_Attribute_Extractor::extract( $data['name'] );
+
 		$product_id = $mapper->upsert( $data );
 		$response   = array( 'product_id' => $product_id );
 

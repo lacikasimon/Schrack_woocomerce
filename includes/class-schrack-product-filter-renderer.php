@@ -44,6 +44,7 @@ class Schrack_Product_Filter_Renderer {
 		$default_category = $this->category_for_picker( $settings['default_category'] );
 		$category_search_value = $category['id'] > 0 ? $category['label'] : $filters['category_search'];
 		$manufacturers = $settings['show_manufacturer_filter'] ? $this->manufacturer_options() : array();
+		$attribute_filter_groups = $settings['show_attribute_filters'] ? $this->attribute_filter_options() : array();
 		$style         = $this->inline_style( $settings );
 
 		ob_start();
@@ -131,6 +132,41 @@ class Schrack_Product_Filter_Renderer {
 									<?php endforeach; ?>
 								</select>
 							</label>
+							<?php endif; ?>
+
+							<?php if ( $settings['show_attribute_filters'] && ! empty( $attribute_filter_groups ) ) : ?>
+							<div class="schrack-product-filter__attributes">
+								<?php foreach ( $attribute_filter_groups as $taxonomy => $group ) : ?>
+									<?php
+									$selected_ids = $filters['attributes'][ $taxonomy ] ?? array();
+									$has_selection = ! empty( $selected_ids );
+									?>
+									<details class="schrack-attribute-filter" <?php echo $has_selection ? 'open' : ''; ?>>
+										<summary class="schrack-attribute-filter__summary">
+											<span><?php echo esc_html( $group['label'] ); ?></span>
+											<?php if ( $has_selection ) : ?>
+												<span class="schrack-attribute-filter__badge"><?php echo esc_html( (string) count( $selected_ids ) ); ?></span>
+											<?php endif; ?>
+										</summary>
+										<div class="schrack-attribute-filter__options">
+											<?php foreach ( $group['terms'] as $term ) : ?>
+												<label class="schrack-attribute-filter__option">
+													<input
+														type="checkbox"
+														name="attr[<?php echo esc_attr( $taxonomy ); ?>][]"
+														value="<?php echo esc_attr( (string) $term['id'] ); ?>"
+														<?php checked( in_array( $term['id'], $selected_ids, true ) ); ?>
+													>
+													<span class="schrack-attribute-filter__chip">
+														<?php echo esc_html( $term['name'] ); ?>
+														<i><?php echo esc_html( (string) $term['count'] ); ?></i>
+													</span>
+												</label>
+											<?php endforeach; ?>
+										</div>
+									</details>
+								<?php endforeach; ?>
+							</div>
 							<?php endif; ?>
 
 							<?php if ( $settings['show_price_filter'] ) : ?>
@@ -289,6 +325,7 @@ class Schrack_Product_Filter_Renderer {
 			'show_price_filter'        => $settings['show_price_filter'] ? 'yes' : 'no',
 			'show_stock_filter'        => $settings['show_stock_filter'] ? 'yes' : 'no',
 			'show_manufacturer_filter' => $settings['show_manufacturer_filter'] ? 'yes' : 'no',
+			'show_attribute_filters'   => $settings['show_attribute_filters'] ? 'yes' : 'no',
 			'show_sort'                => $settings['show_sort'] ? 'yes' : 'no',
 			'show_images'              => $settings['show_images'] ? 'yes' : 'no',
 			'show_categories'          => $settings['show_categories'] ? 'yes' : 'no',
@@ -376,7 +413,50 @@ class Schrack_Product_Filter_Renderer {
 			}
 		}
 
+		$filters['attributes'] = $this->request_attribute_values();
+
 		return $filters;
+	}
+
+	/**
+	 * Reads the "attr[pa_slug][]=term_id" style request parameters used by the
+	 * technical attribute filter checkboxes.
+	 *
+	 * @return array<string,array<int,int>>
+	 */
+	private function request_attribute_values(): array {
+		if ( ! isset( $_GET['attr'] ) || ! is_array( $_GET['attr'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return array();
+		}
+
+		return $this->attribute_filters_from_array( wp_unslash( $_GET['attr'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	}
+
+	/**
+	 * Validates a raw "taxonomy => term IDs" array (from $_GET['attr'] or
+	 * $_POST['attr']) into the clean shape used by the attribute filters.
+	 *
+	 * @param array<mixed,mixed> $raw Raw request array.
+	 * @return array<string,array<int,int>>
+	 */
+	public function attribute_filters_from_array( array $raw ): array {
+		$values = array();
+
+		foreach ( $raw as $taxonomy => $term_ids ) {
+			$taxonomy = sanitize_key( (string) $taxonomy );
+
+			if ( ! str_starts_with( $taxonomy, 'pa_' ) || ! is_array( $term_ids ) ) {
+				continue;
+			}
+
+			$ids = array_values( array_unique( array_filter( array_map( 'absint', $term_ids ) ) ) );
+
+			if ( ! empty( $ids ) ) {
+				$values[ $taxonomy ] = $ids;
+			}
+		}
+
+		return $values;
 	}
 
 	/**
@@ -642,6 +722,21 @@ class Schrack_Product_Filter_Renderer {
 				'value'   => $filters['manufacturer'],
 				'compare' => '=',
 			);
+		}
+
+		if ( $settings['show_attribute_filters'] && ! empty( $filters['attributes'] ) ) {
+			foreach ( $filters['attributes'] as $taxonomy => $term_ids ) {
+				if ( ! taxonomy_exists( $taxonomy ) || empty( $term_ids ) ) {
+					continue;
+				}
+
+				$tax_query[] = array(
+					'taxonomy' => $taxonomy,
+					'field'    => 'term_id',
+					'terms'    => $term_ids,
+					'operator' => 'IN',
+				);
+			}
 		}
 
 		$visibility_terms = function_exists( 'wc_get_product_visibility_term_ids' ) ? wc_get_product_visibility_term_ids() : array();
@@ -1612,6 +1707,77 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
+	 * Returns the technical attribute taxonomies (IP rating, voltage, etc.)
+	 * recovered by Schrack_Attribute_Extractor that currently have at least one
+	 * published product, each with its terms and product counts.
+	 *
+	 * @return array<string,array{slug:string,label:string,terms:array<int,array{id:int,name:string,count:int}>}>
+	 */
+	private function attribute_filter_options(): array {
+		static $options = null;
+
+		if ( null !== $options ) {
+			return $options;
+		}
+
+		$options = array();
+
+		if ( ! class_exists( 'Schrack_Attribute_Extractor' ) || ! function_exists( 'wc_attribute_taxonomy_name' ) ) {
+			return $options;
+		}
+
+		foreach ( Schrack_Attribute_Extractor::slugs() as $slug ) {
+			$taxonomy = wc_attribute_taxonomy_name( $slug );
+
+			if ( '' === $taxonomy || ! taxonomy_exists( $taxonomy ) ) {
+				continue;
+			}
+
+			$terms = get_terms(
+				array(
+					'taxonomy'   => $taxonomy,
+					'hide_empty' => true,
+				)
+			);
+
+			if ( is_wp_error( $terms ) || empty( $terms ) ) {
+				continue;
+			}
+
+			$term_options = array();
+
+			foreach ( $terms as $term ) {
+				if ( ! ( $term instanceof WP_Term ) ) {
+					continue;
+				}
+
+				$term_options[] = array(
+					'id'    => (int) $term->term_id,
+					'name'  => $term->name,
+					'count' => (int) $term->count,
+				);
+			}
+
+			if ( empty( $term_options ) ) {
+				continue;
+			}
+
+			usort(
+				$term_options,
+				static fn ( array $a, array $b ): int => strnatcasecmp( (string) $a['name'], (string) $b['name'] )
+			);
+
+			$options[ $taxonomy ] = array(
+				'slug'  => $slug,
+				'label' => Schrack_Attribute_Extractor::label_for_slug( $slug ),
+				'terms' => $term_options,
+			);
+		}
+
+		return $options;
+	}
+
+	/**
 	 * Sanitizes renderer settings.
 	 *
 	 * @param array<string,mixed> $settings Raw settings.
@@ -1653,6 +1819,7 @@ class Schrack_Product_Filter_Renderer {
 			'show_price_filter'        => $this->truthy( $settings['show_price_filter'] ?? 'yes' ),
 			'show_stock_filter'        => $this->truthy( $settings['show_stock_filter'] ?? 'yes' ),
 			'show_manufacturer_filter' => $this->truthy( $settings['show_manufacturer_filter'] ?? 'yes' ),
+			'show_attribute_filters'   => $this->truthy( $settings['show_attribute_filters'] ?? 'yes' ),
 			'show_sort'                => $this->truthy( $settings['show_sort'] ?? 'yes' ),
 			'show_images'              => $this->truthy( $settings['show_images'] ?? 'yes' ),
 			'show_categories'          => $this->truthy( $settings['show_categories'] ?? 'yes' ),
@@ -1765,6 +1932,9 @@ class Schrack_Product_Filter_Renderer {
 			'manufacturer'         => sanitize_text_field( (string) ( $filters['manufacturer'] ?? '' ) ),
 			'paged'                => max( 1, absint( $filters['paged'] ?? 1 ) ),
 			'orderby'              => $orderby,
+			'attributes'           => is_array( $filters['attributes'] ?? null )
+				? $this->attribute_filters_from_array( $filters['attributes'] )
+				: array(),
 		);
 	}
 

@@ -65,6 +65,20 @@ class Schrack_Product_Mapper {
 	private array $category_path_cache = array();
 
 	/**
+	 * Per-request extracted-attribute slug to pa_ taxonomy name cache.
+	 *
+	 * @var array<string,string>
+	 */
+	private array $attribute_taxonomy_cache = array();
+
+	/**
+	 * Per-request "taxonomy:value" to term ID cache for extracted attributes.
+	 *
+	 * @var array<string,int>
+	 */
+	private array $attribute_term_cache = array();
+
+	/**
 	 * Per-request normalized image URL to attachment ID cache.
 	 *
 	 * @var array<string,int>
@@ -882,6 +896,168 @@ class Schrack_Product_Mapper {
 			$technical_meta_key = 'schrack' === $source ? '_schrack_technical_attributes' : $this->source_meta_key( $source, 'technical_attributes' );
 			$product->update_meta_data( $technical_meta_key, wp_json_encode( $data['technical_attributes'] ) );
 		}
+
+		$this->assign_extracted_attributes( $product, $data );
+	}
+
+	/**
+	 * Assigns the attributes recovered by Schrack_Attribute_Extractor (IP rating,
+	 * voltage, wattage, etc.) as real, global WooCommerce product attributes
+	 * (pa_ taxonomies), so they show on the product page and can power shop
+	 * filters, instead of being buried in an opaque technical_attributes blob.
+	 *
+	 * Existing attributes (including any set manually or by another source) are
+	 * preserved; only the specific extracted-attribute taxonomy slots are added
+	 * or updated.
+	 *
+	 * @param array<string,mixed> $data Normalized product data.
+	 */
+	private function assign_extracted_attributes( WC_Product $product, array $data ): void {
+		$extracted = $data['extracted_attributes'] ?? array();
+
+		if ( empty( $extracted ) || ! is_array( $extracted ) ) {
+			return;
+		}
+
+		if ( ! class_exists( 'WC_Product_Attribute' ) || ! function_exists( 'wc_create_attribute' ) ) {
+			return;
+		}
+
+		$attributes = $product->get_attributes();
+		$position   = count( $attributes );
+
+		foreach ( $extracted as $slug => $info ) {
+			$label = sanitize_text_field( (string) ( $info['label'] ?? Schrack_Attribute_Extractor::label_for_slug( (string) $slug ) ) );
+			$value = sanitize_text_field( (string) ( $info['value'] ?? '' ) );
+
+			if ( '' === $value ) {
+				continue;
+			}
+
+			$taxonomy = $this->ensure_attribute_taxonomy( (string) $slug, $label );
+
+			if ( '' === $taxonomy ) {
+				continue;
+			}
+
+			$term_id = $this->ensure_attribute_term( $taxonomy, $value );
+
+			if ( $term_id <= 0 ) {
+				continue;
+			}
+
+			$attribute = new WC_Product_Attribute();
+			$attribute->set_id( wc_attribute_taxonomy_id_by_name( $taxonomy ) );
+			$attribute->set_name( $taxonomy );
+			$attribute->set_options( array( $term_id ) );
+			$attribute->set_position( $position++ );
+			$attribute->set_visible( true );
+			$attribute->set_variation( false );
+
+			$attributes[ $taxonomy ] = $attribute;
+		}
+
+		$product->set_attributes( $attributes );
+	}
+
+	/**
+	 * Finds or creates the global pa_ attribute taxonomy for an extracted
+	 * attribute slug, registering it immediately so terms can be attached
+	 * within the same request.
+	 */
+	private function ensure_attribute_taxonomy( string $slug, string $label ): string {
+		if ( isset( $this->attribute_taxonomy_cache[ $slug ] ) ) {
+			return $this->attribute_taxonomy_cache[ $slug ];
+		}
+
+		if ( ! function_exists( 'wc_attribute_taxonomy_name' ) || ! function_exists( 'wc_attribute_taxonomy_id_by_name' ) ) {
+			return '';
+		}
+
+		$taxonomy     = wc_attribute_taxonomy_name( $slug );
+		$attribute_id = wc_attribute_taxonomy_id_by_name( $taxonomy );
+
+		if ( $attribute_id <= 0 ) {
+			$result = wc_create_attribute(
+				array(
+					'name'         => $label,
+					'slug'         => $slug,
+					'type'         => 'select',
+					'order_by'     => 'menu_order',
+					'has_archives' => false,
+				)
+			);
+
+			if ( is_wp_error( $result ) ) {
+				$this->logger->warning(
+					'catalog',
+					'Could not create Schrack attribute taxonomy.',
+					null,
+					array( 'slug' => $slug, 'error' => $result->get_error_message() )
+				);
+				$this->attribute_taxonomy_cache[ $slug ] = '';
+
+				return '';
+			}
+
+			$this->register_woocommerce_attribute_taxonomies();
+		} elseif ( ! taxonomy_exists( $taxonomy ) ) {
+			$this->register_woocommerce_attribute_taxonomies();
+		}
+
+		$this->attribute_taxonomy_cache[ $slug ] = $taxonomy;
+
+		return $taxonomy;
+	}
+
+	/**
+	 * Re-runs WooCommerce's own attribute taxonomy registration so a taxonomy
+	 * created mid-request (after the init hook already ran) is available
+	 * immediately for term assignment, without needing a second page load.
+	 */
+	private function register_woocommerce_attribute_taxonomies(): void {
+		if ( class_exists( 'WC_Post_Types' ) && method_exists( 'WC_Post_Types', 'register_taxonomies' ) ) {
+			WC_Post_Types::register_taxonomies();
+		}
+	}
+
+	/**
+	 * Finds or creates a term within an attribute taxonomy for one extracted value.
+	 */
+	private function ensure_attribute_term( string $taxonomy, string $value ): int {
+		$cache_key = $taxonomy . ':' . strtolower( $value );
+
+		if ( isset( $this->attribute_term_cache[ $cache_key ] ) ) {
+			return $this->attribute_term_cache[ $cache_key ];
+		}
+
+		$existing = term_exists( $value, $taxonomy );
+
+		if ( is_wp_error( $existing ) ) {
+			$this->attribute_term_cache[ $cache_key ] = 0;
+
+			return 0;
+		}
+
+		if ( 0 === $existing || null === $existing ) {
+			$created = wp_insert_term( $value, $taxonomy );
+
+			if ( is_wp_error( $created ) ) {
+				$this->attribute_term_cache[ $cache_key ] = 0;
+
+				return 0;
+			}
+
+			$term_id = (int) $created['term_id'];
+		} elseif ( is_array( $existing ) ) {
+			$term_id = (int) $existing['term_id'];
+		} else {
+			$term_id = (int) $existing;
+		}
+
+		$this->attribute_term_cache[ $cache_key ] = $term_id;
+
+		return $term_id;
 	}
 
 	/**
