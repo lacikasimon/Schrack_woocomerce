@@ -74,6 +74,7 @@ class Schrack_Admin {
 		add_action( 'admin_post_schrack_wc_sync_soap_debug', array( $this, 'soap_debug' ) );
 		add_action( 'admin_post_schrack_wc_sync_debug_fetch', array( $this, 'debug_fetch' ) );
 		add_action( 'admin_post_schrack_wc_sync_debug_download', array( $this, 'debug_download' ) );
+		add_action( 'admin_post_schrack_wc_sync_debug_reset', array( $this, 'debug_reset' ) );
 		add_action( 'admin_post_schrack_wc_sync_manual_sync', array( $this, 'manual_sync' ) );
 		add_action( 'admin_post_schrack_wc_sync_stop_syncs', array( $this, 'stop_syncs' ) );
 		add_action( 'admin_post_schrack_wc_sync_sku_action', array( $this, 'sku_action' ) );
@@ -819,6 +820,19 @@ class Schrack_Admin {
 		header( 'Content-Length: ' . (string) filesize( $path ) );
 		readfile( $path );
 		exit;
+	}
+
+	/**
+	 * Clears a stuck or finished debug export status so a new one can be queued.
+	 */
+	public function debug_reset(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_debug_reset' );
+
+		$this->cron->reset_debug_export();
+		$this->set_notice( 'success', __( 'Debug export status cleared.', 'schrack-woocommerce-sync' ) );
+
+		$this->redirect( 'schrack-sync-debug' );
 	}
 
 	/**

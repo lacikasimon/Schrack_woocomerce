@@ -199,10 +199,20 @@ class Schrack_Telesystem_Importer {
 			return array( 'error' => __( 'Telesystem feed did not contain readable headers.', 'schrack-woocommerce-sync' ) );
 		}
 
-		$rows = array();
+		$rows         = array();
+		$started_at   = time();
+		$capped_early = false;
+		$line_number  = 0;
 
 		while ( false !== ( $values = fgetcsv( $handle, 0, $delimiter, '"', '\\' ) ) ) {
 			if ( count( $rows ) >= $limit ) {
+				break;
+			}
+
+			++$line_number;
+
+			if ( 0 === $line_number % 200 && $this->debug_export_should_stop( $started_at ) ) {
+				$capped_early = true;
 				break;
 			}
 
@@ -229,11 +239,51 @@ class Schrack_Telesystem_Importer {
 		fclose( $handle );
 
 		return array(
-			'format'  => 'CSV',
-			'headers' => $headers,
-			'labels'  => $labels,
-			'rows'    => $rows,
+			'format'       => 'CSV',
+			'headers'      => $headers,
+			'labels'       => $labels,
+			'rows'         => $rows,
+			'capped_early' => $capped_early,
 		);
+	}
+
+	/**
+	 * Checks whether a long-running debug export is close enough to the PHP
+	 * memory or execution-time limit that it should stop and return what it has,
+	 * rather than risk a hard fatal error that would leave a background job's
+	 * status stuck at "running" forever.
+	 */
+	private function debug_export_should_stop( int $started_at ): bool {
+		$limit = $this->debug_memory_limit_bytes();
+
+		if ( $limit > 0 && memory_get_usage( true ) >= (int) floor( $limit * 0.70 ) ) {
+			return true;
+		}
+
+		$max_execution_time = (int) ini_get( 'max_execution_time' );
+
+		if ( $max_execution_time <= 0 ) {
+			return false;
+		}
+
+		return time() - $started_at >= max( 10, $max_execution_time - 15 );
+	}
+
+	/**
+	 * Returns the PHP memory_limit in bytes, or 0 when unlimited/unknown.
+	 */
+	private function debug_memory_limit_bytes(): int {
+		$raw = trim( (string) ini_get( 'memory_limit' ) );
+
+		if ( '' === $raw || str_starts_with( $raw, '-' ) ) {
+			return 0;
+		}
+
+		if ( function_exists( 'wp_convert_hr_to_bytes' ) ) {
+			return (int) wp_convert_hr_to_bytes( $raw );
+		}
+
+		return is_numeric( $raw ) ? max( 0, (int) $raw ) : 0;
 	}
 
 	/**

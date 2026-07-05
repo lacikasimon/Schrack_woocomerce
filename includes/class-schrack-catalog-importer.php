@@ -1304,6 +1304,10 @@ class Schrack_Catalog_Importer {
 			return array( 'error' => __( 'Schrack returned an empty catalog response.', 'schrack-woocommerce-sync' ) );
 		}
 
+		if ( 'CSV' === $format ) {
+			return $this->debug_raw_csv_rows_streamed( $content, $limit );
+		}
+
 		if ( filter_var( $content, FILTER_VALIDATE_URL ) ) {
 			$content = $this->download_catalog_content( $content );
 		}
@@ -1312,51 +1316,95 @@ class Schrack_Catalog_Importer {
 			return array( 'error' => __( 'Could not download the Schrack catalog file.', 'schrack-woocommerce-sync' ) );
 		}
 
-		return 'XML' === $format
-			? $this->debug_raw_xml_rows( $content, $limit )
-			: $this->debug_raw_csv_rows( $content, $limit );
+		return $this->debug_raw_xml_rows( $content, $limit );
 	}
 
 	/**
-	 * Parses a raw CSV catalog sample without importing, pairing each raw row with
-	 * the technical_attributes the current mapping would extract from it.
+	 * Downloads/reads the CSV catalog response to a temporary file and parses only
+	 * the requested row count from disk, so a large or slow-arriving catalog file
+	 * is never held fully in memory just to preview a handful of rows -- the same
+	 * memory-safe path the real streamed import uses.
 	 *
 	 * @return array<string,mixed>
 	 */
-	private function debug_raw_csv_rows( string $content, int $limit ): array {
-		if ( $this->looks_like_markup( $content ) ) {
+	private function debug_raw_csv_rows_streamed( string $content, int $limit ): array {
+		$source = $this->catalog_response_source_file( $content );
+		unset( $content );
+
+		if ( null === $source ) {
+			return array( 'error' => __( 'Could not read the Schrack CSV catalog file.', 'schrack-woocommerce-sync' ) );
+		}
+
+		try {
+			return $this->read_debug_csv_file( (string) $source['path'], $limit );
+		} finally {
+			$this->delete_temp_files( (array) ( $source['cleanup_paths'] ?? array() ) );
+		}
+	}
+
+	/**
+	 * Parses a raw CSV catalog sample directly from a file, pairing each raw row
+	 * with the technical_attributes the current mapping would extract from it.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function read_debug_csv_file( string $path, int $limit ): array {
+		if ( ! is_readable( $path ) ) {
+			return array( 'error' => __( 'Downloaded Schrack catalog file was unreadable.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$handle = fopen( $path, 'rb' );
+
+		if ( false === $handle ) {
+			return array( 'error' => __( 'Could not open the downloaded Schrack catalog file.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$first_line = fgets( $handle );
+
+		if ( false === $first_line || '' === trim( $first_line ) ) {
+			fclose( $handle );
+			return array( 'error' => __( 'Schrack CSV catalog content was empty.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( $this->looks_like_markup( $first_line ) ) {
+			fclose( $handle );
 			return array(
 				'error'   => __( 'Schrack returned markup instead of CSV.', 'schrack-woocommerce-sync' ),
-				'preview' => $this->content_preview( $content ),
+				'preview' => $this->content_preview( $first_line ),
 			);
 		}
 
-		$lines = preg_split( '/\r\n|\n|\r/', trim( $content ) );
-
-		if ( empty( $lines ) ) {
-			return array( 'error' => __( 'Schrack CSV catalog was empty.', 'schrack-woocommerce-sync' ) );
-		}
-
-		$delimiter   = $this->detect_csv_delimiter( $lines );
-		$raw_headers = str_getcsv( array_shift( $lines ), $delimiter );
+		$delimiter   = $this->detect_csv_delimiter_from_line( $first_line );
+		$raw_headers = str_getcsv( $first_line, $delimiter );
 		$headers     = $this->normalize_csv_headers( $raw_headers );
 
 		if ( empty( $headers ) ) {
+			fclose( $handle );
 			return array( 'error' => __( 'Schrack CSV catalog did not contain readable headers.', 'schrack-woocommerce-sync' ) );
 		}
 
-		$rows = array();
+		$rows         = array();
+		$started_at   = time();
+		$capped_early = false;
+		$line_number  = 0;
 
-		foreach ( $lines as $line ) {
+		while ( false !== ( $values = fgetcsv( $handle, 0, $delimiter ) ) ) {
 			if ( count( $rows ) >= $limit ) {
 				break;
 			}
 
-			if ( '' === trim( $line ) ) {
+			++$line_number;
+
+			if ( 0 === $line_number % 200 && $this->debug_export_should_stop( $started_at ) ) {
+				$capped_early = true;
+				break;
+			}
+
+			if ( $this->csv_values_are_blank( $values ) ) {
 				continue;
 			}
 
-			$row = $this->combine_csv_row( $headers, str_getcsv( $line, $delimiter ) );
+			$row = $this->combine_csv_row( $headers, $values );
 
 			if ( empty( $row ) || $this->is_csv_header_continuation_row( $row ) ) {
 				continue;
@@ -1372,13 +1420,55 @@ class Schrack_Catalog_Importer {
 			);
 		}
 
+		fclose( $handle );
+
 		return array(
-			'format'      => 'CSV',
-			'delimiter'   => $delimiter,
-			'raw_headers' => array_values( array_map( static fn ( mixed $header ): string => (string) $header, $raw_headers ) ),
-			'headers'     => $headers,
-			'rows'        => $rows,
+			'format'       => 'CSV',
+			'delimiter'    => $delimiter,
+			'raw_headers'  => array_values( array_map( static fn ( mixed $header ): string => (string) $header, $raw_headers ) ),
+			'headers'      => $headers,
+			'rows'         => $rows,
+			'capped_early' => $capped_early,
 		);
+	}
+
+	/**
+	 * Checks whether a long-running debug export is close enough to the PHP
+	 * memory or execution-time limit that it should stop and return what it has,
+	 * rather than risk a hard fatal error that would leave a background job's
+	 * status stuck at "running" forever.
+	 */
+	private function debug_export_should_stop( int $started_at ): bool {
+		$limit = $this->debug_memory_limit_bytes();
+
+		if ( $limit > 0 && memory_get_usage( true ) >= (int) floor( $limit * 0.70 ) ) {
+			return true;
+		}
+
+		$max_execution_time = (int) ini_get( 'max_execution_time' );
+
+		if ( $max_execution_time <= 0 ) {
+			return false;
+		}
+
+		return time() - $started_at >= max( 10, $max_execution_time - 15 );
+	}
+
+	/**
+	 * Returns the PHP memory_limit in bytes, or 0 when unlimited/unknown.
+	 */
+	private function debug_memory_limit_bytes(): int {
+		$raw = trim( (string) ini_get( 'memory_limit' ) );
+
+		if ( '' === $raw || str_starts_with( $raw, '-' ) ) {
+			return 0;
+		}
+
+		if ( function_exists( 'wp_convert_hr_to_bytes' ) ) {
+			return (int) wp_convert_hr_to_bytes( $raw );
+		}
+
+		return is_numeric( $raw ) ? max( 0, (int) $raw ) : 0;
 	}
 
 	/**
@@ -1392,10 +1482,24 @@ class Schrack_Catalog_Importer {
 			return array( 'error' => __( 'PHP SimpleXML extension is not available.', 'schrack-woocommerce-sync' ) );
 		}
 
+		// SimpleXML holds the full document tree in memory regardless of how many
+		// rows are requested, so a very large response is refused up front with a
+		// clear message instead of risking a hard memory-limit crash mid-parse.
+		if ( strlen( $content ) > 40 * MB_IN_BYTES ) {
+			return array(
+				'error' => sprintf(
+					/* translators: %s: response size in MB. */
+					__( 'The Schrack XML catalog response is %s MB, too large to parse safely for a debug preview. Try the CSV format instead, which streams from disk.', 'schrack-woocommerce-sync' ),
+					number_format_i18n( strlen( $content ) / MB_IN_BYTES, 1 )
+				),
+			);
+		}
+
 		$previous = libxml_use_internal_errors( true );
 		$xml      = simplexml_load_string( $content, 'SimpleXMLElement', LIBXML_NONET );
 		libxml_clear_errors();
 		libxml_use_internal_errors( $previous );
+		unset( $content );
 
 		if ( false === $xml ) {
 			return array( 'error' => __( 'Unable to parse the Schrack XML catalog.', 'schrack-woocommerce-sync' ) );
@@ -1404,6 +1508,9 @@ class Schrack_Catalog_Importer {
 		$rows            = array();
 		$facets_raw_xml  = null;
 		$root_structure  = array();
+		$started_at      = time();
+		$capped_early    = false;
+		$processed       = 0;
 
 		foreach ( $xml->children() as $child ) {
 			$name                    = $child->getName();
@@ -1412,6 +1519,13 @@ class Schrack_Catalog_Importer {
 
 		foreach ( $xml->xpath( self::CATALOG_ITEM_XPATH ) ?: array() as $node ) {
 			if ( count( $rows ) >= $limit ) {
+				break;
+			}
+
+			++$processed;
+
+			if ( 0 === $processed % 100 && $this->debug_export_should_stop( $started_at ) ) {
+				$capped_early = true;
 				break;
 			}
 
@@ -1436,10 +1550,11 @@ class Schrack_Catalog_Importer {
 		}
 
 		return array(
-			'format'          => 'XML',
-			'root_structure'  => $root_structure,
-			'facets_raw_xml'  => $facets_raw_xml,
-			'rows'            => $rows,
+			'format'         => 'XML',
+			'root_structure' => $root_structure,
+			'facets_raw_xml' => $facets_raw_xml,
+			'rows'           => $rows,
+			'capped_early'   => $capped_early,
 		);
 	}
 

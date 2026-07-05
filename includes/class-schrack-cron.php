@@ -293,9 +293,10 @@ class Schrack_Cron {
 		$this->settings->update_status(
 			'debug_export',
 			array(
-				'state'  => 'queued',
-				'source' => $source,
-				'limit'  => $limit,
+				'state'      => 'queued',
+				'source'     => $source,
+				'limit'      => $limit,
+				'started_at' => time(),
 			)
 		);
 
@@ -327,12 +328,17 @@ class Schrack_Cron {
 	 * @return array<string,mixed>
 	 */
 	public function run_debug_export( string $source, int $limit ): array {
+		$previous_status = $this->settings->get_status();
+		$previous_export = isset( $previous_status['debug_export'] ) && is_array( $previous_status['debug_export'] ) ? $previous_status['debug_export'] : array();
+		$started_at      = absint( $previous_export['started_at'] ?? 0 ) ?: time();
+
 		$this->settings->update_status(
 			'debug_export',
 			array(
-				'state'  => 'running',
-				'source' => $source,
-				'limit'  => $limit,
+				'state'      => 'running',
+				'source'     => $source,
+				'limit'      => $limit,
+				'started_at' => $started_at,
 			)
 		);
 
@@ -350,10 +356,11 @@ class Schrack_Cron {
 
 			if ( ! empty( $data['error'] ) ) {
 				$result = array(
-					'state'   => 'error',
-					'source'  => $source,
-					'limit'   => $limit,
-					'message' => (string) $data['error'],
+					'state'      => 'error',
+					'source'     => $source,
+					'limit'      => $limit,
+					'started_at' => $started_at,
+					'message'    => (string) $data['error'],
 				);
 				$this->settings->update_status( 'debug_export', $result );
 
@@ -364,10 +371,11 @@ class Schrack_Cron {
 
 			if ( null === $file ) {
 				$result = array(
-					'state'   => 'error',
-					'source'  => $source,
-					'limit'   => $limit,
-					'message' => __( 'Could not write the debug export file.', 'schrack-woocommerce-sync' ),
+					'state'      => 'error',
+					'source'     => $source,
+					'limit'      => $limit,
+					'started_at' => $started_at,
+					'message'    => __( 'Could not write the debug export file.', 'schrack-woocommerce-sync' ),
 				);
 				$this->settings->update_status( 'debug_export', $result );
 
@@ -375,13 +383,15 @@ class Schrack_Cron {
 			}
 
 			$result = array(
-				'state'      => 'done',
-				'source'     => $source,
-				'limit'      => $limit,
-				'rows'       => count( $data['rows'] ?? array() ),
-				'file'       => $file['path'],
-				'file_name'  => $file['name'],
-				'bytes'      => $file['bytes'],
+				'state'        => 'done',
+				'source'       => $source,
+				'limit'        => $limit,
+				'started_at'   => $started_at,
+				'rows'         => count( $data['rows'] ?? array() ),
+				'file'         => $file['path'],
+				'file_name'    => $file['name'],
+				'bytes'        => $file['bytes'],
+				'capped_early' => ! empty( $data['capped_early'] ) ? 'yes' : 'no',
 			);
 			$this->settings->update_status( 'debug_export', $result );
 			$this->logger->info( 'debug', 'Finished raw feed debug export.', null, $result );
@@ -389,16 +399,29 @@ class Schrack_Cron {
 			return $result;
 		} catch ( Throwable $exception ) {
 			$result = array(
-				'state'   => 'error',
-				'source'  => $source,
-				'limit'   => $limit,
-				'message' => $exception->getMessage(),
+				'state'      => 'error',
+				'source'     => $source,
+				'limit'      => $limit,
+				'started_at' => $started_at,
+				'message'    => $exception->getMessage(),
 			);
 			$this->settings->update_status( 'debug_export', $result );
 			$this->logger->error( 'debug', 'Raw feed debug export failed.', null, array( 'error' => $exception->getMessage() ) );
 
 			return $result;
 		}
+	}
+
+	/**
+	 * Clears a stuck or finished debug export status so a new one can be queued.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function reset_debug_export(): array {
+		$result = array( 'state' => 'idle' );
+		$this->settings->update_status( 'debug_export', $result );
+
+		return $result;
 	}
 
 	/**

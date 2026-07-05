@@ -9,9 +9,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$debug_export = isset( $debug_export ) && is_array( $debug_export ) ? $debug_export : array();
-$export_state = (string) ( $debug_export['state'] ?? '' );
-$is_active    = in_array( $export_state, array( 'queued', 'running' ), true );
+$debug_export  = isset( $debug_export ) && is_array( $debug_export ) ? $debug_export : array();
+$export_state  = (string) ( $debug_export['state'] ?? '' );
+$is_active     = in_array( $export_state, array( 'queued', 'running' ), true );
+$started_at    = absint( $debug_export['started_at'] ?? 0 );
+$running_for   = $started_at > 0 ? ( time() - $started_at ) : 0;
+$is_stale      = $is_active && $running_for >= 10 * MINUTE_IN_SECONDS;
 ?>
 <div class="wrap schrack-sync-admin">
 	<h1><?php esc_html_e( 'Schrack Debug', 'schrack-woocommerce-sync' ); ?></h1>
@@ -40,9 +43,20 @@ $is_active    = in_array( $export_state, array( 'queued', 'running' ), true );
 		</form>
 	</div>
 
-	<?php if ( ! empty( $debug_export ) ) : ?>
+	<?php if ( ! empty( $debug_export ) && 'idle' !== $export_state ) : ?>
 		<div class="schrack-panel">
 			<h2><?php esc_html_e( 'Export status', 'schrack-woocommerce-sync' ); ?></h2>
+			<?php if ( $is_stale ) : ?>
+				<p class="schrack-status-pill is-error">
+					<?php
+					printf(
+						/* translators: %s: minutes running. */
+						esc_html__( 'This export has been running for over %s minutes without finishing and has likely crashed (usually a memory or time limit on the server). Reset it and try a smaller row count, or check the PHP error log.', 'schrack-woocommerce-sync' ),
+						esc_html( (string) floor( $running_for / MINUTE_IN_SECONDS ) )
+					);
+					?>
+				</p>
+			<?php endif; ?>
 			<table class="widefat striped">
 				<tbody>
 					<tr>
@@ -62,9 +76,20 @@ $is_active    = in_array( $export_state, array( 'queued', 'running' ), true );
 								'error'   => 'is-error',
 							);
 							?>
-							<span class="schrack-status-pill <?php echo esc_attr( $state_classes[ $export_state ] ?? 'is-warning' ); ?>">
+							<span class="schrack-status-pill <?php echo esc_attr( $is_stale ? 'is-error' : ( $state_classes[ $export_state ] ?? 'is-warning' ) ); ?>">
 								<?php echo esc_html( $state_labels[ $export_state ] ?? ucfirst( $export_state ) ); ?>
 							</span>
+							<?php if ( $is_active && $started_at > 0 ) : ?>
+								<span class="schrack-sync-meta">
+									<?php
+									printf(
+										/* translators: %s: relative time. */
+										esc_html__( 'running for %s', 'schrack-woocommerce-sync' ),
+										esc_html( human_time_diff( $started_at, time() ) )
+									);
+									?>
+								</span>
+							<?php endif; ?>
 						</td>
 					</tr>
 					<tr>
@@ -74,7 +99,12 @@ $is_active    = in_array( $export_state, array( 'queued', 'running' ), true );
 					<?php if ( 'done' === $export_state ) : ?>
 						<tr>
 							<th><?php esc_html_e( 'Rows', 'schrack-woocommerce-sync' ); ?></th>
-							<td><?php echo esc_html( (string) absint( $debug_export['rows'] ?? 0 ) ); ?></td>
+							<td>
+								<?php echo esc_html( (string) absint( $debug_export['rows'] ?? 0 ) ); ?>
+								<?php if ( 'yes' === (string) ( $debug_export['capped_early'] ?? 'no' ) ) : ?>
+									<span class="schrack-sync-meta"><?php esc_html_e( 'stopped early to stay within memory/time limits', 'schrack-woocommerce-sync' ); ?></span>
+								<?php endif; ?>
+							</td>
 						</tr>
 						<tr>
 							<th><?php esc_html_e( 'File', 'schrack-woocommerce-sync' ); ?></th>
@@ -99,6 +129,11 @@ $is_active    = in_array( $export_state, array( 'queued', 'running' ), true );
 					<?php endif; ?>
 				</tbody>
 			</table>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="schrack_wc_sync_debug_reset">
+				<?php wp_nonce_field( 'schrack_wc_sync_debug_reset' ); ?>
+				<button type="submit" class="button<?php echo $is_stale ? ' button-primary' : ''; ?>"><?php esc_html_e( 'Reset export status', 'schrack-woocommerce-sync' ); ?></button>
+			</form>
 		</div>
 	<?php endif; ?>
 </div>
@@ -113,7 +148,7 @@ $is_active    = in_array( $export_state, array( 'queued', 'running' ), true );
 		} );
 	}
 
-	<?php if ( $is_active ) : ?>
+	<?php if ( $is_active && ! $is_stale ) : ?>
 	window.setTimeout( function () {
 		window.location.reload();
 	}, 5000 );
