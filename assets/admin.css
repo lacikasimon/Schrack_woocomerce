@@ -356,6 +356,30 @@
 	min-height: 34px;
 }
 
+.schrack-sync-supplier-group {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.schrack-sync-supplier-group__full {
+	align-self: flex-start;
+}
+
+.schrack-sync-supplier {
+	border-left: 3px solid var(--schrack-border);
+	padding-left: 16px;
+}
+
+.schrack-sync-supplier h3 {
+	align-items: center;
+	display: flex;
+	font-size: 13px;
+	font-weight: 700;
+	gap: 8px;
+	margin: 0 0 10px;
+}
+
 .schrack-toolbar {
 	align-items: center;
 	display: flex;
@@ -787,6 +811,35 @@
 	background: #fff8e5;
 	border-color: #f0d58c;
 	color: #755100;
+}
+
+.schrack-supplier-pill {
+	border: 1px solid transparent;
+	border-radius: 8px;
+	display: inline-flex;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.2;
+	padding: 3px 9px;
+	white-space: nowrap;
+}
+
+.schrack-supplier-pill--schrack {
+	background: #eef3ff;
+	border-color: #c3d4f7;
+	color: #1c3f9e;
+}
+
+.schrack-supplier-pill--telesystem {
+	background: #f3ecff;
+	border-color: #d7c3f7;
+	color: #5a289e;
+}
+
+.schrack-supplier-pill--shared {
+	background: #f1f1f1;
+	border-color: #d6d6d6;
+	color: #3c434a;
 }
 
 .schrack-progress-cell {

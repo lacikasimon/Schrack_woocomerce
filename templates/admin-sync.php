@@ -71,25 +71,65 @@ $telesystem_enabled   = 'yes' === (string) ( $settings['telesystem_enabled'] ?? 
 
 		<div class="schrack-panel">
 			<h2><?php esc_html_e( 'Batch Sync', 'schrack-woocommerce-sync' ); ?></h2>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schrack-button-grid">
+			<p class="description">
+				<?php esc_html_e( 'Each action below is scoped to one supplier (furnizor) so it is clear what runs against which feed. "Full sync" runs every enabled supplier and stage in sequence.', 'schrack-woocommerce-sync' ); ?>
+			</p>
+
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schrack-sync-supplier-group">
 				<input type="hidden" name="action" value="schrack_wc_sync_manual_sync">
 				<?php wp_nonce_field( 'schrack_wc_sync_manual_sync' ); ?>
-				<button type="submit" class="button button-secondary" name="sync_task" value="catalog" <?php disabled( ! $schrack_enabled ); ?>><?php esc_html_e( 'Import catalog', 'schrack-woocommerce-sync' ); ?></button>
-				<button type="submit" class="button button-secondary" name="sync_task" value="telesystem_catalog" <?php disabled( ! $telesystem_enabled ); ?>><?php esc_html_e( 'Import Telesystem', 'schrack-woocommerce-sync' ); ?></button>
-				<button type="submit" class="button button-secondary" name="sync_task" value="images" <?php disabled( ! $image_import_enabled ); ?>><?php esc_html_e( 'Sync images', 'schrack-woocommerce-sync' ); ?></button>
-				<button type="submit" class="button button-secondary" name="sync_task" value="prices" <?php disabled( ! $schrack_enabled ); ?>><?php esc_html_e( 'Sync prices', 'schrack-woocommerce-sync' ); ?></button>
-				<button type="submit" class="button button-secondary" name="sync_task" value="stock" <?php disabled( ! $schrack_enabled ); ?>><?php esc_html_e( 'Sync stock', 'schrack-woocommerce-sync' ); ?></button>
-				<button type="submit" class="button button-primary" name="sync_task" value="full" <?php disabled( ! $schrack_enabled ); ?>><?php esc_html_e( 'Full sync', 'schrack-woocommerce-sync' ); ?></button>
+				<button type="submit" class="button button-primary schrack-sync-supplier-group__full" name="sync_task" value="full" <?php disabled( ! $schrack_enabled && ! $telesystem_enabled ); ?>>
+					<?php esc_html_e( 'Full sync (toti furnizorii)', 'schrack-woocommerce-sync' ); ?>
+				</button>
+
+				<div class="schrack-sync-supplier">
+					<h3>
+						<?php esc_html_e( 'Furnizor: Schrack', 'schrack-woocommerce-sync' ); ?>
+						<span class="schrack-status-pill <?php echo $schrack_enabled ? 'is-ok' : 'is-warning'; ?>">
+							<?php echo $schrack_enabled ? esc_html__( 'Activ', 'schrack-woocommerce-sync' ) : esc_html__( 'Dezactivat', 'schrack-woocommerce-sync' ); ?>
+						</span>
+					</h3>
+					<div class="schrack-button-grid">
+						<button type="submit" class="button button-secondary" name="sync_task" value="catalog" <?php disabled( ! $schrack_enabled ); ?>><?php esc_html_e( 'Import catalog', 'schrack-woocommerce-sync' ); ?></button>
+						<button type="submit" class="button button-secondary" name="sync_task" value="prices" <?php disabled( ! $schrack_enabled ); ?>><?php esc_html_e( 'Sync prices', 'schrack-woocommerce-sync' ); ?></button>
+						<button type="submit" class="button button-secondary" name="sync_task" value="stock" <?php disabled( ! $schrack_enabled ); ?>><?php esc_html_e( 'Sync stock', 'schrack-woocommerce-sync' ); ?></button>
+					</div>
+					<?php if ( ! $schrack_enabled ) : ?>
+						<p class="description"><?php esc_html_e( 'Schrack sync is disabled in settings.', 'schrack-woocommerce-sync' ); ?></p>
+					<?php endif; ?>
+				</div>
+
+				<div class="schrack-sync-supplier">
+					<h3>
+						<?php esc_html_e( 'Furnizor: Telesystem', 'schrack-woocommerce-sync' ); ?>
+						<span class="schrack-status-pill <?php echo $telesystem_enabled ? 'is-ok' : 'is-warning'; ?>">
+							<?php echo $telesystem_enabled ? esc_html__( 'Activ', 'schrack-woocommerce-sync' ) : esc_html__( 'Dezactivat', 'schrack-woocommerce-sync' ); ?>
+						</span>
+					</h3>
+					<p class="description"><?php esc_html_e( 'Telesystem prices and stock come from the same CSV row as the catalog import, so there is only one action for this supplier.', 'schrack-woocommerce-sync' ); ?></p>
+					<div class="schrack-button-grid">
+						<button type="submit" class="button button-secondary" name="sync_task" value="telesystem_catalog" <?php disabled( ! $telesystem_enabled ); ?>><?php esc_html_e( 'Import Telesystem', 'schrack-woocommerce-sync' ); ?></button>
+					</div>
+					<?php if ( ! $telesystem_enabled ) : ?>
+						<p class="description"><?php esc_html_e( 'Telesystem sync is disabled in settings.', 'schrack-woocommerce-sync' ); ?></p>
+					<?php endif; ?>
+				</div>
+
+				<div class="schrack-sync-supplier">
+					<h3>
+						<?php esc_html_e( 'Imagini (ambii furnizori)', 'schrack-woocommerce-sync' ); ?>
+						<span class="schrack-status-pill <?php echo $image_import_enabled ? 'is-ok' : 'is-warning'; ?>">
+							<?php echo $image_import_enabled ? esc_html__( 'Activ', 'schrack-woocommerce-sync' ) : esc_html__( 'Dezactivat', 'schrack-woocommerce-sync' ); ?>
+						</span>
+					</h3>
+					<div class="schrack-button-grid">
+						<button type="submit" class="button button-secondary" name="sync_task" value="images" <?php disabled( ! $image_import_enabled ); ?>><?php esc_html_e( 'Sync images', 'schrack-woocommerce-sync' ); ?></button>
+					</div>
+					<?php if ( ! $image_import_enabled ) : ?>
+						<p class="description"><?php esc_html_e( 'Image sync is disabled; products without downloaded images use their stored external image URLs.', 'schrack-woocommerce-sync' ); ?></p>
+					<?php endif; ?>
+				</div>
 			</form>
-			<?php if ( ! $schrack_enabled ) : ?>
-				<p class="description"><?php esc_html_e( 'Schrack sync is disabled in settings.', 'schrack-woocommerce-sync' ); ?></p>
-			<?php endif; ?>
-			<?php if ( ! $telesystem_enabled ) : ?>
-				<p class="description"><?php esc_html_e( 'Telesystem sync is disabled in settings.', 'schrack-woocommerce-sync' ); ?></p>
-			<?php endif; ?>
-			<?php if ( ! $image_import_enabled ) : ?>
-				<p class="description"><?php esc_html_e( 'Image sync is disabled; products without downloaded images use their stored external image URLs.', 'schrack-woocommerce-sync' ); ?></p>
-			<?php endif; ?>
 		</div>
 
 		<div class="schrack-panel">

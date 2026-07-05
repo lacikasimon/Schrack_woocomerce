@@ -160,6 +160,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 		'images'             => __( 'Images', 'schrack-woocommerce-sync' ),
 	);
 
+	// Which supplier (furnizor) owns each operation, so the progress table never leaves it ambiguous.
+	$operation_supplier_labels = array(
+		'catalog'            => __( 'Schrack', 'schrack-woocommerce-sync' ),
+		'telesystem_catalog' => __( 'Telesystem', 'schrack-woocommerce-sync' ),
+		'price'              => __( 'Schrack', 'schrack-woocommerce-sync' ),
+		'stock'              => __( 'Schrack', 'schrack-woocommerce-sync' ),
+		'images'             => __( 'Ambii furnizori', 'schrack-woocommerce-sync' ),
+	);
+	$operation_supplier_classes = array(
+		'catalog'            => 'schrack-supplier-pill--schrack',
+		'telesystem_catalog' => 'schrack-supplier-pill--telesystem',
+		'price'              => 'schrack-supplier-pill--schrack',
+		'stock'              => 'schrack-supplier-pill--schrack',
+		'images'             => 'schrack-supplier-pill--shared',
+	);
+
 	$any_active = false;
 
 	foreach ( $queue_status as $queue_row ) {
@@ -192,6 +208,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<table class="widefat striped">
 			<thead>
 				<tr>
+					<th><?php esc_html_e( 'Furnizor', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Operation', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'State', 'schrack-woocommerce-sync' ); ?></th>
 					<th><?php esc_html_e( 'Progress', 'schrack-woocommerce-sync' ); ?></th>
@@ -267,6 +284,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 					}
 					?>
 					<tr>
+						<td>
+							<span class="schrack-supplier-pill <?php echo esc_attr( $operation_supplier_classes[ $operation ] ?? '' ); ?>">
+								<?php echo esc_html( (string) ( $operation_supplier_labels[ $operation ] ?? '' ) ); ?>
+							</span>
+						</td>
 						<td><?php echo esc_html( (string) ( $operation_labels[ $operation ] ?? ucfirst( $operation ) ) ); ?></td>
 						<td>
 							<span class="schrack-status-pill <?php echo esc_attr( $state_class ); ?>"><?php echo esc_html( $state_text ); ?></span>

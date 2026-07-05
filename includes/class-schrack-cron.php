@@ -132,11 +132,20 @@ class Schrack_Cron {
 			);
 		}
 
-		if ( in_array( $task, array( 'catalog', 'prices', 'stock', 'full' ), true ) && ! $this->is_schrack_enabled() ) {
+		if ( in_array( $task, array( 'catalog', 'prices', 'stock' ), true ) && ! $this->is_schrack_enabled() ) {
 			return array(
 				'queued'  => false,
 				'code'    => 'schrack_disabled',
 				'message' => __( 'Schrack sync is disabled.', 'schrack-woocommerce-sync' ),
+				'task'    => $task,
+			);
+		}
+
+		if ( 'full' === $task && ! $this->is_schrack_enabled() && ! $this->is_telesystem_enabled() ) {
+			return array(
+				'queued'  => false,
+				'code'    => 'schrack_disabled',
+				'message' => __( 'Full sync is disabled: both Schrack and Telesystem are disabled.', 'schrack-woocommerce-sync' ),
 				'task'    => $task,
 			);
 		}
@@ -1314,8 +1323,8 @@ class Schrack_Cron {
 	 * Runs catalog, price, and stock tasks.
 	 */
 	public function run_full_sync( string $stage = 'catalog' ): void {
-		if ( ! $this->is_schrack_enabled() ) {
-			$this->disabled_schrack_result( 'full' );
+		if ( ! $this->is_schrack_enabled() && ! $this->is_telesystem_enabled() ) {
+			$this->disabled_schrack_result( 'full', 'Full sync is disabled: both Schrack and Telesystem are disabled.' );
 			return;
 		}
 
@@ -1327,6 +1336,11 @@ class Schrack_Cron {
 		}
 
 		if ( 'catalog' === $stage ) {
+			if ( ! $this->is_schrack_enabled() ) {
+				$this->advance_full_sync_stage( 'telesystem_catalog', array() );
+				return;
+			}
+
 			$result = $this->run_catalog_import( false );
 
 			if ( $this->is_stopped_result( $result ) ) {
@@ -1343,20 +1357,35 @@ class Schrack_Cron {
 				return;
 			}
 
-			if ( in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
-				if ( ! $this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'price' ), array( 'next_stage' => 'price' ) ) ) {
-					$this->mark_queue_failed( 'full', $result, self::HOOK_FULL, array( 'price' ) );
-				}
-			} elseif ( $this->should_import_images() ) {
-				if ( ! $this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'images' ), array( 'next_stage' => 'images' ) ) ) {
-					$this->mark_queue_failed( 'full', $result, self::HOOK_FULL, array( 'images' ) );
-				}
-			}
+			$this->advance_full_sync_stage( 'telesystem_catalog', $result );
 
 			return;
 		}
 
-		if ( 'price' === $stage && in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
+		if ( 'telesystem_catalog' === $stage ) {
+			if ( ! $this->is_telesystem_enabled() ) {
+				$this->advance_full_sync_stage( 'price', array() );
+				return;
+			}
+
+			$importer = new Schrack_Telesystem_Importer( $this->settings, $this->logger );
+			$result   = $importer->import_from_feed( $this->telesystem_batch_limit() );
+
+			if ( $this->is_stopped_result( $result ) ) {
+				return;
+			}
+
+			if ( $this->should_continue_batch( $result ) ) {
+				$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'telesystem_catalog' ) );
+				return;
+			}
+
+			$this->advance_full_sync_stage( 'price', $result );
+
+			return;
+		}
+
+		if ( 'price' === $stage && $this->is_schrack_enabled() && in_array( $mode, array( 'catalog_price', 'catalog_price_stock' ), true ) ) {
 			$result = $this->run_price_sync( false );
 
 			if ( $this->is_stopped_result( $result ) ) {
@@ -1373,21 +1402,21 @@ class Schrack_Cron {
 				return;
 			}
 
-			if ( 'catalog_price_stock' === $mode ) {
-				if ( ! $this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'stock' ), array( 'next_stage' => 'stock' ) ) ) {
-					$this->mark_queue_failed( 'full', $result, self::HOOK_FULL, array( 'stock' ) );
-				}
-			} elseif ( $this->should_import_images() ) {
-				if ( ! $this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'images' ), array( 'next_stage' => 'images' ) ) ) {
-					$this->mark_queue_failed( 'full', $result, self::HOOK_FULL, array( 'images' ) );
-				}
-			}
+			$this->advance_full_sync_stage( 'catalog_price_stock' === $mode ? 'stock' : ( $this->should_import_images() ? 'images' : '' ), $result );
 
 			return;
 		}
 
-		if ( 'stock' === $stage && 'catalog_price_stock' === $mode ) {
+		if ( 'price' === $stage ) {
+			// Schrack disabled, or the configured import mode does not include a price stage.
+			$this->advance_full_sync_stage( $this->should_import_images() ? 'images' : '', array() );
+
+			return;
+		}
+
+		if ( 'stock' === $stage && $this->is_schrack_enabled() && 'catalog_price_stock' === $mode ) {
 			$result = $this->run_stock_sync( false );
+
 			if ( $this->is_stopped_result( $result ) ) {
 				return;
 			}
@@ -1399,17 +1428,39 @@ class Schrack_Cron {
 
 			if ( $this->should_continue_batch( $result ) ) {
 				$this->queue_next_batch_if_needed( self::HOOK_FULL, 'full', $result, array( 'stock' ) );
-			} elseif ( $this->should_import_images() ) {
-				if ( ! $this->queue_sync_batch( self::HOOK_FULL, 'full', array( 'images' ), array( 'next_stage' => 'images' ) ) ) {
-					$this->mark_queue_failed( 'full', $result, self::HOOK_FULL, array( 'images' ) );
-				}
+				return;
 			}
+
+			$this->advance_full_sync_stage( $this->should_import_images() ? 'images' : '', $result );
+
+			return;
+		}
+
+		if ( 'stock' === $stage ) {
+			$this->advance_full_sync_stage( $this->should_import_images() ? 'images' : '', array() );
 
 			return;
 		}
 
 		if ( 'images' === $stage && $this->should_import_images() ) {
 			$this->run_image_sync( true );
+		}
+	}
+
+	/**
+	 * Queues the next full-sync stage (Schrack catalog -> Telesystem catalog ->
+	 * price -> stock -> images), skipping stages whose supplier or import mode is
+	 * disabled. A blank next stage means the run is finished.
+	 *
+	 * @param array<string,mixed> $result Last stage result, used only for failure logging.
+	 */
+	private function advance_full_sync_stage( string $next_stage, array $result ): void {
+		if ( '' === $next_stage ) {
+			return;
+		}
+
+		if ( ! $this->queue_sync_batch( self::HOOK_FULL, 'full', array( $next_stage ), array( 'next_stage' => $next_stage ) ) ) {
+			$this->mark_queue_failed( 'full', $result, self::HOOK_FULL, array( $next_stage ) );
 		}
 	}
 
@@ -1447,21 +1498,28 @@ class Schrack_Cron {
 	}
 
 	/**
-	 * Stores and returns a no-op status for disabled Schrack sync tasks.
+	 * Returns whether the Telesystem CSV feed sync is enabled.
+	 */
+	private function is_telesystem_enabled(): bool {
+		return 'yes' === (string) $this->settings->get( 'telesystem_enabled', 'yes' );
+	}
+
+	/**
+	 * Stores and returns a no-op status for a disabled sync task.
 	 *
 	 * @return array<string,mixed>
 	 */
-	private function disabled_schrack_result( string $status_key ): array {
+	private function disabled_schrack_result( string $status_key, string $message = 'Schrack sync is disabled.' ): array {
 		$result = array(
 			'processed'       => 0,
 			'errors'          => 0,
 			'completed_cycle' => 'yes',
 			'disabled'        => 'yes',
-			'message'         => 'Schrack sync is disabled.',
+			'message'         => $message,
 		);
 
 		$this->settings->update_status( $status_key, $result );
-		$this->logger->info( $status_key, 'Skipped Schrack sync because it is disabled.', null, $result );
+		$this->logger->info( $status_key, $message, null, $result );
 
 		return $result;
 	}
