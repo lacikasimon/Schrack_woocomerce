@@ -919,7 +919,7 @@ class Schrack_Product_Filter_Renderer {
 			static fn ( WP_Term $a, WP_Term $b ): int => ( $child_available_counts[ (int) $b->term_id ] ?? 0 ) <=> ( $child_available_counts[ (int) $a->term_id ] ?? 0 )
 		);
 
-		$visible_category_limit = 12;
+		$visible_category_limit = 8;
 		$hidden_category_count  = max( 0, count( $child_categories ) - $visible_category_limit );
 
 		$title       = $current_category instanceof WP_Term ? $current_category->name : __( 'Categorii produse', 'schrack-woocommerce-sync' );
