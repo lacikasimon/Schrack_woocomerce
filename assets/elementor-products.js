@@ -120,6 +120,46 @@
 		badge.hidden = count === 0;
 	}
 
+	function restoreCategoryExplorerDefault(grid) {
+		var expanded = grid.getAttribute('data-expanded') === 'yes';
+
+		Array.prototype.forEach.call(grid.querySelectorAll('.schrack-category-explorer__card'), function (card) {
+			card.hidden = !expanded && card.hasAttribute('data-overflow');
+		});
+	}
+
+	function filterCategoryExplorer(input) {
+		var explorerSection = input.closest('.schrack-category-explorer');
+		var grid = explorerSection ? explorerSection.querySelector('[data-category-explorer-grid]') : null;
+		var toggle = explorerSection ? explorerSection.querySelector('[data-category-explorer-expand]') : null;
+
+		if (!grid) {
+			return;
+		}
+
+		var term = input.value.trim().toLowerCase();
+
+		if (term === '') {
+			restoreCategoryExplorerDefault(grid);
+
+			if (toggle && grid.getAttribute('data-expanded') !== 'yes') {
+				toggle.hidden = false;
+			}
+
+			return;
+		}
+
+		if (toggle) {
+			toggle.hidden = true;
+		}
+
+		Array.prototype.forEach.call(grid.querySelectorAll('.schrack-category-explorer__card'), function (card) {
+			var nameEl = card.querySelector('.schrack-category-explorer__name');
+			var name = nameEl ? nameEl.textContent : '';
+			card.hidden = name.toLowerCase().indexOf(term) === -1;
+		});
+	}
+
 	function appendResults(results, html) {
 		var wrapper = document.createElement('div');
 		var currentGrid = results.querySelector('.schrack-product-filter__grid');
@@ -386,6 +426,12 @@
 			delayedRequest();
 		});
 
+		root.addEventListener('input', function (event) {
+			if (event.target && event.target.matches('[data-category-explorer-search]')) {
+				filterCategoryExplorer(event.target);
+			}
+		});
+
 		if (categorySearch) {
 			categorySearch.addEventListener('focus', function () {
 				requestCategories(root, categorySearchTerm(root));
@@ -406,12 +452,11 @@
 				var grid = explorerSection ? explorerSection.querySelector('[data-category-explorer-grid]') : null;
 
 				if (grid) {
-					Array.prototype.forEach.call(grid.querySelectorAll('[hidden]'), function (card) {
-						card.hidden = false;
-					});
+					grid.setAttribute('data-expanded', 'yes');
+					restoreCategoryExplorerDefault(grid);
 				}
 
-				categoryExplorerExpand.remove();
+				categoryExplorerExpand.hidden = true;
 				return;
 			}
 

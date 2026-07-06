@@ -707,6 +707,31 @@
 	word-break: normal;
 }
 
+.schrack-category-explorer__search {
+	display: block;
+	margin: 0;
+}
+
+.schrack-category-explorer__search input {
+	appearance: none;
+	background: #fbfcfe;
+	border: 1px solid var(--schrack-filter-border);
+	border-radius: 8px;
+	color: var(--schrack-filter-text);
+	font: inherit;
+	min-height: 40px;
+	padding: 8px 12px;
+	transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+	width: 100%;
+}
+
+.schrack-category-explorer__search input:focus {
+	background: #fff;
+	border-color: var(--schrack-filter-accent);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--schrack-filter-accent) 18%, transparent);
+	outline: none;
+}
+
 .schrack-category-explorer__grid {
 	display: grid;
 	gap: 9px;

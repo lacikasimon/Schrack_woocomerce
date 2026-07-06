@@ -87,7 +87,7 @@ class Schrack_Product_Filter_Renderer {
 							<?php if ( $settings['show_special_offer_filter'] && $this->has_special_offer_products( $filters['category'] ) ) : ?>
 							<label class="schrack-product-filter__check">
 								<input type="checkbox" name="special_offer_only" value="yes" <?php checked( $filters['special_offer_only'] ); ?>>
-								<span><?php esc_html_e( 'Doar oferte speciale Telesystem', 'schrack-woocommerce-sync' ); ?></span>
+								<span><?php esc_html_e( 'Doar oferte speciale', 'schrack-woocommerce-sync' ); ?></span>
 							</label>
 							<?php endif; ?>
 
@@ -938,6 +938,18 @@ class Schrack_Product_Filter_Renderer {
 				<p class="schrack-category-explorer__description"><?php echo esc_html( wp_trim_words( $description, 28 ) ); ?></p>
 			<?php endif; ?>
 
+			<?php if ( count( $child_categories ) > $visible_category_limit ) : ?>
+				<label class="schrack-category-explorer__search">
+					<span class="screen-reader-text"><?php esc_html_e( 'Cauta in categorii', 'schrack-woocommerce-sync' ); ?></span>
+					<input
+						type="search"
+						data-category-explorer-search
+						placeholder="<?php esc_attr_e( 'Cauta in categorii...', 'schrack-woocommerce-sync' ); ?>"
+						autocomplete="off"
+					>
+				</label>
+			<?php endif; ?>
+
 			<?php if ( ! empty( $child_categories ) ) : ?>
 				<div class="schrack-category-explorer__grid" data-category-explorer-grid>
 					<?php foreach ( $child_categories as $index => $category ) : ?>
@@ -948,7 +960,7 @@ class Schrack_Product_Filter_Renderer {
 						<a
 							class="schrack-category-explorer__card"
 							href="<?php echo esc_url( $link ); ?>"
-							<?php echo $index >= $visible_category_limit ? 'hidden' : ''; ?>
+							<?php echo $index >= $visible_category_limit ? 'hidden data-overflow' : ''; ?>
 						>
 							<span class="schrack-category-explorer__name"><?php echo esc_html( $category->name ); ?></span>
 							<span class="schrack-category-explorer__meta">
