@@ -904,6 +904,14 @@ class Schrack_Product_Filter_Renderer {
 			array_map( static fn ( WP_Term $category ): int => (int) $category->term_id, $child_categories )
 		);
 
+		// Categories with no currently available products aren't worth showing in the browser.
+		$child_categories = array_values(
+			array_filter(
+				$child_categories,
+				static fn ( WP_Term $category ): bool => ( $child_available_counts[ (int) $category->term_id ] ?? 0 ) > 0
+			)
+		);
+
 		// Show the most-stocked categories first so the default (collapsed) view is
 		// useful instead of an alphabetical slice of a very flat, ~200-category catalog.
 		usort(
