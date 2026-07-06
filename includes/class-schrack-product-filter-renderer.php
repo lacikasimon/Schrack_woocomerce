@@ -44,9 +44,9 @@ class Schrack_Product_Filter_Renderer {
 		$default_category = $this->category_for_picker( $settings['default_category'] );
 		$category_search_value = $category['id'] > 0 ? $category['label'] : $filters['category_search'];
 		$active_filter_count = $this->active_filter_count( $filters );
-		$manufacturers = $settings['show_manufacturer_filter'] ? $this->manufacturer_options() : array();
-		$product_lines = $settings['show_product_line_filter'] ? $this->product_line_options() : array();
-		$attribute_filter_groups = $settings['show_attribute_filters'] ? $this->attribute_filter_options() : array();
+		$manufacturers = $settings['show_manufacturer_filter'] ? $this->manufacturer_options( $filters['category'] ) : array();
+		$product_lines = $settings['show_product_line_filter'] ? $this->product_line_options( $filters['category'] ) : array();
+		$attribute_filter_groups = $settings['show_attribute_filters'] ? $this->attribute_filter_options( $filters['category'] ) : array();
 		$style         = $this->inline_style( $settings );
 
 		ob_start();
@@ -84,7 +84,7 @@ class Schrack_Product_Filter_Renderer {
 							</label>
 							<?php endif; ?>
 
-							<?php if ( $settings['show_special_offer_filter'] && $this->has_special_offer_products() ) : ?>
+							<?php if ( $settings['show_special_offer_filter'] && $this->has_special_offer_products( $filters['category'] ) ) : ?>
 							<label class="schrack-product-filter__check">
 								<input type="checkbox" name="special_offer_only" value="yes" <?php checked( $filters['special_offer_only'] ); ?>>
 								<span><?php esc_html_e( 'Doar oferte speciale Telesystem', 'schrack-woocommerce-sync' ); ?></span>
@@ -1752,14 +1752,16 @@ class Schrack_Product_Filter_Renderer {
 	 * actually return.
 	 *
 	 * @param array<int,int> $term_ids Optional term IDs to restrict the count to.
+	 * @param int             $category_id Optional selected category (and its descendants)
+	 *                                     to scope the count to. 0 means no category constraint.
 	 * @return array<int,int> Term ID => available product count.
 	 */
-	private function available_term_counts( string $taxonomy, array $term_ids = array() ): array {
+	private function available_term_counts( string $taxonomy, array $term_ids = array(), int $category_id = 0 ): array {
 		global $wpdb;
 
 		static $cache = array();
 
-		$cache_key = $taxonomy . ':' . implode( ',', array_map( 'absint', $term_ids ) );
+		$cache_key = $taxonomy . ':' . $category_id . ':' . implode( ',', array_map( 'absint', $term_ids ) );
 
 		if ( isset( $cache[ $cache_key ] ) ) {
 			return $cache[ $cache_key ];
@@ -1782,6 +1784,9 @@ class Schrack_Product_Filter_Renderer {
 			$params       = array_merge( $params, $term_ids );
 		}
 
+		$category_scope = $this->category_scope_clause( 'term_relationships.object_id', $category_id );
+		$params         = array_merge( $params, $category_scope['params'] );
+
 		$sql = "SELECT term_taxonomy.term_id AS term_id, COUNT(DISTINCT term_relationships.object_id) AS total
 			FROM {$wpdb->term_relationships} AS term_relationships
 			INNER JOIN {$wpdb->term_taxonomy} AS term_taxonomy ON term_taxonomy.term_taxonomy_id = term_relationships.term_taxonomy_id
@@ -1792,6 +1797,7 @@ class Schrack_Product_Filter_Renderer {
 				AND product_posts.post_status = 'publish'
 				AND lookup.stock_status <> 'outofstock'
 				{$term_clause}
+				{$category_scope['sql']}
 			GROUP BY term_taxonomy.term_id";
 
 		$rows = $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A );
@@ -1810,21 +1816,95 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
+	 * Returns a bindable `AND EXISTS (...)` SQL fragment that restricts a query's
+	 * object/post ID column to products inside the given category or its
+	 * descendants. Returns an empty fragment when no category is selected, so
+	 * every facet query still shows catalog-wide results by default.
+	 *
+	 * @return array{sql:string,params:array<int,int>}
+	 */
+	private function category_scope_clause( string $object_id_column, int $category_id ): array {
+		if ( $category_id <= 0 || ! taxonomy_exists( 'product_cat' ) ) {
+			return array(
+				'sql'    => '',
+				'params' => array(),
+			);
+		}
+
+		global $wpdb;
+
+		$category_ids = $this->category_and_descendant_ids( $category_id );
+
+		if ( empty( $category_ids ) ) {
+			return array(
+				'sql'    => '',
+				'params' => array(),
+			);
+		}
+
+		$placeholders = implode( ',', array_fill( 0, count( $category_ids ), '%d' ) );
+
+		$sql = " AND EXISTS (
+			SELECT 1 FROM {$wpdb->term_relationships} AS category_rel
+			INNER JOIN {$wpdb->term_taxonomy} AS category_tt ON category_tt.term_taxonomy_id = category_rel.term_taxonomy_id
+			WHERE category_rel.object_id = {$object_id_column}
+				AND category_tt.taxonomy = 'product_cat'
+				AND category_tt.term_id IN ({$placeholders})
+		)";
+
+		return array(
+			'sql'    => $sql,
+			'params' => $category_ids,
+		);
+	}
+
+	/**
+	 * Returns the given product category term ID plus every descendant term ID,
+	 * matching how WP_Query's tax_query treats hierarchical taxonomies (selecting
+	 * a parent category also includes its subcategories' products).
+	 *
+	 * @return array<int,int>
+	 */
+	private function category_and_descendant_ids( int $category_id ): array {
+		static $cache = array();
+
+		if ( isset( $cache[ $category_id ] ) ) {
+			return $cache[ $category_id ];
+		}
+
+		$ids = array( $category_id );
+		$children = get_term_children( $category_id, 'product_cat' );
+
+		if ( is_array( $children ) ) {
+			foreach ( $children as $child_id ) {
+				$ids[] = (int) $child_id;
+			}
+		}
+
+		$cache[ $category_id ] = array_values( array_unique( array_map( 'absint', $ids ) ) );
+
+		return $cache[ $category_id ];
+	}
+
+	/**
 	 * Returns manufacturer options collected from imported Schrack product metadata,
-	 * restricted to products that are currently available (see available_term_counts()).
+	 * restricted to products that are currently available (see available_term_counts())
+	 * and, when a category is selected, to that category (and its descendants).
 	 *
 	 * @return array<int,array{name:string,count:int}>
 	 */
-	private function manufacturer_options(): array {
+	private function manufacturer_options( int $category_id = 0 ): array {
 		global $wpdb;
 
-		static $options = null;
+		static $options = array();
 
-		if ( null !== $options ) {
-			return $options;
+		if ( isset( $options[ $category_id ] ) ) {
+			return $options[ $category_id ];
 		}
 
-		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+		$lookup_table   = $wpdb->prefix . 'wc_product_meta_lookup';
+		$category_scope = $this->category_scope_clause( 'manufacturer_meta.post_id', $category_id );
+		$params         = array_merge( array( '_schrack_manufacturer' ), $category_scope['params'] );
 
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
@@ -1837,20 +1917,21 @@ class Schrack_Product_Filter_Renderer {
 					AND product_posts.post_type = 'product'
 					AND product_posts.post_status = 'publish'
 					AND lookup.stock_status <> 'outofstock'
+					{$category_scope['sql']}
 				GROUP BY manufacturer_meta.meta_value
 				ORDER BY manufacturer_meta.meta_value ASC",
-				'_schrack_manufacturer'
+				$params
 			),
 			ARRAY_A
 		);
 
 		if ( ! is_array( $rows ) ) {
-			$options = array();
+			$options[ $category_id ] = array();
 
-			return $options;
+			return $options[ $category_id ];
 		}
 
-		$options = array();
+		$result = array();
 
 		foreach ( $rows as $row ) {
 			$name = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
@@ -1859,13 +1940,15 @@ class Schrack_Product_Filter_Renderer {
 				continue;
 			}
 
-			$options[] = array(
+			$result[] = array(
 				'name'  => $name,
 				'count' => max( 0, absint( $row['total'] ?? 0 ) ),
 			);
 		}
 
-		return $options;
+		$options[ $category_id ] = $result;
+
+		return $result;
 	}
 
 	/**
@@ -1875,16 +1958,18 @@ class Schrack_Product_Filter_Renderer {
 	 *
 	 * @return array<int,array{name:string,count:int}>
 	 */
-	private function product_line_options(): array {
+	private function product_line_options( int $category_id = 0 ): array {
 		global $wpdb;
 
-		static $options = null;
+		static $options = array();
 
-		if ( null !== $options ) {
-			return $options;
+		if ( isset( $options[ $category_id ] ) ) {
+			return $options[ $category_id ];
 		}
 
-		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+		$lookup_table   = $wpdb->prefix . 'wc_product_meta_lookup';
+		$category_scope = $this->category_scope_clause( 'product_line_meta.post_id', $category_id );
+		$params         = array_merge( array( '_schrack_product_line' ), $category_scope['params'] );
 
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
@@ -1897,20 +1982,21 @@ class Schrack_Product_Filter_Renderer {
 					AND product_posts.post_type = 'product'
 					AND product_posts.post_status = 'publish'
 					AND lookup.stock_status <> 'outofstock'
+					{$category_scope['sql']}
 				GROUP BY product_line_meta.meta_value
 				ORDER BY product_line_meta.meta_value ASC",
-				'_schrack_product_line'
+				$params
 			),
 			ARRAY_A
 		);
 
 		if ( ! is_array( $rows ) ) {
-			$options = array();
+			$options[ $category_id ] = array();
 
-			return $options;
+			return $options[ $category_id ];
 		}
 
-		$options = array();
+		$result = array();
 
 		foreach ( $rows as $row ) {
 			$name = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
@@ -1919,13 +2005,15 @@ class Schrack_Product_Filter_Renderer {
 				continue;
 			}
 
-			$options[] = array(
+			$result[] = array(
 				'name'  => $name,
 				'count' => max( 0, absint( $row['total'] ?? 0 ) ),
 			);
 		}
 
-		return $options;
+		$options[ $category_id ] = $result;
+
+		return $result;
 	}
 
 	/**
@@ -1933,16 +2021,18 @@ class Schrack_Product_Filter_Renderer {
 	 * flagged as a special offer, so the checkbox only appears once the feed
 	 * has actually populated it.
 	 */
-	private function has_special_offer_products(): bool {
+	private function has_special_offer_products( int $category_id = 0 ): bool {
 		global $wpdb;
 
-		static $has_offers = null;
+		static $has_offers = array();
 
-		if ( null !== $has_offers ) {
-			return $has_offers;
+		if ( isset( $has_offers[ $category_id ] ) ) {
+			return $has_offers[ $category_id ];
 		}
 
-		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+		$lookup_table   = $wpdb->prefix . 'wc_product_meta_lookup';
+		$category_scope = $this->category_scope_clause( 'special_offer_meta.post_id', $category_id );
+		$params         = array_merge( array( '_telesystem_special_offer' ), $category_scope['params'] );
 
 		$found = $wpdb->get_var(
 			$wpdb->prepare(
@@ -1955,14 +2045,15 @@ class Schrack_Product_Filter_Renderer {
 					AND product_posts.post_type = 'product'
 					AND product_posts.post_status = 'publish'
 					AND lookup.stock_status <> 'outofstock'
+					{$category_scope['sql']}
 				LIMIT 1",
-				'_telesystem_special_offer'
+				$params
 			)
 		);
 
-		$has_offers = null !== $found;
+		$has_offers[ $category_id ] = null !== $found;
 
-		return $has_offers;
+		return $has_offers[ $category_id ];
 	}
 
 	/**
@@ -1972,17 +2063,19 @@ class Schrack_Product_Filter_Renderer {
 	 *
 	 * @return array<string,array{slug:string,label:string,terms:array<int,array{id:int,name:string,count:int}>}>
 	 */
-	private function attribute_filter_options(): array {
-		static $options = null;
+	private function attribute_filter_options( int $category_id = 0 ): array {
+		static $options = array();
 
-		if ( null !== $options ) {
-			return $options;
+		if ( isset( $options[ $category_id ] ) ) {
+			return $options[ $category_id ];
 		}
 
-		$options = array();
+		$result = array();
 
 		if ( ! class_exists( 'Schrack_Attribute_Extractor' ) || ! function_exists( 'wc_attribute_taxonomy_name' ) ) {
-			return $options;
+			$options[ $category_id ] = $result;
+
+			return $result;
 		}
 
 		foreach ( Schrack_Attribute_Extractor::slugs() as $slug ) {
@@ -2005,7 +2098,8 @@ class Schrack_Product_Filter_Renderer {
 
 			$available_counts = $this->available_term_counts(
 				$taxonomy,
-				array_map( static fn ( WP_Term $term ): int => (int) $term->term_id, array_filter( $terms, static fn ( mixed $term ): bool => $term instanceof WP_Term ) )
+				array_map( static fn ( WP_Term $term ): int => (int) $term->term_id, array_filter( $terms, static fn ( mixed $term ): bool => $term instanceof WP_Term ) ),
+				$category_id
 			);
 
 			$term_options = array();
@@ -2037,14 +2131,16 @@ class Schrack_Product_Filter_Renderer {
 				static fn ( array $a, array $b ): int => strnatcasecmp( (string) $a['name'], (string) $b['name'] )
 			);
 
-			$options[ $taxonomy ] = array(
+			$result[ $taxonomy ] = array(
 				'slug'  => $slug,
 				'label' => Schrack_Attribute_Extractor::label_for_slug( $slug ),
 				'terms' => $term_options,
 			);
 		}
 
-		return $options;
+		$options[ $category_id ] = $result;
+
+		return $result;
 	}
 
 	/**
