@@ -11,11 +11,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Header_Renderer {
 	/**
+	 * Header navigation should stay compact; the full catalog tree belongs on
+	 * shop/category pages where filtering and paging can do the heavy lifting.
+	 */
+	private const DESKTOP_PRODUCT_MENU_MAX_DEPTH = 2;
+	private const MOBILE_PRODUCT_MENU_MAX_DEPTH  = 1;
+	private const PRODUCT_MENU_CHILD_LIMIT       = 16;
+
+	/**
 	 * Per-request category thumbnail cache.
 	 *
 	 * @var array<int,int>
 	 */
 	private array $term_thumbnail_ids = array();
+
+	/**
+	 * Per-request product menu node cache.
+	 *
+	 * @var array<string,array<int,array<string,mixed>>>
+	 */
+	private array $product_menu_nodes_cache = array();
 
 	/**
 	 * Renders the header module.
@@ -434,7 +449,7 @@ class Schrack_Header_Renderer {
 			$nodes = $this->fallback_links();
 		}
 
-		$nodes = $this->with_product_catalog_node( $nodes );
+		$nodes = $this->with_product_catalog_node( $nodes, $desktop );
 
 		return $this->render_menu_nodes( $nodes, 0, $desktop );
 	}
@@ -465,12 +480,12 @@ class Schrack_Header_Renderer {
 	 * @param array<int,array<string,mixed>> $nodes Existing top-level menu nodes.
 	 * @return array<int,array<string,mixed>>
 	 */
-	private function with_product_catalog_node( array $nodes ): array {
+	private function with_product_catalog_node( array $nodes, bool $desktop ): array {
 		foreach ( $nodes as $index => $node ) {
 			$label = strtolower( remove_accents( (string) ( $node['label'] ?? '' ) ) );
 
 			if ( in_array( $label, array( 'produse', 'products' ), true ) ) {
-				$nodes[ $index ]['children'] = $this->product_category_menu_nodes();
+				$nodes[ $index ]['children'] = $this->product_category_menu_nodes( $desktop );
 				$nodes[ $index ]['classes'] = array_values(
 					array_unique(
 						array_merge(
@@ -484,7 +499,7 @@ class Schrack_Header_Renderer {
 			}
 		}
 
-		array_unshift( $nodes, $this->product_catalog_menu_node() );
+		array_unshift( $nodes, $this->product_catalog_menu_node( $desktop ) );
 
 		return $nodes;
 	}
@@ -494,12 +509,12 @@ class Schrack_Header_Renderer {
 	 *
 	 * @return array<string,mixed>
 	 */
-	private function product_catalog_menu_node(): array {
+	private function product_catalog_menu_node( bool $desktop ): array {
 		return array(
 			'label'    => __( 'Produse', 'schrack-woocommerce-sync' ),
 			'href'     => $this->shop_url(),
 			'classes'  => array( 'is-products-menu' ),
-			'children' => $this->product_category_menu_nodes(),
+			'children' => $this->product_category_menu_nodes( $desktop ),
 		);
 	}
 
@@ -558,11 +573,21 @@ class Schrack_Header_Renderer {
 	 *
 	 * @return array<int,array<string,mixed>>
 	 */
-	private function product_category_menu_nodes(): array {
+	private function product_category_menu_nodes( bool $desktop ): array {
+		$max_depth   = $this->product_menu_max_depth( $desktop );
+		$child_limit = $this->product_menu_child_limit();
+		$cache_key   = ( $desktop ? 'desktop' : 'mobile' ) . ':' . $max_depth . ':' . $child_limit;
+
+		if ( isset( $this->product_menu_nodes_cache[ $cache_key ] ) ) {
+			return $this->product_menu_nodes_cache[ $cache_key ];
+		}
+
 		$definitions = $this->main_product_categories();
 
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
-			return $this->fallback_product_category_nodes( $definitions );
+			$this->product_menu_nodes_cache[ $cache_key ] = $this->fallback_product_category_nodes( $definitions );
+
+			return $this->product_menu_nodes_cache[ $cache_key ];
 		}
 
 		$all_terms = get_terms(
@@ -576,7 +601,9 @@ class Schrack_Header_Renderer {
 		);
 
 		if ( is_wp_error( $all_terms ) || ! is_array( $all_terms ) ) {
-			return $this->fallback_product_category_nodes( $definitions );
+			$this->product_menu_nodes_cache[ $cache_key ] = $this->fallback_product_category_nodes( $definitions );
+
+			return $this->product_menu_nodes_cache[ $cache_key ];
 		}
 
 		$terms_by_slug      = array();
@@ -613,10 +640,31 @@ class Schrack_Header_Renderer {
 				continue;
 			}
 
-			$nodes[] = $this->product_category_term_node( $term, $children_by_parent, 0 );
+			$nodes[] = $this->product_category_term_node( $term, $children_by_parent, 0, $max_depth, $child_limit );
 		}
 
-		return $nodes;
+		$this->product_menu_nodes_cache[ $cache_key ] = $nodes;
+
+		return $this->product_menu_nodes_cache[ $cache_key ];
+	}
+
+	/**
+	 * Returns how deep the automatic product category menu should render.
+	 */
+	private function product_menu_max_depth( bool $desktop ): int {
+		$default = $desktop ? self::DESKTOP_PRODUCT_MENU_MAX_DEPTH : self::MOBILE_PRODUCT_MENU_MAX_DEPTH;
+		$depth   = (int) apply_filters( 'schrack_wc_header_product_menu_max_depth', $default, $desktop );
+
+		return max( 0, min( 3, $depth ) );
+	}
+
+	/**
+	 * Returns how many direct child categories each header menu branch may show.
+	 */
+	private function product_menu_child_limit(): int {
+		$limit = (int) apply_filters( 'schrack_wc_header_product_menu_child_limit', self::PRODUCT_MENU_CHILD_LIMIT );
+
+		return max( 4, min( 32, $limit ) );
 	}
 
 	/**
@@ -625,13 +673,15 @@ class Schrack_Header_Renderer {
 	 * @param array<int,array<int,WP_Term>> $children_by_parent Terms grouped by parent term ID.
 	 * @return array<string,mixed>
 	 */
-	private function product_category_term_node( WP_Term $term, array $children_by_parent, int $depth ): array {
+	private function product_category_term_node( WP_Term $term, array $children_by_parent, int $depth, int $max_depth, int $child_limit ): array {
 		$children = array();
 
-		if ( $depth < 7 && ! empty( $children_by_parent[ (int) $term->term_id ] ) ) {
-			foreach ( $children_by_parent[ (int) $term->term_id ] as $child ) {
+		if ( $depth < $max_depth && ! empty( $children_by_parent[ (int) $term->term_id ] ) ) {
+			$direct_children = array_slice( $children_by_parent[ (int) $term->term_id ], 0, $child_limit );
+
+			foreach ( $direct_children as $child ) {
 				if ( $child instanceof WP_Term ) {
-					$children[] = $this->product_category_term_node( $child, $children_by_parent, $depth + 1 );
+					$children[] = $this->product_category_term_node( $child, $children_by_parent, $depth + 1, $max_depth, $child_limit );
 				}
 			}
 		}
