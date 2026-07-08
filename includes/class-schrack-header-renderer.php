@@ -14,8 +14,8 @@ class Schrack_Header_Renderer {
 	 * Header navigation should stay compact; the full catalog tree belongs on
 	 * shop/category pages where filtering and paging can do the heavy lifting.
 	 */
-	private const DESKTOP_PRODUCT_MENU_MAX_DEPTH = 2;
-	private const MOBILE_PRODUCT_MENU_MAX_DEPTH  = 1;
+	private const DESKTOP_PRODUCT_MENU_MAX_DEPTH = 0;
+	private const MOBILE_PRODUCT_MENU_MAX_DEPTH  = 0;
 	private const PRODUCT_MENU_CHILD_LIMIT       = 16;
 
 	/**
@@ -590,6 +590,12 @@ class Schrack_Header_Renderer {
 			return $this->product_menu_nodes_cache[ $cache_key ];
 		}
 
+		if ( 0 === $max_depth ) {
+			$this->product_menu_nodes_cache[ $cache_key ] = $this->root_product_category_menu_nodes( $definitions );
+
+			return $this->product_menu_nodes_cache[ $cache_key ];
+		}
+
 		$all_terms = get_terms(
 			array(
 				'taxonomy'   => 'product_cat',
@@ -646,6 +652,64 @@ class Schrack_Header_Renderer {
 		$this->product_menu_nodes_cache[ $cache_key ] = $nodes;
 
 		return $this->product_menu_nodes_cache[ $cache_key ];
+	}
+
+	/**
+	 * Builds only the configured root product categories for the compact header.
+	 *
+	 * @param array<int,array{name:string,slug:string}> $definitions Main category definitions.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function root_product_category_menu_nodes( array $definitions ): array {
+		$slugs = array_values(
+			array_filter(
+				array_map(
+					static fn ( array $definition ): string => sanitize_title( (string) ( $definition['slug'] ?? '' ) ),
+					$definitions
+				)
+			)
+		);
+
+		if ( empty( $slugs ) ) {
+			return $this->fallback_product_category_nodes( $definitions );
+		}
+
+		$terms = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'slug'       => $slugs,
+				'number'     => count( $slugs ),
+			)
+		);
+
+		if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
+			return $this->fallback_product_category_nodes( $definitions );
+		}
+
+		$terms_by_slug = array();
+
+		foreach ( $terms as $term ) {
+			if ( $term instanceof WP_Term ) {
+				$terms_by_slug[ $term->slug ] = $term;
+			}
+		}
+
+		$nodes = array();
+
+		foreach ( $definitions as $definition ) {
+			$slug = (string) $definition['slug'];
+			$term = $terms_by_slug[ $slug ] ?? null;
+
+			if ( $term instanceof WP_Term ) {
+				$nodes[] = $this->product_category_term_node( $term, array(), 0, 0, 0 );
+				continue;
+			}
+
+			$nodes[] = $this->fallback_product_category_node( $definition );
+		}
+
+		return $nodes;
 	}
 
 	/**
