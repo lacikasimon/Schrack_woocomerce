@@ -11,6 +11,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Product_Mapper {
 	/**
+	 * Site option registry of dynamically-discovered attribute taxonomy slugs
+	 * (beyond the curated Schrack_Attribute_Extractor set), so the shop filter
+	 * sidebar can offer them without a hardcoded list.
+	 */
+	private const DYNAMIC_ATTRIBUTE_REGISTRY_OPTION = 'schrack_wc_sync_dynamic_attributes';
+
+	/**
 	 * Settings service.
 	 *
 	 * @var Schrack_Settings
@@ -902,21 +909,23 @@ class Schrack_Product_Mapper {
 	}
 
 	/**
-	 * Assigns the attributes recovered by Schrack_Attribute_Extractor (IP rating,
-	 * voltage, wattage, etc.) as real, global WooCommerce product attributes
-	 * (pa_ taxonomies), so they show on the product page and can power shop
-	 * filters, instead of being buried in an opaque technical_attributes blob.
+	 * Assigns both the curated attributes recovered by Schrack_Attribute_Extractor
+	 * (IP rating, voltage, wattage, etc.) and any other categorical feed column
+	 * (dynamic_technical_attributes -- e.g. Telesystem's per-category "Rezolutie
+	 * Megapixel", "Standard WiFi", etc.) as real, global WooCommerce product
+	 * attributes (pa_ taxonomies), so they show on the product page and can power
+	 * shop filters instead of being buried in an opaque technical_attributes blob.
 	 *
 	 * Existing attributes (including any set manually or by another source) are
-	 * preserved; only the specific extracted-attribute taxonomy slots are added
-	 * or updated.
+	 * preserved; only these specific taxonomy slots are added or updated.
 	 *
 	 * @param array<string,mixed> $data Normalized product data.
 	 */
 	private function assign_extracted_attributes( WC_Product $product, array $data ): void {
-		$extracted = $data['extracted_attributes'] ?? array();
+		$extracted = is_array( $data['extracted_attributes'] ?? null ) ? $data['extracted_attributes'] : array();
+		$dynamic   = $this->normalized_dynamic_attributes( is_array( $data['dynamic_technical_attributes'] ?? null ) ? $data['dynamic_technical_attributes'] : array() );
 
-		if ( empty( $extracted ) || ! is_array( $extracted ) ) {
+		if ( empty( $extracted ) && empty( $dynamic ) ) {
 			return;
 		}
 
@@ -924,41 +933,140 @@ class Schrack_Product_Mapper {
 			return;
 		}
 
-		$attributes = $product->get_attributes();
-		$position   = count( $attributes );
+		$attributes    = $product->get_attributes();
+		$position      = count( $attributes );
+		$dynamic_slugs = array();
 
 		foreach ( $extracted as $slug => $info ) {
-			$label = sanitize_text_field( (string) ( $info['label'] ?? Schrack_Attribute_Extractor::label_for_slug( (string) $slug ) ) );
-			$value = sanitize_text_field( (string) ( $info['value'] ?? '' ) );
+			$this->apply_taxonomy_attribute( $attributes, $position, (string) $slug, $info );
+		}
 
-			if ( '' === $value ) {
-				continue;
+		foreach ( $dynamic as $slug => $info ) {
+			if ( $this->apply_taxonomy_attribute( $attributes, $position, $slug, $info ) ) {
+				$dynamic_slugs[ $slug ] = (string) ( $info['label'] ?? $slug );
 			}
-
-			$taxonomy = $this->ensure_attribute_taxonomy( (string) $slug, $label );
-
-			if ( '' === $taxonomy ) {
-				continue;
-			}
-
-			$term_id = $this->ensure_attribute_term( $taxonomy, $value );
-
-			if ( $term_id <= 0 ) {
-				continue;
-			}
-
-			$attribute = new WC_Product_Attribute();
-			$attribute->set_id( wc_attribute_taxonomy_id_by_name( $taxonomy ) );
-			$attribute->set_name( $taxonomy );
-			$attribute->set_options( array( $term_id ) );
-			$attribute->set_position( $position++ );
-			$attribute->set_visible( true );
-			$attribute->set_variation( false );
-
-			$attributes[ $taxonomy ] = $attribute;
 		}
 
 		$product->set_attributes( $attributes );
+
+		if ( ! empty( $dynamic_slugs ) ) {
+			$this->register_dynamic_attributes( $dynamic_slugs );
+		}
+	}
+
+	/**
+	 * Remaps raw dynamic technical-attribute entries into taxonomy-ready slugs.
+	 * "Culoare"/"Material" labels merge into the same shared color/material
+	 * taxonomies Schrack_Attribute_Extractor already uses -- color and material
+	 * mean the same thing regardless of supplier or product category. Everything
+	 * else keeps its own per-feed-column slug, so unrelated category contexts that
+	 * happen to reuse a generic label (e.g. Telesystem's "Tip" for both cameras
+	 * and access-control readers) never merge into one confusing filter.
+	 *
+	 * @param array<string,array{label:string,value:string}> $entries Raw key => {label, value}.
+	 * @return array<string,array{label:string,value:string}> Taxonomy slug => {label, value}.
+	 */
+	private function normalized_dynamic_attributes( array $entries ): array {
+		$shared_slugs_by_label = array(
+			'culoare'  => 'color',
+			'color'    => 'color',
+			'material' => 'material',
+		);
+
+		$result = array();
+
+		foreach ( $entries as $key => $info ) {
+			$label = trim( (string) ( $info['label'] ?? '' ) );
+			$value = trim( (string) ( $info['value'] ?? '' ) );
+
+			if ( '' === $label || '' === $value ) {
+				continue;
+			}
+
+			$slug = $shared_slugs_by_label[ strtolower( $label ) ] ?? sanitize_key( (string) $key );
+
+			if ( '' === $slug || isset( $result[ $slug ] ) ) {
+				continue;
+			}
+
+			$result[ $slug ] = array(
+				'label' => sanitize_text_field( $label ),
+				'value' => sanitize_text_field( $value ),
+			);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Ensures the taxonomy/term for one attribute slug exist and assigns it on
+	 * the product's in-memory attribute list (by reference). Returns whether the
+	 * attribute was actually applied, so callers can track which dynamic slugs
+	 * are genuinely in use.
+	 *
+	 * @param array<string,WC_Product_Attribute> $attributes Product attributes, keyed by taxonomy (by reference).
+	 * @param array{label:string,value:string}    $info       Attribute label/value.
+	 */
+	private function apply_taxonomy_attribute( array &$attributes, int &$position, string $slug, array $info ): bool {
+		$label = sanitize_text_field( (string) ( $info['label'] ?? Schrack_Attribute_Extractor::label_for_slug( $slug ) ) );
+		$value = sanitize_text_field( (string) ( $info['value'] ?? '' ) );
+
+		if ( '' === $value ) {
+			return false;
+		}
+
+		$taxonomy = $this->ensure_attribute_taxonomy( $slug, $label );
+
+		if ( '' === $taxonomy ) {
+			return false;
+		}
+
+		$term_id = $this->ensure_attribute_term( $taxonomy, $value );
+
+		if ( $term_id <= 0 ) {
+			return false;
+		}
+
+		$attribute = new WC_Product_Attribute();
+		$attribute->set_id( wc_attribute_taxonomy_id_by_name( $taxonomy ) );
+		$attribute->set_name( $taxonomy );
+		$attribute->set_options( array( $term_id ) );
+		$attribute->set_position( $position++ );
+		$attribute->set_visible( true );
+		$attribute->set_variation( false );
+
+		$attributes[ $taxonomy ] = $attribute;
+
+		return true;
+	}
+
+	/**
+	 * Records newly-used dynamic attribute taxonomy slugs in a site option, so
+	 * the shop filter sidebar can discover and offer them without a hardcoded
+	 * list. Only writes when something actually changed, since this runs once
+	 * per product during a sync.
+	 *
+	 * @param array<string,string> $slugs Taxonomy slug => human label.
+	 */
+	private function register_dynamic_attributes( array $slugs ): void {
+		$registry = get_option( self::DYNAMIC_ATTRIBUTE_REGISTRY_OPTION, array() );
+
+		if ( ! is_array( $registry ) ) {
+			$registry = array();
+		}
+
+		$changed = false;
+
+		foreach ( $slugs as $slug => $label ) {
+			if ( ! isset( $registry[ $slug ] ) || $registry[ $slug ] !== $label ) {
+				$registry[ $slug ] = $label;
+				$changed            = true;
+			}
+		}
+
+		if ( $changed ) {
+			update_option( self::DYNAMIC_ATTRIBUTE_REGISTRY_OPTION, $registry, false );
+		}
 	}
 
 	/**

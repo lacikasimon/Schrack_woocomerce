@@ -2077,9 +2077,15 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
-	 * Returns the technical attribute taxonomies (IP rating, voltage, etc.)
-	 * recovered by Schrack_Attribute_Extractor that currently have at least one
-	 * published product, each with its terms and product counts.
+	 * Returns every filterable attribute taxonomy that currently has at least one
+	 * available product: the curated set recovered by Schrack_Attribute_Extractor
+	 * (IP rating, voltage, wattage, etc.) plus any dynamically-discovered ones
+	 * (e.g. Telesystem's per-category "Rezolutie Megapixel", "Standard WiFi") from
+	 * the schrack_wc_sync_dynamic_attributes registry. Dynamic taxonomies are
+	 * additionally capped at a maximum term count so a near-unique-per-product
+	 * feed column can't turn into an unusable wall of one-off checkboxes; the
+	 * curated set is exempt since some of those (wattage, lumens) are legitimately
+	 * high-cardinality and already work fine in production.
 	 *
 	 * @return array<string,array{slug:string,label:string,terms:array<int,array{id:int,name:string,count:int}>}>
 	 */
@@ -2092,13 +2098,42 @@ class Schrack_Product_Filter_Renderer {
 
 		$result = array();
 
-		if ( ! class_exists( 'Schrack_Attribute_Extractor' ) || ! function_exists( 'wc_attribute_taxonomy_name' ) ) {
+		if ( ! function_exists( 'wc_attribute_taxonomy_name' ) ) {
 			$options[ $category_id ] = $result;
 
 			return $result;
 		}
 
-		foreach ( Schrack_Attribute_Extractor::slugs() as $slug ) {
+		$max_dynamic_terms = 100;
+		$slugs              = array();
+
+		if ( class_exists( 'Schrack_Attribute_Extractor' ) ) {
+			foreach ( Schrack_Attribute_Extractor::slugs() as $slug ) {
+				$slugs[ $slug ] = array(
+					'label'   => Schrack_Attribute_Extractor::label_for_slug( $slug ),
+					'dynamic' => false,
+				);
+			}
+		}
+
+		$registry = get_option( 'schrack_wc_sync_dynamic_attributes', array() );
+
+		if ( is_array( $registry ) ) {
+			foreach ( $registry as $slug => $label ) {
+				$slug = (string) $slug;
+
+				if ( '' === $slug || isset( $slugs[ $slug ] ) ) {
+					continue;
+				}
+
+				$slugs[ $slug ] = array(
+					'label'   => sanitize_text_field( (string) $label ),
+					'dynamic' => true,
+				);
+			}
+		}
+
+		foreach ( $slugs as $slug => $meta ) {
 			$taxonomy = wc_attribute_taxonomy_name( $slug );
 
 			if ( '' === $taxonomy || ! taxonomy_exists( $taxonomy ) ) {
@@ -2113,6 +2148,10 @@ class Schrack_Product_Filter_Renderer {
 			);
 
 			if ( is_wp_error( $terms ) || empty( $terms ) ) {
+				continue;
+			}
+
+			if ( $meta['dynamic'] && count( $terms ) > $max_dynamic_terms ) {
 				continue;
 			}
 
@@ -2153,7 +2192,7 @@ class Schrack_Product_Filter_Renderer {
 
 			$result[ $taxonomy ] = array(
 				'slug'  => $slug,
-				'label' => Schrack_Attribute_Extractor::label_for_slug( $slug ),
+				'label' => $meta['label'],
 				'terms' => $term_options,
 			);
 		}

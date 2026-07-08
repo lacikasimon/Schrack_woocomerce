@@ -2011,8 +2011,45 @@ class Schrack_Catalog_Importer {
 
 		$item['technical_attributes'] = $this->catalog_technical_attributes( $row, $item );
 		$item['extracted_attributes'] = Schrack_Attribute_Extractor::extract( $item['name'] );
+		$item['dynamic_technical_attributes'] = $this->dynamic_catalog_technical_attributes( $item['technical_attributes'] );
 
 		return $item;
+	}
+
+	/**
+	 * Re-keys the already-computed technical_attributes list by a slug derived
+	 * from each entry's label, for promotion into real WooCommerce product
+	 * attributes. Schrack's CSV feed has no per-category column reuse (unlike
+	 * Telesystem's wide schema), so a label-derived slug is safe here; entries
+	 * that look like free text are skipped so only categorical values get promoted.
+	 *
+	 * @param array<int,array{label:string,value:string}> $technical_attributes Already-computed entries.
+	 * @return array<string,array{label:string,value:string}> Slug => {label, value}.
+	 */
+	private function dynamic_catalog_technical_attributes( array $technical_attributes ): array {
+		$result = array();
+
+		foreach ( $technical_attributes as $entry ) {
+			$label = (string) ( $entry['label'] ?? '' );
+			$value = (string) ( $entry['value'] ?? '' );
+
+			if ( '' === $label || '' === $value || mb_strlen( $value ) > 40 || false !== stripos( $value, 'http' ) ) {
+				continue;
+			}
+
+			$slug = sanitize_title( $label );
+
+			if ( '' === $slug || isset( $result[ $slug ] ) ) {
+				continue;
+			}
+
+			$result[ $slug ] = array(
+				'label' => $label,
+				'value' => $value,
+			);
+		}
+
+		return $result;
 	}
 
 	/**

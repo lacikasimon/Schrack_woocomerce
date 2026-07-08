@@ -190,6 +190,43 @@ class Schrack_Attribute_Extractor {
 					return null;
 				},
 			),
+			// ~33% of names, e.g. "... DALI IP20 negru". The best single hit rate of any
+			// rule here; Romanian color words are near-universally the last token in
+			// luminaire/device names.
+			'color'      => array(
+				'label'   => __( 'Culoare', 'schrack-woocommerce-sync' ),
+				'matcher' => static function ( string $name ): ?string {
+					if ( preg_match( '/\b(alb|negru|gri|argintiu|antracit|auriu|maro|crom|bronz|nichel|ro[sș]u|verde|albastru|galben|crem|bej|transparent|opal|fumuriu|grafit|titan)\b/iu', $name, $m ) ) {
+						return ucfirst( strtolower( $m[1] ) );
+					}
+					return null;
+				},
+			),
+			// ~11% of names, e.g. "Cablu de energie, PVC, ...". Dominated by "PVC"
+			// (cable insulation), the largest single catalog segment.
+			'material'   => array(
+				'label'   => __( 'Material', 'schrack-woocommerce-sync' ),
+				'matcher' => static function ( string $name ): ?string {
+					if ( preg_match( '/\b(o[tț]el|plastic|metalic|metal|aluminiu|inox|polimer|policarbonat|pvc|abs|cauciuc|sticl[aă]|poliester|ceramic[aă]|tabl[aă])\b/iu', $name, $m ) ) {
+						$value = strtolower( $m[1] );
+						return in_array( $value, array( 'pvc', 'abs' ), true ) ? strtoupper( $value ) : ucfirst( $value );
+					}
+					return null;
+				},
+			),
+			// ~12% of names, e.g. "... 36° 230V ..." (luminaire beam angle) or
+			// "... 360° ..." (motion-sensor detection angle) -- kept generic since both
+			// domains use a bare "N°" in the name. Excludes "40° C" temperature ratings
+			// via the negative lookahead, a confirmed false positive in real feed data.
+			'angle'      => array(
+				'label'   => __( 'Unghi', 'schrack-woocommerce-sync' ),
+				'matcher' => static function ( string $name ): ?string {
+					if ( preg_match( '/(?<![\d.])(\d{1,3})°(?!\s?[Cc]\b)/', $name, $m ) ) {
+						return $m[1] . '°';
+					}
+					return null;
+				},
+			),
 		);
 	}
 }

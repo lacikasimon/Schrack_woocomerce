@@ -781,6 +781,7 @@ class Schrack_Telesystem_Importer {
 
 		$item['technical_attributes'] = $this->technical_attributes( $row, $labels );
 		$item['extracted_attributes'] = Schrack_Attribute_Extractor::extract( $item['name'] );
+		$item['dynamic_technical_attributes'] = $this->dynamic_technical_attributes( $row, $labels );
 
 		return $item;
 	}
@@ -1196,6 +1197,51 @@ class Schrack_Telesystem_Importer {
 			$seen[ $seen_key ] = true;
 			$items[] = array(
 				'label' => $label,
+				'value' => sanitize_text_field( $value ),
+			);
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Returns technical attribute candidates for promotion into real WooCommerce
+	 * product attributes, keyed by their raw feed column instead of deduped by
+	 * label+value like technical_attributes(). Telesystem's CSV is a wide,
+	 * per-category schema where the same human label (e.g. "Tip") is reused by
+	 * unrelated column blocks for cameras, access control, networking, etc. --
+	 * keying by the raw column keeps those value domains from merging into one
+	 * confusing filter. Values that look like free text or URLs are skipped so
+	 * only genuinely categorical candidates reach the mapper.
+	 *
+	 * @param array<string,mixed>  $row    Raw feed row.
+	 * @param array<string,string> $labels Raw column key => human label.
+	 * @return array<string,array{label:string,value:string}> Raw column key => {label, value}.
+	 */
+	private function dynamic_technical_attributes( array $row, array $labels ): array {
+		$items     = array();
+		$excluded  = $this->excluded_technical_keys();
+		$sensitive = $this->sensitive_technical_keys();
+
+		foreach ( $row as $key => $value ) {
+			$key = (string) $key;
+
+			if ( isset( $excluded[ $this->catalog_key( $key ) ] ) || $this->catalog_key_matches_any( $this->catalog_key( $key ), $sensitive ) ) {
+				continue;
+			}
+
+			if ( ! is_scalar( $value ) ) {
+				continue;
+			}
+
+			$value = $this->clean_text( (string) $value );
+
+			if ( '' === $value || mb_strlen( $value ) > 40 || false !== stripos( $value, 'http' ) ) {
+				continue;
+			}
+
+			$items[ $key ] = array(
+				'label' => sanitize_text_field( $labels[ $key ] ?? $key ),
 				'value' => sanitize_text_field( $value ),
 			);
 		}
