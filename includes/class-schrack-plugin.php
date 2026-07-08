@@ -140,6 +140,7 @@ class Schrack_Plugin {
 			'class-schrack-account-renderer.php',
 			'class-schrack-cart-checkout-renderer.php',
 			'class-schrack-homepage-renderer.php',
+			'class-schrack-featured-categories-renderer.php',
 			'class-schrack-footer-renderer.php',
 			'class-schrack-funding-renderer.php',
 			'class-schrack-support-renderer.php',

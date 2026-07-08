@@ -183,6 +183,21 @@ class Schrack_Elementor {
 			$this->asset_version( 'assets/elementor-homepage.js' ),
 			true
 		);
+
+		wp_register_style(
+			'schrack-wc-featured-categories',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-featured-categories.css',
+			array(),
+			$this->asset_version( 'assets/elementor-featured-categories.css' )
+		);
+
+		wp_register_script(
+			'schrack-wc-featured-categories',
+			SCHRACK_WC_SYNC_URL . 'assets/elementor-featured-categories.js',
+			array(),
+			$this->asset_version( 'assets/elementor-featured-categories.js' ),
+			true
+		);
 	}
 
 	/**
@@ -375,6 +390,7 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-pay-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-received-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-featured-categories-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-funding-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-support-widget.php';
@@ -382,6 +398,7 @@ class Schrack_Elementor {
 		$widgets = array(
 			new Schrack_Elementor_Header_Widget(),
 			new Schrack_Elementor_Homepage_Widget(),
+			new Schrack_Elementor_Featured_Categories_Widget(),
 			new Schrack_Elementor_Footer_Widget(),
 			new Schrack_Elementor_Funding_Widget(),
 			new Schrack_Elementor_Product_Filter_Widget(),
@@ -425,6 +442,7 @@ class Schrack_Elementor {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-pay-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-order-received-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-homepage-widget.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-featured-categories-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-footer-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-funding-widget.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/widgets/class-schrack-elementor-support-widget.php';
@@ -432,6 +450,7 @@ class Schrack_Elementor {
 		if ( is_object( $widgets_manager ) && method_exists( $widgets_manager, 'register_widget_type' ) ) {
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Header_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Homepage_Widget() );
+			$widgets_manager->register_widget_type( new Schrack_Elementor_Featured_Categories_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Footer_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Funding_Widget() );
 			$widgets_manager->register_widget_type( new Schrack_Elementor_Product_Filter_Widget() );
