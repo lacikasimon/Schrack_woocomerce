@@ -47,7 +47,7 @@ class Schrack_Footer_Renderer {
 				<div class="schrack-footer__grid">
 					<div class="schrack-footer__brand">
 						<a class="schrack-footer__logo-link" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['brand_name'] ); ?>">
-							<img src="<?php echo esc_url( $settings['logo_url'] ); ?>" alt="" loading="lazy">
+							<img src="<?php echo esc_url( $settings['logo_url'] ); ?>" alt="" width="40" height="40" loading="lazy" decoding="async">
 							<span>
 								<strong><?php echo esc_html( $settings['brand_name'] ); ?></strong>
 								<?php if ( '' !== $settings['brand_suffix'] ) : ?>
@@ -135,7 +135,7 @@ class Schrack_Footer_Renderer {
 								<div>
 									<?php foreach ( $this->anpc_links() as $link ) : ?>
 										<a href="<?php echo esc_url( $link['href'] ); ?>" target="_blank" rel="nofollow noopener noreferrer" aria-label="<?php echo esc_attr( $link['label'] ); ?>">
-											<img src="<?php echo esc_url( $link['src'] ); ?>" alt="<?php echo esc_attr( $link['label'] ); ?>" width="<?php echo esc_attr( $link['width'] ); ?>" height="<?php echo esc_attr( $link['height'] ); ?>" loading="lazy">
+											<img src="<?php echo esc_url( $link['src'] ); ?>" alt="<?php echo esc_attr( $link['label'] ); ?>" width="<?php echo esc_attr( $link['width'] ); ?>" height="<?php echo esc_attr( $link['height'] ); ?>" loading="lazy" decoding="async">
 										</a>
 									<?php endforeach; ?>
 								</div>
@@ -150,6 +150,7 @@ class Schrack_Footer_Renderer {
 									width="1852"
 									height="349"
 									loading="lazy"
+									decoding="async"
 								>
 							</div>
 						<?php endif; ?>

@@ -74,7 +74,7 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-products.js',
 			array(),
 			SCHRACK_WC_SYNC_VERSION,
-			true
+			$this->deferred_script_args()
 		);
 
 		wp_register_style(
@@ -96,7 +96,7 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-header-search.js',
 			array(),
 			SCHRACK_WC_SYNC_VERSION,
-			true
+			$this->deferred_script_args()
 		);
 
 		wp_register_style(
@@ -111,7 +111,7 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-header.js',
 			array(),
 			$this->asset_version( 'assets/elementor-header.js' ),
-			true
+			$this->deferred_script_args()
 		);
 
 		wp_register_style(
@@ -140,7 +140,7 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-cart-checkout.js',
 			array(),
 			$this->asset_version( 'assets/elementor-cart-checkout.js' ),
-			true
+			$this->deferred_script_args()
 		);
 
 		wp_register_style(
@@ -155,7 +155,7 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-support.js',
 			array(),
 			$this->asset_version( 'assets/elementor-support.js' ),
-			true
+			$this->deferred_script_args()
 		);
 
 		wp_register_style(
@@ -184,7 +184,7 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-homepage.js',
 			array(),
 			$this->asset_version( 'assets/elementor-homepage.js' ),
-			true
+			$this->deferred_script_args()
 		);
 
 		wp_register_style(
@@ -199,7 +199,7 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-featured-categories.js',
 			array(),
 			$this->asset_version( 'assets/elementor-featured-categories.js' ),
-			true
+			$this->deferred_script_args()
 		);
 
 		wp_register_style(
@@ -214,7 +214,19 @@ class Schrack_Elementor {
 			SCHRACK_WC_SYNC_URL . 'assets/shop-archive.js',
 			array(),
 			$this->asset_version( 'assets/shop-archive.js' ),
-			true
+			$this->deferred_script_args()
+		);
+	}
+
+	/**
+	 * Loads frontend scripts without blocking first paint.
+	 *
+	 * @return array{in_footer:bool,strategy:string}
+	 */
+	private function deferred_script_args(): array {
+		return array(
+			'in_footer' => true,
+			'strategy'  => 'defer',
 		);
 	}
 

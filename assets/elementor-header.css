@@ -1,6 +1,7 @@
 .schrack-header {
 	--schrack-header-accent: #102033;
 	--schrack-header-action: #f15a0a;
+	--schrack-header-action-readable: color-mix(in srgb, var(--schrack-header-action) 72%, #000);
 	--schrack-header-border: #dbe4ee;
 	--schrack-header-muted: #647180;
 	--schrack-header-radius: 8px;
@@ -35,6 +36,25 @@
 	hyphens: manual;
 	overflow-wrap: break-word;
 	word-break: normal;
+}
+
+.onetap-site-container {
+	color: #fff !important;
+}
+
+.onetap-site-container .onetap-site-info,
+.onetap-site-container .onetap-title {
+	color: #fff !important;
+}
+
+.onetap-site-container .onetap-languages {
+	background: #fff !important;
+	color: var(--schrack-header-slate) !important;
+}
+
+.onetap-site-container .onetap-languages .onetap-text,
+.onetap-site-container .onetap-languages span {
+	color: var(--schrack-header-slate) !important;
 }
 
 .schrack-header__eu-top {
@@ -337,7 +357,7 @@ img.schrack-header__eu-logo.is-adr {
 .schrack-header__actions > .schrack-header__action:not(.schrack-header__offer):focus {
 	background: transparent;
 	border-color: transparent;
-	color: var(--schrack-header-action);
+	color: var(--schrack-header-action-readable);
 }
 
 .schrack-header__action:hover,
@@ -353,14 +373,14 @@ img.schrack-header__eu-logo.is-adr {
 }
 
 .schrack-header__cart {
-	border-color: color-mix(in srgb, var(--schrack-header-action) 26%, var(--schrack-header-border));
+	border-color: color-mix(in srgb, var(--schrack-header-action-readable) 26%, var(--schrack-header-border));
 }
 
 .schrack-header__offer {
 	/* #fff text on the raw accent is only ~3.4:1 (fails WCAG AA); darkening the
 	   background to 80% keeps the brand hue but clears 4.5:1. */
-	background: color-mix(in srgb, var(--schrack-header-action) 80%, #000);
-	border-color: color-mix(in srgb, var(--schrack-header-action) 80%, #000);
+	background: var(--schrack-header-action-readable);
+	border-color: var(--schrack-header-action-readable);
 	border-radius: var(--schrack-header-radius);
 	color: #fff;
 	font-size: 16px;
@@ -404,7 +424,7 @@ img.schrack-header__eu-logo.is-adr {
 
 .schrack-header__cart-count {
 	align-items: center;
-	background: var(--schrack-header-action);
+	background: var(--schrack-header-action-readable);
 	border-radius: 999px;
 	color: #fff;
 	display: inline-flex;
@@ -712,7 +732,7 @@ img.schrack-header__eu-logo.is-adr {
 
 .schrack-header__desktop-menu .schrack-header__menu-list a:hover,
 .schrack-header__desktop-menu .schrack-header__menu-list a:focus {
-	color: var(--schrack-header-action);
+	color: var(--schrack-header-action-readable);
 	outline: none;
 }
 
@@ -749,7 +769,7 @@ img.schrack-header__eu-logo.is-adr {
 }
 
 .schrack-header__desktop-menu .is-primary-trigger > a {
-	color: var(--schrack-header-action);
+	color: var(--schrack-header-action-readable);
 	gap: 6px;
 }
 

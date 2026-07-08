@@ -115,12 +115,12 @@
 
 	function buildRegionalFooter() {
 		var counties = [
-			{ label: 'BH', color: '#84CDDD' },
-			{ label: 'BN', color: '#2EBBD5' },
-			{ label: 'CJ', color: '#188CB1' },
-			{ label: 'MM', color: '#196194' },
-			{ label: 'SJ', color: '#1E528F' },
-			{ label: 'SM', color: '#2A416F' }
+			{ label: 'BH', color: '#84CDDD', text: 'var(--schrack-footer-slate)' },
+			{ label: 'BN', color: '#2EBBD5', text: 'var(--schrack-footer-slate)' },
+			{ label: 'CJ', color: '#188CB1', text: 'var(--schrack-footer-slate)' },
+			{ label: 'MM', color: '#196194', text: '#fff' },
+			{ label: 'SJ', color: '#1E528F', text: '#fff' },
+			{ label: 'SM', color: '#2A416F', text: '#fff' }
 		];
 		var links = [
 			{ label: 'www.regionordvest.ro', href: 'https://regionordvest.ro/' },
@@ -145,6 +145,7 @@
 
 			item.textContent = county.label;
 			item.style.backgroundColor = county.color;
+			item.style.color = county.text;
 			countyBand.appendChild(item);
 		});
 		section.appendChild(countyBand);
@@ -201,11 +202,43 @@
 		});
 	}
 
+	function repairThirdPartyButtonLabels(context) {
+		var scope = context && context.querySelectorAll ? context : document;
+		var labels = [
+			{ selector: '.cookieadmin_close_pref', label: 'Inchide preferintele cookie' },
+			{ selector: '.cookieadmin_re_consent', label: 'Modifica preferintele cookie' }
+		];
+
+		labels.forEach(function (item) {
+			Array.prototype.forEach.call(scope.querySelectorAll(item.selector), function (button) {
+				if (!button.getAttribute('aria-label')) {
+					button.setAttribute('aria-label', item.label);
+				}
+			});
+		});
+	}
+
 	function initAll(context) {
 		var scope = context && context.querySelectorAll ? context : document;
 
 		Array.prototype.forEach.call(scope.querySelectorAll('[data-schrack-header]'), initHeader);
 		initRegionalFooter(scope);
+		repairThirdPartyButtonLabels(scope);
+	}
+
+	function observeThirdPartyButtonLabels() {
+		if (!document.body || !window.MutationObserver) {
+			return;
+		}
+
+		var observer = new MutationObserver(function () {
+			repairThirdPartyButtonLabels(document);
+		});
+
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true
+		});
 	}
 
 	document.addEventListener('keydown', function (event) {
@@ -218,9 +251,15 @@
 		});
 	});
 
-	document.addEventListener('DOMContentLoaded', function () {
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', function () {
+			initAll(document);
+			observeThirdPartyButtonLabels();
+		});
+	} else {
 		initAll(document);
-	});
+		observeThirdPartyButtonLabels();
+	}
 
 	if (window.elementorFrontend && window.elementorFrontend.hooks) {
 		window.elementorFrontend.hooks.addAction('frontend/element_ready/schrack_header.default', function ($scope) {

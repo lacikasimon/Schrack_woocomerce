@@ -446,11 +446,81 @@ class Schrack_Frontend_Image_Loader {
 		$attr['class']    = $this->remote_image_class( $size, (string) ( $attr['class'] ?? '' ) );
 		$attr['decoding'] = (string) ( $attr['decoding'] ?? 'async' );
 
+		if ( empty( $attr['width'] ) || empty( $attr['height'] ) ) {
+			$dimensions = $this->remote_image_dimensions( $size );
+
+			if ( empty( $attr['width'] ) && $dimensions['width'] > 0 ) {
+				$attr['width'] = $dimensions['width'];
+			}
+
+			if ( empty( $attr['height'] ) && $dimensions['height'] > 0 ) {
+				$attr['height'] = $dimensions['height'];
+			}
+		}
+
 		if ( empty( $attr['loading'] ) ) {
 			$attr['loading'] = 'lazy';
 		}
 
+		if ( 'eager' === (string) $attr['loading'] && empty( $attr['fetchpriority'] ) ) {
+			$attr['fetchpriority'] = 'high';
+		}
+
 		return $attr;
+	}
+
+	/**
+	 * Resolves stable dimensions for remote product image fallback tags.
+	 *
+	 * @return array{width:int,height:int}
+	 */
+	private function remote_image_dimensions( mixed $size ): array {
+		if ( is_array( $size ) && count( $size ) >= 2 ) {
+			return array(
+				'width'  => absint( $size[0] ),
+				'height' => absint( $size[1] ),
+			);
+		}
+
+		$size_name = is_string( $size ) ? $size : '';
+
+		if ( '' !== $size_name && function_exists( 'wc_get_image_size' ) ) {
+			$wc_size = wc_get_image_size( $size_name );
+
+			if ( is_array( $wc_size ) ) {
+				$width  = absint( $wc_size['width'] ?? 0 );
+				$height = absint( $wc_size['height'] ?? 0 );
+
+				if ( $width > 0 && $height > 0 ) {
+					return array(
+						'width'  => $width,
+						'height' => $height,
+					);
+				}
+			}
+		}
+
+		$fallbacks = array(
+			'woocommerce_thumbnail'         => array( 300, 300 ),
+			'woocommerce_gallery_thumbnail' => array( 100, 100 ),
+			'woocommerce_single'            => array( 600, 600 ),
+			'shop_catalog'                  => array( 300, 300 ),
+			'shop_single'                   => array( 600, 600 ),
+			'shop_thumbnail'                => array( 100, 100 ),
+			'thumbnail'                     => array( 150, 150 ),
+		);
+
+		if ( isset( $fallbacks[ $size_name ] ) ) {
+			return array(
+				'width'  => $fallbacks[ $size_name ][0],
+				'height' => $fallbacks[ $size_name ][1],
+			);
+		}
+
+		return array(
+			'width'  => 0,
+			'height' => 0,
+		);
 	}
 
 	/**

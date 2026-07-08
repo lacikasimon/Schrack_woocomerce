@@ -11,6 +11,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Homepage_Renderer {
 	/**
+	 * Tracks whether the page-level content landmark has already been rendered.
+	 *
+	 * @var bool
+	 */
+	private static bool $content_landmark_rendered = false;
+
+	/**
 	 * Per-request category thumbnail cache.
 	 *
 	 * @var array<int,int>
@@ -24,7 +31,10 @@ class Schrack_Homepage_Renderer {
 	 */
 	public function render( array $settings, string $instance_id = '' ): string {
 		if ( ! class_exists( 'WooCommerce' ) ) {
-			return '<div class="schrack-home"><p>' . esc_html__( 'WooCommerce este necesar pentru acest modul.', 'schrack-woocommerce-sync' ) . '</p></div>';
+			$root_id = $this->homepage_root_id( $instance_id );
+			$tag     = 'content' === $root_id ? 'main' : 'section';
+
+			return '<' . $tag . ' id="' . esc_attr( $root_id ) . '" class="schrack-home"' . ( 'main' === $tag ? ' role="main" tabindex="-1"' : '' ) . ' data-schrack-home><p>' . esc_html__( 'WooCommerce este necesar pentru acest modul.', 'schrack-woocommerce-sync' ) . '</p></' . $tag . '>';
 		}
 
 		$settings       = $this->sanitize_settings( $settings );
@@ -33,6 +43,8 @@ class Schrack_Homepage_Renderer {
 		$project_terms  = ! empty( $settings['project_category_ids'] ) ? $this->selected_terms( $settings['project_category_ids'], $terms ) : $terms;
 		$category_terms = ! empty( $settings['featured_category_ids'] ) ? $this->selected_terms( $settings['featured_category_ids'], $terms ) : $terms;
 		$product_terms  = ! empty( $settings['solution_category_ids'] ) ? $this->selected_terms( $settings['solution_category_ids'], $terms ) : $category_terms;
+		$root_id        = $this->homepage_root_id( $instance_id );
+		$root_tag       = 'content' === $root_id ? 'main' : 'section';
 
 		wp_enqueue_style( 'schrack-wc-homepage' );
 		wp_enqueue_script( 'schrack-wc-homepage' );
@@ -47,10 +59,11 @@ class Schrack_Homepage_Renderer {
 
 		ob_start();
 		?>
-		<section
-			id="<?php echo esc_attr( '' !== $instance_id ? 'schrack-home-' . $instance_id : 'schrack-home' ); ?>"
+		<<?php echo esc_html( $root_tag ); ?>
+			id="<?php echo esc_attr( $root_id ); ?>"
 			class="schrack-home"
 			style="<?php echo esc_attr( $style ); ?>"
+			<?php echo 'main' === $root_tag ? 'role="main" tabindex="-1"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			data-schrack-home
 		>
 			<div class="schrack-home__inner">
@@ -114,10 +127,23 @@ class Schrack_Homepage_Renderer {
 					<?php echo $this->closing_cta( $copy['final'], $settings['contact_url'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endif; ?>
 			</div>
-		</section>
+		</<?php echo esc_html( $root_tag ); ?>>
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Returns a stable root ID and uses #content once so skip links can land.
+	 */
+	private function homepage_root_id( string $instance_id ): string {
+		if ( ! self::$content_landmark_rendered ) {
+			self::$content_landmark_rendered = true;
+
+			return 'content';
+		}
+
+		return '' !== $instance_id ? 'schrack-home-' . sanitize_html_class( $instance_id ) : wp_unique_id( 'schrack-home-' );
 	}
 
 	/**
@@ -984,7 +1010,7 @@ class Schrack_Homepage_Renderer {
 		?>
 		<article class="schrack-home__product-card">
 			<a class="schrack-home__product-image" href="<?php echo esc_url( $link ); ?>">
-				<?php echo wp_kses_post( $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) ); ?>
+				<?php echo wp_kses_post( $product->get_image( 'woocommerce_thumbnail', array( 'decoding' => 'async', 'loading' => 'lazy' ) ) ); ?>
 			</a>
 			<div class="schrack-home__product-body">
 				<a href="<?php echo esc_url( $link ); ?>"><?php echo esc_html( $product->get_name() ); ?></a>
@@ -1614,7 +1640,7 @@ class Schrack_Homepage_Renderer {
 				<a class="schrack-home__service-card is-<?php echo esc_attr( $service['variant'] ); ?>" href="<?php echo esc_url( $service['url'] ); ?>">
 					<span class="schrack-home__service-visual <?php echo '' === $service['image'] ? 'is-image-missing' : ''; ?>">
 						<?php if ( '' !== $service['image'] ) : ?>
-							<img src="<?php echo esc_url( $service['image'] ); ?>" alt="<?php echo esc_attr( $service['name'] ); ?>" loading="lazy">
+							<img src="<?php echo esc_url( $service['image'] ); ?>" alt="<?php echo esc_attr( $service['name'] ); ?>" width="640" height="360" loading="lazy" decoding="async">
 						<?php endif; ?>
 					</span>
 					<div class="schrack-home__service-copy">
@@ -2005,7 +2031,8 @@ class Schrack_Homepage_Renderer {
 				$size,
 				false,
 				array(
-					'loading' => 'lazy',
+					'decoding' => 'async',
+					'loading'  => 'lazy',
 				)
 			);
 		}
