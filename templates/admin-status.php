@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 ?>
 <div class="wrap schrack-sync-admin">
-	<h1><?php esc_html_e( 'Schrack Status', 'schrack-woocommerce-sync' ); ?></h1>
+	<h1><?php esc_html_e( 'Product furnizor importer Status', 'schrack-woocommerce-sync' ); ?></h1>
 	<?php $this->render_tabs( 'status' ); ?>
 	<?php $this->render_notice( $notice ); ?>
 	<?php

@@ -1,6 +1,6 @@
-# Schrack WooCommerce Sync
+# Product furnizor importer
 
-Professional WooCommerce plugin skeleton for importing Schrack products and synchronizing purchase prices and stock quantities.
+Professional WooCommerce plugin skeleton for importing supplier products and synchronizing purchase prices and stock quantities.
 
 ## Scope
 
@@ -27,8 +27,8 @@ It must not be used for order submission. Order related SOAP methods, including 
 
 1. Clone this repository into `wp-content/plugins/schrack-woocommerce-sync/`.
 2. Activate WooCommerce first.
-3. Activate `Schrack WooCommerce Sync`.
-4. Open `WooCommerce > Schrack Sync`.
+3. Activate `Product furnizor importer`.
+4. Open `WooCommerce > Product furnizor importer`.
 5. Configure TEST or LIVE credentials and save settings.
 6. Enable debug mode temporarily and use the WSDL function/type list to confirm the exact Schrack SOAP request structures.
 
@@ -114,7 +114,7 @@ When the default TEST WSDL is temporarily unavailable, the SOAP client can load 
 
 ## Manual MVP Tools
 
-`WooCommerce > Schrack Manual Sync` includes:
+`WooCommerce > Product furnizor importer Manual Sync` includes:
 
 - Queue catalog import
 - Queue price sync
@@ -128,7 +128,7 @@ The one-product create/update tool is intended for validating SKU idempotency, c
 
 ## Category Markups
 
-`WooCommerce > Schrack Markups` lets an administrator define per-category:
+`WooCommerce > Product furnizor importer Markups` lets an administrator define per-category:
 
 - Markup %
 - Optional minimum margin

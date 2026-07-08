@@ -361,7 +361,7 @@
 			return;
 		}
 
-		if (!window.confirm('Clear all Schrack Sync logs?')) {
+		if (!window.confirm('Clear all Product furnizor importer logs?')) {
 			event.preventDefault();
 		}
 	});

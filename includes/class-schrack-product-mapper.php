@@ -875,6 +875,7 @@ class Schrack_Product_Mapper {
 
 		$product->update_meta_data( '_schrack_catalog_source', $source );
 		$this->update_optional_meta( $product, '_schrack_supplier', $data, 'supplier', $is_new );
+		$product->update_meta_data( '_schrack_raw_feed_data', wp_json_encode( is_array( $data['raw_feed_data'] ?? null ) ? $data['raw_feed_data'] : array() ) );
 
 		if ( 'schrack' === $source ) {
 			$product->update_meta_data( '_schrack_item_number', $source_item );

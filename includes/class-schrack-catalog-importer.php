@@ -2012,6 +2012,7 @@ class Schrack_Catalog_Importer {
 		$item['technical_attributes'] = $this->catalog_technical_attributes( $row, $item );
 		$item['extracted_attributes'] = Schrack_Attribute_Extractor::extract( $item['name'] );
 		$item['dynamic_technical_attributes'] = $this->dynamic_catalog_technical_attributes( $item['technical_attributes'] );
+		$item['raw_feed_data'] = $this->catalog_raw_feed_fields( $row );
 
 		return $item;
 	}
@@ -2067,6 +2068,24 @@ class Schrack_Catalog_Importer {
 		$sensitive_keys = $this->catalog_sensitive_technical_keys();
 
 		$this->collect_catalog_technical_attributes( $row, '', $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
+
+		return $items;
+	}
+
+	/**
+	 * Flattens the entire, unfiltered parser row for the admin "raw supplier
+	 * data" product screen -- unlike catalog_technical_attributes() this keeps
+	 * core and commercially sensitive fields too, since it is only ever shown
+	 * to shop admins verifying what the feed actually sent.
+	 *
+	 * @param array<int|string,mixed> $row Raw parser row.
+	 * @return array<int,array{label:string,value:string}>
+	 */
+	private function catalog_raw_feed_fields( array $row ): array {
+		$items = array();
+		$seen  = array();
+
+		$this->collect_catalog_technical_attributes( $row, '', $items, $seen, array(), array(), array() );
 
 		return $items;
 	}

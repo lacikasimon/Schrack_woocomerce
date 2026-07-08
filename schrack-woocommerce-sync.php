@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: Schrack WooCommerce Sync
- * Description: Imports Schrack catalog data and synchronizes purchase prices and stock with WooCommerce products.
+ * Plugin Name: Product furnizor importer
+ * Description: Imports supplier catalog data and synchronizes purchase prices and stock with WooCommerce products.
  * Version: 0.1.51
- * Author: Schrack WooCommerce Sync
+ * Author: Product furnizor importer
  * Requires PHP: 8.1
  * Requires Plugins: woocommerce
  * Text Domain: schrack-woocommerce-sync

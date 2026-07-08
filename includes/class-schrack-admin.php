@@ -93,8 +93,8 @@ class Schrack_Admin {
 	public function register_menu(): void {
 		add_submenu_page(
 			'woocommerce',
-			__( 'Schrack Sync Settings', 'schrack-woocommerce-sync' ),
-			__( 'Schrack Sync', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Settings', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer', 'schrack-woocommerce-sync' ),
 			self::CAPABILITY,
 			'schrack-sync',
 			array( $this, 'render_settings_page' )
@@ -102,8 +102,8 @@ class Schrack_Admin {
 
 		add_submenu_page(
 			'woocommerce',
-			__( 'Schrack Category Markups', 'schrack-woocommerce-sync' ),
-			__( 'Schrack Markups', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Category Markups', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Markups', 'schrack-woocommerce-sync' ),
 			self::CAPABILITY,
 			'schrack-sync-markups',
 			array( $this, 'render_markups_page' )
@@ -120,8 +120,8 @@ class Schrack_Admin {
 
 		add_submenu_page(
 			'woocommerce',
-			__( 'Schrack Manual Sync', 'schrack-woocommerce-sync' ),
-			__( 'Schrack Manual Sync', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Manual Sync', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Manual Sync', 'schrack-woocommerce-sync' ),
 			self::CAPABILITY,
 			'schrack-sync-manual',
 			array( $this, 'render_manual_page' )
@@ -129,8 +129,8 @@ class Schrack_Admin {
 
 		add_submenu_page(
 			'woocommerce',
-			__( 'Schrack Logs', 'schrack-woocommerce-sync' ),
-			__( 'Schrack Logs', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Logs', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Logs', 'schrack-woocommerce-sync' ),
 			self::CAPABILITY,
 			'schrack-sync-logs',
 			array( $this, 'render_logs_page' )
@@ -138,8 +138,8 @@ class Schrack_Admin {
 
 		add_submenu_page(
 			'woocommerce',
-			__( 'Schrack Status', 'schrack-woocommerce-sync' ),
-			__( 'Schrack Status', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Status', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Status', 'schrack-woocommerce-sync' ),
 			self::CAPABILITY,
 			'schrack-sync-status',
 			array( $this, 'render_status_page' )
@@ -147,8 +147,8 @@ class Schrack_Admin {
 
 		add_submenu_page(
 			'woocommerce',
-			__( 'Schrack Debug', 'schrack-woocommerce-sync' ),
-			__( 'Schrack Debug', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Debug', 'schrack-woocommerce-sync' ),
+			__( 'Product furnizor importer Debug', 'schrack-woocommerce-sync' ),
 			self::CAPABILITY,
 			'schrack-sync-debug',
 			array( $this, 'render_debug_page' )
@@ -183,7 +183,7 @@ class Schrack_Admin {
 
 		$this->settings->update( $input );
 		$this->cron->reschedule();
-		$this->logger->info( 'admin', 'Schrack Sync settings were updated.' );
+		$this->logger->info( 'admin', 'Product furnizor importer settings were updated.' );
 		$this->set_notice( 'success', __( 'Settings saved.', 'schrack-woocommerce-sync' ) );
 		$this->redirect( 'schrack-sync' );
 	}
@@ -207,7 +207,7 @@ class Schrack_Admin {
 		}
 
 		$this->markups->update( $input );
-		$this->logger->info( 'admin', 'Schrack category markup rules were updated.' );
+		$this->logger->info( 'admin', 'Product furnizor importer category markup rules were updated.' );
 		$this->set_notice( 'success', __( 'Category markups saved.', 'schrack-woocommerce-sync' ) );
 		$this->redirect( 'schrack-sync-markups' );
 	}
@@ -391,7 +391,7 @@ class Schrack_Admin {
 		$this->markups->update( $merged );
 		$this->logger->info(
 			'admin',
-			'Schrack category markup CSV was imported.',
+			'Product furnizor importer category markup CSV was imported.',
 			'',
 			array(
 				'imported_rows'      => $imported_rows,
@@ -2671,7 +2671,7 @@ class Schrack_Admin {
 	 */
 	private function assert_can_manage(): void {
 		if ( ! current_user_can( self::CAPABILITY ) ) {
-			wp_die( esc_html__( 'You do not have permission to manage Schrack Sync.', 'schrack-woocommerce-sync' ) );
+			wp_die( esc_html__( 'You do not have permission to manage Product furnizor importer.', 'schrack-woocommerce-sync' ) );
 		}
 	}
 }

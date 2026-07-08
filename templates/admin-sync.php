@@ -17,7 +17,7 @@ $schrack_enabled      = 'yes' === (string) ( $settings['schrack_enabled'] ?? 'ye
 $telesystem_enabled   = 'yes' === (string) ( $settings['telesystem_enabled'] ?? 'yes' );
 ?>
 <div class="wrap schrack-sync-admin">
-	<h1><?php esc_html_e( 'Schrack Manual Sync', 'schrack-woocommerce-sync' ); ?></h1>
+	<h1><?php esc_html_e( 'Product furnizor importer Manual Sync', 'schrack-woocommerce-sync' ); ?></h1>
 	<?php $this->render_tabs( 'manual' ); ?>
 	<?php $this->render_notice( $notice ); ?>
 	<?php include SCHRACK_WC_SYNC_PATH . 'templates/admin-sync-dashboard.php'; ?>

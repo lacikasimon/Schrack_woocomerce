@@ -17,7 +17,7 @@ $running_for   = $started_at > 0 ? ( time() - $started_at ) : 0;
 $is_stale      = $is_active && $running_for >= 10 * MINUTE_IN_SECONDS;
 ?>
 <div class="wrap schrack-sync-admin">
-	<h1><?php esc_html_e( 'Schrack Debug', 'schrack-woocommerce-sync' ); ?></h1>
+	<h1><?php esc_html_e( 'Product furnizor importer Debug', 'schrack-woocommerce-sync' ); ?></h1>
 	<?php $this->render_tabs( 'debug' ); ?>
 	<?php $this->render_notice( $notice ); ?>
 

@@ -39,6 +39,13 @@ class Schrack_Plugin {
 	private ?Schrack_Admin $admin = null;
 
 	/**
+	 * Product edit screen admin fields (supplier box, raw feed data box).
+	 *
+	 * @var Schrack_Product_Admin_Fields|null
+	 */
+	private ?Schrack_Product_Admin_Fields $product_admin_fields = null;
+
+	/**
 	 * Cron service.
 	 *
 	 * @var Schrack_Cron|null
@@ -103,6 +110,9 @@ class Schrack_Plugin {
 		if ( is_admin() ) {
 			$this->admin = new Schrack_Admin( $this->settings, $this->logger, $this->cron );
 			$this->admin->init();
+
+			$this->product_admin_fields = new Schrack_Product_Admin_Fields();
+			$this->product_admin_fields->init();
 		}
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -147,6 +157,7 @@ class Schrack_Plugin {
 			'class-schrack-elementor.php',
 			'class-schrack-cron.php',
 			'class-schrack-admin.php',
+			'class-schrack-product-admin-fields.php',
 			'class-schrack-wp-cli.php',
 		);
 
@@ -160,11 +171,11 @@ class Schrack_Plugin {
 	 */
 	public static function activate(): void {
 		if ( version_compare( PHP_VERSION, '8.1', '<' ) ) {
-			wp_die( esc_html__( 'Schrack WooCommerce Sync requires PHP 8.1 or newer.', 'schrack-woocommerce-sync' ) );
+			wp_die( esc_html__( 'Product furnizor importer requires PHP 8.1 or newer.', 'schrack-woocommerce-sync' ) );
 		}
 
 		if ( ! extension_loaded( 'soap' ) ) {
-			wp_die( esc_html__( 'Schrack WooCommerce Sync requires the PHP SOAP extension.', 'schrack-woocommerce-sync' ) );
+			wp_die( esc_html__( 'Product furnizor importer requires the PHP SOAP extension.', 'schrack-woocommerce-sync' ) );
 		}
 
 		if ( ! function_exists( 'is_plugin_active' ) ) {
@@ -172,7 +183,7 @@ class Schrack_Plugin {
 		}
 
 		if ( ! class_exists( 'WooCommerce' ) && ! is_plugin_active( 'woocommerce/woocommerce.php' ) ) {
-			wp_die( esc_html__( 'Schrack WooCommerce Sync requires WooCommerce to be installed and active.', 'schrack-woocommerce-sync' ) );
+			wp_die( esc_html__( 'Product furnizor importer requires WooCommerce to be installed and active.', 'schrack-woocommerce-sync' ) );
 		}
 
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-settings.php';
@@ -203,14 +214,14 @@ class Schrack_Plugin {
 		if ( ! class_exists( 'WooCommerce' ) ) {
 			printf(
 				'<div class="notice notice-error"><p>%s</p></div>',
-				esc_html__( 'Schrack WooCommerce Sync is inactive until WooCommerce is active.', 'schrack-woocommerce-sync' )
+				esc_html__( 'Product furnizor importer is inactive until WooCommerce is active.', 'schrack-woocommerce-sync' )
 			);
 		}
 
 		if ( ! extension_loaded( 'soap' ) ) {
 			printf(
 				'<div class="notice notice-error"><p>%s</p></div>',
-				esc_html__( 'Schrack WooCommerce Sync requires the PHP SOAP extension.', 'schrack-woocommerce-sync' )
+				esc_html__( 'Product furnizor importer requires the PHP SOAP extension.', 'schrack-woocommerce-sync' )
 			);
 		}
 	}

@@ -782,8 +782,53 @@ class Schrack_Telesystem_Importer {
 		$item['technical_attributes'] = $this->technical_attributes( $row, $labels );
 		$item['extracted_attributes'] = Schrack_Attribute_Extractor::extract( $item['name'] );
 		$item['dynamic_technical_attributes'] = $this->dynamic_technical_attributes( $row, $labels );
+		$item['raw_feed_data'] = $this->raw_feed_fields( $row, $labels );
 
 		return $item;
+	}
+
+	/**
+	 * Flattens the entire, unfiltered CSV row for the admin "raw supplier data"
+	 * product screen -- unlike technical_attributes() this keeps core and
+	 * commercially sensitive columns too, since it is only ever shown to shop
+	 * admins verifying what the feed actually sent.
+	 *
+	 * @param array<string,mixed>  $row CSV row.
+	 * @param array<string,string> $labels Header labels by normalized key.
+	 * @return array<int,array{label:string,value:string}>
+	 */
+	private function raw_feed_fields( array $row, array $labels ): array {
+		$items = array();
+		$seen  = array();
+
+		foreach ( $row as $key => $value ) {
+			$key = (string) $key;
+
+			if ( ! is_scalar( $value ) ) {
+				continue;
+			}
+
+			$value = $this->clean_text( (string) $value );
+
+			if ( '' === $value ) {
+				continue;
+			}
+
+			$label    = sanitize_text_field( $labels[ $key ] ?? $key );
+			$seen_key = $this->catalog_key( $label ) . ':' . $this->catalog_key( $value );
+
+			if ( isset( $seen[ $seen_key ] ) ) {
+				continue;
+			}
+
+			$seen[ $seen_key ] = true;
+			$items[] = array(
+				'label' => $label,
+				'value' => sanitize_text_field( $value ),
+			);
+		}
+
+		return $items;
 	}
 
 	/**

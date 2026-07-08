@@ -112,7 +112,7 @@ $render_bulk_category_nodes = static function ( int $parent_id ) use ( &$render_
 };
 ?>
 <div class="wrap schrack-sync-admin">
-	<h1><?php esc_html_e( 'Schrack Category Markups', 'schrack-woocommerce-sync' ); ?></h1>
+	<h1><?php esc_html_e( 'Product furnizor importer Category Markups', 'schrack-woocommerce-sync' ); ?></h1>
 	<?php $this->render_tabs( 'markups' ); ?>
 	<?php $this->render_notice( $notice ); ?>
 
