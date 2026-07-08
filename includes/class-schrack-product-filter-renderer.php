@@ -287,6 +287,27 @@ class Schrack_Product_Filter_Renderer {
 			$filters['category'] = (int) $settings['default_category'];
 		}
 
+		if ( $this->should_show_category_level_only( $filters ) ) {
+			$summary = __( 'Alege o subcategorie pentru a vedea produsele.', 'schrack-woocommerce-sync' );
+
+			ob_start();
+			?>
+			<?php echo $this->category_explorer( $filters ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<div class="schrack-product-filter__summary">
+				<?php echo esc_html( $summary ); ?>
+			</div>
+			<?php
+
+			return array(
+				'html'        => (string) ob_get_clean(),
+				'summary'     => $summary,
+				'page'        => 1,
+				'has_more'    => 'no',
+				'total_pages' => 1,
+				'total'       => 0,
+			);
+		}
+
 		$query    = $this->query_products( $settings, $filters );
 		$posts    = $this->visible_posts( $query, $settings );
 		$has_more = $this->has_more_results( $query, $settings, $filters );
@@ -899,12 +920,10 @@ class Schrack_Product_Filter_Renderer {
 			return '';
 		}
 
-		$child_available_counts = $this->available_term_counts(
-			'product_cat',
-			array_map( static fn ( WP_Term $category ): int => (int) $category->term_id, $child_categories )
-		);
+		$child_available_counts = $this->category_tree_available_counts( $child_categories );
 
-		// Categories with no currently available products aren't worth showing in the browser.
+		// Categories with no currently available products in their full subtree
+		// are not useful as navigation targets in the browser.
 		$child_categories = array_values(
 			array_filter(
 				$child_categories,
@@ -1036,6 +1055,128 @@ class Schrack_Product_Filter_Renderer {
 				static fn ( mixed $term ): bool => $term instanceof WP_Term
 			)
 		);
+	}
+
+	/**
+	 * Returns whether a category page should stop at child navigation instead
+	 * of listing every descendant product.
+	 *
+	 * @param array<string,mixed> $filters Filters.
+	 */
+	private function should_show_category_level_only( array $filters ): bool {
+		$category_id = absint( $filters['category'] ?? 0 );
+
+		if ( $category_id <= 0 || ! $this->is_plain_category_browse( $filters ) ) {
+			return false;
+		}
+
+		$children = $this->direct_child_categories( $category_id );
+
+		if ( empty( $children ) ) {
+			return false;
+		}
+
+		$counts = $this->category_tree_available_counts( $children );
+
+		foreach ( $children as $child ) {
+			if ( ( $counts[ (int) $child->term_id ] ?? 0 ) > 0 ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Detects the unfiltered category-browsing state. Product searches and
+	 * facet filters still show products even when the selected category has
+	 * children, because that is an explicit product-listing action.
+	 *
+	 * @param array<string,mixed> $filters Filters.
+	 */
+	private function is_plain_category_browse( array $filters ): bool {
+		foreach ( array( 'search', 'category_search', 'min_price', 'max_price', 'manufacturer', 'product_line' ) as $key ) {
+			if ( '' !== trim( (string) ( $filters[ $key ] ?? '' ) ) ) {
+				return false;
+			}
+		}
+
+		if ( ! empty( $filters['special_offer_only'] ) && 'yes' === (string) $filters['special_offer_only'] ) {
+			return false;
+		}
+
+		if ( ! empty( $filters['include_out_of_stock'] ) && 'yes' === (string) $filters['include_out_of_stock'] ) {
+			return false;
+		}
+
+		return empty( $filters['attributes'] ) || ! is_array( $filters['attributes'] );
+	}
+
+	/**
+	 * Counts available products for each child category including all of that
+	 * child's descendants. WooCommerce category archives include descendants in
+	 * product queries, so the category browser needs the same definition.
+	 *
+	 * @param array<int,WP_Term> $categories Categories.
+	 * @return array<int,int> Category term ID => available product count.
+	 */
+	private function category_tree_available_counts( array $categories ): array {
+		$counts = array();
+
+		foreach ( $categories as $category ) {
+			if ( ! $category instanceof WP_Term ) {
+				continue;
+			}
+
+			$term_id            = (int) $category->term_id;
+			$counts[ $term_id ] = $this->available_product_count_for_category_tree( $term_id );
+		}
+
+		return $counts;
+	}
+
+	/**
+	 * Counts distinct published, currently available products in one product
+	 * category tree.
+	 */
+	private function available_product_count_for_category_tree( int $category_id ): int {
+		if ( $category_id <= 0 || ! taxonomy_exists( 'product_cat' ) ) {
+			return 0;
+		}
+
+		global $wpdb;
+
+		static $cache = array();
+
+		if ( isset( $cache[ $category_id ] ) ) {
+			return $cache[ $category_id ];
+		}
+
+		$category_ids = $this->category_and_descendant_ids( $category_id );
+
+		if ( empty( $category_ids ) ) {
+			$cache[ $category_id ] = 0;
+
+			return 0;
+		}
+
+		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+		$placeholders = implode( ',', array_fill( 0, count( $category_ids ), '%d' ) );
+
+		$sql = "SELECT COUNT(DISTINCT product_posts.ID)
+			FROM {$wpdb->posts} AS product_posts
+			INNER JOIN {$wpdb->term_relationships} AS term_relationships ON term_relationships.object_id = product_posts.ID
+			INNER JOIN {$wpdb->term_taxonomy} AS term_taxonomy ON term_taxonomy.term_taxonomy_id = term_relationships.term_taxonomy_id
+			INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = product_posts.ID
+			WHERE product_posts.post_type = 'product'
+				AND product_posts.post_status = 'publish'
+				AND term_taxonomy.taxonomy = 'product_cat'
+				AND term_taxonomy.term_id IN ({$placeholders})
+				AND lookup.stock_status <> 'outofstock'";
+
+		$cache[ $category_id ] = absint( $wpdb->get_var( $wpdb->prepare( $sql, $category_ids ) ) );
+
+		return $cache[ $category_id ];
 	}
 
 	/**

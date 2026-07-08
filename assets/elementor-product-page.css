@@ -42,7 +42,12 @@
 	gap: 6px !important;
 	line-height: 1.35 !important;
 	list-style: none !important;
+	max-width: calc(min(100%, 20ch) + 18px) !important;
 	min-width: 0;
+}
+
+.schrack-product-page__breadcrumb li:last-child {
+	max-width: min(100%, 46ch) !important;
 }
 
 .schrack-product-page__breadcrumb li::marker {

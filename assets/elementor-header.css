@@ -357,8 +357,10 @@ img.schrack-header__eu-logo.is-adr {
 }
 
 .schrack-header__offer {
-	background: var(--schrack-header-action);
-	border-color: var(--schrack-header-action);
+	/* #fff text on the raw accent is only ~3.4:1 (fails WCAG AA); darkening the
+	   background to 80% keeps the brand hue but clears 4.5:1. */
+	background: color-mix(in srgb, var(--schrack-header-action) 80%, #000);
+	border-color: color-mix(in srgb, var(--schrack-header-action) 80%, #000);
 	border-radius: var(--schrack-header-radius);
 	color: #fff;
 	font-size: 16px;
@@ -369,8 +371,8 @@ img.schrack-header__eu-logo.is-adr {
 
 .schrack-header__offer:hover,
 .schrack-header__offer:focus {
-	background: color-mix(in srgb, var(--schrack-header-action) 88%, #000);
-	border-color: color-mix(in srgb, var(--schrack-header-action) 88%, #000);
+	background: color-mix(in srgb, var(--schrack-header-action) 65%, #000);
+	border-color: color-mix(in srgb, var(--schrack-header-action) 65%, #000);
 	color: #fff;
 }
 

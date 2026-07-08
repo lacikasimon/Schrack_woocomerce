@@ -91,7 +91,7 @@ class Schrack_Header_Renderer {
 					<?php echo $this->account_link( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<?php echo $this->cart_link( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<?php echo $this->offer_link( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-					<button class="schrack-header__menu-toggle" type="button" aria-expanded="false" aria-controls="<?php echo esc_attr( $panel_id ); ?>" data-header-menu-toggle>
+					<button class="schrack-header__menu-toggle" type="button" aria-expanded="false" aria-controls="<?php echo esc_attr( $panel_id ); ?>" aria-label="<?php echo esc_attr( $settings['menu_label'] ); ?>" data-header-menu-toggle>
 						<span class="schrack-header__hamburger" aria-hidden="true">
 							<span></span>
 							<span></span>
@@ -107,7 +107,7 @@ class Schrack_Header_Renderer {
 
 			<div class="schrack-header__backdrop" hidden data-header-menu-close></div>
 
-			<aside id="<?php echo esc_attr( $panel_id ); ?>" class="schrack-header__panel" role="dialog" aria-modal="true" aria-label="<?php echo esc_attr( $settings['menu_label'] ); ?>" hidden data-header-menu-panel>
+			<div id="<?php echo esc_attr( $panel_id ); ?>" class="schrack-header__panel" role="dialog" aria-modal="true" aria-label="<?php echo esc_attr( $settings['menu_label'] ); ?>" hidden data-header-menu-panel>
 				<div class="schrack-header__panel-head">
 					<a class="schrack-header__panel-brand" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['brand_name'] ); ?>">
 						<span class="schrack-header__panel-logo" aria-hidden="true">
@@ -132,7 +132,7 @@ class Schrack_Header_Renderer {
 					<?php echo $this->account_link( $settings, true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<?php echo $this->cart_link( $settings, true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</div>
-			</aside>
+			</div>
 		</header>
 		<?php
 

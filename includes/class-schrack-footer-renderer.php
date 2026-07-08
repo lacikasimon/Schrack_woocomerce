@@ -47,7 +47,7 @@ class Schrack_Footer_Renderer {
 				<div class="schrack-footer__grid">
 					<div class="schrack-footer__brand">
 						<a class="schrack-footer__logo-link" href="<?php echo esc_url( $settings['site_url'] ); ?>" aria-label="<?php echo esc_attr( $settings['brand_name'] ); ?>">
-							<img src="<?php echo esc_url( $settings['logo_url'] ); ?>" alt="<?php echo esc_attr( $settings['brand_name'] ); ?>" loading="lazy">
+							<img src="<?php echo esc_url( $settings['logo_url'] ); ?>" alt="" loading="lazy">
 							<span>
 								<strong><?php echo esc_html( $settings['brand_name'] ); ?></strong>
 								<?php if ( '' !== $settings['brand_suffix'] ) : ?>
@@ -135,7 +135,7 @@ class Schrack_Footer_Renderer {
 								<div>
 									<?php foreach ( $this->anpc_links() as $link ) : ?>
 										<a href="<?php echo esc_url( $link['href'] ); ?>" target="_blank" rel="nofollow noopener noreferrer" aria-label="<?php echo esc_attr( $link['label'] ); ?>">
-											<img src="<?php echo esc_url( $link['src'] ); ?>" alt="<?php echo esc_attr( $link['label'] ); ?>" loading="lazy">
+											<img src="<?php echo esc_url( $link['src'] ); ?>" alt="<?php echo esc_attr( $link['label'] ); ?>" width="<?php echo esc_attr( $link['width'] ); ?>" height="<?php echo esc_attr( $link['height'] ); ?>" loading="lazy">
 										</a>
 									<?php endforeach; ?>
 								</div>
@@ -191,7 +191,7 @@ class Schrack_Footer_Renderer {
 			<p class="schrack-footer__regional-slogan"><?php esc_html_e( 'Investim în viitorul regiunii!', 'schrack-woocommerce-sync' ); ?></p>
 			<div class="schrack-footer__county-band" aria-label="<?php esc_attr_e( 'Judetele Regiunii de Dezvoltare Nord-Vest', 'schrack-woocommerce-sync' ); ?>">
 				<?php foreach ( $this->county_band() as $county ) : ?>
-					<span style="<?php echo esc_attr( 'background-color:' . $county['color'] . ';' ); ?>"><?php echo esc_html( $county['label'] ); ?></span>
+					<span style="<?php echo esc_attr( 'background-color:' . $county['color'] . ';color:' . $county['text'] . ';' ); ?>"><?php echo esc_html( $county['label'] ); ?></span>
 				<?php endforeach; ?>
 			</div>
 			<div class="schrack-footer__regional-links">
@@ -330,16 +330,45 @@ class Schrack_Footer_Renderer {
 	/**
 	 * Returns Regiunea de Dezvoltare Nord-Vest county band colors.
 	 *
-	 * @return array<int,array{label:string,color:string}>
+	 * The three lightest swatches (BH, BN, CJ) get the dark footer slate as
+	 * their text color instead of white -- white-on-light-blue fails WCAG AA
+	 * contrast (as low as 1.79:1) while the mandated background colors
+	 * themselves must stay unchanged.
+	 *
+	 * @return array<int,array{label:string,color:string,text:string}>
 	 */
 	private function county_band(): array {
 		return array(
-			array( 'label' => 'BH', 'color' => '#84CDDD' ),
-			array( 'label' => 'BN', 'color' => '#2EBBD5' ),
-			array( 'label' => 'CJ', 'color' => '#188CB1' ),
-			array( 'label' => 'MM', 'color' => '#196194' ),
-			array( 'label' => 'SJ', 'color' => '#1E528F' ),
-			array( 'label' => 'SM', 'color' => '#2A416F' ),
+			array(
+				'label' => 'BH',
+				'color' => '#84CDDD',
+				'text'  => 'var(--schrack-footer-slate)',
+			),
+			array(
+				'label' => 'BN',
+				'color' => '#2EBBD5',
+				'text'  => 'var(--schrack-footer-slate)',
+			),
+			array(
+				'label' => 'CJ',
+				'color' => '#188CB1',
+				'text'  => 'var(--schrack-footer-slate)',
+			),
+			array(
+				'label' => 'MM',
+				'color' => '#196194',
+				'text'  => '#fff',
+			),
+			array(
+				'label' => 'SJ',
+				'color' => '#1E528F',
+				'text'  => '#fff',
+			),
+			array(
+				'label' => 'SM',
+				'color' => '#2A416F',
+				'text'  => '#fff',
+			),
 		);
 	}
 
@@ -391,24 +420,34 @@ class Schrack_Footer_Renderer {
 	/**
 	 * Returns ANPC image links.
 	 *
-	 * @return array<int,array{label:string,href:string,src:string}>
+	 * Width/height mirror each SVG's native viewBox ratio at the 250px display
+	 * width set by .schrack-footer__anpc img, so the browser can reserve the
+	 * correct box before the (lazy-loaded) image arrives and avoid a layout shift.
+	 *
+	 * @return array<int,array{label:string,href:string,src:string,width:int,height:int}>
 	 */
 	private function anpc_links(): array {
 		return array(
 			array(
-				'label' => __( 'ANPC - Autoritatea Nationala pentru Protectia Consumatorilor', 'schrack-woocommerce-sync' ),
-				'href'  => 'https://anpc.ro/',
-				'src'   => 'https://syshub.ro/assets/anpc-logo-C3lA3zda.svg',
+				'label'  => __( 'ANPC - Autoritatea Nationala pentru Protectia Consumatorilor', 'schrack-woocommerce-sync' ),
+				'href'   => 'https://anpc.ro/',
+				'src'    => 'https://syshub.ro/assets/anpc-logo-C3lA3zda.svg',
+				'width'  => 250,
+				'height' => 119,
 			),
 			array(
-				'label' => __( 'SAL ANPC', 'schrack-woocommerce-sync' ),
-				'href'  => 'https://anpc.ro/ce-este-sal/',
-				'src'   => 'https://syshub.ro/assets/anpc-sal-BLYQEtJZ.svg',
+				'label'  => __( 'SAL ANPC', 'schrack-woocommerce-sync' ),
+				'href'   => 'https://anpc.ro/ce-este-sal/',
+				'src'    => 'https://syshub.ro/assets/anpc-sal-BLYQEtJZ.svg',
+				'width'  => 250,
+				'height' => 62,
 			),
 			array(
-				'label' => __( 'Redresare consumatori UE', 'schrack-woocommerce-sync' ),
-				'href'  => 'https://consumer-redress.ec.europa.eu/site-relocation_en',
-				'src'   => 'https://syshub.ro/assets/anpc-sol-vgITSumg.svg',
+				'label'  => __( 'Redresare consumatori UE', 'schrack-woocommerce-sync' ),
+				'href'   => 'https://consumer-redress.ec.europa.eu/site-relocation_en',
+				'src'    => 'https://syshub.ro/assets/anpc-sol-vgITSumg.svg',
+				'width'  => 250,
+				'height' => 62,
 			),
 		);
 	}

@@ -37,6 +37,7 @@ class Schrack_Elementor {
 	public function init(): void {
 		add_action( 'init', array( $this, 'register_assets' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_shop_archive_assets' ), 20 );
 		add_action( 'admin_post_' . Schrack_Registration_Renderer::ACTION, array( $this, 'handle_registration' ) );
 		add_action( 'admin_post_nopriv_' . Schrack_Registration_Renderer::ACTION, array( $this, 'handle_registration' ) );
 		add_action( 'admin_post_' . Schrack_Account_Renderer::ACTION, array( $this, 'handle_account_login' ) );
@@ -51,6 +52,8 @@ class Schrack_Elementor {
 		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
 		add_action( 'wp_ajax_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
+		add_filter( 'body_class', array( $this, 'shop_archive_body_class' ) );
+		add_filter( 'woocommerce_get_loop_display_mode', array( $this, 'category_archive_display_mode' ), 20 );
 		add_filter( 'woocommerce_add_to_cart_fragments', array( $this, 'cart_fragments' ) );
 		add_shortcode( 'schrack_account_page', array( $this, 'account_shortcode' ) );
 	}
@@ -198,6 +201,21 @@ class Schrack_Elementor {
 			$this->asset_version( 'assets/elementor-featured-categories.js' ),
 			true
 		);
+
+		wp_register_style(
+			'schrack-wc-shop-archive',
+			SCHRACK_WC_SYNC_URL . 'assets/shop-archive.css',
+			array(),
+			$this->asset_version( 'assets/shop-archive.css' )
+		);
+
+		wp_register_script(
+			'schrack-wc-shop-archive',
+			SCHRACK_WC_SYNC_URL . 'assets/shop-archive.js',
+			array(),
+			$this->asset_version( 'assets/shop-archive.js' ),
+			true
+		);
 	}
 
 	/**
@@ -315,6 +333,18 @@ class Schrack_Elementor {
 	}
 
 	/**
+	 * Shows only child categories on non-leaf WooCommerce product category
+	 * archives. Leaf categories keep the normal product grid.
+	 */
+	public function category_archive_display_mode( string $display_mode ): string {
+		if ( $this->current_product_category_has_children() ) {
+			return 'subcategories';
+		}
+
+		return $display_mode;
+	}
+
+	/**
 	 * Returns whether the current frontend request is a WooCommerce listing screen.
 	 */
 	private function is_shop_archive_context(): bool {
@@ -349,6 +379,38 @@ class Schrack_Elementor {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Detects whether the current WooCommerce product category archive has a
+	 * direct child category.
+	 */
+	private function current_product_category_has_children(): bool {
+		if ( is_admin() || ! taxonomy_exists( 'product_cat' ) ) {
+			return false;
+		}
+
+		if ( ! function_exists( 'is_product_category' ) || ! is_product_category() ) {
+			return false;
+		}
+
+		$term = get_queried_object();
+
+		if ( ! $term instanceof WP_Term || 'product_cat' !== $term->taxonomy ) {
+			return false;
+		}
+
+		$children = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'fields'     => 'ids',
+				'number'     => 1,
+				'parent'     => (int) $term->term_id,
+			)
+		);
+
+		return is_array( $children ) && ! empty( $children );
 	}
 
 	/**
