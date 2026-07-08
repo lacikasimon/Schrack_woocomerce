@@ -19,6 +19,7 @@ class Schrack_Cron {
 	public const HOOK_IMAGES  = 'schrack_wc_sync_images';
 	public const HOOK_IMAGE_WORKER = 'schrack_wc_sync_image_worker';
 	public const HOOK_DEBUG_EXPORT = 'schrack_wc_sync_debug_export';
+	public const HOOK_CATEGORY_IMPORT = 'schrack_wc_sync_category_csv_import';
 
 	/**
 	 * Settings.
@@ -56,6 +57,7 @@ class Schrack_Cron {
 		add_action( self::HOOK_IMAGE_WORKER, array( $this, 'run_image_worker' ), 10, 3 );
 		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
 		add_action( self::HOOK_DEBUG_EXPORT, array( $this, 'run_debug_export' ), 10, 2 );
+		add_action( self::HOOK_CATEGORY_IMPORT, array( $this, 'run_category_csv_import' ), 10, 1 );
 	}
 
 	/**
@@ -328,6 +330,56 @@ class Schrack_Cron {
 		$this->logger->info( 'debug', 'Queued raw feed debug export.', null, array_merge( array( 'source' => $source, 'limit' => $limit ), $queued ) );
 
 		return $queued;
+	}
+
+	/**
+	 * Queues a background product category CSV import batch.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function queue_category_csv_import( string $import_id ): array {
+		$queued = $this->queue_manual_action( self::HOOK_CATEGORY_IMPORT, array( $import_id ) );
+
+		if ( empty( $queued['queued'] ) ) {
+			$importer = new Schrack_Category_CSV_Importer( $this->settings, $this->logger );
+			$importer->mark_queue_failed( $import_id );
+
+			return array(
+				'queued'  => false,
+				'message' => __( 'Could not queue the category CSV import. Please check Action Scheduler/WP-Cron.', 'schrack-woocommerce-sync' ),
+			);
+		}
+
+		$this->logger->info( 'category_import', 'Queued category CSV import worker.', null, array_merge( array( 'import_id' => $import_id ), $queued ) );
+
+		return $queued;
+	}
+
+	/**
+	 * Runs one queued product category CSV import batch.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function run_category_csv_import( string $import_id ): array {
+		$importer = new Schrack_Category_CSV_Importer( $this->settings, $this->logger );
+		$result   = $importer->run_batch( $import_id );
+
+		if ( 'no' === (string) ( $result['completed_cycle'] ?? 'yes' ) && 'error' !== (string) ( $result['state'] ?? '' ) ) {
+			if ( ! $this->queue_sync_batch(
+				self::HOOK_CATEGORY_IMPORT,
+				'category_import',
+				array( $import_id ),
+				array(
+					'line_number' => $result['line_number'] ?? null,
+					'batch_count' => $result['batch_count'] ?? null,
+				),
+				1
+			) ) {
+				$importer->mark_queue_failed( $import_id );
+			}
+		}
+
+		return $result;
 	}
 
 	/**
@@ -1468,7 +1520,7 @@ class Schrack_Cron {
 	 * Clears scheduled actions.
 	 */
 	public static function clear_scheduled_actions(): void {
-		$hooks = array( self::HOOK_CATALOG, self::HOOK_TELESYSTEM_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER );
+		$hooks = array( self::HOOK_CATALOG, self::HOOK_TELESYSTEM_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER, self::HOOK_CATEGORY_IMPORT );
 
 		if ( class_exists( 'Schrack_Frontend_Image_Loader' ) ) {
 			$hooks[] = Schrack_Frontend_Image_Loader::BACKGROUND_HOOK;
@@ -2354,6 +2406,10 @@ class Schrack_Cron {
 				'hook'  => self::HOOK_IMAGES,
 				'label' => __( 'Images', 'schrack-woocommerce-sync' ),
 				'extra_hooks' => $image_extra_hooks,
+			),
+			'category_import' => array(
+				'hook'  => self::HOOK_CATEGORY_IMPORT,
+				'label' => __( 'Category CSV import', 'schrack-woocommerce-sync' ),
 			),
 		);
 	}

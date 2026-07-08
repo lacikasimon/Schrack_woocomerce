@@ -432,7 +432,11 @@ class Schrack_Admin {
 
 		$this->category_csv_tools_rendered = true;
 
-		$notice = $this->get_notice();
+		$notice          = $this->get_notice();
+		$status          = $this->settings->get_status();
+		$category_import = isset( $status[ Schrack_Category_CSV_Importer::STATUS_KEY ] ) && is_array( $status[ Schrack_Category_CSV_Importer::STATUS_KEY ] )
+			? $status[ Schrack_Category_CSV_Importer::STATUS_KEY ]
+			: array();
 		?>
 		<div class="schrack-sync-admin schrack-category-csv-admin">
 			<?php $this->render_notice( $notice ); ?>
@@ -458,6 +462,65 @@ class Schrack_Admin {
 					<input id="schrack_categories_csv" type="file" name="schrack_categories_csv" accept=".csv,text/csv">
 					<button type="submit" class="button"><?php esc_html_e( 'Import categories CSV', 'schrack-woocommerce-sync' ); ?></button>
 				</form>
+
+				<?php if ( ! empty( $category_import ) ) : ?>
+					<?php
+					$state        = sanitize_key( (string) ( $category_import['state'] ?? 'idle' ) );
+					$total_rows   = absint( $category_import['total_rows'] ?? 0 );
+					$processed    = absint( $category_import['processed'] ?? 0 );
+					$created      = absint( $category_import['created'] ?? 0 );
+					$updated      = absint( $category_import['updated'] ?? 0 );
+					$skipped      = absint( $category_import['skipped'] ?? 0 );
+					$percent      = $total_rows > 0 ? min( 100, (int) floor( ( $processed / $total_rows ) * 100 ) ) : 0;
+					$state_labels = array(
+						'queued'  => __( 'Queued', 'schrack-woocommerce-sync' ),
+						'running' => __( 'Running', 'schrack-woocommerce-sync' ),
+						'done'    => __( 'Done', 'schrack-woocommerce-sync' ),
+						'error'   => __( 'Error', 'schrack-woocommerce-sync' ),
+					);
+					$warnings = isset( $category_import['warnings'] ) && is_array( $category_import['warnings'] ) ? $category_import['warnings'] : array();
+					?>
+					<div class="notice notice-<?php echo 'error' === $state ? 'error' : ( 'done' === $state ? 'success' : 'info' ); ?>">
+						<p>
+							<strong><?php esc_html_e( 'Category CSV import status:', 'schrack-woocommerce-sync' ); ?></strong>
+							<?php echo esc_html( $state_labels[ $state ] ?? ucfirst( $state ) ); ?>
+							<?php if ( $total_rows > 0 ) : ?>
+								<?php
+								echo esc_html(
+									sprintf(
+										/* translators: 1: processed rows, 2: total rows, 3: percent. */
+										__( '%1$s / %2$s rows (%3$s%%).', 'schrack-woocommerce-sync' ),
+										number_format_i18n( $processed ),
+										number_format_i18n( $total_rows ),
+										number_format_i18n( $percent )
+									)
+								);
+								?>
+							<?php endif; ?>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: 1: created, 2: updated, 3: skipped. */
+									__( 'Created %1$s, updated %2$s, skipped %3$s.', 'schrack-woocommerce-sync' ),
+									number_format_i18n( $created ),
+									number_format_i18n( $updated ),
+									number_format_i18n( $skipped )
+								)
+							);
+							?>
+						</p>
+						<?php if ( ! empty( $category_import['message'] ) ) : ?>
+							<p><?php echo esc_html( (string) $category_import['message'] ); ?></p>
+						<?php endif; ?>
+						<?php if ( ! empty( $warnings ) ) : ?>
+							<ul>
+								<?php foreach ( array_slice( $warnings, 0, 10 ) as $warning ) : ?>
+									<li><?php echo esc_html( (string) $warning ); ?></li>
+								<?php endforeach; ?>
+							</ul>
+						<?php endif; ?>
+					</div>
+				<?php endif; ?>
 
 				<p class="description">
 					<?php esc_html_e( 'Supported columns:', 'schrack-woocommerce-sync' ); ?>
@@ -561,110 +624,31 @@ class Schrack_Admin {
 			$this->redirect_categories_page();
 		}
 
-		$handle = fopen( $tmp_name, 'r' );
+		$importer = new Schrack_Category_CSV_Importer( $this->settings, $this->logger );
+		$prepared = $importer->prepare_upload( $tmp_name, isset( $file['name'] ) ? (string) $file['name'] : '' );
 
-		if ( false === $handle ) {
-			$this->set_notice( 'error', __( 'CSV upload could not be opened.', 'schrack-woocommerce-sync' ) );
+		if ( is_wp_error( $prepared ) ) {
+			$this->set_notice( 'error', $prepared->get_error_message() );
 			$this->redirect_categories_page();
 		}
 
-		$first_line = fgets( $handle );
+		$queued = $this->cron->queue_category_csv_import( (string) ( $prepared['import_id'] ?? '' ) );
 
-		if ( false === $first_line ) {
-			fclose( $handle );
-			$this->set_notice( 'error', __( 'CSV file is empty.', 'schrack-woocommerce-sync' ) );
-			$this->redirect_categories_page();
-		}
-
-		$delimiter  = $this->detect_markup_csv_delimiter( $first_line );
-		$headers    = str_getcsv( $this->strip_utf8_bom( $first_line ), $delimiter, '"', '\\' );
-		$header_map = $this->category_csv_header_map( $headers );
-
-		if ( empty( array_intersect( array_keys( $header_map ), array( 'term_id', 'slug', 'path', 'name' ) ) ) ) {
-			fclose( $handle );
-			$this->set_notice( 'error', __( 'CSV must include term_id, slug, path, or name column.', 'schrack-woocommerce-sync' ) );
-			$this->redirect_categories_page();
-		}
-
-		$tree         = $this->product_category_tree();
-		$lookup       = $this->product_category_lookup( $tree['terms'], $tree['paths'] );
-		$created      = 0;
-		$updated      = 0;
-		$skipped      = 0;
-		$warnings     = array();
-		$line_number  = 1;
-
-		while ( false !== ( $row = fgetcsv( $handle, 0, $delimiter, '"', '\\' ) ) ) {
-			$line_number++;
-
-			if ( $this->is_empty_csv_row( $row ) ) {
-				continue;
-			}
-
-			$result = $this->import_category_csv_row( $row, $header_map, $lookup );
-
-			if ( ! empty( $result['warning'] ) && count( $warnings ) < 10 ) {
-				$warnings[] = sprintf(
-					/* translators: 1: CSV line number, 2: warning message. */
-					__( 'Line %1$d: %2$s', 'schrack-woocommerce-sync' ),
-					$line_number,
-					(string) $result['warning']
-				);
-			}
-
-			if ( 'created' === (string) ( $result['status'] ?? '' ) ) {
-				$created++;
-			} elseif ( 'updated' === (string) ( $result['status'] ?? '' ) ) {
-				$updated++;
-			} else {
-				$skipped++;
-			}
-
-			if ( ! empty( $result['term_id'] ) ) {
-				$tree   = $this->product_category_tree();
-				$lookup = $this->product_category_lookup( $tree['terms'], $tree['paths'] );
-			}
-		}
-
-		fclose( $handle );
-
-		if ( 0 === $created && 0 === $updated ) {
+		if ( empty( $queued['queued'] ) ) {
 			$this->set_notice(
-				empty( $warnings ) ? 'warning' : 'error',
-				__( 'No product categories were imported.', 'schrack-woocommerce-sync' ),
-				$warnings
+				'error',
+				(string) ( $queued['message'] ?? __( 'Could not queue the category CSV import. Please check Action Scheduler/WP-Cron.', 'schrack-woocommerce-sync' ) )
 			);
 			$this->redirect_categories_page();
 		}
-
-		$this->logger->info(
-			'admin',
-			'Schrack product category CSV was imported.',
-			'',
-			array(
-				'created' => $created,
-				'updated' => $updated,
-				'skipped' => $skipped,
-			)
-		);
 
 		$message = sprintf(
-			/* translators: 1: created categories, 2: updated categories, 3: skipped rows. */
-			__( 'Category CSV import finished. Created %1$d, updated %2$d, skipped %3$d row(s).', 'schrack-woocommerce-sync' ),
-			$created,
-			$updated,
-			$skipped
+			/* translators: %d: CSV data rows. */
+			__( 'Category CSV import was queued in the background. %d row(s) will be processed in batches.', 'schrack-woocommerce-sync' ),
+			absint( $prepared['total_rows'] ?? 0 )
 		);
 
-		if ( count( $warnings ) >= 10 && $skipped > count( $warnings ) ) {
-			$warnings[] = sprintf(
-				/* translators: %d: omitted warning count. */
-				__( '%d additional warnings are not shown.', 'schrack-woocommerce-sync' ),
-				$skipped - count( $warnings )
-			);
-		}
-
-		$this->set_notice( ! empty( $warnings ) || $skipped > 0 ? 'warning' : 'success', $message, $warnings );
+		$this->set_notice( 'success', $message );
 		$this->redirect_categories_page();
 	}
 

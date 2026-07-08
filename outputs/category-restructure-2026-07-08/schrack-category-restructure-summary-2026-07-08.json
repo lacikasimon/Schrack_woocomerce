@@ -1,0 +1,743 @@
+{
+  "input_file": "/Users/simon/Downloads/schrack-product-categories-2026-07-08.csv",
+  "source_rows": 3301,
+  "source_root_categories": 498,
+  "output_rows": 3405,
+  "main_categories": [
+    {
+      "name": "Iluminat si surse de lumina",
+      "slug": "iluminat-si-surse-de-lumina",
+      "description": "Corpuri de iluminat, surse de lumina, sisteme LED si iluminat de siguranta.",
+      "root_categories": 21,
+      "category_rows": 234,
+      "source_root_count_sum": 15111,
+      "source_all_count_sum": 31784
+    },
+    {
+      "name": "Cabluri, conductori si conectica",
+      "slug": "cabluri-conductori-si-conectica",
+      "description": "Cabluri, conductori, cleme, papuci, presetupe si accesorii de conectare.",
+      "root_categories": 44,
+      "category_rows": 395,
+      "source_root_count_sum": 5199,
+      "source_all_count_sum": 11971
+    },
+    {
+      "name": "Instalatii, trasee cabluri si scule",
+      "slug": "instalatii-trasee-cabluri-si-scule",
+      "description": "Doze, tuburi, canale, tavi, fixare, scule si materiale auxiliare.",
+      "root_categories": 30,
+      "category_rows": 158,
+      "source_root_count_sum": 1827,
+      "source_all_count_sum": 2822
+    },
+    {
+      "name": "Protectie electrica si comutatie",
+      "slug": "protectie-electrica-si-comutatie",
+      "description": "Intreruptoare, sigurante, descarcatoare, separatoare si comutatoare de sarcina.",
+      "root_categories": 76,
+      "category_rows": 436,
+      "source_root_count_sum": 4079,
+      "source_all_count_sum": 8179
+    },
+    {
+      "name": "Tablouri, dulapuri si distributie",
+      "slug": "tablouri-dulapuri-si-distributie",
+      "description": "Tablouri, dulapuri, cofrete, carcase, sisteme de bare si accesorii de distributie.",
+      "root_categories": 82,
+      "category_rows": 527,
+      "source_root_count_sum": 4691,
+      "source_all_count_sum": 9486
+    },
+    {
+      "name": "Aparataj terminal, prize si intrerupatoare",
+      "slug": "aparataj-terminal-prize-si-intrerupatoare",
+      "description": "Aparataj terminal, prize, intrerupatoare, rame, module si accesorii de montaj terminal.",
+      "root_categories": 24,
+      "category_rows": 223,
+      "source_root_count_sum": 1608,
+      "source_all_count_sum": 3470
+    },
+    {
+      "name": "Automatizari, control si masurare",
+      "slug": "automatizari-control-si-masurare",
+      "description": "Contactoare, relee, KNX, senzori, actionari, masurare, semnalizare si control industrial.",
+      "root_categories": 78,
+      "category_rows": 444,
+      "source_root_count_sum": 3608,
+      "source_all_count_sum": 7445
+    },
+    {
+      "name": "Retelistica, date si telecomunicatii",
+      "slug": "retelistica-date-si-telecomunicatii",
+      "description": "Cablare structurata, fibra optica, rack-uri, patching, SAT, telefonie si echipamente de retea.",
+      "root_categories": 83,
+      "category_rows": 544,
+      "source_root_count_sum": 4023,
+      "source_all_count_sum": 8629
+    },
+    {
+      "name": "Securitate, detectie si control acces",
+      "slug": "securitate-detectie-si-control-acces",
+      "description": "Supraveghere video, detectie incendiu/efractie, interfoane, control acces si sisteme speciale.",
+      "root_categories": 16,
+      "category_rows": 122,
+      "source_root_count_sum": 2018,
+      "source_all_count_sum": 4059
+    },
+    {
+      "name": "Energie, UPS si fotovoltaice",
+      "slug": "energie-ups-si-fotovoltaice",
+      "description": "UPS, baterii, PDU, e-mobility, management energie si sisteme fotovoltaice.",
+      "root_categories": 44,
+      "category_rows": 218,
+      "source_root_count_sum": 1193,
+      "source_all_count_sum": 2459
+    }
+  ],
+  "virtual_group_rows": 94,
+  "max_children_requested": 16,
+  "max_depth_requested": 6,
+  "max_children_actual": 16,
+  "max_depth": 6,
+  "balance_operations": [
+    {
+      "parent_path": "Retelistica, date si telecomunicatii",
+      "original_children": 83,
+      "group_count": 6,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C-D",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii D-H",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii I-P",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii P-U",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii U: Unități de vent... - Uși pentru dula...",
+          "children": 3
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie",
+      "original_children": 82,
+      "group_count": 6,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C-D",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii D-M",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii M: Modul 2000 - Co... - Modul 2000TT, a...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii O-T",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii U: Unităţi de vent... - Uşi IP30 pentru...",
+          "children": 2
+        }
+      ]
+    },
+    {
+      "parent_path": "Automatizari, control si masurare",
+      "original_children": 78,
+      "group_count": 5,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C-K",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii M-R",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S: Self-contained... - Series MM and c...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S-T",
+          "children": 14
+        }
+      ]
+    },
+    {
+      "parent_path": "Protectie electrica si comutatie",
+      "original_children": 76,
+      "group_count": 5,
+      "groups": [
+        {
+          "name": "Subcategorii A-D",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii I: Întreruptoare a... - Întreruptoare p...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii M-S",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S: Seria S - Comut... - Series KN Mini...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S-T",
+          "children": 12
+        }
+      ]
+    },
+    {
+      "parent_path": "Cabluri, conductori si conectica",
+      "original_children": 44,
+      "group_count": 3,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C: Cabluri pentru... - Cleme şir conex...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C-T",
+          "children": 12
+        }
+      ]
+    },
+    {
+      "parent_path": "Energie, UPS si fotovoltaice",
+      "original_children": 44,
+      "group_count": 3,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii D-S",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S-W",
+          "children": 12
+        }
+      ]
+    },
+    {
+      "parent_path": "Instalatii, trasee cabluri si scule",
+      "original_children": 30,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-M",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii P-U",
+          "children": 14
+        }
+      ]
+    },
+    {
+      "parent_path": "Aparataj terminal, prize si intrerupatoare",
+      "original_children": 24,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A: Alte aparate mo... - Aparataj termin...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii E-T",
+          "children": 8
+        }
+      ]
+    },
+    {
+      "parent_path": "Iluminat si surse de lumina",
+      "original_children": 21,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-L",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S: Șine de aliment... - Surse de lumină",
+          "children": 5
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie > Subcategorii M: Modul 2000 - Co... - Modul 2000TT, a... > Modul 2000 - Măşti frontale (Plastroane)",
+      "original_children": 35,
+      "group_count": 3,
+      "groups": [
+        {
+          "name": "Subcategorii B-D",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii F-S",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S: Slotted Front P... - Slotted Front P...",
+          "children": 3
+        }
+      ]
+    },
+    {
+      "parent_path": "Iluminat si surse de lumina > Subcategorii A-L > Corpuri de iluminat cu pictograme de evacuare",
+      "original_children": 30,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii C: Corpuri de ilum... - Corpuri de ilum...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C-P",
+          "children": 14
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie > Subcategorii A-C > Accesorii pentru dulapuri monobloc KC",
+      "original_children": 30,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii B-P",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii P-U",
+          "children": 14
+        }
+      ]
+    },
+    {
+      "parent_path": "Instalatii, trasee cabluri si scule > Subcategorii A-M > Accesorii",
+      "original_children": 29,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-Z",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii Z: Zack Marker str... - Zack Marker str...",
+          "children": 13
+        }
+      ]
+    },
+    {
+      "parent_path": "Protectie electrica si comutatie > Subcategorii I: Întreruptoare a... - Întreruptoare p... > Întreruptoare automate compacte MX, montaj fix",
+      "original_children": 26,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii C-I",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii I: Întreruptoare a... - Întreruptoare a...",
+          "children": 10
+        }
+      ]
+    },
+    {
+      "parent_path": "Aparataj terminal, prize si intrerupatoare > Subcategorii A: Alte aparate mo... - Aparataj termin... > Aparataj terminal Design VISIO 45",
+      "original_children": 25,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-P",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii R-T",
+          "children": 9
+        }
+      ]
+    },
+    {
+      "parent_path": "Iluminat si surse de lumina > Subcategorii A-L > Corpuri de iluminat pentru iluminarea căilor de evacuare",
+      "original_children": 24,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii C: Corpuri de ilum... - Corpuri de ilum...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C-S",
+          "children": 8
+        }
+      ]
+    },
+    {
+      "parent_path": "Protectie electrica si comutatie > Subcategorii I: Întreruptoare a... - Întreruptoare p... > Întreruptoare automate compacte MC, montaj fix",
+      "original_children": 24,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii I: Întreruptoare a... - Întreruptoare a...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii I: Întreruptoare a... - Întreruptoare a... (2)",
+          "children": 8
+        }
+      ]
+    },
+    {
+      "parent_path": "Aparataj terminal, prize si intrerupatoare > Subcategorii A: Alte aparate mo... - Aparataj termin... > Aparataj terminal VISIO S 55 Design CUBIC",
+      "original_children": 21,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-P",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii P-T",
+          "children": 5
+        }
+      ]
+    },
+    {
+      "parent_path": "Retelistica, date si telecomunicatii > Subcategorii I-P > Multiswitchuri",
+      "original_children": 21,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-S",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii U: Unghiuri de împ... - Unitate cascada...",
+          "children": 5
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie > Subcategorii C-D > Cutii aplicate din tablă de oțel, tip WSA",
+      "original_children": 21,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii C-S",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S-U",
+          "children": 5
+        }
+      ]
+    },
+    {
+      "parent_path": "Aparataj terminal, prize si intrerupatoare > Subcategorii A: Alte aparate mo... - Aparataj termin... > Aparataj terminal VISIO S 50 Design CLASSIC",
+      "original_children": 20,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-P",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii R-T",
+          "children": 4
+        }
+      ]
+    },
+    {
+      "parent_path": "Automatizari, control si masurare > Subcategorii C-K > Contactoare electromagnetice seria LA",
+      "original_children": 20,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii B-M",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii M-S",
+          "children": 4
+        }
+      ]
+    },
+    {
+      "parent_path": "Protectie electrica si comutatie > Subcategorii I: Întreruptoare a... - Întreruptoare p... > Întreruptoare automate modulare",
+      "original_children": 19,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-I",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii I: Întreruptoare a... - Întreruptoare a...",
+          "children": 3
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie > Subcategorii A-C > Cadre de montaj în spate",
+      "original_children": 19,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-R",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii R-S",
+          "children": 3
+        }
+      ]
+    },
+    {
+      "parent_path": "Cabluri, conductori si conectica > Subcategorii C: Cabluri pentru... - Cleme şir conex... > Cleme șir-conexiune cu șurub IK1",
+      "original_children": 18,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii B-P",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii P-S",
+          "children": 2
+        }
+      ]
+    },
+    {
+      "parent_path": "Iluminat si surse de lumina > Subcategorii S: Șine de aliment... - Surse de lumină > Șine de alimentare și spoturi pentru șine",
+      "original_children": 18,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii 0-9-S",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii S: Spot șină 1-phase - Spot șină 3-phase",
+          "children": 2
+        }
+      ]
+    },
+    {
+      "parent_path": "Protectie electrica si comutatie > Subcategorii I: Întreruptoare a... - Întreruptoare p... > Întreruptoare compacte şi comutatoare MC, în execuţie plug-in şi debroşabilă",
+      "original_children": 18,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii I: Întreruptoare a... - Întreruptoare a...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii I: Întreruptoare a... - Întreruptoare a... (2)",
+          "children": 2
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie > Subcategorii A-C > Accesorii generale",
+      "original_children": 18,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-P",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii P-S",
+          "children": 2
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie > Subcategorii A-C > Accesorii pentru dulapuri monobloc KT",
+      "original_children": 18,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii B-S",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii U: Uși pline RAL 7035 - Uși transparente",
+          "children": 2
+        }
+      ]
+    },
+    {
+      "parent_path": "Automatizari, control si masurare > Subcategorii C-K > Contactoare electromagnetice seria ALEA II LT",
+      "original_children": 17,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii B-P",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii R: Relee de timp s... - Relee de timp s...",
+          "children": 1
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie > Subcategorii A-C > Cofrete rezidenţiale şi casnice",
+      "original_children": 17,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C: Cofrete modular... - Cofrete modular...",
+          "children": 1
+        }
+      ]
+    },
+    {
+      "parent_path": "Cabluri, conductori si conectica > Subcategorii A-C",
+      "original_children": 21,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C: Cabluri de Cupr... - Cabluri pentru...",
+          "children": 5
+        }
+      ]
+    },
+    {
+      "parent_path": "Iluminat si surse de lumina > Subcategorii A-L",
+      "original_children": 20,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C-L",
+          "children": 4
+        }
+      ]
+    },
+    {
+      "parent_path": "Retelistica, date si telecomunicatii > Subcategorii A-C",
+      "original_children": 20,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii A-C",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C: Categoria OM4 - Categoria OS2 -...",
+          "children": 4
+        }
+      ]
+    },
+    {
+      "parent_path": "Automatizari, control si masurare > Subcategorii C-K",
+      "original_children": 17,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii C-K",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii K: KNX Sensors 80... - KNX Sensors 80...",
+          "children": 1
+        }
+      ]
+    },
+    {
+      "parent_path": "Cabluri, conductori si conectica > Subcategorii C: Cabluri pentru... - Cleme şir conex...",
+      "original_children": 17,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii C: Cabluri pentru... - Cleme șir-conex...",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii C: Cleme şir conex... - Cleme şir conex...",
+          "children": 1
+        }
+      ]
+    },
+    {
+      "parent_path": "Tablouri, dulapuri si distributie > Subcategorii O-T",
+      "original_children": 17,
+      "group_count": 2,
+      "groups": [
+        {
+          "name": "Subcategorii O-T",
+          "children": 16
+        },
+        {
+          "name": "Subcategorii T: Tablouri sosire... - Tablouri sosire...",
+          "children": 1
+        }
+      ]
+    }
+  ],
+  "depth_cap_operations": [
+    {
+      "capped_paths": 56,
+      "max_depth": 6
+    },
+    {
+      "capped_paths": 114,
+      "max_depth": 6
+    }
+  ],
+  "confidence_counts": {
+    "high": 483,
+    "medium": 15
+  },
+  "default_rule_root_count": 0
+}
