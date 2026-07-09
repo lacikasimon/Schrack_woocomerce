@@ -2022,8 +2022,11 @@ class Schrack_Cron {
 	private function catalog_batches_per_run(): int {
 		$max_batches = max( 1, min( 20, (int) $this->settings->get( 'catalog_batches_per_run', 1 ) ) );
 
-		// Catalog import is now streamed and cache-backed, so 2 GB hosts can safely chain a few batches.
-		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 5 ) : $max_batches;
+		// Catalog import is now streamed and cache-backed, so 2 GB hosts can safely chain
+		// several batches -- should_pause_batch_run() already bails on real memory/time
+		// pressure per batch, so this ceiling only needs to stop runaway configuration,
+		// not second-guess hosts that measure well under their memory limit.
+		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 15 ) : $max_batches;
 	}
 
 	/**
@@ -2032,7 +2035,8 @@ class Schrack_Cron {
 	private function telesystem_batches_per_run(): int {
 		$max_batches = max( 1, min( 20, (int) $this->settings->get( 'telesystem_batches_per_run', 3 ) ) );
 
-		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 5 ) : $max_batches;
+		// See catalog_batches_per_run() for why this ceiling was raised.
+		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 15 ) : $max_batches;
 	}
 
 	/**
