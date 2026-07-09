@@ -568,7 +568,7 @@ class Schrack_Cron {
 
 			foreach ( $this->definition_hooks( $definition ) as $definition_hook ) {
 				$pending += $this->scheduled_action_count( $definition_hook, 'pending' );
-				$running += $this->scheduled_action_count( $definition_hook, 'in-progress' );
+				$running += $this->active_running_action_count( $definition_hook );
 				$hook_next_run = $this->next_scheduled_timestamp( $definition_hook );
 
 				if ( null !== $hook_next_run && ( null === $next_run || $hook_next_run < $next_run ) ) {
@@ -2322,6 +2322,52 @@ class Schrack_Cron {
 	}
 
 	/**
+	 * Counts Action Scheduler actions genuinely still running for a hook.
+	 *
+	 * A batch is bounded by should_pause_batch_run() and always yields well
+	 * before PHP's max_execution_time, so a claimed action that is still
+	 * "in-progress" long after that can only mean the worker process died
+	 * (fatal error, OOM kill, host timeout) without Action Scheduler noticing --
+	 * its own stuck-claim cleanup depends on WP-Cron ticking, which is not
+	 * guaranteed. Without this, active_sync_conflict() would treat that zombie
+	 * action as a permanently running sync and block every future manual sync
+	 * request. Ignoring in-progress actions past a generous staleness window
+	 * lets the plugin route around them instead of getting stuck forever.
+	 */
+	private function active_running_action_count( string $hook, int $stale_after = 20 * MINUTE_IN_SECONDS ): int {
+		if ( ! function_exists( 'as_get_scheduled_actions' ) ) {
+			return $this->scheduled_action_count( $hook, 'in-progress' );
+		}
+
+		$actions = as_get_scheduled_actions(
+			array(
+				'hook'          => $hook,
+				'group'         => self::GROUP,
+				'status'        => 'in-progress',
+				'per_page'      => 50,
+				'return_format' => 'ids',
+			)
+		);
+
+		if ( ! is_array( $actions ) ) {
+			return 0;
+		}
+
+		$now   = time();
+		$count = 0;
+
+		foreach ( $actions as $action_id ) {
+			$timestamp = $this->scheduled_action_timestamp( (int) $action_id );
+
+			if ( null === $timestamp || ( $now - $timestamp ) < $stale_after ) {
+				++$count;
+			}
+		}
+
+		return $count;
+	}
+
+	/**
 	 * Counts Action Scheduler actions for a hook/status pair.
 	 *
 	 * @param array<int,mixed>|null $args Optional exact hook arguments.
@@ -2453,7 +2499,7 @@ class Schrack_Cron {
 	 */
 	private function active_image_worker_count(): int {
 		return $this->scheduled_action_count( self::HOOK_IMAGE_WORKER, 'pending' )
-			+ $this->scheduled_action_count( self::HOOK_IMAGE_WORKER, 'in-progress' );
+			+ $this->active_running_action_count( self::HOOK_IMAGE_WORKER );
 	}
 
 	/**
