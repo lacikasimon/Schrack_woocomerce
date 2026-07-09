@@ -18,6 +18,7 @@ class Schrack_Cron {
 	public const HOOK_FULL    = 'schrack_wc_sync_full';
 	public const HOOK_IMAGES  = 'schrack_wc_sync_images';
 	public const HOOK_IMAGE_WORKER = 'schrack_wc_sync_image_worker';
+	public const HOOK_CATALOG_WORKER = 'schrack_wc_sync_catalog_worker';
 	public const HOOK_DEBUG_EXPORT = 'schrack_wc_sync_debug_export';
 	public const HOOK_CATEGORY_IMPORT = 'schrack_wc_sync_category_csv_import';
 
@@ -55,6 +56,7 @@ class Schrack_Cron {
 		add_action( self::HOOK_STOCK, array( $this, 'run_stock_sync' ) );
 		add_action( self::HOOK_IMAGES, array( $this, 'run_image_sync' ) );
 		add_action( self::HOOK_IMAGE_WORKER, array( $this, 'run_image_worker' ), 10, 3 );
+		add_action( self::HOOK_CATALOG_WORKER, array( $this, 'run_catalog_worker' ), 10, 6 );
 		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
 		add_action( self::HOOK_DEBUG_EXPORT, array( $this, 'run_debug_export' ), 10, 2 );
 		add_action( self::HOOK_CATEGORY_IMPORT, array( $this, 'run_category_csv_import' ), 10, 1 );
@@ -639,10 +641,25 @@ class Schrack_Cron {
 
 	/**
 	 * Runs a catalog import batch.
+	 *
+	 * @param bool $allow_parallel Whether parallel workers may be dispatched.
+	 *                             Full sync forces this false: should_continue_batch()
+	 *                             can't tell "workers still running in the background"
+	 *                             from "nothing left to do", so chaining stages through
+	 *                             a parallel dispatch would advance to the next stage
+	 *                             before the catalog workers actually finish.
 	 */
-	public function run_catalog_import( bool $queue_continuation = true ): array {
+	public function run_catalog_import( bool $queue_continuation = true, bool $allow_parallel = true ): array {
 		if ( ! $this->is_schrack_enabled() ) {
 			return $this->disabled_schrack_result( 'catalog' );
+		}
+
+		if ( $allow_parallel ) {
+			$workers = $this->catalog_parallel_workers();
+
+			if ( $workers > 1 && $this->can_queue_parallel_image_workers() ) {
+				return $this->queue_parallel_catalog_sync( $workers, $queue_continuation );
+			}
 		}
 
 		$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
@@ -751,6 +768,392 @@ class Schrack_Cron {
 				'completed_cycle' => 'yes',
 			);
 		}
+	}
+
+	/**
+	 * Dispatches one wave of parallel catalog import workers: claims the whole
+	 * remaining catalog as fixed, non-overlapping row ranges (one per worker),
+	 * primes every category/attribute term those rows reference so workers
+	 * never race to create the same new term, then queues one Action Scheduler
+	 * action per range. Mirrors queue_parallel_image_sync()'s pattern.
+	 */
+	private function queue_parallel_catalog_sync( int $workers, bool $queue_continuation ): array {
+		if ( $this->settings->is_stop_requested() ) {
+			return $this->handle_stopped_sync( 'catalog', 0, 0 );
+		}
+
+		$active_workers = $this->active_catalog_worker_count();
+
+		if ( $active_workers > 0 ) {
+			return $this->defer_parallel_catalog_dispatcher( $workers, $active_workers, $queue_continuation );
+		}
+
+		$status   = $this->settings->get_status();
+		$last_row = isset( $status['catalog'] ) && is_array( $status['catalog'] ) ? $status['catalog'] : array();
+
+		if ( 'yes' === (string) ( $last_row['parallel'] ?? 'no' ) && 'no' === (string) ( $last_row['completed_cycle'] ?? 'yes' ) ) {
+			// No workers are pending/running anymore, but the last dispatched wave
+			// never got marked complete -- that means it just finished. Finalize
+			// that cycle instead of immediately fetching and starting a new one.
+			return $this->finalize_parallel_catalog_cycle( $last_row, $queue_continuation );
+		}
+
+		$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
+
+		try {
+			$cache = $importer->fetch_and_cache_catalog( 'CSV' );
+		} catch ( Schrack_Rate_Limit_Exception $exception ) {
+			$result = $this->handle_rate_limited_sync( 'catalog', 0, 0, $exception );
+
+			if ( $queue_continuation ) {
+				$this->queue_rate_limited_batch( self::HOOK_CATALOG, 'catalog', array(), $result );
+			}
+
+			return $result;
+		} catch ( Throwable $exception ) {
+			$this->logger->error( 'catalog', 'Failed to fetch/parse Schrack catalog for parallel import.', null, array( 'error' => $exception->getMessage() ) );
+			$result = array( 'processed' => 0, 'errors' => 1, 'completed_cycle' => 'yes' );
+			$this->settings->update_status( 'catalog', $result );
+
+			return $result;
+		}
+
+		if ( null === $cache || absint( $cache['total_items'] ?? 0 ) <= 0 ) {
+			$result = array( 'processed' => 0, 'errors' => 0, 'completed_cycle' => 'yes' );
+			$this->settings->update_status( 'catalog', $result );
+			$this->logger->info( 'catalog', 'Schrack catalog was empty; nothing to import.', null, $result );
+
+			return $result;
+		}
+
+		$total_items = absint( $cache['total_items'] );
+		$format      = (string) $cache['format'];
+		$signature   = (string) $cache['signature'];
+		$items_path  = (string) $cache['items_path'];
+		$run_id      = wp_generate_uuid4();
+
+		$this->prime_catalog_terms( $importer, $items_path, $total_items );
+
+		$ranges          = $this->split_range( $total_items, $workers );
+		$queued_workers  = 0;
+		$queued_ranges   = array();
+		$queue_errors    = 0;
+
+		foreach ( $ranges as $index => $range ) {
+			[$start, $count] = $range;
+			$end              = $start + $count;
+
+			$queued = $this->queue_sync_batch(
+				self::HOOK_CATALOG_WORKER,
+				'catalog',
+				array( $format, $signature, $items_path, $start, $end, $run_id ),
+				array(
+					'run_id'       => $run_id,
+					'worker_index' => $index + 1,
+					'range_start'  => $start,
+					'range_end'    => $end,
+				),
+				0
+			);
+
+			if ( $queued ) {
+				++$queued_workers;
+				$queued_ranges[] = array( $start, $end );
+			} else {
+				++$queue_errors;
+			}
+		}
+
+		$result = array_merge(
+			array(
+				'processed'         => 0,
+				'errors'            => $queue_errors,
+				'total_items'       => $total_items,
+				'batch_count'       => 0,
+				'completed_cycle'   => 'no',
+				'parallel'          => 'yes',
+				'run_id'            => $run_id,
+				'workers_requested' => $workers,
+				'workers_queued'    => $queued_workers,
+				'catalog_format'    => $format,
+				'catalog_signature' => $signature,
+			),
+			$this->memory_status_context()
+		);
+
+		$this->settings->update_status( 'catalog', $result );
+		$this->logger->info(
+			'catalog',
+			'Queued parallel Schrack catalog import workers.',
+			null,
+			array_merge( $result, array( 'ranges' => $queued_ranges ) )
+		);
+
+		if ( $queue_continuation && $queued_workers > 0 ) {
+			$this->queue_sync_batch(
+				self::HOOK_CATALOG,
+				'catalog',
+				array(),
+				array( 'source' => 'parallel_catalog_continuation', 'run_id' => $run_id ),
+				$this->image_parallel_followup_delay()
+			);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Re-queues the catalog dispatcher to check back later instead of claiming
+	 * new work while a previous wave of parallel workers is still active.
+	 */
+	private function defer_parallel_catalog_dispatcher( int $workers, int $active_workers, bool $queue_continuation ): array {
+		$status   = $this->settings->get_status();
+		$last_row = isset( $status['catalog'] ) && is_array( $status['catalog'] ) ? $status['catalog'] : array();
+		$result   = array_merge(
+			$last_row,
+			array(
+				'parallel'          => 'yes',
+				'completed_cycle'   => 'no',
+				'waiting_workers'   => 'yes',
+				'active_workers'    => $active_workers,
+				'workers_requested' => $workers,
+			),
+			$this->memory_status_context()
+		);
+
+		$this->settings->update_status( 'catalog', $result );
+
+		if ( $queue_continuation ) {
+			$this->queue_sync_batch(
+				self::HOOK_CATALOG,
+				'catalog',
+				array(),
+				array( 'source' => 'catalog_workers_active', 'active_workers' => $active_workers ),
+				$this->image_parallel_followup_delay()
+			);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Marks a parallel catalog cycle complete once every worker has finished,
+	 * deletes the now-fully-consumed cache, and (like the sequential path)
+	 * triggers the image sync stage.
+	 *
+	 * Note: unlike the sequential path's exact running totals, 'processed' here
+	 * is approximated as total_items -- each worker logs its own per-range
+	 * processed/error counts individually (see run_catalog_worker()), since
+	 * having every worker also write into the single shared 'catalog' status
+	 * row would race across processes. The per-item error log is unaffected;
+	 * only this aggregate summary count is approximate.
+	 *
+	 * @param array<string,mixed> $last_row Status row from the dispatch that just finished.
+	 */
+	private function finalize_parallel_catalog_cycle( array $last_row, bool $queue_continuation ): array {
+		$format      = (string) ( $last_row['catalog_format'] ?? 'CSV' );
+		$signature   = (string) ( $last_row['catalog_signature'] ?? '' );
+		$total_items = absint( $last_row['total_items'] ?? 0 );
+
+		if ( '' !== $signature ) {
+			$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
+			$importer->delete_cache_for_signature( $format, $signature );
+		}
+
+		$result = array_merge(
+			$last_row,
+			array(
+				'processed'       => $total_items,
+				'batch_count'     => $total_items,
+				'completed_cycle' => 'yes',
+				'parallel'        => 'yes',
+			),
+			$this->memory_status_context()
+		);
+
+		$this->settings->update_status( 'catalog', $result );
+		$this->logger->info( 'catalog', 'Finished parallel Schrack catalog import cycle.', null, $result );
+
+		if ( $queue_continuation && $this->should_import_images() ) {
+			if ( ! $this->queue_sync_batch( self::HOOK_IMAGES, 'images', array(), array( 'source' => 'catalog_completed' ) ) ) {
+				$this->mark_queue_failed(
+					'images',
+					array(
+						'processed'       => 0,
+						'errors'          => 1,
+						'completed_cycle' => 'no',
+						'source'          => 'catalog_completed',
+					),
+					self::HOOK_IMAGES,
+					array()
+				);
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Runs one parallel catalog import worker over its own fixed [start, end)
+	 * row range. If it gets close to its time/memory budget before finishing,
+	 * it requeues itself with an updated start offset -- the same
+	 * should_pause_batch_run() safety net the sequential loop uses, just scoped
+	 * to this worker's own slice instead of the whole catalog.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function run_catalog_worker( string $format, string $signature, string $items_path, int $start, int $end, string $run_id ): array {
+		try {
+			$importer   = new Schrack_Catalog_Importer( $this->settings, $this->logger );
+			$limit      = $this->catalog_batch_limit();
+			$started_at = time();
+			$position   = max( 0, $start );
+			$processed  = 0;
+			$errors     = 0;
+
+			while ( $position < $end ) {
+				if ( $this->settings->is_stop_requested() ) {
+					$this->logger->warning(
+						'catalog',
+						'Stopped parallel Schrack catalog worker because admin requested it.',
+						null,
+						array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'resumed_at' => $position, 'range_end' => $end )
+					);
+
+					return array( 'processed' => $processed, 'errors' => $errors, 'run_id' => $run_id, 'stopped' => 'yes' );
+				}
+
+				$batch_limit = min( $limit, $end - $position );
+				$result      = $importer->import_cache_range( $format, $signature, $items_path, $position, $batch_limit );
+				$batch_count = absint( $result['batch_count'] ?? 0 );
+
+				$processed += absint( $result['processed'] ?? 0 );
+				$errors    += absint( $result['errors'] ?? 0 );
+				$this->release_batch_memory();
+
+				if ( $batch_count <= 0 ) {
+					// Nothing left to read at this offset (short file/race with
+					// cache cleanup) -- stop instead of spinning on an empty read.
+					break;
+				}
+
+				$position += $batch_count;
+
+				if ( $position < $end && $this->should_pause_batch_run( $started_at, 'catalog' ) ) {
+					$this->queue_sync_batch(
+						self::HOOK_CATALOG_WORKER,
+						'catalog',
+						array( $format, $signature, $items_path, $position, $end, $run_id ),
+						array( 'run_id' => $run_id, 'resumed_at' => $position, 'range_end' => $end ),
+						0
+					);
+
+					$this->logger->info(
+						'catalog',
+						'Paused parallel Schrack catalog worker before its time/memory budget ran out; requeued the remaining range.',
+						null,
+						array_merge(
+							array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'resumed_at' => $position, 'range_end' => $end ),
+							$this->memory_status_context()
+						)
+					);
+
+					return array( 'processed' => $processed, 'errors' => $errors, 'run_id' => $run_id, 'paused' => 'yes' );
+				}
+			}
+
+			$this->logger->info(
+				'catalog',
+				'Finished parallel Schrack catalog worker range.',
+				null,
+				array_merge(
+					array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'range_start' => $start, 'range_end' => $end ),
+					$this->memory_status_context()
+				)
+			);
+
+			return array( 'processed' => $processed, 'errors' => $errors, 'run_id' => $run_id, 'completed' => 'yes' );
+		} catch ( Throwable $exception ) {
+			$this->logger->error(
+				'catalog',
+				'Parallel Schrack catalog worker failed.',
+				null,
+				array( 'run_id' => $run_id, 'range_start' => $start, 'range_end' => $end, 'error' => $exception->getMessage() )
+			);
+
+			return array( 'processed' => 0, 'errors' => 1, 'run_id' => $run_id );
+		}
+	}
+
+	/**
+	 * Sequentially pre-creates every category/attribute term the remaining
+	 * catalog references, reading the cache in pages so priming a large
+	 * catalog does not hold the whole thing in memory at once.
+	 */
+	private function prime_catalog_terms( Schrack_Catalog_Importer $importer, string $items_path, int $total_items ): void {
+		$mapper = new Schrack_Product_Mapper( $this->settings, $this->logger );
+		$page   = 2000;
+
+		for ( $offset = 0; $offset < $total_items; $offset += $page ) {
+			$items = $importer->read_cache_range( $items_path, $offset, min( $page, $total_items - $offset ) );
+
+			if ( empty( $items ) ) {
+				break;
+			}
+
+			$mapper->prime_terms_for_items( $items );
+		}
+
+		$this->logger->debug(
+			'catalog',
+			'Primed category/attribute terms before dispatching parallel catalog workers.',
+			null,
+			array( 'total_items' => $total_items )
+		);
+	}
+
+	/**
+	 * Splits a [0, $total) range into up to $workers contiguous, non-overlapping
+	 * chunks as evenly as possible.
+	 *
+	 * @return array<int,array{0:int,1:int}> List of [start, count] pairs.
+	 */
+	private function split_range( int $total, int $workers ): array {
+		$workers = max( 1, min( $workers, max( 1, $total ) ) );
+		$base    = intdiv( $total, $workers );
+		$extra   = $total % $workers;
+		$ranges  = array();
+		$offset  = 0;
+
+		for ( $i = 0; $i < $workers; $i++ ) {
+			$count = $base + ( $i < $extra ? 1 : 0 );
+
+			if ( $count <= 0 ) {
+				continue;
+			}
+
+			$ranges[] = array( $offset, $count );
+			$offset  += $count;
+		}
+
+		return $ranges;
+	}
+
+	/**
+	 * Returns how many parallel catalog worker actions are already queued or running.
+	 */
+	private function active_catalog_worker_count(): int {
+		return $this->scheduled_action_count( self::HOOK_CATALOG_WORKER, 'pending' )
+			+ $this->active_running_action_count( self::HOOK_CATALOG_WORKER );
+	}
+
+	/**
+	 * Returns how many Action Scheduler workers catalog import may dispatch at once.
+	 */
+	private function catalog_parallel_workers(): int {
+		$workers = max( 1, min( 8, (int) $this->settings->get( 'catalog_parallel_workers', 1 ) ) );
+
+		return $this->is_low_memory_host() ? min( $workers, 5 ) : $workers;
 	}
 
 	/**
@@ -1393,7 +1796,7 @@ class Schrack_Cron {
 				return;
 			}
 
-			$result = $this->run_catalog_import( false );
+			$result = $this->run_catalog_import( false, false );
 
 			if ( $this->is_stopped_result( $result ) ) {
 				return;
@@ -1520,7 +1923,7 @@ class Schrack_Cron {
 	 * Clears scheduled actions.
 	 */
 	public static function clear_scheduled_actions(): void {
-		$hooks = array( self::HOOK_CATALOG, self::HOOK_TELESYSTEM_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER, self::HOOK_CATEGORY_IMPORT );
+		$hooks = array( self::HOOK_CATALOG, self::HOOK_CATALOG_WORKER, self::HOOK_TELESYSTEM_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER, self::HOOK_CATEGORY_IMPORT );
 
 		if ( class_exists( 'Schrack_Frontend_Image_Loader' ) ) {
 			$hooks[] = Schrack_Frontend_Image_Loader::BACKGROUND_HOOK;
@@ -1535,7 +1938,7 @@ class Schrack_Cron {
 	 * Clears only Schrack-source catalog, price, stock, and full sync actions.
 	 */
 	private function clear_schrack_source_actions(): void {
-		foreach ( array( self::HOOK_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL ) as $hook ) {
+		foreach ( array( self::HOOK_CATALOG, self::HOOK_CATALOG_WORKER, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL ) as $hook ) {
 			if ( self::has_scheduled_hook( $hook ) ) {
 				self::clear_hook_actions( $hook );
 			}
@@ -2435,6 +2838,7 @@ class Schrack_Cron {
 			'catalog' => array(
 				'hook'  => self::HOOK_CATALOG,
 				'label' => __( 'Catalog', 'schrack-woocommerce-sync' ),
+				'extra_hooks' => array( self::HOOK_CATALOG_WORKER ),
 			),
 			'telesystem_catalog' => array(
 				'hook'  => self::HOOK_TELESYSTEM_CATALOG,

@@ -154,6 +154,28 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,mixed>
 	 */
 	public function import_items( array $items, array $status_context = array() ): array {
+		$result = array_merge( $this->import_items_batch( $items ), $status_context );
+
+		$this->settings->update_status(
+			'catalog',
+			$result
+		);
+
+		return $result;
+	}
+
+	/**
+	 * Core product-save loop shared by the sequential cursor path and parallel
+	 * worker ranges (see Schrack_Cron::run_catalog_worker()). Deliberately does
+	 * not touch the shared 'catalog' status row: parallel workers run as
+	 * separate PHP processes, and a get-modify-set status write from each one
+	 * could race and clobber another worker's update. Callers decide how (or
+	 * whether) to record status from the returned counts instead.
+	 *
+	 * @param array<int,array<string,mixed>> $items Items.
+	 * @return array<string,mixed>
+	 */
+	private function import_items_batch( array $items ): array {
 		$processed             = 0;
 		$errors                = 0;
 		$image_urls_seen       = 0;
@@ -208,24 +230,98 @@ class Schrack_Catalog_Importer {
 			wp_defer_term_counting( false );
 		}
 
-		$result = array_merge(
+		return array(
+			'processed'             => $processed,
+			'errors'                => $errors,
+			'image_urls_seen'       => $image_urls_seen,
+			'image_urls_stored'     => $image_urls_stored,
+			'image_urls_backfilled' => $image_urls_backfilled,
+			'image_url_meta_errors' => $image_url_meta_errors,
+		);
+	}
+
+	/**
+	 * Fetches and parses the catalog fresh, without importing anything. Used by
+	 * the parallel dispatcher, which needs the cache metadata (signature,
+	 * total_items, items_path) up front to split work across workers before any
+	 * of them start -- unlike the sequential path, this never resumes a
+	 * partially-consumed cache, since a parallel run always claims the whole
+	 * remaining catalog in one go.
+	 *
+	 * @return array<string,mixed>|null Cache metadata, or null on failure.
+	 */
+	public function fetch_and_cache_catalog( string $format ): ?array {
+		$format = strtoupper( $format );
+
+		if ( 'CSV' !== $format ) {
+			return null;
+		}
+
+		$raw     = $this->client->get_catalog_as( $format );
+		$content = $this->extract_catalog_content( $raw );
+
+		if ( '' === $content ) {
+			return null;
+		}
+
+		$source = $this->catalog_response_source_file( $content );
+		unset( $content );
+
+		if ( null === $source ) {
+			return null;
+		}
+
+		try {
+			$cache = $this->write_csv_catalog_cache_from_file( (string) $source['path'], $format );
+		} finally {
+			$this->delete_temp_files( (array) ( $source['cleanup_paths'] ?? array() ) );
+		}
+
+		if ( null === $cache || absint( $cache['total_items'] ?? 0 ) <= 0 ) {
+			return null;
+		}
+
+		return $cache;
+	}
+
+	/**
+	 * Reads one slice from a parsed catalog cache without importing it, e.g. for
+	 * the parallel dispatcher's term-priming pass.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function read_cache_range( string $items_path, int $offset, int $limit ): array {
+		return $this->read_catalog_cache_batch( $items_path, $offset, $limit );
+	}
+
+	/**
+	 * Imports one batch from an explicit cache offset rather than the shared
+	 * cursor, for a parallel worker processing its own fixed range.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public function import_cache_range( string $format, string $signature, string $items_path, int $offset, int $limit ): array {
+		$batch  = $this->read_catalog_cache_batch( $items_path, $offset, $limit );
+		$result = $this->import_items_batch( $batch );
+
+		return array_merge(
+			$result,
 			array(
-				'processed'             => $processed,
-				'errors'                => $errors,
-				'image_urls_seen'       => $image_urls_seen,
-				'image_urls_stored'     => $image_urls_stored,
-				'image_urls_backfilled' => $image_urls_backfilled,
-				'image_url_meta_errors' => $image_url_meta_errors,
-			),
-			$status_context
+				'catalog_format'    => strtoupper( $format ),
+				'catalog_signature' => $signature,
+				'batch_start'       => $offset,
+				'batch_count'       => count( $batch ),
+				'batch_limit'       => $limit,
+			)
 		);
+	}
 
-		$this->settings->update_status(
-			'catalog',
-			$result
-		);
-
-		return $result;
+	/**
+	 * Deletes a parsed catalog cache by signature, for the parallel dispatcher
+	 * to call once every worker has finished consuming it.
+	 */
+	public function delete_cache_for_signature( string $format, string $signature ): void {
+		$this->delete_catalog_cache( $format, $signature );
 	}
 
 	/**

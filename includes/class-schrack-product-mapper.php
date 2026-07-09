@@ -956,6 +956,48 @@ class Schrack_Product_Mapper {
 	}
 
 	/**
+	 * Pre-creates every category and pa_ attribute term a batch of catalog
+	 * items references, without touching any product. Parallel catalog import
+	 * workers each run in their own PHP process, so two workers can otherwise
+	 * both encounter the same brand-new category/attribute value at the same
+	 * moment and both try to create it -- WordPress has no DB-level unique
+	 * constraint stopping that race. Running this sequentially, once, before
+	 * any worker starts means every worker afterwards only ever reads an
+	 * existing term ID instead of trying to insert one.
+	 *
+	 * @param array<int,array<string,mixed>> $items Normalized catalog items.
+	 */
+	public function prime_terms_for_items( array $items ): void {
+		foreach ( $items as $item ) {
+			if ( ! empty( $item['category_path'] ) ) {
+				$this->assign_categories( is_array( $item['category_path'] ) ? $item['category_path'] : $this->string_value( $item['category_path'] ) );
+			}
+
+			$extracted = is_array( $item['extracted_attributes'] ?? null ) ? $item['extracted_attributes'] : array();
+			$dynamic   = $this->normalized_dynamic_attributes( is_array( $item['dynamic_technical_attributes'] ?? null ) ? $item['dynamic_technical_attributes'] : array() );
+
+			if ( empty( $extracted ) && empty( $dynamic ) ) {
+				continue;
+			}
+
+			if ( ! class_exists( 'WC_Product_Attribute' ) || ! function_exists( 'wc_create_attribute' ) ) {
+				continue;
+			}
+
+			$attributes = array();
+			$position   = 0;
+
+			foreach ( $extracted as $slug => $info ) {
+				$this->apply_taxonomy_attribute( $attributes, $position, (string) $slug, $info );
+			}
+
+			foreach ( $dynamic as $slug => $info ) {
+				$this->apply_taxonomy_attribute( $attributes, $position, $slug, $info );
+			}
+		}
+	}
+
+	/**
 	 * Remaps raw dynamic technical-attribute entries into taxonomy-ready slugs.
 	 * "Culoare"/"Material" labels merge into the same shared color/material
 	 * taxonomies Schrack_Attribute_Extractor already uses -- color and material
