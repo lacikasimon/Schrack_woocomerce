@@ -846,6 +846,17 @@ class Schrack_Telesystem_Importer {
 		$price_2 = isset( $item['telesystem_price_2'] ) ? (float) $item['telesystem_price_2'] : 0.0;
 		$price   = $this->woocommerce_price( $product_id, $price_1, $price_2 );
 
+		// Pret 1 is Telesystem's net/cost price (see "Pret 1 + default/category
+		// markup" in settings); Telesystem products never go through the
+		// Schrack SOAP price sync, so this is the only point where the
+		// admin-visible supplier price (_schrack_purchase_price, shared with
+		// the Schrack price sync) can be populated for them.
+		$purchase_price = $price_1 > 0 ? $price_1 : $price_2;
+
+		if ( $purchase_price > 0 ) {
+			$product->update_meta_data( '_schrack_purchase_price', $purchase_price );
+		}
+
 		if ( $price > 0 ) {
 			$formatted_price = $this->format_price( $price );
 			$product->set_regular_price( $formatted_price );

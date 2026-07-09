@@ -15,6 +15,7 @@ class Schrack_Product_Admin_Fields {
 	 */
 	public function init(): void {
 		add_action( 'add_meta_boxes', array( $this, 'register_meta_boxes' ) );
+		add_action( 'woocommerce_product_options_pricing', array( $this, 'render_supplier_price_field' ) );
 	}
 
 	/**
@@ -102,6 +103,38 @@ class Schrack_Product_Admin_Fields {
 		}
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-product-supplier-box.php';
+	}
+
+	/**
+	 * Shows the synced supplier purchase price alongside the Regular/Sale price
+	 * fields, so the markup applied to reach the storefront price is visible
+	 * without leaving the product edit screen. Read-only: the value is only
+	 * ever written by the price/catalog sync, never by editing this field.
+	 */
+	public function render_supplier_price_field(): void {
+		global $post;
+
+		if ( ! $post instanceof WP_Post ) {
+			return;
+		}
+
+		$purchase_price = get_post_meta( $post->ID, '_schrack_purchase_price', true );
+
+		if ( '' === $purchase_price || ! is_numeric( $purchase_price ) ) {
+			return;
+		}
+
+		woocommerce_wp_text_input(
+			array(
+				'id'                => 'schrack_purchase_price_display',
+				'label'             => __( 'Preț furnizor', 'schrack-woocommerce-sync' ) . ' (' . get_woocommerce_currency_symbol() . ')',
+				'value'             => wc_format_localized_price( (float) $purchase_price ),
+				'data_type'         => 'price',
+				'custom_attributes' => array( 'readonly' => 'readonly' ),
+				'desc_tip'          => true,
+				'description'       => __( 'A beszállítói beszerzési ár, automatikusan szinkronizálva. Itt nem szerkeszthető.', 'schrack-woocommerce-sync' ),
+			)
+		);
 	}
 
 	/**
