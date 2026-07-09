@@ -1290,7 +1290,7 @@ class Schrack_Catalog_Importer {
 	 */
 	public function debug_raw_rows( string $format, int $limit = 10 ): array {
 		$format = strtoupper( $format );
-		$limit  = max( 1, min( 5000, $limit ) );
+		$limit  = max( 1, $limit );
 
 		try {
 			$raw = $this->client->get_catalog_as( $format );

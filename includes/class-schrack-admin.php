@@ -763,7 +763,7 @@ class Schrack_Admin {
 		check_admin_referer( 'schrack_wc_sync_debug_fetch' );
 
 		$source = isset( $_POST['debug_source'] ) ? sanitize_key( wp_unslash( (string) $_POST['debug_source'] ) ) : 'schrack_csv';
-		$limit  = isset( $_POST['debug_limit'] ) ? max( 1, min( 5000, absint( $_POST['debug_limit'] ) ) ) : 10;
+		$limit  = isset( $_POST['debug_limit'] ) ? max( 1, absint( $_POST['debug_limit'] ) ) : 10;
 
 		$queued = $this->cron->queue_debug_export( $source, $limit );
 

@@ -24,7 +24,7 @@ $is_stale      = $is_active && $running_for >= 10 * MINUTE_IN_SECONDS;
 	<div class="schrack-panel">
 		<h2><?php esc_html_e( 'Raw feed sample', 'schrack-woocommerce-sync' ); ?></h2>
 		<p class="description">
-			<?php esc_html_e( 'Queues a background export directly from the selected feed without importing or caching anything, so a large sample never times out the request. Each row is captured as the raw feed columns alongside the technical_attributes the current mapping would extract from it, so category/filter attribute handling can be tuned against real data. Rows are capped at 5000 to keep a single export light on memory; that already covers most/all category diversity in the catalog, but is not a guaranteed full dump of every SKU.', 'schrack-woocommerce-sync' ); ?>
+			<?php esc_html_e( 'Queues a background export directly from the selected feed without importing or caching anything, so a large sample never times out the request. Each row is captured as the raw feed columns alongside the technical_attributes the current mapping would extract from it, so category/filter attribute handling can be tuned against real data. There is no artificial row cap; the export only stops early if it gets close to the server memory or time limit, in which case it is flagged as stopped early.', 'schrack-woocommerce-sync' ); ?>
 		</p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schrack-inline-actions">
 			<input type="hidden" name="action" value="schrack_wc_sync_debug_fetch">
@@ -36,9 +36,9 @@ $is_stale      = $is_active && $running_for >= 10 * MINUTE_IN_SECONDS;
 			</select>
 			<label>
 				<?php esc_html_e( 'Rows', 'schrack-woocommerce-sync' ); ?>
-				<input type="number" id="schrack-debug-limit" name="debug_limit" value="10" min="1" max="5000" step="1" class="small-text">
+				<input type="number" id="schrack-debug-limit" name="debug_limit" value="10" min="1" step="1" class="small-text">
 			</label>
-			<button type="button" class="button" id="schrack-debug-limit-max"><?php esc_html_e( 'Full export (5000)', 'schrack-woocommerce-sync' ); ?></button>
+			<button type="button" class="button" id="schrack-debug-limit-max"><?php esc_html_e( 'Full export (all rows)', 'schrack-woocommerce-sync' ); ?></button>
 			<button type="submit" class="button button-primary"><?php esc_html_e( 'Queue export', 'schrack-woocommerce-sync' ); ?></button>
 		</form>
 	</div>
@@ -144,7 +144,9 @@ $is_stale      = $is_active && $running_for >= 10 * MINUTE_IN_SECONDS;
 
 	if ( maxButton && limitInput ) {
 		maxButton.addEventListener( 'click', function () {
-			limitInput.value = limitInput.max;
+			// A very large sentinel, not a real cap: the export itself only
+			// stops early if it nears the server's memory/time limit.
+			limitInput.value = 100000000;
 		} );
 	}
 

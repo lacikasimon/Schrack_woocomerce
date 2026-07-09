@@ -134,14 +134,14 @@ class Schrack_Telesystem_Importer {
 	 * through the normal normalize_telesystem_row() mapping so the raw feed columns
 	 * and the resulting technical_attributes can be compared side by side.
 	 *
-	 * The row count is capped well above typical exploratory samples so a "full"
-	 * export can cover most/all of the feed's category diversity, while still
-	 * bounding memory/response size for a manual, one-off admin action.
+	 * The row count is bounded only by debug_export_should_stop()'s memory/time
+	 * safety net, so a "full" export genuinely covers every row in the feed
+	 * rather than an artificial ceiling.
 	 *
 	 * @return array<string,mixed>
 	 */
 	public function debug_raw_rows( int $limit = 10 ): array {
-		$limit    = max( 1, min( 5000, $limit ) );
+		$limit    = max( 1, $limit );
 		$feed_url = $this->feed_url();
 
 		if ( '' === $feed_url ) {
