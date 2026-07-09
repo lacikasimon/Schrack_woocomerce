@@ -78,24 +78,72 @@ class Schrack_Catalog_Importer {
 		$cache = $this->active_catalog_cache( $format );
 
 		if ( null !== $cache ) {
-			return $this->import_cached_items_with_cursor( $cache, $format, $limit );
+			$import_started = microtime( true );
+			$result         = $this->import_cached_items_with_cursor( $cache, $format, $limit );
+
+			$result['catalog_import_seconds'] = round( microtime( true ) - $import_started, 2 );
+			$this->log_catalog_batch_timing( $format, $result );
+
+			return $result;
 		}
 
-		$raw = $this->client->get_catalog_as( $format );
+		$fetch_started = microtime( true );
+		$raw           = $this->client->get_catalog_as( $format );
+		$fetch_seconds = round( microtime( true ) - $fetch_started, 2 );
 
 		$streamed_result = $this->import_streamed_catalog_response( $raw, $format, $limit );
 
 		if ( null !== $streamed_result ) {
+			$streamed_result['catalog_fetch_seconds'] = $fetch_seconds;
+			$this->log_catalog_batch_timing( $format, $streamed_result );
+
 			return $streamed_result;
 		}
 
-		$items     = $this->parse_catalog_response( $raw, $format );
-		$signature = $this->catalog_signature( $items );
-		$context   = empty( $items )
+		$parse_started = microtime( true );
+		$items         = $this->parse_catalog_response( $raw, $format );
+		$parse_seconds = round( microtime( true ) - $parse_started, 2 );
+		$signature     = $this->catalog_signature( $items );
+		$context       = empty( $items )
 			? array( 'catalog_cache' => 'empty' )
 			: $this->write_catalog_cache( $format, $signature, $items );
 
-		return $this->import_items_with_cursor( $items, $format, $limit, $context, $signature );
+		$context['catalog_fetch_seconds'] = $fetch_seconds;
+		$context['catalog_parse_seconds'] = $parse_seconds;
+
+		$import_started = microtime( true );
+		$result         = $this->import_items_with_cursor( $items, $format, $limit, $context, $signature );
+
+		$result['catalog_import_seconds'] = round( microtime( true ) - $import_started, 2 );
+		$this->log_catalog_batch_timing( $format, $result );
+
+		return $result;
+	}
+
+	/**
+	 * Logs a fetch/parse/import time breakdown for one catalog batch, so a slow
+	 * sync can be diagnosed from the Logs tab without guessing whether the
+	 * bottleneck is the remote Schrack fetch, the local CSV parse (which runs
+	 * once per full catalog cycle, not per batch), or the WooCommerce product
+	 * save loop.
+	 *
+	 * @param array<string,mixed> $result Batch result, possibly carrying
+	 *                                    catalog_fetch_seconds/catalog_parse_seconds/catalog_import_seconds.
+	 */
+	private function log_catalog_batch_timing( string $format, array $result ): void {
+		$this->logger->info(
+			'catalog',
+			'Schrack catalog batch timing.',
+			null,
+			array(
+				'format'                 => $format,
+				'catalog_fetch_seconds'  => $result['catalog_fetch_seconds'] ?? 0.0,
+				'catalog_parse_seconds'  => $result['catalog_parse_seconds'] ?? 0.0,
+				'catalog_import_seconds' => $result['catalog_import_seconds'] ?? 0.0,
+				'batch_count'            => $result['batch_count'] ?? ( $result['processed'] ?? 0 ),
+				'processed'              => $result['processed'] ?? 0,
+			)
+		);
 	}
 
 	/**
@@ -723,39 +771,55 @@ class Schrack_Catalog_Importer {
 			return null;
 		}
 
+		$parse_started = microtime( true );
+
 		try {
 			$cache = $this->write_csv_catalog_cache_from_file( (string) $source['path'], $format );
 		} finally {
 			$this->delete_temp_files( (array) ( $source['cleanup_paths'] ?? array() ) );
 		}
 
+		$parse_seconds = round( microtime( true ) - $parse_started, 2 );
+
 		if ( null === $cache ) {
 			return null;
 		}
 
 		if ( 0 === absint( $cache['total_items'] ?? 0 ) ) {
-			return $this->import_items_with_cursor(
+			$import_started = microtime( true );
+			$result         = $this->import_items_with_cursor(
 				array(),
 				$format,
 				$limit,
 				array(
-					'catalog_cache'     => 'empty',
-					'catalog_streamed'  => 'yes',
-					'catalog_signature' => (string) ( $cache['signature'] ?? '' ),
+					'catalog_cache'         => 'empty',
+					'catalog_streamed'      => 'yes',
+					'catalog_signature'     => (string) ( $cache['signature'] ?? '' ),
+					'catalog_parse_seconds' => $parse_seconds,
 				),
 				(string) ( $cache['signature'] ?? '' )
 			);
+
+			$result['catalog_import_seconds'] = round( microtime( true ) - $import_started, 2 );
+
+			return $result;
 		}
 
-		return $this->import_cached_items_with_cursor(
+		$import_started = microtime( true );
+		$result         = $this->import_cached_items_with_cursor(
 			$cache,
 			$format,
 			$limit,
 			array(
-				'catalog_cache'    => 'written',
-				'catalog_streamed' => 'yes',
+				'catalog_cache'         => 'written',
+				'catalog_streamed'      => 'yes',
+				'catalog_parse_seconds' => $parse_seconds,
 			)
 		);
+
+		$result['catalog_import_seconds'] = round( microtime( true ) - $import_started, 2 );
+
+		return $result;
 	}
 
 	/**

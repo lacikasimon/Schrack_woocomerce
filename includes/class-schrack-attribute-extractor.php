@@ -70,10 +70,20 @@ class Schrack_Attribute_Extractor {
 	 * Returns the extraction rule table. Each matcher returns the formatted
 	 * attribute value, or null when the name does not contain that attribute.
 	 *
+	 * Memoized: a full catalog parse calls extract() once per product name
+	 * (thousands of times per sync cycle), and rebuilding ~15 closures on every
+	 * call was measurable overhead worth avoiding.
+	 *
 	 * @return array<string,array{label:string,matcher:callable(string):?string}>
 	 */
 	private static function rules(): array {
-		return array(
+		static $rules = null;
+
+		if ( null !== $rules ) {
+			return $rules;
+		}
+
+		$rules = array(
 			// ~19% of names, e.g. "NUMINOS L ... IP20 negru".
 			'ip-rating'  => array(
 				'label'   => __( 'Grad de protecție IP', 'schrack-woocommerce-sync' ),
@@ -228,5 +238,7 @@ class Schrack_Attribute_Extractor {
 				},
 			),
 		);
+
+		return $rules;
 	}
 }
