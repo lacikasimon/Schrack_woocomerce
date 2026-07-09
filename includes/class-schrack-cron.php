@@ -1109,6 +1109,12 @@ class Schrack_Cron {
 						array( 'run_id' => $run_id, 'resumed_at' => $position, 'range_end' => $end ),
 						0
 					);
+					// Workers in a wave tend to hit their pause threshold around
+					// the same moment; without this, only the first of them to
+					// requeue would trigger Action Scheduler's throttled
+					// self-dispatch, and the rest would sit due but idle for up
+					// to another 60 seconds.
+					$this->dispatch_queue_runner_ping();
 
 					$this->logger->info(
 						'catalog',
@@ -1258,19 +1264,34 @@ class Schrack_Cron {
 	}
 
 	/**
-	 * Manually fires $count near-simultaneous Action Scheduler async-runner
-	 * loopback requests instead of relying on its natural self-dispatch, which
+	 * Fires $count near-simultaneous Action Scheduler async-runner loopback
+	 * requests instead of relying on its natural self-dispatch, which
 	 * throttles itself to at most one new runner every 60 seconds
 	 * (ActionScheduler_QueueRunner::maybe_dispatch_async_request()) regardless
 	 * of how many actions are due or how many times as_enqueue_async_action()
 	 * is called. That single throttle -- not a hosting/loopback problem -- is
 	 * why only one worker action progressed roughly once a minute no matter
-	 * how many were dispatched at once. Replicates Action Scheduler's own
-	 * ActionScheduler_AsyncRequest_QueueRunner dispatch call exactly (same
-	 * admin-ajax action/nonce), just fired $count times instead of once.
+	 * how many were dispatched at once.
 	 */
 	private function dispatch_concurrent_queue_runners( int $count ): void {
-		if ( $count <= 1 || ! function_exists( 'wp_create_nonce' ) ) {
+		for ( $i = 0; $i < $count; $i++ ) {
+			$this->dispatch_queue_runner_ping();
+		}
+	}
+
+	/**
+	 * Fires one Action Scheduler async-runner loopback request immediately,
+	 * bypassing its natural once-per-60-seconds self-dispatch throttle.
+	 * Replicates ActionScheduler_AsyncRequest_QueueRunner's own dispatch call
+	 * exactly (same admin-ajax action/nonce). Used both to burst-start a fresh
+	 * wave of parallel workers and, from run_catalog_worker() itself, so a
+	 * worker that pauses and requeues its own continuation wakes a runner
+	 * right away instead of waiting on the same throttle -- since all workers
+	 * in a wave tend to pause around the same moment, each firing its own ping
+	 * reproduces the same concurrent burst that started them.
+	 */
+	private function dispatch_queue_runner_ping(): void {
+		if ( ! function_exists( 'wp_create_nonce' ) ) {
 			return;
 		}
 
@@ -1282,15 +1303,15 @@ class Schrack_Cron {
 			),
 			admin_url( 'admin-ajax.php' )
 		);
-		$args = array(
-			'timeout'   => 0.01,
-			'blocking'  => false,
-			'sslverify' => apply_filters( 'https_local_ssl_verify', false ),
-		);
 
-		for ( $i = 0; $i < $count; $i++ ) {
-			wp_remote_post( esc_url_raw( $url ), $args );
-		}
+		wp_remote_post(
+			esc_url_raw( $url ),
+			array(
+				'timeout'   => 0.01,
+				'blocking'  => false,
+				'sslverify' => apply_filters( 'https_local_ssl_verify', false ),
+			)
+		);
 	}
 
 	/**
