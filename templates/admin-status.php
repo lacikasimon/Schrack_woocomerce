@@ -113,6 +113,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<?php esc_html_e( 'Action Scheduler is not available, so sync batches run through WP-Cron instead. WP-Cron only fires on incoming site visits, which can make sync noticeably slower on low-traffic stores. Activating WooCommerce (which bundles Action Scheduler) and/or pointing a real system cron at wp-cron.php is the single biggest speed-up available for this sync.', 'schrack-woocommerce-sync' ); ?>
 				</p>
 			<?php endif; ?>
+			<?php if ( isset( $queue_runner_ping_url ) ) : ?>
+				<p class="description">
+					<?php esc_html_e( 'Optional: for genuinely concurrent parallel workers, point an external cron at this URL several times a minute (e.g. 5 near-simultaneous hits, one crontab line using & to background each curl). wp-cron.php itself cannot do this -- it holds a site-wide lock that only lets one hit at a time actually run, so several hits to it still only process one at a time. This URL bypasses that lock and triggers Action Scheduler directly.', 'schrack-woocommerce-sync' ); ?>
+					<code style="display:block;margin-top:4px;word-break:break-all;"><?php echo esc_html( $queue_runner_ping_url ); ?></code>
+				</p>
+			<?php endif; ?>
 		</div>
 
 		<div class="schrack-panel">

@@ -1310,6 +1310,7 @@ class Schrack_Admin {
 		$queue_status   = $this->cron->queue_status();
 		$stop_request   = $this->active_stop_request( $this->settings->stop_request(), $queue_status );
 		$sync_dashboard = $this->sync_dashboard_stats();
+		$queue_runner_ping_url = add_query_arg( 'schrack_as_ping', $this->cron->queue_runner_ping_secret(), home_url( '/' ) );
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-status.php';
 	}

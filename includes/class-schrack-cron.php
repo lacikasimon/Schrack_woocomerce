@@ -51,6 +51,7 @@ class Schrack_Cron {
 		add_filter( 'cron_schedules', array( $this, 'add_wp_cron_schedules' ) );
 		add_filter( 'action_scheduler_queue_runner_concurrent_batches', array( $this, 'raise_action_scheduler_concurrency' ) );
 		add_filter( 'action_scheduler_queue_runner_batch_size', array( $this, 'lower_action_scheduler_batch_size' ) );
+		add_action( 'init', array( $this, 'maybe_handle_queue_runner_ping' ), 0 );
 		add_action( 'init', array( $this, 'maybe_schedule_recurring_actions' ) );
 		add_action( self::HOOK_CATALOG, array( $this, 'run_catalog_import' ) );
 		add_action( self::HOOK_TELESYSTEM_CATALOG, array( $this, 'run_telesystem_catalog_import' ) );
@@ -62,6 +63,86 @@ class Schrack_Cron {
 		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
 		add_action( self::HOOK_DEBUG_EXPORT, array( $this, 'run_debug_export' ), 10, 2 );
 		add_action( self::HOOK_CATEGORY_IMPORT, array( $this, 'run_category_csv_import' ), 10, 1 );
+	}
+
+	/**
+	 * A fixed-per-site secret so an external cron job can trigger Action
+	 * Scheduler's queue runner directly, without needing a WP nonce (which
+	 * rotates and can't be embedded in a static cron command). wp-cron.php
+	 * itself can't serve this purpose for real concurrency: it holds
+	 * WordPress's own site-wide "doing_cron" lock, so several near-simultaneous
+	 * hits to wp-cron.php still only let ONE of them actually process
+	 * anything -- the rest just see the lock and exit immediately. Hitting
+	 * this endpoint several times at once from cron instead calls the Action
+	 * Scheduler hook directly, bypassing that lock entirely, gated only by the
+	 * action_scheduler_queue_runner_concurrent_batches ceiling raised above.
+	 *
+	 * Derived from the site's own AUTH_SALT rather than a value stored in
+	 * code or the database, so it's never committed to version control and
+	 * differs per install automatically.
+	 */
+	public function queue_runner_ping_secret(): string {
+		return substr( wp_hash( 'schrack_as_queue_runner_ping_v1', 'auth' ), 0, 32 );
+	}
+
+	/**
+	 * Handles an external cron hit to the queue-runner ping endpoint. Exits
+	 * immediately either way, before the rest of WordPress (theme, most
+	 * plugins) loads, since this only ever needs Action Scheduler's own hook.
+	 *
+	 * Requires both the secret AND that the request originates from the
+	 * server itself (loopback, or the server's own resolved IP) -- defense in
+	 * depth so that even a leaked secret can't be used to trigger this from
+	 * off-server.
+	 */
+	public function maybe_handle_queue_runner_ping(): void {
+		if ( ! isset( $_GET['schrack_as_ping'] ) ) {
+			return;
+		}
+
+		$provided = sanitize_text_field( wp_unslash( (string) $_GET['schrack_as_ping'] ) );
+
+		if ( ! hash_equals( $this->queue_runner_ping_secret(), $provided ) ) {
+			return;
+		}
+
+		if ( ! $this->request_is_from_this_server() ) {
+			return;
+		}
+
+		if ( has_action( 'action_scheduler_run_queue' ) ) {
+			do_action( 'action_scheduler_run_queue', 'Schrack Cron Ping' );
+		}
+
+		exit;
+	}
+
+	/**
+	 * Checks whether the current request's remote address is the server this
+	 * site itself runs on, so the ping endpoint only ever honors requests the
+	 * server made to itself (e.g. its own cron), regardless of who has the
+	 * secret.
+	 */
+	private function request_is_from_this_server(): bool {
+		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '';
+
+		if ( '' === $remote ) {
+			return false;
+		}
+
+		if ( in_array( $remote, array( '127.0.0.1', '::1' ), true ) ) {
+			return true;
+		}
+
+		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+
+		if ( ! is_string( $host ) || '' === $host ) {
+			return false;
+		}
+
+		$server_ip = gethostbyname( $host );
+
+		return '' !== $server_ip && $server_ip !== $host && $server_ip === $remote;
 	}
 
 	/**
