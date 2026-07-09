@@ -305,33 +305,40 @@ class Schrack_Telesystem_Importer {
 		$this->mapper->prime_product_ids_by_source_item_numbers( self::SOURCE, $this->item_source_item_numbers( $items ) );
 		$this->mapper->prime_category_cache();
 
-		foreach ( $items as $item ) {
-			try {
-				$product = $this->mapper->upsert_product( $item );
-				++$processed;
+		// See Schrack_Catalog_Importer::import_items() for why this is deferred.
+		wp_defer_term_counting( true );
 
-				$commercial = $this->apply_feed_commercial_data( $product, $item );
+		try {
+			foreach ( $items as $item ) {
+				try {
+					$product = $this->mapper->upsert_product( $item );
+					++$processed;
 
-				if ( ! empty( $commercial['price_synced'] ) ) {
-					++$prices_synced;
+					$commercial = $this->apply_feed_commercial_data( $product, $item );
+
+					if ( ! empty( $commercial['price_synced'] ) ) {
+						++$prices_synced;
+					}
+
+					if ( ! empty( $commercial['stock_synced'] ) ) {
+						++$stock_synced;
+					}
+
+					if ( '' !== $this->string_value( $item['image_url'] ?? '' ) ) {
+						++$image_urls_seen;
+					}
+				} catch ( Throwable $exception ) {
+					++$errors;
+					$this->logger->error(
+						self::OPERATION,
+						'Failed to import Telesystem feed item.',
+						$this->item_sku( $item ),
+						array( 'error' => $exception->getMessage() )
+					);
 				}
-
-				if ( ! empty( $commercial['stock_synced'] ) ) {
-					++$stock_synced;
-				}
-
-				if ( '' !== $this->string_value( $item['image_url'] ?? '' ) ) {
-					++$image_urls_seen;
-				}
-			} catch ( Throwable $exception ) {
-				++$errors;
-				$this->logger->error(
-					self::OPERATION,
-					'Failed to import Telesystem feed item.',
-					$this->item_sku( $item ),
-					array( 'error' => $exception->getMessage() )
-				);
 			}
+		} finally {
+			wp_defer_term_counting( false );
 		}
 
 		$result = array_merge(

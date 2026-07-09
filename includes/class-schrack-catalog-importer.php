@@ -164,37 +164,48 @@ class Schrack_Catalog_Importer {
 		$this->mapper->prime_product_ids_by_skus( $this->item_skus( $items ) );
 		$this->mapper->prime_category_cache();
 
-		foreach ( $items as $item ) {
-			try {
-				$product_id = $this->mapper->upsert( $item );
-				++$processed;
+		// Every product save assigns category and pa_ attribute terms, and by
+		// default each of those recalculates the term's post count with its own
+		// query right away. Deferring that to one pass per taxonomy after the
+		// whole batch is a standard bulk-import technique (WordPress's own
+		// importers do the same) and meaningfully cuts per-product save time.
+		wp_defer_term_counting( true );
 
-				$image_url = $this->item_image_url( $item );
+		try {
+			foreach ( $items as $item ) {
+				try {
+					$product_id = $this->mapper->upsert( $item );
+					++$processed;
 
-				if ( '' !== $image_url ) {
-					++$image_urls_seen;
+					$image_url = $this->item_image_url( $item );
 
-					$meta_status = $this->ensure_product_image_url_meta( $product_id, $image_url, $this->item_sku( $item ) );
+					if ( '' !== $image_url ) {
+						++$image_urls_seen;
 
-					if ( in_array( $meta_status, array( 'verified', 'backfilled' ), true ) ) {
-						++$image_urls_stored;
+						$meta_status = $this->ensure_product_image_url_meta( $product_id, $image_url, $this->item_sku( $item ) );
+
+						if ( in_array( $meta_status, array( 'verified', 'backfilled' ), true ) ) {
+							++$image_urls_stored;
+						}
+
+						if ( 'backfilled' === $meta_status ) {
+							++$image_urls_backfilled;
+						} elseif ( 'failed' === $meta_status ) {
+							++$image_url_meta_errors;
+						}
 					}
-
-					if ( 'backfilled' === $meta_status ) {
-						++$image_urls_backfilled;
-					} elseif ( 'failed' === $meta_status ) {
-						++$image_url_meta_errors;
-					}
+				} catch ( Throwable $exception ) {
+					++$errors;
+					$this->logger->error(
+						'catalog',
+						'Failed to import Schrack catalog item.',
+						$this->item_sku( $item ),
+						array( 'error' => $exception->getMessage() )
+					);
 				}
-			} catch ( Throwable $exception ) {
-				++$errors;
-				$this->logger->error(
-					'catalog',
-					'Failed to import Schrack catalog item.',
-					$this->item_sku( $item ),
-					array( 'error' => $exception->getMessage() )
-				);
 			}
+		} finally {
+			wp_defer_term_counting( false );
 		}
 
 		$result = array_merge(
