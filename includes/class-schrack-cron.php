@@ -49,6 +49,8 @@ class Schrack_Cron {
 	 */
 	public function init(): void {
 		add_filter( 'cron_schedules', array( $this, 'add_wp_cron_schedules' ) );
+		add_filter( 'action_scheduler_queue_runner_concurrent_batches', array( $this, 'raise_action_scheduler_concurrency' ) );
+		add_filter( 'action_scheduler_queue_runner_batch_size', array( $this, 'lower_action_scheduler_batch_size' ) );
 		add_action( 'init', array( $this, 'maybe_schedule_recurring_actions' ) );
 		add_action( self::HOOK_CATALOG, array( $this, 'run_catalog_import' ) );
 		add_action( self::HOOK_TELESYSTEM_CATALOG, array( $this, 'run_telesystem_catalog_import' ) );
@@ -889,6 +891,16 @@ class Schrack_Cron {
 			array_merge( $result, array( 'ranges' => $queued_ranges ) )
 		);
 
+		// Action Scheduler's own async dispatch only starts one new runner at
+		// most once every 60 seconds, so without this the 5 queued workers
+		// above would still only progress one at a time. Firing several
+		// concurrent loopback pings ourselves is what actually lets them run
+		// at the same time (combined with the concurrency/batch-size filters
+		// registered in init()).
+		if ( $queued_workers > 0 ) {
+			$this->dispatch_concurrent_queue_runners( $queued_workers );
+		}
+
 		if ( $queue_continuation && $queued_workers > 0 ) {
 			$this->queue_sync_batch(
 				self::HOOK_CATALOG,
@@ -1210,6 +1222,75 @@ class Schrack_Cron {
 		$workers = max( 1, min( 8, (int) $this->settings->get( 'catalog_parallel_workers', 1 ) ) );
 
 		return $this->is_low_memory_host() ? min( $workers, 5 ) : $workers;
+	}
+
+	/**
+	 * Action Scheduler only allows one claimed batch of due actions to run at a
+	 * time, site-wide, by default (filter default: 1). Whichever queue-runner
+	 * process wins the race claims *every* due action in one go and processes
+	 * them one by one in its own single PHP process before a second runner is
+	 * even permitted to start (see has_maximum_concurrent_batches() in Action
+	 * Scheduler core). That default is why parallel catalog/image workers,
+	 * despite being dispatched as separate Action Scheduler actions, never
+	 * actually ran at the same time -- raising this lets multiple
+	 * concurrently-triggered runner processes each hold their own claim.
+	 *
+	 * @param mixed $current Action Scheduler's current filtered value.
+	 */
+	public function raise_action_scheduler_concurrency( mixed $current ): int {
+		return max( (int) $current, $this->catalog_parallel_workers(), $this->image_parallel_workers() );
+	}
+
+	/**
+	 * A single claim grabs up to this many due actions at once (Action
+	 * Scheduler's default: 25), then processes them all sequentially in one
+	 * PHP process regardless of how many *other* runner processes are also
+	 * allowed to run concurrently. With e.g. 5 worker actions queued together,
+	 * one claim would happily scoop up all 5 and quietly defeat the
+	 * concurrency raise above. Capping this near 1 forces each
+	 * concurrently-dispatched runner to claim at most a couple of actions, so
+	 * they actually split the work instead of one runner doing it all anyway.
+	 *
+	 * @param mixed $current Action Scheduler's current filtered value.
+	 */
+	public function lower_action_scheduler_batch_size( mixed $current ): int {
+		return min( (int) $current, 2 );
+	}
+
+	/**
+	 * Manually fires $count near-simultaneous Action Scheduler async-runner
+	 * loopback requests instead of relying on its natural self-dispatch, which
+	 * throttles itself to at most one new runner every 60 seconds
+	 * (ActionScheduler_QueueRunner::maybe_dispatch_async_request()) regardless
+	 * of how many actions are due or how many times as_enqueue_async_action()
+	 * is called. That single throttle -- not a hosting/loopback problem -- is
+	 * why only one worker action progressed roughly once a minute no matter
+	 * how many were dispatched at once. Replicates Action Scheduler's own
+	 * ActionScheduler_AsyncRequest_QueueRunner dispatch call exactly (same
+	 * admin-ajax action/nonce), just fired $count times instead of once.
+	 */
+	private function dispatch_concurrent_queue_runners( int $count ): void {
+		if ( $count <= 1 || ! function_exists( 'wp_create_nonce' ) ) {
+			return;
+		}
+
+		$identifier = 'as_async_request_queue_runner';
+		$url        = add_query_arg(
+			array(
+				'action' => $identifier,
+				'nonce'  => wp_create_nonce( $identifier ),
+			),
+			admin_url( 'admin-ajax.php' )
+		);
+		$args = array(
+			'timeout'   => 0.01,
+			'blocking'  => false,
+			'sslverify' => apply_filters( 'https_local_ssl_verify', false ),
+		);
+
+		for ( $i = 0; $i < $count; $i++ ) {
+			wp_remote_post( esc_url_raw( $url ), $args );
+		}
 	}
 
 	/**
