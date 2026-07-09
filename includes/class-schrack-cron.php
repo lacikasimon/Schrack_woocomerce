@@ -56,7 +56,7 @@ class Schrack_Cron {
 		add_action( self::HOOK_STOCK, array( $this, 'run_stock_sync' ) );
 		add_action( self::HOOK_IMAGES, array( $this, 'run_image_sync' ) );
 		add_action( self::HOOK_IMAGE_WORKER, array( $this, 'run_image_worker' ), 10, 3 );
-		add_action( self::HOOK_CATALOG_WORKER, array( $this, 'run_catalog_worker' ), 10, 6 );
+		add_action( self::HOOK_CATALOG_WORKER, array( $this, 'run_catalog_worker' ), 10, 9 );
 		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
 		add_action( self::HOOK_DEBUG_EXPORT, array( $this, 'run_debug_export' ), 10, 2 );
 		add_action( self::HOOK_CATEGORY_IMPORT, array( $this, 'run_category_csv_import' ), 10, 1 );
@@ -846,7 +846,7 @@ class Schrack_Cron {
 			$queued = $this->queue_sync_batch(
 				self::HOOK_CATALOG_WORKER,
 				'catalog',
-				array( $format, $signature, $items_path, $start, $end, $run_id ),
+				array( $format, $signature, $items_path, $start, $end, $run_id, $start, 0, 0 ),
 				array(
 					'run_id'       => $run_id,
 					'worker_index' => $index + 1,
@@ -938,15 +938,8 @@ class Schrack_Cron {
 
 	/**
 	 * Marks a parallel catalog cycle complete once every worker has finished,
-	 * deletes the now-fully-consumed cache, and (like the sequential path)
-	 * triggers the image sync stage.
-	 *
-	 * Note: unlike the sequential path's exact running totals, 'processed' here
-	 * is approximated as total_items -- each worker logs its own per-range
-	 * processed/error counts individually (see run_catalog_worker()), since
-	 * having every worker also write into the single shared 'catalog' status
-	 * row would race across processes. The per-item error log is unaffected;
-	 * only this aggregate summary count is approximate.
+	 * deletes the now-fully-consumed cache and the per-worker progress rows it
+	 * left behind, and (like the sequential path) triggers the image sync stage.
 	 *
 	 * @param array<string,mixed> $last_row Status row from the dispatch that just finished.
 	 */
@@ -954,6 +947,8 @@ class Schrack_Cron {
 		$format      = (string) ( $last_row['catalog_format'] ?? 'CSV' );
 		$signature   = (string) ( $last_row['catalog_signature'] ?? '' );
 		$total_items = absint( $last_row['total_items'] ?? 0 );
+		$run_id      = (string) ( $last_row['run_id'] ?? '' );
+		$totals      = $this->sum_and_clear_catalog_worker_status( $run_id );
 
 		if ( '' !== $signature ) {
 			$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
@@ -963,7 +958,8 @@ class Schrack_Cron {
 		$result = array_merge(
 			$last_row,
 			array(
-				'processed'       => $total_items,
+				'processed'       => $totals['processed'] > 0 ? $totals['processed'] : $total_items,
+				'errors'          => $totals['errors'],
 				'batch_count'     => $total_items,
 				'completed_cycle' => 'yes',
 				'parallel'        => 'yes',
@@ -994,6 +990,42 @@ class Schrack_Cron {
 	}
 
 	/**
+	 * Sums every 'catalog_worker_*' progress row belonging to a run, then
+	 * deletes them -- they exist only to let the status page show live
+	 * progress while workers are active (see Schrack_Admin::
+	 * aggregate_parallel_catalog_status()); once the cycle is finalized they'd
+	 * otherwise sit around as stale option rows forever.
+	 *
+	 * @return array{processed:int,errors:int}
+	 */
+	private function sum_and_clear_catalog_worker_status( string $run_id ): array {
+		$processed = 0;
+		$errors    = 0;
+
+		if ( '' === $run_id ) {
+			return array( 'processed' => $processed, 'errors' => $errors );
+		}
+
+		$status = $this->settings->get_status();
+
+		foreach ( $status as $key => $value ) {
+			if ( ! is_string( $key ) || ! str_starts_with( $key, 'catalog_worker_' ) || ! is_array( $value ) ) {
+				continue;
+			}
+
+			if ( $run_id !== (string) ( $value['run_id'] ?? '' ) ) {
+				continue;
+			}
+
+			$processed += absint( $value['processed'] ?? 0 );
+			$errors    += absint( $value['errors'] ?? 0 );
+			$this->settings->delete_status( $key );
+		}
+
+		return array( 'processed' => $processed, 'errors' => $errors );
+	}
+
+	/**
 	 * Runs one parallel catalog import worker over its own fixed [start, end)
 	 * row range. If it gets close to its time/memory budget before finishing,
 	 * it requeues itself with an updated start offset -- the same
@@ -1002,14 +1034,25 @@ class Schrack_Cron {
 	 *
 	 * @return array<string,mixed>
 	 */
-	public function run_catalog_worker( string $format, string $signature, string $items_path, int $start, int $end, string $run_id ): array {
+	public function run_catalog_worker( string $format, string $signature, string $items_path, int $start, int $end, string $run_id, int $range_start = -1, int $carried_processed = 0, int $carried_errors = 0 ): array {
+		// A worker that pauses and requeues itself starts this method fresh each
+		// time, with its own processed/errors counters back at zero. range_start
+		// (stable across resumptions, unlike $start) and the carried totals let
+		// the status row report this worker's true cumulative progress instead
+		// of resetting to 0 every time it resumes -- see status_key() below.
+		if ( $range_start < 0 ) {
+			$range_start = $start;
+		}
+
+		$status_key = 'catalog_worker_' . $range_start;
+
 		try {
 			$importer   = new Schrack_Catalog_Importer( $this->settings, $this->logger );
 			$limit      = $this->catalog_batch_limit();
 			$started_at = time();
 			$position   = max( 0, $start );
-			$processed  = 0;
-			$errors     = 0;
+			$processed  = $carried_processed;
+			$errors     = $carried_errors;
 
 			while ( $position < $end ) {
 				if ( $this->settings->is_stop_requested() ) {
@@ -1019,6 +1062,8 @@ class Schrack_Cron {
 						null,
 						array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'resumed_at' => $position, 'range_end' => $end )
 					);
+
+					$this->settings->update_status( $status_key, array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'state' => 'stopped' ) );
 
 					return array( 'processed' => $processed, 'errors' => $errors, 'run_id' => $run_id, 'stopped' => 'yes' );
 				}
@@ -1039,11 +1084,16 @@ class Schrack_Cron {
 
 				$position += $batch_count;
 
+				$this->settings->update_status(
+					$status_key,
+					array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'state' => 'running' )
+				);
+
 				if ( $position < $end && $this->should_pause_batch_run( $started_at, 'catalog' ) ) {
 					$this->queue_sync_batch(
 						self::HOOK_CATALOG_WORKER,
 						'catalog',
-						array( $format, $signature, $items_path, $position, $end, $run_id ),
+						array( $format, $signature, $items_path, $position, $end, $run_id, $range_start, $processed, $errors ),
 						array( 'run_id' => $run_id, 'resumed_at' => $position, 'range_end' => $end ),
 						0
 					);
@@ -1062,6 +1112,7 @@ class Schrack_Cron {
 				}
 			}
 
+			$this->settings->update_status( $status_key, array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'state' => 'completed' ) );
 			$this->logger->info(
 				'catalog',
 				'Finished parallel Schrack catalog worker range.',
@@ -1079,6 +1130,11 @@ class Schrack_Cron {
 				'Parallel Schrack catalog worker failed.',
 				null,
 				array( 'run_id' => $run_id, 'range_start' => $start, 'range_end' => $end, 'error' => $exception->getMessage() )
+			);
+
+			$this->settings->update_status(
+				'catalog_worker_' . $range_start,
+				array( 'run_id' => $run_id, 'processed' => $carried_processed, 'errors' => $carried_errors + 1, 'state' => 'failed' )
 			);
 
 			return array( 'processed' => 0, 'errors' => 1, 'run_id' => $run_id );

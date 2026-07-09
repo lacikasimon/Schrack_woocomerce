@@ -252,6 +252,21 @@ class Schrack_Settings {
 	}
 
 	/**
+	 * Removes one status row, e.g. a parallel worker's progress row once its
+	 * run has finished and been aggregated into the parent status row.
+	 */
+	public function delete_status( string $key ): void {
+		$status = get_option( self::STATUS_OPTION_NAME, array() );
+
+		if ( ! is_array( $status ) || ! array_key_exists( $key, $status ) ) {
+			return;
+		}
+
+		unset( $status[ $key ] );
+		update_option( self::STATUS_OPTION_NAME, $status, false );
+	}
+
+	/**
 	 * Returns all status data.
 	 *
 	 * @return array<string,mixed>

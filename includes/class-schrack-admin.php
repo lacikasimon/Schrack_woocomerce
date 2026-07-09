@@ -1304,6 +1304,7 @@ class Schrack_Admin {
 		$this->assert_can_manage();
 
 		$status         = $this->settings->get_status();
+		$status['catalog'] = $this->aggregate_parallel_catalog_status( $status );
 		$settings       = $this->settings->all();
 		$notice         = $this->get_notice();
 		$queue_status   = $this->cron->queue_status();
@@ -1311,6 +1312,57 @@ class Schrack_Admin {
 		$sync_dashboard = $this->sync_dashboard_stats();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-status.php';
+	}
+
+	/**
+	 * Sums live progress across parallel catalog workers for the current run.
+	 *
+	 * Each worker writes its own status row (see Schrack_Cron::run_catalog_worker())
+	 * instead of the shared 'catalog' row, to avoid racing on a single option
+	 * across processes. That means the 'catalog' row itself never carries a
+	 * running processed count while parallel workers are active -- without this,
+	 * the status page would show "0 processed, 0%" for the whole run even while
+	 * thousands of products are actually being imported.
+	 *
+	 * @param array<string,mixed> $status Full status option.
+	 * @return array<string,mixed> The 'catalog' row, with processed/errors/cursor
+	 *                             filled in from worker rows when a parallel run
+	 *                             is in progress.
+	 */
+	private function aggregate_parallel_catalog_status( array $status ): array {
+		$row = isset( $status['catalog'] ) && is_array( $status['catalog'] ) ? $status['catalog'] : array();
+
+		if ( 'yes' !== (string) ( $row['parallel'] ?? 'no' ) || 'no' !== (string) ( $row['completed_cycle'] ?? 'yes' ) ) {
+			return $row;
+		}
+
+		$run_id = (string) ( $row['run_id'] ?? '' );
+
+		if ( '' === $run_id ) {
+			return $row;
+		}
+
+		$processed = 0;
+		$errors    = 0;
+
+		foreach ( $status as $key => $value ) {
+			if ( ! is_string( $key ) || ! str_starts_with( $key, 'catalog_worker_' ) || ! is_array( $value ) ) {
+				continue;
+			}
+
+			if ( $run_id !== (string) ( $value['run_id'] ?? '' ) ) {
+				continue;
+			}
+
+			$processed += absint( $value['processed'] ?? 0 );
+			$errors    += absint( $value['errors'] ?? 0 );
+		}
+
+		$row['processed'] = $processed;
+		$row['errors']    = $errors;
+		$row['cursor']    = $processed;
+
+		return $row;
 	}
 
 	/**
