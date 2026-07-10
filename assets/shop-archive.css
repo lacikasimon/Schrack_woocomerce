@@ -26,6 +26,10 @@ body.schrack-shop-main-page .woocommerce-products-header {
 	display: none !important;
 }
 
+body.schrack-shop-main-page.schrack-shop-has-intro .elementor-widget-theme-archive-title {
+	display: none !important;
+}
+
 body.schrack-shop-archive-page .container_inner.default_template_holder {
 	box-sizing: border-box;
 	max-width: 1480px;

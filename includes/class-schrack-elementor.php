@@ -43,6 +43,7 @@ class Schrack_Elementor {
 		add_action( 'init', array( $this, 'register_assets' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_shop_archive_assets' ), 20 );
+		add_action( 'elementor/theme/before_do_archive', array( $this, 'render_shop_archive_intro' ), 5 );
 		add_action( 'woocommerce_before_main_content', array( $this, 'render_shop_archive_intro' ), 5 );
 		add_action( 'pre_get_posts', array( $this, 'apply_shop_archive_search' ), 20 );
 		add_filter( 'the_content', array( $this, 'prepend_shop_archive_intro' ), 5 );
