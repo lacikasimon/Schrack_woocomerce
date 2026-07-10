@@ -1345,7 +1345,20 @@ class Schrack_Admin {
 
 		$processed = 0;
 		$errors    = 0;
+		$created   = 0;
+		$updated   = 0;
+		$unchanged = 0;
 
+		foreach ( $this->settings->get_catalog_worker_statuses( $run_id ) as $value ) {
+			$processed += absint( $value['processed'] ?? 0 );
+			$errors    += absint( $value['errors'] ?? 0 );
+			$created   += absint( $value['created'] ?? 0 );
+			$updated   += absint( $value['updated'] ?? 0 );
+			$unchanged += absint( $value['unchanged'] ?? 0 );
+		}
+
+		// Include legacy shared-option worker rows that may have been queued
+		// before the per-worker status storage migration.
 		foreach ( $status as $key => $value ) {
 			if ( ! is_string( $key ) || ! str_starts_with( $key, 'catalog_worker_' ) || ! is_array( $value ) ) {
 				continue;
@@ -1357,10 +1370,16 @@ class Schrack_Admin {
 
 			$processed += absint( $value['processed'] ?? 0 );
 			$errors    += absint( $value['errors'] ?? 0 );
+			$created   += absint( $value['created'] ?? 0 );
+			$updated   += absint( $value['updated'] ?? 0 );
+			$unchanged += absint( $value['unchanged'] ?? 0 );
 		}
 
 		$row['processed'] = $processed;
 		$row['errors']    = $errors;
+		$row['created']   = $created;
+		$row['updated']   = $updated;
+		$row['unchanged'] = $unchanged;
 		$row['cursor']    = $processed;
 
 		return $row;

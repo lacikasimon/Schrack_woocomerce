@@ -45,6 +45,20 @@ class Schrack_Telesystem_Importer {
 	private Schrack_Category_Markup $markup;
 
 	/**
+	 * Open JSONL reader retained across consecutive batches in one request.
+	 *
+	 * @var array<string,array{file:SplFileObject,next_offset:int}>
+	 */
+	private array $feed_cache_readers = array();
+
+	/**
+	 * Per-request fingerprint context for output-affecting commercial settings.
+	 *
+	 * @var array<string,mixed>|null
+	 */
+	private ?array $fingerprint_context = null;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct( Schrack_Settings $settings, Schrack_Logger $logger, ?Schrack_Product_Mapper $mapper = null, ?Schrack_Category_Markup $markup = null ) {
@@ -59,7 +73,7 @@ class Schrack_Telesystem_Importer {
 	 *
 	 * @return array<string,mixed>
 	 */
-	public function import_from_feed( int $limit = 500 ): array {
+	public function import_from_feed( int $limit = 500, bool $manage_term_counting = true ): array {
 		$limit = max( 1, $limit );
 
 		if ( 'yes' !== (string) $this->settings->get( 'telesystem_enabled', 'yes' ) ) {
@@ -125,7 +139,7 @@ class Schrack_Telesystem_Importer {
 			return $result;
 		}
 
-		return $this->import_cached_items_with_cursor( $cache, $limit );
+		return $this->import_cached_items_with_cursor( $cache, $limit, $manage_term_counting );
 	}
 
 	/**
@@ -294,27 +308,87 @@ class Schrack_Telesystem_Importer {
 	 * @param array<string,mixed>            $status_context Extra status fields.
 	 * @return array<string,mixed>
 	 */
-	public function import_items( array $items, array $status_context = array() ): array {
+	public function import_items( array $items, array $status_context = array(), bool $manage_term_counting = true ): array {
 		$processed       = 0;
 		$errors          = 0;
+		$created         = 0;
+		$updated         = 0;
+		$unchanged       = 0;
 		$prices_synced   = 0;
 		$stock_synced    = 0;
 		$image_urls_seen = 0;
 
 		$this->mapper->prime_product_ids_by_skus( $this->item_skus( $items ) );
-		$this->mapper->prime_product_ids_by_source_item_numbers( self::SOURCE, $this->item_source_item_numbers( $items ) );
+
+		// SKU is deterministic (TS-<supplier code>) and uses WooCommerce's indexed
+		// lookup table. Only prime the slower source-meta fallback for legacy rows
+		// whose current SKU did not resolve.
+		$missing_source_numbers = array();
+		foreach ( $items as $item ) {
+			$sku = $this->item_sku( $item );
+
+			if ( null !== $sku && $this->mapper->find_product_by_sku( $sku ) <= 0 ) {
+				$missing_source_numbers[] = $this->source_item_number( $item );
+			}
+		}
+		$this->mapper->prime_product_ids_by_source_item_numbers( self::SOURCE, $missing_source_numbers );
 		$this->mapper->prime_category_cache();
+		$fingerprint_context = $this->catalog_fingerprint_context();
+		$requires_post_save_category_pricing = $this->requires_post_save_category_pricing();
 
 		// See Schrack_Catalog_Importer::import_items() for why this is deferred.
-		wp_defer_term_counting( true );
+		if ( $manage_term_counting ) {
+			wp_defer_term_counting( true );
+		}
 
 		try {
 			foreach ( $items as $item ) {
 				try {
-					$product = $this->mapper->upsert_product( $item );
+					$fingerprint = $this->mapper->catalog_fingerprint( $item, $fingerprint_context );
+
+					if ( $requires_post_save_category_pricing ) {
+						// Preserve the established category-markup behavior: that mode
+						// reads persisted product terms. It still benefits from the
+						// unchanged-row skip; only changed rows retain the second save.
+						$outcome = $this->mapper->upsert_product_if_changed( $item, $fingerprint, null, false );
+
+						if ( 'unchanged' !== (string) ( $outcome['status'] ?? '' ) ) {
+							$product = $outcome['product'] ?? null;
+
+							if ( ! $product instanceof WC_Product ) {
+								throw new RuntimeException( 'WooCommerce product was not found.' );
+							}
+
+							$commercial = $this->apply_feed_commercial_data( $product, $item, false );
+							$this->mapper->set_catalog_fingerprint( $product, $item, $fingerprint );
+							$product->save();
+						} else {
+							$commercial = array( 'price_synced' => false, 'stock_synced' => false );
+						}
+					} else {
+						$outcome = $this->mapper->upsert_product_if_changed(
+							$item,
+							$fingerprint,
+							fn ( WC_Product $product ): array => $this->apply_feed_commercial_data( $product, $item, false )
+						);
+						$commercial = is_array( $outcome['callback_result'] ?? null )
+							? $outcome['callback_result']
+							: array( 'price_synced' => false, 'stock_synced' => false );
+					}
+
 					++$processed;
 
-					$commercial = $this->apply_feed_commercial_data( $product, $item );
+					switch ( (string) ( $outcome['status'] ?? '' ) ) {
+						case 'created':
+							++$created;
+							break;
+						case 'updated':
+							++$updated;
+							break;
+						case 'unchanged':
+							++$unchanged;
+							break;
+					}
 
 					if ( ! empty( $commercial['price_synced'] ) ) {
 						++$prices_synced;
@@ -338,13 +412,18 @@ class Schrack_Telesystem_Importer {
 				}
 			}
 		} finally {
-			wp_defer_term_counting( false );
+			if ( $manage_term_counting ) {
+				wp_defer_term_counting( false );
+			}
 		}
 
 		$result = array_merge(
 			array(
 				'processed'       => $processed,
 				'errors'          => $errors,
+				'created'         => $created,
+				'updated'         => $updated,
+				'unchanged'       => $unchanged,
 				'prices_synced'   => $prices_synced,
 				'stock_synced'    => $stock_synced,
 				'image_urls_seen' => $image_urls_seen,
@@ -363,7 +442,7 @@ class Schrack_Telesystem_Importer {
 	 * @param array<string,mixed> $cache Parsed feed cache metadata.
 	 * @return array<string,mixed>
 	 */
-	private function import_cached_items_with_cursor( array $cache, int $limit ): array {
+	private function import_cached_items_with_cursor( array $cache, int $limit, bool $manage_term_counting = true ): array {
 		$total_items = absint( $cache['total_items'] ?? 0 );
 		$signature   = (string) ( $cache['signature'] ?? '' );
 		$feed_hash   = (string) ( $cache['feed_url_hash'] ?? '' );
@@ -381,7 +460,8 @@ class Schrack_Telesystem_Importer {
 					'batch_limit'     => $limit,
 					'completed_cycle' => 'yes',
 					'feed_url_hash'   => $feed_hash,
-				)
+				),
+				$manage_term_counting
 			);
 		}
 
@@ -406,7 +486,7 @@ class Schrack_Telesystem_Importer {
 			);
 			$this->delete_feed_cache( $signature );
 
-			return $this->import_from_feed( $limit );
+			return $this->import_from_feed( $limit, $manage_term_counting );
 		}
 
 		$batch_count     = count( $batch );
@@ -432,7 +512,8 @@ class Schrack_Telesystem_Importer {
 				'feed_cache_key'    => $cache['key'] ?? '',
 				'feed_url_hash'     => $feed_hash,
 				'catalog_signature' => $signature,
-			)
+			),
+			$manage_term_counting
 		);
 	}
 
@@ -840,13 +921,14 @@ class Schrack_Telesystem_Importer {
 
 	/**
 	 * Applies Telesystem price, stock, and supplier-specific metadata to an already
-	 * loaded/saved product object (avoids a redundant wc_get_product() reload).
+	 * loaded product object. Saving is optional so the normal path can persist core
+	 * and commercial changes together.
 	 *
 	 * @param WC_Product           $product Product already created/updated by upsert_product().
 	 * @param array<string,mixed>  $item Normalized feed item.
 	 * @return array{price_synced:bool,stock_synced:bool}
 	 */
-	private function apply_feed_commercial_data( WC_Product $product, array $item ): array {
+	private function apply_feed_commercial_data( WC_Product $product, array $item, bool $save = true ): array {
 		$product_id = $product->get_id();
 
 		$price_1 = isset( $item['telesystem_price_1'] ) ? (float) $item['telesystem_price_1'] : 0.0;
@@ -894,20 +976,24 @@ class Schrack_Telesystem_Importer {
 		$product->update_meta_data( '_telesystem_warranty_months', absint( $item['telesystem_warranty'] ?? 0 ) );
 		$product->update_meta_data( '_telesystem_image_urls', wp_json_encode( $item['image_urls'] ?? array() ) );
 		$product->update_meta_data( '_telesystem_last_catalog_sync', current_time( 'mysql' ) );
-		$product->save();
+		if ( $save ) {
+			$product->save();
+		}
 
-		$this->logger->debug(
-			self::OPERATION,
-			'Imported Telesystem product data.',
-			$this->item_sku( $item ),
-			array(
-				'product_id'   => $product_id,
-				'price'        => $price,
-				'vat_rate'     => $this->markup->vat_rate(),
-				'stock_text'   => $stock_text,
-				'stock_status' => $stock_status,
-			)
-		);
+		if ( $save ) {
+			$this->logger->debug(
+				self::OPERATION,
+				'Imported Telesystem product data.',
+				$this->item_sku( $item ),
+				array(
+					'product_id'   => $product_id,
+					'price'        => $price,
+					'vat_rate'     => $this->markup->vat_rate(),
+					'stock_text'   => $stock_text,
+					'stock_status' => $stock_status,
+				)
+			);
+		}
 
 		return array(
 			'price_synced' => $price > 0,
@@ -930,6 +1016,51 @@ class Schrack_Telesystem_Importer {
 		}
 
 		return $this->markup->apply_vat( $price_2 > 0 ? $price_2 : $price_1 );
+	}
+
+	/**
+	 * Returns the stable output settings included in every Telesystem row hash.
+	 *
+	 * Category rules only affect the pret1_markup strategy; hashing them once per
+	 * request makes a rule edit invalidate prices without serializing the full rule
+	 * set for every product.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function catalog_fingerprint_context(): array {
+		if ( null !== $this->fingerprint_context ) {
+			return $this->fingerprint_context;
+		}
+
+		$price_source = sanitize_key( (string) $this->settings->get( 'telesystem_price_source', 'pret2' ) );
+		$rules_hash   = '';
+
+		if ( 'pret1_markup' === $price_source ) {
+			$rules = $this->markup->all();
+			ksort( $rules, SORT_NUMERIC );
+			$encoded    = wp_json_encode( $rules, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION );
+			$rules_hash = hash( 'sha256', is_string( $encoded ) ? $encoded : serialize( $rules ) );
+		}
+
+		$this->fingerprint_context = array(
+			'source'            => self::SOURCE,
+			'price_source'      => $price_source,
+			'default_markup'    => 'pret1_markup' === $price_source ? (string) $this->settings->get( 'default_markup', 20 ) : '',
+			'vat_rate'          => (string) $this->settings->get( 'vat_rate', 19 ),
+			'markup_rules_hash' => $rules_hash,
+		);
+
+		return $this->fingerprint_context;
+	}
+
+	/**
+	 * Category markup currently resolves rules from persisted product terms.
+	 * Keep that rare compatibility path two-phase while all other strategies save
+	 * catalog and commercial fields in one WooCommerce write.
+	 */
+	private function requires_post_save_category_pricing(): bool {
+		return 'pret1_markup' === sanitize_key( (string) $this->settings->get( 'telesystem_price_source', 'pret2' ) )
+			&& ! empty( $this->markup->all() );
 	}
 
 	/**
@@ -1015,11 +1146,22 @@ class Schrack_Telesystem_Importer {
 			return array();
 		}
 
-		$items = array();
+		$items  = array();
+		$offset = max( 0, $offset );
 
 		try {
-			$file = new SplFileObject( $path, 'r' );
-			$file->seek( max( 0, $offset ) );
+			$reader = $this->feed_cache_readers[ $path ] ?? null;
+
+			if (
+				! is_array( $reader ) ||
+				! ( ( $reader['file'] ?? null ) instanceof SplFileObject ) ||
+				(int) ( $reader['next_offset'] ?? -1 ) !== $offset
+			) {
+				$file = new SplFileObject( $path, 'r' );
+				$file->seek( $offset );
+			} else {
+				$file = $reader['file'];
+			}
 
 			while ( ! $file->eof() && count( $items ) < $limit ) {
 				$line = trim( (string) $file->current() );
@@ -1035,7 +1177,13 @@ class Schrack_Telesystem_Importer {
 					$items[] = $item;
 				}
 			}
+
+			$this->feed_cache_readers[ $path ] = array(
+				'file'        => $file,
+				'next_offset' => (int) $file->key(),
+			);
 		} catch ( Throwable ) {
+			unset( $this->feed_cache_readers[ $path ] );
 			return array();
 		}
 
@@ -1189,6 +1337,11 @@ class Schrack_Telesystem_Importer {
 	 */
 	private function delete_feed_cache( string $signature ): void {
 		$paths = $this->feed_cache_paths( $signature );
+		$items_path = (string) ( $paths['items_path'] ?? '' );
+
+		if ( '' !== $items_path ) {
+			unset( $this->feed_cache_readers[ $items_path ] );
+		}
 
 		foreach ( array( 'items_path', 'meta_path' ) as $key ) {
 			if ( ! empty( $paths[ $key ] ) && file_exists( (string) $paths[ $key ] ) ) {
@@ -1215,6 +1368,7 @@ class Schrack_Telesystem_Importer {
 			}
 
 			if ( is_file( $path ) ) {
+				unset( $this->feed_cache_readers[ $path ] );
 				wp_delete_file( $path );
 			}
 		}
@@ -1234,9 +1388,10 @@ class Schrack_Telesystem_Importer {
 		$sensitive = $this->sensitive_technical_keys();
 
 		foreach ( $row as $key => $value ) {
-			$key = (string) $key;
+			$key            = (string) $key;
+			$normalized_key = $this->catalog_key( $key );
 
-			if ( isset( $excluded[ $this->catalog_key( $key ) ] ) || $this->catalog_key_matches_any( $this->catalog_key( $key ), $sensitive ) ) {
+			if ( isset( $excluded[ $normalized_key ] ) || $this->catalog_key_matches_any( $normalized_key, $sensitive ) ) {
 				continue;
 			}
 
@@ -1287,9 +1442,10 @@ class Schrack_Telesystem_Importer {
 		$sensitive = $this->sensitive_technical_keys();
 
 		foreach ( $row as $key => $value ) {
-			$key = (string) $key;
+			$key            = (string) $key;
+			$normalized_key = $this->catalog_key( $key );
 
-			if ( isset( $excluded[ $this->catalog_key( $key ) ] ) || $this->catalog_key_matches_any( $this->catalog_key( $key ), $sensitive ) ) {
+			if ( isset( $excluded[ $normalized_key ] ) || $this->catalog_key_matches_any( $normalized_key, $sensitive ) ) {
 				continue;
 			}
 
@@ -1318,6 +1474,12 @@ class Schrack_Telesystem_Importer {
 	 * @return array<string,bool>
 	 */
 	private function excluded_technical_keys(): array {
+		static $lookup = null;
+
+		if ( is_array( $lookup ) ) {
+			return $lookup;
+		}
+
 		$keys = array(
 			'furnizor',
 			'codprodus',
@@ -1343,7 +1505,9 @@ class Schrack_Telesystem_Importer {
 			'ean',
 		);
 
-		return array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+		$lookup = array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+
+		return $lookup;
 	}
 
 	/**
@@ -1352,6 +1516,12 @@ class Schrack_Telesystem_Importer {
 	 * @return array<string,bool>
 	 */
 	private function sensitive_technical_keys(): array {
+		static $lookup = null;
+
+		if ( is_array( $lookup ) ) {
+			return $lookup;
+		}
+
 		$keys = array(
 			'cost',
 			'currency',
@@ -1370,7 +1540,9 @@ class Schrack_Telesystem_Importer {
 			'warehouse',
 		);
 
-		return array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+		$lookup = array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+
+		return $lookup;
 	}
 
 	/**
@@ -1559,26 +1731,6 @@ class Schrack_Telesystem_Importer {
 		}
 
 		return $skus;
-	}
-
-	/**
-	 * Extracts source item numbers from a normalized batch for lookup priming.
-	 *
-	 * @param array<int,array<string,mixed>> $items Normalized items.
-	 * @return array<int,string>
-	 */
-	private function item_source_item_numbers( array $items ): array {
-		$item_numbers = array();
-
-		foreach ( $items as $item ) {
-			$item_number = $this->source_item_number( $item );
-
-			if ( '' !== $item_number ) {
-				$item_numbers[] = $item_number;
-			}
-		}
-
-		return $item_numbers;
 	}
 
 	/**

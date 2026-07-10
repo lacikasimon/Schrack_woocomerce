@@ -59,7 +59,7 @@ class Schrack_Cron {
 		add_action( self::HOOK_STOCK, array( $this, 'run_stock_sync' ) );
 		add_action( self::HOOK_IMAGES, array( $this, 'run_image_sync' ) );
 		add_action( self::HOOK_IMAGE_WORKER, array( $this, 'run_image_worker' ), 10, 3 );
-		add_action( self::HOOK_CATALOG_WORKER, array( $this, 'run_catalog_worker' ), 10, 9 );
+		add_action( self::HOOK_CATALOG_WORKER, array( $this, 'run_catalog_worker' ), 10, 12 );
 		add_action( self::HOOK_FULL, array( $this, 'run_full_sync' ), 10, 1 );
 		add_action( self::HOOK_DEBUG_EXPORT, array( $this, 'run_debug_export' ), 10, 2 );
 		add_action( self::HOOK_CATEGORY_IMPORT, array( $this, 'run_category_csv_import' ), 10, 1 );
@@ -726,11 +726,7 @@ class Schrack_Cron {
 	 * Runs a catalog import batch.
 	 *
 	 * @param bool $allow_parallel Whether parallel workers may be dispatched.
-	 *                             Full sync forces this false: should_continue_batch()
-	 *                             can't tell "workers still running in the background"
-	 *                             from "nothing left to do", so chaining stages through
-	 *                             a parallel dispatch would advance to the next stage
-	 *                             before the catalog workers actually finish.
+	 *                             Full sync handles the parallel waiting barrier explicitly.
 	 */
 	public function run_catalog_import( bool $queue_continuation = true, bool $allow_parallel = true ): array {
 		if ( ! $this->is_schrack_enabled() ) {
@@ -749,6 +745,7 @@ class Schrack_Cron {
 		$limit    = $this->catalog_batch_limit();
 		$max_batches = $this->catalog_batches_per_run();
 		$started_at  = time();
+		$term_counting_deferred = false;
 
 		try {
 			if ( $this->settings->is_stop_requested() ) {
@@ -758,11 +755,17 @@ class Schrack_Cron {
 			$result                    = array();
 			$total_processed           = 0;
 			$total_errors              = 0;
+			$total_created             = 0;
+			$total_updated             = 0;
+			$total_unchanged           = 0;
 			$total_image_seen          = 0;
 			$total_image_urls          = 0;
 			$total_image_backfilled   = 0;
 			$total_image_meta_errors  = 0;
 			$batches                   = 0;
+
+			wp_defer_term_counting( true );
+			$term_counting_deferred = true;
 
 			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
 				if ( $this->settings->is_stop_requested() ) {
@@ -773,11 +776,14 @@ class Schrack_Cron {
 					break;
 				}
 
-				$result = $importer->import_from_soap( 'CSV', $limit );
+				$result = $importer->import_from_soap( 'CSV', $limit, false );
 				++$batches;
 
 				$total_processed           += (int) ( $result['processed'] ?? 0 );
 				$total_errors              += (int) ( $result['errors'] ?? 0 );
+				$total_created             += (int) ( $result['created'] ?? 0 );
+				$total_updated             += (int) ( $result['updated'] ?? 0 );
+				$total_unchanged           += (int) ( $result['unchanged'] ?? 0 );
 				$total_image_seen          += (int) ( $result['image_urls_seen'] ?? 0 );
 				$total_image_urls          += (int) ( $result['image_urls_stored'] ?? 0 );
 				$total_image_backfilled  += (int) ( $result['image_urls_backfilled'] ?? 0 );
@@ -802,6 +808,9 @@ class Schrack_Cron {
 				array(
 					'processed'               => $total_processed,
 					'errors'                  => $total_errors,
+					'created'                 => $total_created,
+					'updated'                 => $total_updated,
+					'unchanged'               => $total_unchanged,
 					'image_urls_seen'         => $total_image_seen,
 					'image_urls_stored'       => $total_image_urls,
 					'image_urls_backfilled'   => $total_image_backfilled,
@@ -850,6 +859,10 @@ class Schrack_Cron {
 				'errors'          => 1,
 				'completed_cycle' => 'yes',
 			);
+		} finally {
+			if ( $term_counting_deferred ) {
+				wp_defer_term_counting( false );
+			}
 		}
 	}
 
@@ -915,7 +928,9 @@ class Schrack_Cron {
 		$items_path  = (string) $cache['items_path'];
 		$run_id      = wp_generate_uuid4();
 
+		$prime_started = microtime( true );
 		$this->prime_catalog_terms( $importer, $items_path, $total_items );
+		$prime_seconds = round( microtime( true ) - $prime_started, 2 );
 
 		$ranges          = $this->split_range( $total_items, $workers );
 		$queued_workers  = 0;
@@ -929,7 +944,7 @@ class Schrack_Cron {
 			$queued = $this->queue_sync_batch(
 				self::HOOK_CATALOG_WORKER,
 				'catalog',
-				array( $format, $signature, $items_path, $start, $end, $run_id, $start, 0, 0 ),
+				array( $format, $signature, $items_path, $start, $end, $run_id, $start, 0, 0, 0, 0, 0 ),
 				array(
 					'run_id'       => $run_id,
 					'worker_index' => $index + 1,
@@ -960,6 +975,10 @@ class Schrack_Cron {
 				'workers_queued'    => $queued_workers,
 				'catalog_format'    => $format,
 				'catalog_signature' => $signature,
+				'catalog_fetch_seconds'  => $cache['catalog_fetch_seconds'] ?? 0.0,
+				'catalog_source_seconds' => $cache['catalog_source_seconds'] ?? 0.0,
+				'catalog_parse_seconds'  => $cache['catalog_parse_seconds'] ?? 0.0,
+				'catalog_term_prime_seconds' => $prime_seconds,
 			),
 			$this->memory_status_context()
 		);
@@ -1051,8 +1070,11 @@ class Schrack_Cron {
 		$result = array_merge(
 			$last_row,
 			array(
-				'processed'       => $totals['processed'] > 0 ? $totals['processed'] : $total_items,
-				'errors'          => $totals['errors'],
+				'processed'       => $totals['processed'],
+				'errors'          => absint( $last_row['errors'] ?? 0 ) + $totals['errors'],
+				'created'         => $totals['created'],
+				'updated'         => $totals['updated'],
+				'unchanged'       => $totals['unchanged'],
 				'batch_count'     => $total_items,
 				'completed_cycle' => 'yes',
 				'parallel'        => 'yes',
@@ -1089,16 +1111,31 @@ class Schrack_Cron {
 	 * aggregate_parallel_catalog_status()); once the cycle is finalized they'd
 	 * otherwise sit around as stale option rows forever.
 	 *
-	 * @return array{processed:int,errors:int}
+	 * @return array{processed:int,errors:int,created:int,updated:int,unchanged:int}
 	 */
 	private function sum_and_clear_catalog_worker_status( string $run_id ): array {
 		$processed = 0;
 		$errors    = 0;
+		$created   = 0;
+		$updated   = 0;
+		$unchanged = 0;
 
 		if ( '' === $run_id ) {
-			return array( 'processed' => $processed, 'errors' => $errors );
+			return compact( 'processed', 'errors', 'created', 'updated', 'unchanged' );
 		}
 
+		foreach ( $this->settings->get_catalog_worker_statuses( $run_id ) as $value ) {
+			$processed += absint( $value['processed'] ?? 0 );
+			$errors    += absint( $value['errors'] ?? 0 );
+			$created   += absint( $value['created'] ?? 0 );
+			$updated   += absint( $value['updated'] ?? 0 );
+			$unchanged += absint( $value['unchanged'] ?? 0 );
+		}
+
+		$this->settings->delete_catalog_worker_statuses( $run_id );
+
+		// Backward compatibility for worker rows queued before the per-worker
+		// option migration. New workers never write these shared status buckets.
 		$status = $this->settings->get_status();
 
 		foreach ( $status as $key => $value ) {
@@ -1112,10 +1149,13 @@ class Schrack_Cron {
 
 			$processed += absint( $value['processed'] ?? 0 );
 			$errors    += absint( $value['errors'] ?? 0 );
+			$created   += absint( $value['created'] ?? 0 );
+			$updated   += absint( $value['updated'] ?? 0 );
+			$unchanged += absint( $value['unchanged'] ?? 0 );
 			$this->settings->delete_status( $key );
 		}
 
-		return array( 'processed' => $processed, 'errors' => $errors );
+		return compact( 'processed', 'errors', 'created', 'updated', 'unchanged' );
 	}
 
 	/**
@@ -1127,7 +1167,7 @@ class Schrack_Cron {
 	 *
 	 * @return array<string,mixed>
 	 */
-	public function run_catalog_worker( string $format, string $signature, string $items_path, int $start, int $end, string $run_id, int $range_start = -1, int $carried_processed = 0, int $carried_errors = 0 ): array {
+	public function run_catalog_worker( string $format, string $signature, string $items_path, int $start, int $end, string $run_id, int $range_start = -1, int $carried_processed = 0, int $carried_errors = 0, int $carried_created = 0, int $carried_updated = 0, int $carried_unchanged = 0 ): array {
 		// A worker that pauses and requeues itself starts this method fresh each
 		// time, with its own processed/errors counters back at zero. range_start
 		// (stable across resumptions, unlike $start) and the carried totals let
@@ -1137,7 +1177,7 @@ class Schrack_Cron {
 			$range_start = $start;
 		}
 
-		$status_key = 'catalog_worker_' . $range_start;
+		$term_counting_deferred = false;
 
 		try {
 			$importer   = new Schrack_Catalog_Importer( $this->settings, $this->logger );
@@ -1146,6 +1186,15 @@ class Schrack_Cron {
 			$position   = max( 0, $start );
 			$processed  = $carried_processed;
 			$errors     = $carried_errors;
+			$created    = $carried_created;
+			$updated    = $carried_updated;
+			$unchanged  = $carried_unchanged;
+
+			// One worker can process many internal batches. Keep term counting
+			// deferred across the whole worker request instead of flushing the same
+			// popular category/attribute counts after every batch.
+			wp_defer_term_counting( true );
+			$term_counting_deferred = true;
 
 			while ( $position < $end ) {
 				if ( $this->settings->is_stop_requested() ) {
@@ -1156,17 +1205,24 @@ class Schrack_Cron {
 						array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'resumed_at' => $position, 'range_end' => $end )
 					);
 
-					$this->settings->update_status( $status_key, array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'state' => 'stopped' ) );
+					$this->settings->update_catalog_worker_status(
+						$run_id,
+						$range_start,
+						compact( 'processed', 'errors', 'created', 'updated', 'unchanged' ) + array( 'state' => 'stopped' )
+					);
 
-					return array( 'processed' => $processed, 'errors' => $errors, 'run_id' => $run_id, 'stopped' => 'yes' );
+					return compact( 'processed', 'errors', 'created', 'updated', 'unchanged', 'run_id' ) + array( 'stopped' => 'yes' );
 				}
 
 				$batch_limit = min( $limit, $end - $position );
-				$result      = $importer->import_cache_range( $format, $signature, $items_path, $position, $batch_limit );
+				$result      = $importer->import_cache_range( $format, $signature, $items_path, $position, $batch_limit, false );
 				$batch_count = absint( $result['batch_count'] ?? 0 );
 
 				$processed += absint( $result['processed'] ?? 0 );
 				$errors    += absint( $result['errors'] ?? 0 );
+				$created   += absint( $result['created'] ?? 0 );
+				$updated   += absint( $result['updated'] ?? 0 );
+				$unchanged += absint( $result['unchanged'] ?? 0 );
 				$this->release_batch_memory();
 
 				if ( $batch_count <= 0 ) {
@@ -1177,16 +1233,17 @@ class Schrack_Cron {
 
 				$position += $batch_count;
 
-				$this->settings->update_status(
-					$status_key,
-					array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'state' => 'running' )
+				$this->settings->update_catalog_worker_status(
+					$run_id,
+					$range_start,
+					compact( 'processed', 'errors', 'created', 'updated', 'unchanged' ) + array( 'state' => 'running' )
 				);
 
 				if ( $position < $end && $this->should_pause_batch_run( $started_at, 'catalog' ) ) {
 					$this->queue_sync_batch(
 						self::HOOK_CATALOG_WORKER,
 						'catalog',
-						array( $format, $signature, $items_path, $position, $end, $run_id, $range_start, $processed, $errors ),
+						array( $format, $signature, $items_path, $position, $end, $run_id, $range_start, $processed, $errors, $created, $updated, $unchanged ),
 						array( 'run_id' => $run_id, 'resumed_at' => $position, 'range_end' => $end ),
 						0
 					);
@@ -1207,11 +1264,15 @@ class Schrack_Cron {
 						)
 					);
 
-					return array( 'processed' => $processed, 'errors' => $errors, 'run_id' => $run_id, 'paused' => 'yes' );
+					return compact( 'processed', 'errors', 'created', 'updated', 'unchanged', 'run_id' ) + array( 'paused' => 'yes' );
 				}
 			}
 
-			$this->settings->update_status( $status_key, array( 'run_id' => $run_id, 'processed' => $processed, 'errors' => $errors, 'state' => 'completed' ) );
+			$this->settings->update_catalog_worker_status(
+				$run_id,
+				$range_start,
+				compact( 'processed', 'errors', 'created', 'updated', 'unchanged' ) + array( 'state' => 'completed' )
+			);
 			$this->logger->info(
 				'catalog',
 				'Finished parallel Schrack catalog worker range.',
@@ -1222,7 +1283,7 @@ class Schrack_Cron {
 				)
 			);
 
-			return array( 'processed' => $processed, 'errors' => $errors, 'run_id' => $run_id, 'completed' => 'yes' );
+			return compact( 'processed', 'errors', 'created', 'updated', 'unchanged', 'run_id' ) + array( 'completed' => 'yes' );
 		} catch ( Throwable $exception ) {
 			$this->logger->error(
 				'catalog',
@@ -1231,12 +1292,23 @@ class Schrack_Cron {
 				array( 'run_id' => $run_id, 'range_start' => $start, 'range_end' => $end, 'error' => $exception->getMessage() )
 			);
 
-			$this->settings->update_status(
-				'catalog_worker_' . $range_start,
-				array( 'run_id' => $run_id, 'processed' => $carried_processed, 'errors' => $carried_errors + 1, 'state' => 'failed' )
+			$processed = $processed ?? $carried_processed;
+			$errors    = ( $errors ?? $carried_errors ) + 1;
+			$created   = $created ?? $carried_created;
+			$updated   = $updated ?? $carried_updated;
+			$unchanged = $unchanged ?? $carried_unchanged;
+
+			$this->settings->update_catalog_worker_status(
+				$run_id,
+				$range_start,
+				compact( 'processed', 'errors', 'created', 'updated', 'unchanged' ) + array( 'state' => 'failed' )
 			);
 
-			return array( 'processed' => 0, 'errors' => 1, 'run_id' => $run_id );
+			return compact( 'processed', 'errors', 'created', 'updated', 'unchanged', 'run_id' );
+		} finally {
+			if ( $term_counting_deferred ) {
+				wp_defer_term_counting( false );
+			}
 		}
 	}
 
@@ -1403,6 +1475,7 @@ class Schrack_Cron {
 		$limit       = $this->telesystem_batch_limit();
 		$max_batches = $this->telesystem_batches_per_run();
 		$started_at  = time();
+		$term_counting_deferred = false;
 
 		try {
 			if ( $this->settings->is_stop_requested() ) {
@@ -1412,10 +1485,16 @@ class Schrack_Cron {
 			$result            = array();
 			$total_processed   = 0;
 			$total_errors      = 0;
+			$total_created     = 0;
+			$total_updated     = 0;
+			$total_unchanged   = 0;
 			$total_prices      = 0;
 			$total_stock       = 0;
 			$total_image_urls  = 0;
 			$batches           = 0;
+
+			wp_defer_term_counting( true );
+			$term_counting_deferred = true;
 
 			for ( $batch_index = 0; $batch_index < $max_batches; ++$batch_index ) {
 				if ( $this->settings->is_stop_requested() ) {
@@ -1426,11 +1505,14 @@ class Schrack_Cron {
 					break;
 				}
 
-				$result = $importer->import_from_feed( $limit );
+				$result = $importer->import_from_feed( $limit, false );
 				++$batches;
 
 				$total_processed  += (int) ( $result['processed'] ?? 0 );
 				$total_errors     += (int) ( $result['errors'] ?? 0 );
+				$total_created    += (int) ( $result['created'] ?? 0 );
+				$total_updated    += (int) ( $result['updated'] ?? 0 );
+				$total_unchanged  += (int) ( $result['unchanged'] ?? 0 );
 				$total_prices     += (int) ( $result['prices_synced'] ?? 0 );
 				$total_stock      += (int) ( $result['stock_synced'] ?? 0 );
 				$total_image_urls += (int) ( $result['image_urls_seen'] ?? 0 );
@@ -1454,6 +1536,9 @@ class Schrack_Cron {
 				array(
 					'processed'                    => $total_processed,
 					'errors'                       => $total_errors,
+					'created'                      => $total_created,
+					'updated'                      => $total_updated,
+					'unchanged'                    => $total_unchanged,
 					'prices_synced'                => $total_prices,
 					'stock_synced'                 => $total_stock,
 					'image_urls_seen'              => $total_image_urls,
@@ -1496,6 +1581,10 @@ class Schrack_Cron {
 				'errors'          => 1,
 				'completed_cycle' => 'yes',
 			);
+		} finally {
+			if ( $term_counting_deferred ) {
+				wp_defer_term_counting( false );
+			}
 		}
 	}
 
@@ -2035,7 +2124,7 @@ class Schrack_Cron {
 				return;
 			}
 
-			$result = $this->run_catalog_import( false, false );
+			$result = $this->run_catalog_import( false, true );
 
 			if ( $this->is_stopped_result( $result ) ) {
 				return;
@@ -2043,6 +2132,27 @@ class Schrack_Cron {
 
 			if ( $this->is_rate_limited_result( $result ) ) {
 				$this->queue_rate_limited_batch( self::HOOK_FULL, 'full', array( 'catalog' ), $result );
+				return;
+			}
+
+			if (
+				'yes' === (string) ( $result['parallel'] ?? 'no' ) &&
+				'no' === (string) ( $result['completed_cycle'] ?? 'yes' )
+			) {
+				// The parallel dispatcher intentionally reports batch_count=0 because
+				// workers own the rows, so should_continue_batch() is not the right
+				// barrier here. Poll the same Full-sync stage until finalization marks
+				// the catalog complete, then advance normally.
+				if ( ! $this->queue_sync_batch(
+					self::HOOK_FULL,
+					'full',
+					array( 'catalog' ),
+					array( 'source' => 'parallel_catalog_full_sync', 'run_id' => $result['run_id'] ?? '' ),
+					$this->image_parallel_followup_delay()
+				) ) {
+					$this->mark_queue_failed( 'full', $result, self::HOOK_FULL, array( 'catalog' ) );
+				}
+
 				return;
 			}
 
@@ -2777,7 +2887,10 @@ class Schrack_Cron {
 	 * Releases runtime-only caches between batches on small-memory hosting.
 	 */
 	private function release_batch_memory(): void {
-		if ( function_exists( 'wp_cache_flush_runtime' ) ) {
+		if (
+			function_exists( 'wp_cache_flush_runtime' ) &&
+			( $this->is_low_memory_host() || $this->is_memory_pressure_high() )
+		) {
 			wp_cache_flush_runtime();
 		}
 

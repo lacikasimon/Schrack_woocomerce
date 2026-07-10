@@ -106,7 +106,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<th scope="row"><label for="schrack_catalog_parallel_workers"><?php esc_html_e( 'Parallel catalog workers', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td>
 					<input id="schrack_catalog_parallel_workers" type="number" min="1" max="8" step="1" name="schrack_settings[catalog_parallel_workers]" value="<?php echo esc_attr( min( 8, max( 1, absint( $settings['catalog_parallel_workers'] ?? 1 ) ) ) ); ?>">
-					<p class="description"><?php esc_html_e( 'Above 1, catalog import splits the remaining catalog into this many ranges and imports them at once with separate Action Scheduler workers, instead of one batch at a time. Ignored by Full sync, which always runs the catalog stage sequentially. Runtime protection caps this to 5 on low-memory hosts.', 'schrack-woocommerce-sync' ); ?></p>
+					<p class="description"><?php esc_html_e( 'Above 1, catalog import splits the catalog into this many ranges and imports them at once with separate Action Scheduler workers. Full sync waits for those workers before advancing to the next stage. Runtime protection caps this to 5 on low-memory hosts.', 'schrack-woocommerce-sync' ); ?></p>
 				</td>
 			</tr>
 			<tr>

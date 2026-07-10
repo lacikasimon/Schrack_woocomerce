@@ -55,6 +55,13 @@ class Schrack_Catalog_Importer {
 	private Schrack_Product_Mapper $mapper;
 
 	/**
+	 * Open JSONL readers retained across consecutive batches in one request.
+	 *
+	 * @var array<string,array{file:SplFileObject,next_offset:int}>
+	 */
+	private array $catalog_cache_readers = array();
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct( Schrack_Settings $settings, Schrack_Logger $logger, ?Schrack_Soap_Client $client = null, ?Schrack_Product_Mapper $mapper = null ) {
@@ -71,7 +78,7 @@ class Schrack_Catalog_Importer {
 	 * @param int    $limit Batch limit.
 	 * @return array<string,mixed>
 	 */
-	public function import_from_soap( string $format = 'CSV', int $limit = 25 ): array {
+	public function import_from_soap( string $format = 'CSV', int $limit = 25, bool $manage_term_counting = true ): array {
 		$format = strtoupper( $format );
 		$limit  = max( 1, $limit );
 
@@ -79,7 +86,7 @@ class Schrack_Catalog_Importer {
 
 		if ( null !== $cache ) {
 			$import_started = microtime( true );
-			$result         = $this->import_cached_items_with_cursor( $cache, $format, $limit );
+			$result         = $this->import_cached_items_with_cursor( $cache, $format, $limit, array(), $manage_term_counting );
 
 			$result['catalog_import_seconds'] = round( microtime( true ) - $import_started, 2 );
 			$this->log_catalog_batch_timing( $format, $result );
@@ -91,7 +98,7 @@ class Schrack_Catalog_Importer {
 		$raw           = $this->client->get_catalog_as( $format );
 		$fetch_seconds = round( microtime( true ) - $fetch_started, 2 );
 
-		$streamed_result = $this->import_streamed_catalog_response( $raw, $format, $limit );
+		$streamed_result = $this->import_streamed_catalog_response( $raw, $format, $limit, $manage_term_counting );
 
 		if ( null !== $streamed_result ) {
 			$streamed_result['catalog_fetch_seconds'] = $fetch_seconds;
@@ -112,7 +119,7 @@ class Schrack_Catalog_Importer {
 		$context['catalog_parse_seconds'] = $parse_seconds;
 
 		$import_started = microtime( true );
-		$result         = $this->import_items_with_cursor( $items, $format, $limit, $context, $signature );
+		$result         = $this->import_items_with_cursor( $items, $format, $limit, $context, $signature, $manage_term_counting );
 
 		$result['catalog_import_seconds'] = round( microtime( true ) - $import_started, 2 );
 		$this->log_catalog_batch_timing( $format, $result );
@@ -138,10 +145,14 @@ class Schrack_Catalog_Importer {
 			array(
 				'format'                 => $format,
 				'catalog_fetch_seconds'  => $result['catalog_fetch_seconds'] ?? 0.0,
+				'catalog_source_seconds' => $result['catalog_source_seconds'] ?? 0.0,
 				'catalog_parse_seconds'  => $result['catalog_parse_seconds'] ?? 0.0,
 				'catalog_import_seconds' => $result['catalog_import_seconds'] ?? 0.0,
 				'batch_count'            => $result['batch_count'] ?? ( $result['processed'] ?? 0 ),
 				'processed'              => $result['processed'] ?? 0,
+				'created'                => $result['created'] ?? 0,
+				'updated'                => $result['updated'] ?? 0,
+				'unchanged'              => $result['unchanged'] ?? 0,
 			)
 		);
 	}
@@ -153,8 +164,8 @@ class Schrack_Catalog_Importer {
 	 * @param array<string,mixed>            $status_context Extra status fields.
 	 * @return array<string,mixed>
 	 */
-	public function import_items( array $items, array $status_context = array() ): array {
-		$result = array_merge( $this->import_items_batch( $items ), $status_context );
+	public function import_items( array $items, array $status_context = array(), bool $manage_term_counting = true ): array {
+		$result = array_merge( $this->import_items_batch( $items, $manage_term_counting ), $status_context );
 
 		$this->settings->update_status(
 			'catalog',
@@ -175,9 +186,12 @@ class Schrack_Catalog_Importer {
 	 * @param array<int,array<string,mixed>> $items Items.
 	 * @return array<string,mixed>
 	 */
-	private function import_items_batch( array $items ): array {
+	private function import_items_batch( array $items, bool $manage_term_counting = true ): array {
 		$processed             = 0;
 		$errors                = 0;
+		$created               = 0;
+		$updated               = 0;
+		$unchanged             = 0;
 		$image_urls_seen       = 0;
 		$image_urls_stored     = 0;
 		$image_urls_backfilled = 0;
@@ -191,29 +205,57 @@ class Schrack_Catalog_Importer {
 		// query right away. Deferring that to one pass per taxonomy after the
 		// whole batch is a standard bulk-import technique (WordPress's own
 		// importers do the same) and meaningfully cuts per-product save time.
-		wp_defer_term_counting( true );
+		if ( $manage_term_counting ) {
+			wp_defer_term_counting( true );
+		}
 
 		try {
 			foreach ( $items as $item ) {
 				try {
-					$product_id = $this->mapper->upsert( $item );
+					$fingerprint = $this->mapper->catalog_fingerprint( $item, array( 'source' => 'schrack' ) );
+					$outcome     = $this->mapper->upsert_product_if_changed( $item, $fingerprint );
 					++$processed;
+
+					switch ( (string) ( $outcome['status'] ?? '' ) ) {
+						case 'created':
+							++$created;
+							break;
+						case 'updated':
+							++$updated;
+							break;
+						case 'unchanged':
+							++$unchanged;
+							break;
+					}
 
 					$image_url = $this->item_image_url( $item );
 
 					if ( '' !== $image_url ) {
 						++$image_urls_seen;
 
-						$meta_status = $this->ensure_product_image_url_meta( $product_id, $image_url, $this->item_sku( $item ) );
+						if ( 'unchanged' === (string) ( $outcome['status'] ?? '' ) ) {
+							// Postmeta was primed with the SKU lookup, so this integrity check
+							// normally stays in memory. It still repairs an image URL that was
+							// manually removed after the row fingerprint was stored.
+							$meta_status = $this->ensure_product_image_url_meta(
+								absint( $outcome['product_id'] ?? 0 ),
+								$image_url,
+								$this->item_sku( $item )
+							);
 
-						if ( in_array( $meta_status, array( 'verified', 'backfilled' ), true ) ) {
+							if ( in_array( $meta_status, array( 'verified', 'backfilled' ), true ) ) {
+								++$image_urls_stored;
+							}
+
+							if ( 'backfilled' === $meta_status ) {
+								++$image_urls_backfilled;
+							} elseif ( 'failed' === $meta_status ) {
+								++$image_url_meta_errors;
+							}
+						} else {
+							// Changed/new rows persisted the URL as part of the successful
+							// WooCommerce product save, so do not immediately read it back.
 							++$image_urls_stored;
-						}
-
-						if ( 'backfilled' === $meta_status ) {
-							++$image_urls_backfilled;
-						} elseif ( 'failed' === $meta_status ) {
-							++$image_url_meta_errors;
 						}
 					}
 				} catch ( Throwable $exception ) {
@@ -227,12 +269,17 @@ class Schrack_Catalog_Importer {
 				}
 			}
 		} finally {
-			wp_defer_term_counting( false );
+			if ( $manage_term_counting ) {
+				wp_defer_term_counting( false );
+			}
 		}
 
 		return array(
 			'processed'             => $processed,
 			'errors'                => $errors,
+			'created'               => $created,
+			'updated'               => $updated,
+			'unchanged'             => $unchanged,
 			'image_urls_seen'       => $image_urls_seen,
 			'image_urls_stored'     => $image_urls_stored,
 			'image_urls_backfilled' => $image_urls_backfilled,
@@ -257,19 +304,25 @@ class Schrack_Catalog_Importer {
 			return null;
 		}
 
-		$raw     = $this->client->get_catalog_as( $format );
-		$content = $this->extract_catalog_content( $raw );
+		$fetch_started = microtime( true );
+		$raw           = $this->client->get_catalog_as( $format );
+		$fetch_seconds = round( microtime( true ) - $fetch_started, 2 );
+		$content       = $this->extract_catalog_content( $raw );
 
 		if ( '' === $content ) {
 			return null;
 		}
 
-		$source = $this->catalog_response_source_file( $content );
+		$source_started = microtime( true );
+		$source         = $this->catalog_response_source_file( $content );
+		$source_seconds = round( microtime( true ) - $source_started, 2 );
 		unset( $content );
 
 		if ( null === $source ) {
 			return null;
 		}
+
+		$parse_started = microtime( true );
 
 		try {
 			$cache = $this->write_csv_catalog_cache_from_file( (string) $source['path'], $format );
@@ -280,6 +333,10 @@ class Schrack_Catalog_Importer {
 		if ( null === $cache || absint( $cache['total_items'] ?? 0 ) <= 0 ) {
 			return null;
 		}
+
+		$cache['catalog_fetch_seconds']  = $fetch_seconds;
+		$cache['catalog_source_seconds'] = $source_seconds;
+		$cache['catalog_parse_seconds']  = round( microtime( true ) - $parse_started, 2 );
 
 		return $cache;
 	}
@@ -300,9 +357,9 @@ class Schrack_Catalog_Importer {
 	 *
 	 * @return array<string,mixed>
 	 */
-	public function import_cache_range( string $format, string $signature, string $items_path, int $offset, int $limit ): array {
+	public function import_cache_range( string $format, string $signature, string $items_path, int $offset, int $limit, bool $manage_term_counting = true ): array {
 		$batch  = $this->read_catalog_cache_batch( $items_path, $offset, $limit );
-		$result = $this->import_items_batch( $batch );
+		$result = $this->import_items_batch( $batch, $manage_term_counting );
 
 		return array_merge(
 			$result,
@@ -379,7 +436,7 @@ class Schrack_Catalog_Importer {
 	 * @param array<int,array<string,mixed>> $items Parsed catalog items.
 	 * @return array<string,mixed>
 	 */
-	private function import_items_with_cursor( array $items, string $format, int $limit, array $status_context = array(), ?string $signature = null ): array {
+	private function import_items_with_cursor( array $items, string $format, int $limit, array $status_context = array(), ?string $signature = null, bool $manage_term_counting = true ): array {
 		$total_items = count( $items );
 		$format      = strtoupper( $format );
 
@@ -394,7 +451,8 @@ class Schrack_Catalog_Importer {
 					'batch_limit'     => $limit,
 					'completed_cycle' => 'yes',
 					'catalog_format'  => $format,
-				)
+				),
+				$manage_term_counting
 			);
 		}
 
@@ -430,7 +488,8 @@ class Schrack_Catalog_Importer {
 					'catalog_format'    => $format,
 					'catalog_signature' => $signature,
 				)
-			)
+			),
+			$manage_term_counting
 		);
 	}
 
@@ -440,13 +499,13 @@ class Schrack_Catalog_Importer {
 	 * @param array<string,mixed> $cache Catalog cache metadata.
 	 * @return array<string,mixed>
 	 */
-	private function import_cached_items_with_cursor( array $cache, string $format, int $limit, array $status_context = array() ): array {
+	private function import_cached_items_with_cursor( array $cache, string $format, int $limit, array $status_context = array(), bool $manage_term_counting = true ): array {
 		$signature   = (string) $cache['signature'];
 		$total_items = absint( $cache['total_items'] ?? 0 );
 
 		if ( 0 === $total_items ) {
 			$this->delete_catalog_cache( $format, $signature );
-			return $this->import_items_with_cursor( array(), $format, $limit );
+			return $this->import_items_with_cursor( array(), $format, $limit, array(), null, $manage_term_counting );
 		}
 
 		$offset = $this->catalog_cursor( $format, $signature, $total_items );
@@ -469,7 +528,7 @@ class Schrack_Catalog_Importer {
 				)
 			);
 			$this->delete_catalog_cache( $format, $signature );
-			return $this->import_from_soap( $format, $limit );
+			return $this->import_from_soap( $format, $limit, $manage_term_counting );
 		}
 
 		$batch_count     = count( $batch );
@@ -497,7 +556,8 @@ class Schrack_Catalog_Importer {
 					'catalog_signature' => $signature,
 				),
 				$status_context
-			)
+			),
+			$manage_term_counting
 		);
 	}
 
@@ -666,11 +726,22 @@ class Schrack_Catalog_Importer {
 			return array();
 		}
 
-		$items = array();
+		$items  = array();
+		$offset = max( 0, $offset );
 
 		try {
-			$file = new SplFileObject( $path, 'r' );
-			$file->seek( max( 0, $offset ) );
+			$reader = $this->catalog_cache_readers[ $path ] ?? null;
+
+			if (
+				! is_array( $reader ) ||
+				! ( ( $reader['file'] ?? null ) instanceof SplFileObject ) ||
+				(int) ( $reader['next_offset'] ?? -1 ) !== $offset
+			) {
+				$file = new SplFileObject( $path, 'r' );
+				$file->seek( $offset );
+			} else {
+				$file = $reader['file'];
+			}
 
 			while ( ! $file->eof() && count( $items ) < $limit ) {
 				$line = trim( (string) $file->current() );
@@ -686,7 +757,13 @@ class Schrack_Catalog_Importer {
 					$items[] = $item;
 				}
 			}
+
+			$this->catalog_cache_readers[ $path ] = array(
+				'file'        => $file,
+				'next_offset' => (int) $file->key(),
+			);
 		} catch ( Throwable ) {
+			unset( $this->catalog_cache_readers[ $path ] );
 			return array();
 		}
 
@@ -773,6 +850,11 @@ class Schrack_Catalog_Importer {
 	 */
 	private function delete_catalog_cache( string $format, string $signature ): void {
 		$paths = $this->catalog_cache_paths( $format, $signature );
+		$items_path = (string) ( $paths['items_path'] ?? '' );
+
+		if ( '' !== $items_path ) {
+			unset( $this->catalog_cache_readers[ $items_path ] );
+		}
 
 		foreach ( array( 'items_path', 'meta_path' ) as $key ) {
 			if ( ! empty( $paths[ $key ] ) && file_exists( (string) $paths[ $key ] ) ) {
@@ -799,6 +881,7 @@ class Schrack_Catalog_Importer {
 			}
 
 			if ( is_file( $path ) ) {
+				unset( $this->catalog_cache_readers[ $path ] );
 				wp_delete_file( $path );
 			}
 		}
@@ -860,7 +943,7 @@ class Schrack_Catalog_Importer {
 	 *
 	 * @return array<string,mixed>|null Null when the response should use the legacy parser.
 	 */
-	private function import_streamed_catalog_response( mixed $raw, string $format, int $limit ): ?array {
+	private function import_streamed_catalog_response( mixed $raw, string $format, int $limit, bool $manage_term_counting = true ): ?array {
 		if ( 'CSV' !== strtoupper( $format ) ) {
 			return null;
 		}
@@ -871,7 +954,9 @@ class Schrack_Catalog_Importer {
 			return null;
 		}
 
-		$source = $this->catalog_response_source_file( $content );
+		$source_started = microtime( true );
+		$source         = $this->catalog_response_source_file( $content );
+		$source_seconds = round( microtime( true ) - $source_started, 2 );
 		unset( $content );
 
 		if ( null === $source ) {
@@ -902,9 +987,11 @@ class Schrack_Catalog_Importer {
 					'catalog_cache'         => 'empty',
 					'catalog_streamed'      => 'yes',
 					'catalog_signature'     => (string) ( $cache['signature'] ?? '' ),
-					'catalog_parse_seconds' => $parse_seconds,
+					'catalog_parse_seconds'  => $parse_seconds,
+					'catalog_source_seconds' => $source_seconds,
 				),
-				(string) ( $cache['signature'] ?? '' )
+				(string) ( $cache['signature'] ?? '' ),
+				$manage_term_counting
 			);
 
 			$result['catalog_import_seconds'] = round( microtime( true ) - $import_started, 2 );
@@ -918,10 +1005,12 @@ class Schrack_Catalog_Importer {
 			$format,
 			$limit,
 			array(
-				'catalog_cache'         => 'written',
-				'catalog_streamed'      => 'yes',
-				'catalog_parse_seconds' => $parse_seconds,
-			)
+				'catalog_cache'          => 'written',
+				'catalog_streamed'       => 'yes',
+				'catalog_parse_seconds'  => $parse_seconds,
+				'catalog_source_seconds' => $source_seconds,
+			),
+			$manage_term_counting
 		);
 
 		$result['catalog_import_seconds'] = round( microtime( true ) - $import_started, 2 );
@@ -2160,8 +2249,9 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,mixed>
 	 */
 	private function normalize_catalog_row( array $row ): array {
-		$get           = fn ( array $keys ): string => $this->find_catalog_value( $row, $keys );
-		$category_path = $this->catalog_category_path( $row );
+		$value_lookup  = $this->catalog_value_lookup( $row );
+		$get           = fn ( array $keys ): string => $this->find_catalog_value( $value_lookup, $keys );
+		$category_path = $this->catalog_category_path( $value_lookup );
 
 		$item = array(
 			'sku'               => sanitize_text_field( $get( array( 'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_id', 'articleid', 'article_number', 'articlenumber', 'artikel', 'artikelnummer', 'artikelnr', 'artnr', 'artno', 'bestellnummer', 'ordernumber', 'materialnumber', 'materialnr', 'productid', 'productnumber', 'partnumber', 'produs', 'schrackarticlenumber', 'schrackartikelnummer', 'schrackartikel', 'edsarticleid', 'edsartikelnummer' ) ) ),
@@ -2358,6 +2448,12 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,bool>
 	 */
 	private function catalog_excluded_technical_keys(): array {
+		static $lookup = null;
+
+		if ( is_array( $lookup ) ) {
+			return $lookup;
+		}
+
 		$keys = array(
 			'sku', 'id', 'item_id', 'itemid', 'item_number', 'itemnumber', 'item_no', 'itemno', 'article', 'article_id', 'articleid', 'article_number', 'articlenumber', 'artikel', 'artikelnummer', 'artikelnr', 'artnr', 'artno', 'bestellnummer', 'ordernumber', 'materialnumber', 'materialnr', 'productid', 'productnumber', 'partnumber', 'produs', 'schrackarticlenumber', 'schrackartikelnummer', 'schrackartikel', 'edsarticleid', 'edsartikelnummer',
 			'name', 'title', 'productname', 'itemname', 'produsname', 'textprodus', 'description_short', 'descriptionshort', 'shorttext', 'kurztext', 'bezeichnung', 'bezeichnung1', 'artikelbezeichnung',
@@ -2374,7 +2470,9 @@ class Schrack_Catalog_Importer {
 			'soap', 'wsdl', 'endpoint', 'token', 'password', 'username', 'userid', 'session',
 		);
 
-		return array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+		$lookup = array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+
+		return $lookup;
 	}
 
 	/**
@@ -2383,6 +2481,12 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,bool>
 	 */
 	private function catalog_sensitive_technical_keys(): array {
+		static $lookup = null;
+
+		if ( is_array( $lookup ) ) {
+			return $lookup;
+		}
+
 		$keys = array(
 			'cost',
 			'costprice',
@@ -2421,7 +2525,9 @@ class Schrack_Catalog_Importer {
 			'session',
 		);
 
-		return array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+		$lookup = array_fill_keys( array_map( array( $this, 'catalog_key' ), $keys ), true );
+
+		return $lookup;
 	}
 
 	/**
@@ -2545,12 +2651,12 @@ class Schrack_Catalog_Importer {
 	/**
 	 * Builds a category path from split catalog group columns when available.
 	 *
-	 * @param array<int|string,mixed> $row Raw parser row.
+	 * @param array<string,string> $value_lookup Normalized row lookup.
 	 */
-	private function catalog_category_path( array $row ): string {
+	private function catalog_category_path( array $value_lookup ): string {
 		$parts = array(
-			$this->find_catalog_value( $row, array( 'maingroup' ) ),
-			$this->find_catalog_value( $row, array( 'group' ) ),
+			$this->find_catalog_value( $value_lookup, array( 'maingroup' ) ),
+			$this->find_catalog_value( $value_lookup, array( 'group' ) ),
 		);
 
 		$parts = array_values( array_filter( array_map( 'trim', $parts ) ) );
@@ -2559,41 +2665,73 @@ class Schrack_Catalog_Importer {
 	}
 
 	/**
-	 * Finds the first scalar catalog value by broad key aliases, including nested XML rows.
+	 * Finds the first catalog value by broad key aliases in a row lookup whose
+	 * keys were normalized once up front.
 	 *
-	 * @param array<int|string,mixed> $row Raw parser row.
-	 * @param array<int,string>   $keys Key aliases.
+	 * @param array<string,string> $value_lookup Normalized row lookup.
+	 * @param array<int,string>    $keys Key aliases.
 	 */
-	private function find_catalog_value( array $row, array $keys ): string {
-		$normalized_keys = array_map( array( $this, 'catalog_key' ), $keys );
+	private function find_catalog_value( array $value_lookup, array $keys ): string {
+		static $normalized_alias_cache = array();
 
-		foreach ( $row as $key => $value ) {
+		$cache_key = implode( "\0", $keys );
+
+		if ( ! isset( $normalized_alias_cache[ $cache_key ] ) ) {
+			$normalized_alias_cache[ $cache_key ] = array_fill_keys(
+				array_map( array( $this, 'catalog_key' ), $keys ),
+				true
+			);
+		}
+
+		$aliases = $normalized_alias_cache[ $cache_key ];
+
+		// Preserve feed-column precedence by scanning the once-normalized lookup in
+		// its original depth-first insertion order.
+		foreach ( $value_lookup as $normalized_key => $value ) {
+			if ( isset( $aliases[ $normalized_key ] ) ) {
+				return (string) $value;
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Flattens and normalizes a parser row once so individual mapped fields do not
+	 * recursively normalize and rescan the raw structure independently.
+	 *
+	 * @return array<string,string>
+	 */
+	private function catalog_value_lookup( array $row ): array {
+		$lookup = array();
+		$this->collect_catalog_value_lookup( $row, $lookup );
+
+		return $lookup;
+	}
+
+	/**
+	 * @param array<string,string> $lookup Normalized first-value lookup by reference.
+	 */
+	private function collect_catalog_value_lookup( array $data, array &$lookup ): void {
+		foreach ( $data as $key => $value ) {
 			$normalized_key = $this->catalog_key( (string) $key );
 
-			if ( in_array( $normalized_key, $normalized_keys, true ) ) {
+			if ( '' !== $normalized_key && ! isset( $lookup[ $normalized_key ] ) ) {
 				if ( is_scalar( $value ) && '' !== (string) $value ) {
-					return (string) $value;
-				}
-
-				if ( is_array( $value ) ) {
+					$lookup[ $normalized_key ] = (string) $value;
+				} elseif ( is_array( $value ) ) {
 					$scalar = $this->first_scalar_value( $value );
 
 					if ( '' !== $scalar ) {
-						return $scalar;
+						$lookup[ $normalized_key ] = $scalar;
 					}
 				}
 			}
 
 			if ( is_array( $value ) ) {
-				$nested = $this->find_catalog_value( $value, $keys );
-
-				if ( '' !== $nested ) {
-					return $nested;
-				}
+				$this->collect_catalog_value_lookup( $value, $lookup );
 			}
 		}
-
-		return '';
 	}
 
 	/**

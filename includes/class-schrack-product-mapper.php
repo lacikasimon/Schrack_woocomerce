@@ -18,6 +18,13 @@ class Schrack_Product_Mapper {
 	private const DYNAMIC_ATTRIBUTE_REGISTRY_OPTION = 'schrack_wc_sync_dynamic_attributes';
 
 	/**
+	 * Increment when normalized catalog data maps to a materially different
+	 * WooCommerce representation. This invalidates stored row fingerprints
+	 * without tying full-catalog rewrites to unrelated plugin releases.
+	 */
+	private const CATALOG_FINGERPRINT_VERSION = '2026-07-10-1';
+
+	/**
 	 * Settings service.
 	 *
 	 * @var Schrack_Settings
@@ -84,6 +91,13 @@ class Schrack_Product_Mapper {
 	 * @var array<string,int>
 	 */
 	private array $attribute_term_cache = array();
+
+	/**
+	 * Per-request copy of the dynamic-attribute registry.
+	 *
+	 * @var array<string,string>|null
+	 */
+	private ?array $dynamic_attribute_registry_cache = null;
 
 	/**
 	 * Per-request normalized image URL to attachment ID cache.
@@ -290,21 +304,41 @@ class Schrack_Product_Mapper {
 		}
 
 		$resolved_ids = array();
+		$lookup_table = isset( $wpdb->wc_product_meta_lookup )
+			? (string) $wpdb->wc_product_meta_lookup
+			: $wpdb->prefix . 'wc_product_meta_lookup';
 
 		foreach ( array_chunk( $missing, 500 ) as $chunk ) {
 			$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%s' ) );
 			$sql          = "
-				SELECT sku_meta.meta_value AS sku, sku_meta.post_id AS product_id
-				FROM {$wpdb->postmeta} AS sku_meta
+				SELECT product_lookup.sku AS sku, product_lookup.product_id AS product_id
+				FROM {$lookup_table} AS product_lookup
 				INNER JOIN {$wpdb->posts} AS products
-					ON products.ID = sku_meta.post_id
-				WHERE sku_meta.meta_key = '_sku'
-					AND sku_meta.meta_value IN ({$placeholders})
+					ON products.ID = product_lookup.product_id
+				WHERE product_lookup.sku IN ({$placeholders})
 					AND products.post_type IN ('product', 'product_variation')
 					AND products.post_status NOT IN ('trash', 'auto-draft')
-				ORDER BY sku_meta.post_id ASC
+				ORDER BY product_lookup.product_id ASC
 			";
 			$rows         = $wpdb->get_results( $wpdb->prepare( $sql, $chunk ), ARRAY_A );
+
+			// Older or partially-migrated WooCommerce installs may not have the
+			// lookup table yet. Keep imports functional by falling back to postmeta;
+			// healthy stores stay on the indexed lookup-table path above.
+			if ( ! is_array( $rows ) || '' !== (string) $wpdb->last_error ) {
+				$sql  = "
+					SELECT sku_meta.meta_value AS sku, sku_meta.post_id AS product_id
+					FROM {$wpdb->postmeta} AS sku_meta
+					INNER JOIN {$wpdb->posts} AS products
+						ON products.ID = sku_meta.post_id
+					WHERE sku_meta.meta_key = '_sku'
+						AND sku_meta.meta_value IN ({$placeholders})
+						AND products.post_type IN ('product', 'product_variation')
+						AND products.post_status NOT IN ('trash', 'auto-draft')
+					ORDER BY sku_meta.post_id ASC
+				";
+				$rows = $wpdb->get_results( $wpdb->prepare( $sql, $chunk ), ARRAY_A );
+			}
 
 			if ( is_array( $rows ) ) {
 				foreach ( $rows as $row ) {
@@ -466,19 +500,185 @@ class Schrack_Product_Mapper {
 			throw new InvalidArgumentException( 'SKU is required for Schrack product import.' );
 		}
 
-		$source             = $this->catalog_source( $data );
-		$source_item_number = $this->source_item_number( $data, $sku );
-		$product_id         = $this->find_product_by_source_item_number( $source, $source_item_number );
-
-		if ( $product_id <= 0 ) {
-			$product_id = $this->find_product_by_sku( $sku );
-		}
+		$product_id = $this->resolve_product_id( $data, $sku );
 
 		if ( $product_id > 0 ) {
 			return $this->update_product_object( $product_id, $data );
 		}
 
 		return $this->create_product_object( $data );
+	}
+
+	/**
+	 * Creates or updates a catalog product only when its normalized supplier row
+	 * changed since the last successful import.
+	 *
+	 * The optional callback can apply source-specific values to the in-memory
+	 * product before the single save (used by Telesystem commercial data).
+	 *
+	 * @param callable(WC_Product,bool):mixed|null $before_save Called after core catalog mapping.
+	 * @return array{product_id:int,status:string,product:WC_Product|null,callback_result:mixed}
+	 */
+	public function upsert_product_if_changed( array $data, string $fingerprint, ?callable $before_save = null, bool $persist_fingerprint = true ): array {
+		$sku = isset( $data['sku'] ) ? sanitize_text_field( $this->string_value( $data['sku'] ) ) : '';
+
+		if ( '' === $sku ) {
+			throw new InvalidArgumentException( 'SKU is required for Schrack product import.' );
+		}
+
+		$source     = $this->catalog_source( $data );
+		$product_id = $this->resolve_product_id( $data, $sku );
+		$meta_key   = $this->catalog_fingerprint_meta_key( $source );
+
+		if ( $product_id > 0 && '' !== $fingerprint ) {
+			$stored = (string) get_post_meta( $product_id, $meta_key, true );
+
+			if ( '' !== $stored && hash_equals( $stored, $fingerprint ) ) {
+				return array(
+					'product_id'      => $product_id,
+					'status'          => 'unchanged',
+					'product'         => null,
+					'callback_result' => null,
+				);
+			}
+		}
+
+		$is_new  = $product_id <= 0;
+
+		if ( $is_new && ! class_exists( 'WC_Product_Simple' ) ) {
+			throw new RuntimeException( 'WooCommerce product classes are not available.' );
+		}
+
+		$product = $is_new ? new WC_Product_Simple() : wc_get_product( $product_id );
+
+		if ( ! $product instanceof WC_Product ) {
+			throw new RuntimeException( 'WooCommerce product was not found.' );
+		}
+
+		$this->apply_product_data( $product, $data, $is_new );
+		$callback_result = null !== $before_save ? $before_save( $product, $is_new ) : null;
+
+		if ( $persist_fingerprint && '' !== $fingerprint ) {
+			$this->set_catalog_fingerprint( $product, $data, $fingerprint );
+		}
+
+		$product_id = (int) $product->save();
+		$this->remember_product_identity( $product_id, $data, $sku );
+
+		$item_number = $this->source_item_number( $data, $sku );
+		$this->logger->debug(
+			'catalog',
+			( $is_new ? 'Created ' : 'Updated ' ) . $this->catalog_source_label( $source ) . ' product.',
+			$item_number,
+			array( 'product_id' => $product_id, 'fingerprint' => $persist_fingerprint && '' !== $fingerprint ? 'yes' : 'deferred' )
+		);
+
+		return array(
+			'product_id'      => $product_id,
+			'status'          => $is_new ? 'created' : 'updated',
+			'product'         => $product,
+			'callback_result' => $callback_result,
+		);
+	}
+
+	/**
+	 * Applies a previously calculated source-specific row fingerprint to an
+	 * in-memory product. Exposed for the rare two-save compatibility path where
+	 * category-based pricing must see persisted terms before the final save.
+	 */
+	public function set_catalog_fingerprint( WC_Product $product, array $data, string $fingerprint ): void {
+		if ( '' === $fingerprint ) {
+			return;
+		}
+
+		$product->update_meta_data(
+			$this->catalog_fingerprint_meta_key( $this->catalog_source( $data ) ),
+			$fingerprint
+		);
+	}
+
+	/**
+	 * Builds a deterministic, versioned fingerprint for normalized catalog data.
+	 *
+	 * @param array<string,mixed> $context Source/output settings affecting persistence.
+	 */
+	public function catalog_fingerprint( array $data, array $context = array() ): string {
+		$payload = $this->canonical_fingerprint_value(
+			array(
+				'version' => self::CATALOG_FINGERPRINT_VERSION,
+				'context' => $context,
+				'data'    => $data,
+			)
+		);
+		$json    = wp_json_encode(
+			$payload,
+			JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION
+		);
+
+		return hash( 'sha256', is_string( $json ) ? $json : serialize( $payload ) );
+	}
+
+	/**
+	 * Resolves an existing catalog product by indexed WooCommerce SKU first,
+	 * falling back to a source item number only for legacy supplier migrations.
+	 */
+	private function resolve_product_id( array $data, string $sku ): int {
+		$product_id = $this->find_product_by_sku( $sku );
+
+		if ( $product_id > 0 ) {
+			return $product_id;
+		}
+
+		$source = $this->catalog_source( $data );
+
+		return $this->find_product_by_source_item_number(
+			$source,
+			$this->source_item_number( $data, $sku )
+		);
+	}
+
+	/**
+	 * Updates in-memory lookup caches after a successful product save.
+	 */
+	private function remember_product_identity( int $product_id, array $data, string $sku ): void {
+		$source      = $this->catalog_source( $data );
+		$item_number = $this->source_item_number( $data, $sku );
+
+		$this->sku_product_id_cache[ $sku ] = $product_id;
+
+		if ( 'schrack' !== $source && '' !== $item_number ) {
+			$this->source_item_product_id_cache[ $source . ':' . $item_number ] = $product_id;
+		}
+	}
+
+	/**
+	 * Returns the source-specific row-fingerprint meta key.
+	 */
+	private function catalog_fingerprint_meta_key( string $source ): string {
+		return 'schrack' === $source
+			? '_schrack_catalog_fingerprint'
+			: '_' . sanitize_key( $source ) . '_catalog_fingerprint';
+	}
+
+	/**
+	 * Recursively sorts associative arrays while preserving list order.
+	 */
+	private function canonical_fingerprint_value( mixed $value ): mixed {
+		if ( ! is_array( $value ) ) {
+			return $value;
+		}
+
+		if ( array_is_list( $value ) ) {
+			return array_map( array( $this, 'canonical_fingerprint_value' ), $value );
+		}
+
+		ksort( $value, SORT_STRING );
+
+		foreach ( $value as $key => $item ) {
+			$value[ $key ] = $this->canonical_fingerprint_value( $item );
+		}
+
+		return $value;
 	}
 
 	/**
@@ -968,6 +1168,8 @@ class Schrack_Product_Mapper {
 	 * @param array<int,array<string,mixed>> $items Normalized catalog items.
 	 */
 	public function prime_terms_for_items( array $items ): void {
+		$dynamic_slugs = array();
+
 		foreach ( $items as $item ) {
 			if ( ! empty( $item['category_path'] ) ) {
 				$this->assign_categories( is_array( $item['category_path'] ) ? $item['category_path'] : $this->string_value( $item['category_path'] ) );
@@ -984,17 +1186,39 @@ class Schrack_Product_Mapper {
 				continue;
 			}
 
-			$attributes = array();
-			$position   = 0;
-
 			foreach ( $extracted as $slug => $info ) {
-				$this->apply_taxonomy_attribute( $attributes, $position, (string) $slug, $info );
+				$this->prime_taxonomy_attribute( (string) $slug, $info );
 			}
 
 			foreach ( $dynamic as $slug => $info ) {
-				$this->apply_taxonomy_attribute( $attributes, $position, $slug, $info );
+				if ( $this->prime_taxonomy_attribute( $slug, $info ) ) {
+					$dynamic_slugs[ $slug ] = (string) ( $info['label'] ?? $slug );
+				}
 			}
 		}
+
+		if ( ! empty( $dynamic_slugs ) ) {
+			$this->register_dynamic_attributes( $dynamic_slugs );
+		}
+	}
+
+	/**
+	 * Ensures one attribute taxonomy and value term exist without constructing a
+	 * throwaway WC_Product_Attribute object during the dispatcher preflight pass.
+	 *
+	 * @param array{label:string,value:string} $info Attribute label/value.
+	 */
+	private function prime_taxonomy_attribute( string $slug, array $info ): bool {
+		$label = sanitize_text_field( (string) ( $info['label'] ?? Schrack_Attribute_Extractor::label_for_slug( $slug ) ) );
+		$value = sanitize_text_field( (string) ( $info['value'] ?? '' ) );
+
+		if ( '' === $value ) {
+			return false;
+		}
+
+		$taxonomy = $this->ensure_attribute_taxonomy( $slug, $label );
+
+		return '' !== $taxonomy && $this->ensure_attribute_term( $taxonomy, $value ) > 0;
 	}
 
 	/**
@@ -1092,7 +1316,12 @@ class Schrack_Product_Mapper {
 	 * @param array<string,string> $slugs Taxonomy slug => human label.
 	 */
 	private function register_dynamic_attributes( array $slugs ): void {
-		$registry = get_option( self::DYNAMIC_ATTRIBUTE_REGISTRY_OPTION, array() );
+		$registry = $this->dynamic_attribute_registry_cache;
+
+		if ( null === $registry ) {
+			$stored   = get_option( self::DYNAMIC_ATTRIBUTE_REGISTRY_OPTION, array() );
+			$registry = is_array( $stored ) ? $stored : array();
+		}
 
 		if ( ! is_array( $registry ) ) {
 			$registry = array();
@@ -1110,6 +1339,8 @@ class Schrack_Product_Mapper {
 		if ( $changed ) {
 			update_option( self::DYNAMIC_ATTRIBUTE_REGISTRY_OPTION, $registry, false );
 		}
+
+		$this->dynamic_attribute_registry_cache = $registry;
 	}
 
 	/**

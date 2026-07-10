@@ -15,11 +15,21 @@ class Schrack_Settings {
 	public const MARKUPS_OPTION_NAME  = 'schrack_wc_sync_category_markups';
 	public const STOP_TRANSIENT_NAME  = 'schrack_wc_sync_stop_requested';
 	public const SOAP_PAUSE_TRANSIENT_NAME = 'schrack_wc_sync_soap_paused';
+	private const CATALOG_WORKER_STATUS_OPTION_PREFIX = 'schrack_wc_sync_catalog_worker_';
 	public const DEFAULT_TEST_WSDL    = 'https://ws-test.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice?wsdl';
 	public const DEFAULT_TEST_URL     = 'https://ws-test.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice';
 	public const DEFAULT_LIVE_WSDL    = 'https://ws.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice?wsdl';
 	public const DEFAULT_LIVE_URL     = 'https://ws.schrack.com/SchrackServicePortal/SchrackCommonVersionedWebservice';
 	public const DEFAULT_DATANORM_URL = 'https://www.schrack.cz/eshop/datanorm/';
+
+	/**
+	 * Per-request settings cache. get_option() itself is cached by WordPress, but
+	 * rebuilding and merging the full defaults array in every hot-loop get() call
+	 * is still avoidable work during large imports.
+	 *
+	 * @var array<string,mixed>|null
+	 */
+	private ?array $settings_cache = null;
 
 	/**
 	 * Installs default options.
@@ -100,13 +110,19 @@ class Schrack_Settings {
 	 * @return array<string,mixed>
 	 */
 	public function all(): array {
+		if ( null !== $this->settings_cache ) {
+			return $this->settings_cache;
+		}
+
 		$options = get_option( self::OPTION_NAME, array() );
 
 		if ( ! is_array( $options ) ) {
 			$options = array();
 		}
 
-		return wp_parse_args( $options, self::defaults() );
+		$this->settings_cache = wp_parse_args( $options, self::defaults() );
+
+		return $this->settings_cache;
 	}
 
 	/**
@@ -132,6 +148,7 @@ class Schrack_Settings {
 		$clean   = $this->sanitize( $input, $current );
 
 		update_option( self::OPTION_NAME, $clean, false );
+		$this->settings_cache = $clean;
 	}
 
 	/**
@@ -275,6 +292,99 @@ class Schrack_Settings {
 		$status = get_option( self::STATUS_OPTION_NAME, array() );
 
 		return is_array( $status ) ? $status : array();
+	}
+
+	/**
+	 * Stores progress for one catalog worker in its own option row.
+	 *
+	 * Parallel workers must not read-modify-write the shared serialized status
+	 * option: concurrent writes can otherwise overwrite sibling progress and all
+	 * workers contend for the same wp_options row.
+	 *
+	 * @param array<string,mixed> $data Worker progress.
+	 */
+	public function update_catalog_worker_status( string $run_id, int $range_start, array $data ): void {
+		$run_id = sanitize_key( $run_id );
+
+		if ( '' === $run_id ) {
+			return;
+		}
+
+		update_option(
+			$this->catalog_worker_status_option_name( $run_id, $range_start ),
+			array_merge(
+				array(
+					'last_run'    => current_time( 'mysql' ),
+					'run_id'      => $run_id,
+					'range_start' => max( 0, $range_start ),
+					'processed'   => 0,
+					'errors'      => 0,
+				),
+				$data
+			),
+			false
+		);
+	}
+
+	/**
+	 * Returns every independently stored worker status row for a catalog run.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function get_catalog_worker_statuses( string $run_id ): array {
+		global $wpdb;
+
+		$run_id = sanitize_key( $run_id );
+
+		if ( '' === $run_id ) {
+			return array();
+		}
+
+		$prefix = self::CATALOG_WORKER_STATUS_OPTION_PREFIX . $run_id . '_';
+		$sql    = $wpdb->prepare(
+			"SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_name ASC",
+			$wpdb->esc_like( $prefix ) . '%'
+		);
+		$rows   = $wpdb->get_col( $sql );
+		$result = array();
+
+		foreach ( is_array( $rows ) ? $rows : array() as $raw ) {
+			$value = maybe_unserialize( $raw );
+
+			if ( is_array( $value ) && $run_id === (string) ( $value['run_id'] ?? '' ) ) {
+				$result[] = $value;
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Deletes the independent worker progress rows for one completed run.
+	 */
+	public function delete_catalog_worker_statuses( string $run_id ): void {
+		global $wpdb;
+
+		$run_id = sanitize_key( $run_id );
+
+		if ( '' === $run_id ) {
+			return;
+		}
+
+		$prefix = self::CATALOG_WORKER_STATUS_OPTION_PREFIX . $run_id . '_';
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$wpdb->esc_like( $prefix ) . '%'
+			)
+		);
+	}
+
+	/**
+	 * Builds the deterministic per-worker option name.
+	 */
+	private function catalog_worker_status_option_name( string $run_id, int $range_start ): string {
+		return self::CATALOG_WORKER_STATUS_OPTION_PREFIX . sanitize_key( $run_id ) . '_' . max( 0, $range_start );
 	}
 
 	/**

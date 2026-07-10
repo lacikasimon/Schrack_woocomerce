@@ -246,7 +246,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					$details = array();
 
 					if ( 'catalog' === $operation ) {
-						foreach ( array( 'workers_queued', 'active_workers', 'image_urls_seen', 'image_urls_stored', 'image_urls_backfilled', 'image_url_meta_errors' ) as $detail_key ) {
+					foreach ( array( 'workers_queued', 'active_workers', 'created', 'updated', 'unchanged', 'image_urls_seen', 'image_urls_stored', 'image_urls_backfilled', 'image_url_meta_errors' ) as $detail_key ) {
 							if ( isset( $row[ $detail_key ] ) ) {
 								$details[] = ucwords( str_replace( '_', ' ', $detail_key ) ) . ': ' . absint( $row[ $detail_key ] );
 							}
