@@ -148,6 +148,8 @@ Price formula:
 sale_price = purchase_price * (1 + markup / 100) * (1 + vat_rate / 100)
 ```
 
+When the Schrack price response includes `PretUnitar`, the imported purchase price is first divided by that positive value. This converts package quotations such as a cable price per 100 metres into the price per metre before markup and VAT are applied.
+
 If a minimum margin is configured, the plugin uses the higher net value before applying TVA.
 
 ## Product Mapping
