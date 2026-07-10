@@ -139,7 +139,8 @@
 
 .schrack-product-page__media,
 .schrack-product-page__summary,
-.schrack-product-page__specs {
+.schrack-product-page__specs,
+.schrack-product-page__documents {
 	min-width: 0;
 }
 
@@ -316,6 +317,13 @@
 
 .schrack-product-page__price ins {
 	text-decoration: none;
+}
+
+.schrack-product-page__price .schrack-price-unit {
+	color: var(--schrack-page-muted);
+	font-size: .55em;
+	font-weight: 750;
+	white-space: nowrap;
 }
 
 .schrack-product-page__price .schrack-b2b-price {
@@ -582,6 +590,55 @@
 	padding-top: 22px;
 }
 
+.schrack-product-page__documents {
+	border-top: 1px solid var(--schrack-page-border);
+	display: grid;
+	gap: 14px;
+	margin-top: 24px;
+	padding-top: 22px;
+}
+
+.schrack-product-page__document-grid {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.schrack-product-page__document-grid a {
+	align-items: center;
+	background: var(--schrack-page-panel);
+	border: 1px solid var(--schrack-page-border);
+	border-radius: var(--schrack-page-radius);
+	color: var(--schrack-page-text);
+	display: flex;
+	gap: 10px;
+	min-width: 0;
+	padding: 11px;
+	text-decoration: none;
+}
+
+.schrack-product-page__document-grid a:hover,
+.schrack-product-page__document-grid a:focus-visible {
+	border-color: var(--schrack-page-accent);
+	color: var(--schrack-page-accent);
+}
+
+.schrack-product-page__document-grid b {
+	background: var(--schrack-page-accent);
+	border-radius: 5px;
+	color: #fff;
+	flex: none;
+	font-size: 10px;
+	padding: 5px 6px;
+}
+
+.schrack-product-page__document-grid strong {
+	font-size: 13px;
+	line-height: 1.3;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 .schrack-product-page__specs-head {
 	align-items: center;
 	display: flex;
@@ -765,7 +822,8 @@ body.single-product .woocommerce-notices-wrapper .woocommerce-info a.wc-forward:
 	}
 
 	.schrack-product-page__meta-grid,
-	.schrack-product-page__spec-grid {
+	.schrack-product-page__spec-grid,
+	.schrack-product-page__document-grid {
 		grid-template-columns: 1fr;
 	}
 

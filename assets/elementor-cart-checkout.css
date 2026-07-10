@@ -1317,6 +1317,40 @@ body:has(.schrack-cart-checkout) .elementor-widget-schrack_cart_checkout > .elem
 	line-height: 1.55;
 }
 
+.schrack-cart-checkout .schrack-newsletter-checkout {
+	background: #f6f8fa;
+	border: 1px solid #e2e6ea;
+	border-radius: var(--schrack-cart-radius);
+	margin: 18px 0;
+	padding: 16px;
+}
+
+.schrack-cart-checkout .schrack-newsletter-checkout h3 {
+	font-size: 16px;
+	margin: 0 0 10px;
+}
+
+.schrack-cart-checkout .schrack-newsletter-checkout__field {
+	margin: 0;
+}
+
+.schrack-cart-checkout .schrack-newsletter-checkout__field label {
+	align-items: flex-start;
+	display: flex;
+	gap: 10px;
+}
+
+.schrack-cart-checkout .schrack-newsletter-checkout__field input[type="checkbox"] {
+	flex: 0 0 auto;
+	margin-top: 3px;
+}
+
+.schrack-cart-checkout .schrack-newsletter-checkout__description {
+	color: #646970;
+	font-size: 12px;
+	margin: 6px 0 0;
+}
+
 .schrack-cart-checkout .woocommerce-terms-and-conditions-wrapper .form-row {
 	align-items: flex-start;
 	display: flex;

@@ -142,6 +142,20 @@ class Schrack_Account_Renderer {
 			$this->redirect_with_notice( $redirect, 'success', __( 'Detaliile contului au fost actualizate.', 'schrack-woocommerce-sync' ) );
 		}
 
+		if ( 'newsletter' === $section ) {
+			$subscribed = 'yes' === $this->posted_text( Schrack_Newsletter::FIELD_NAME );
+			$updated    = Schrack_Newsletter::set_user_subscription( $user_id, $subscribed, 'account' );
+
+			if ( ! $updated ) {
+				$this->redirect_with_notice( $redirect, 'error', __( 'Preferinta pentru newsletter nu a putut fi salvata.', 'schrack-woocommerce-sync' ) );
+			}
+
+			$message = $subscribed
+				? __( 'Abonarea la newsletter a fost activata.', 'schrack-woocommerce-sync' )
+				: __( 'Abonarea la newsletter a fost dezactivata.', 'schrack-woocommerce-sync' );
+			$this->redirect_with_notice( $redirect, 'success', $message );
+		}
+
 		if ( 'b2b' === $section ) {
 			$error = $this->update_b2b_request( $user_id );
 
@@ -253,6 +267,7 @@ class Schrack_Account_Renderer {
 	 */
 	private function login_portal( array $settings ): string {
 		$success_redirect = '' !== $settings['success_redirect'] ? $settings['success_redirect'] : $this->current_url();
+		$return_manager   = new Schrack_Return_Manager();
 
 		ob_start();
 		?>
@@ -291,6 +306,10 @@ class Schrack_Account_Renderer {
 			</div>
 
 			<?php echo $this->registration_portal( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+		</div>
+
+		<div class="schrack-account__guest-return">
+			<?php echo $return_manager->render_guest_form( $this->current_url() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 		</div>
 		<?php
 
@@ -387,6 +406,11 @@ class Schrack_Account_Renderer {
 				<span><?php esc_html_e( 'Sunt de acord cu politica magazinului.', 'schrack-woocommerce-sync' ); ?></span>
 			</label>
 
+			<label class="schrack-account__terms schrack-account__terms--newsletter">
+				<input type="checkbox" name="<?php echo esc_attr( Schrack_Newsletter::FIELD_NAME ); ?>" value="yes">
+				<span><?php esc_html_e( 'Doresc sa primesc noutati si oferte prin email.', 'schrack-woocommerce-sync' ); ?></span>
+			</label>
+
 			<button class="schrack-account__button" type="submit"><?php echo esc_html( $button ); ?></button>
 		</form>
 		<?php
@@ -476,11 +500,12 @@ class Schrack_Account_Renderer {
 	 */
 	private function account_section_panel( string $section, int $user_id, array $settings ): string {
 		return match ( $section ) {
-			'orders'    => $this->orders_section( $user_id, $settings ),
-			'order'     => $this->order_detail_section( $user_id ),
-			'addresses' => $this->address_form_section( $user_id ),
-			'account'   => $this->account_form_section( $user_id ),
-			default     => '',
+			'orders'     => $this->orders_section( $user_id, $settings ),
+			'order'      => $this->order_detail_section( $user_id ),
+			'addresses'  => $this->address_form_section( $user_id ),
+			'account'    => $this->account_form_section( $user_id ),
+			'newsletter' => $this->newsletter_section( $user_id ),
+			default      => '',
 		};
 	}
 
@@ -545,6 +570,7 @@ class Schrack_Account_Renderer {
 		$shipping_name = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
 		$billing_name = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
 		$customer_note = trim( (string) $order->get_customer_note() );
+		$return_manager = new Schrack_Return_Manager();
 
 		ob_start();
 		?>
@@ -622,6 +648,8 @@ class Schrack_Account_Renderer {
 					</div>
 				<?php endforeach; ?>
 			</div>
+
+			<?php echo $return_manager->render_order_return_panel( $order, $this->order_url( (int) $order->get_id() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 		</div>
 		<?php
 
@@ -755,6 +783,45 @@ class Schrack_Account_Renderer {
 	}
 
 	/**
+	 * Renders the newsletter preference form.
+	 */
+	private function newsletter_section( int $user_id ): string {
+		$subscribed = Schrack_Newsletter::is_user_subscribed( $user_id );
+
+		ob_start();
+		?>
+		<div class="schrack-account__panel schrack-account__panel--wide schrack-account__section" id="schrack-account-newsletter">
+			<div class="schrack-account__panel-head">
+				<div>
+					<h3><?php esc_html_e( 'Newsletter', 'schrack-woocommerce-sync' ); ?></h3>
+					<p><?php esc_html_e( 'Alege daca doresti sa primesti noutati, recomandari si oferte prin email.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
+				<a href="<?php echo esc_url( $this->section_url( 'dashboard' ) ); ?>"><?php esc_html_e( 'Inapoi la sumar', 'schrack-woocommerce-sync' ); ?></a>
+			</div>
+
+			<form class="schrack-account__edit-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="<?php echo esc_attr( self::UPDATE_ACTION ); ?>">
+				<input type="hidden" name="section" value="newsletter">
+				<input type="hidden" name="redirect_to" value="<?php echo esc_url( $this->section_url( 'newsletter' ) ); ?>">
+				<?php wp_nonce_field( self::UPDATE_NONCE_ACTION, 'schrack_account_update_nonce' ); ?>
+
+				<label class="schrack-account__terms schrack-account__terms--preference">
+					<input type="checkbox" name="<?php echo esc_attr( Schrack_Newsletter::FIELD_NAME ); ?>" value="yes" <?php checked( $subscribed ); ?>>
+					<span>
+						<strong><?php echo esc_html( $subscribed ? __( 'Abonare activa', 'schrack-woocommerce-sync' ) : __( 'Abonare inactiva', 'schrack-woocommerce-sync' ) ); ?></strong><br>
+						<?php echo esc_html( $subscribed ? __( 'Debifeaza optiunea pentru dezabonare.', 'schrack-woocommerce-sync' ) : __( 'Bifeaza optiunea pentru abonare.', 'schrack-woocommerce-sync' ) ); ?>
+					</span>
+				</label>
+
+				<button class="schrack-account__button" type="submit"><?php esc_html_e( 'Salveaza preferinta', 'schrack-woocommerce-sync' ); ?></button>
+			</form>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * Renders a simple message section.
 	 */
 	private function message_section( string $title, string $message, string $back_url ): string {
@@ -834,6 +901,7 @@ class Schrack_Account_Renderer {
 			array( 'section' => 'orders', 'label' => __( 'Comenzile mele', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'orders' ) ),
 			array( 'section' => 'addresses', 'label' => __( 'Adrese facturare si livrare', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'addresses' ) ),
 			array( 'section' => 'account', 'label' => __( 'Detalii cont', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'account' ) ),
+			array( 'section' => 'newsletter', 'label' => __( 'Newsletter', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'newsletter' ) ),
 			array( 'section' => 'cart', 'label' => __( 'Cosul meu', 'schrack-woocommerce-sync' ), 'url' => $this->cart_url() ),
 		);
 
@@ -946,13 +1014,35 @@ class Schrack_Account_Renderer {
 	 * Renders an order status badge.
 	 */
 	private function order_status_badge( WC_Order $order ): string {
-		$status = sanitize_html_class( 'is-' . $order->get_status() );
+		$status           = sanitize_html_class( 'is-' . $order->get_status() );
+		$return_manager   = new Schrack_Return_Manager();
+		$return_request   = $return_manager->latest_request( $order );
+		$return_eligible  = $return_manager->get_eligibility( $order );
+		$return_badge     = '';
+
+		if ( is_array( $return_request ) ) {
+			$return_badge = sprintf(
+				'<em class="schrack-account__order-status is-return">%s</em>',
+				esc_html__( 'Retur solicitat', 'schrack-woocommerce-sync' )
+			);
+		} elseif ( $return_eligible['eligible'] ) {
+			$return_badge = sprintf(
+				'<em class="schrack-account__order-status is-return-eligible">%s</em>',
+				esc_html(
+					sprintf(
+						/* translators: %d: remaining return days. */
+						_n( 'Retur: %d zi', 'Retur: %d zile', $return_eligible['days_remaining'], 'schrack-woocommerce-sync' ),
+						$return_eligible['days_remaining']
+					)
+				)
+			);
+		}
 
 		return sprintf(
 			'<em class="schrack-account__order-status %1$s">%2$s</em>',
 			esc_attr( $status ),
 			esc_html( wc_get_order_status_name( $order->get_status() ) )
-		);
+		) . $return_badge;
 	}
 
 	/**
@@ -1535,7 +1625,7 @@ class Schrack_Account_Renderer {
 	private function active_section(): string {
 		$has_section = isset( $_GET[ self::SECTION_QUERY_ARG ] );
 		$section     = $has_section ? sanitize_key( wp_unslash( (string) $_GET[ self::SECTION_QUERY_ARG ] ) ) : $this->section_from_woocommerce_endpoint();
-		$allowed = array( 'dashboard', 'orders', 'order', 'addresses', 'account' );
+		$allowed = array( 'dashboard', 'orders', 'order', 'addresses', 'account', 'newsletter' );
 		$order_id = $this->requested_order_id();
 
 		if ( 'order' === $section && 0 === $order_id ) {

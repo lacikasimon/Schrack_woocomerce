@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Product furnizor importer
  * Description: Imports supplier catalog data and synchronizes purchase prices and stock with WooCommerce products.
- * Version: 0.1.52
+ * Version: 0.1.55
  * Author: Product furnizor importer
  * Requires PHP: 8.1
  * Requires Plugins: woocommerce
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SCHRACK_WC_SYNC_VERSION', '0.1.52' );
+define( 'SCHRACK_WC_SYNC_VERSION', '0.1.55' );
 define( 'SCHRACK_WC_SYNC_FILE', __FILE__ );
 define( 'SCHRACK_WC_SYNC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SCHRACK_WC_SYNC_URL', plugin_dir_url( __FILE__ ) );

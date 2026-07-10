@@ -93,6 +93,11 @@ class Schrack_Registration_Renderer {
 							</label>
 						<?php endif; ?>
 
+						<label class="schrack-register__terms schrack-register__terms--newsletter">
+							<input type="checkbox" name="<?php echo esc_attr( Schrack_Newsletter::FIELD_NAME ); ?>" value="yes">
+							<span><?php esc_html_e( 'Doresc sa primesc noutati si oferte prin email.', 'schrack-woocommerce-sync' ); ?></span>
+						</label>
+
 						<button class="schrack-register__button" type="submit"><?php echo esc_html( $settings['button_text'] ); ?></button>
 
 						<?php if ( 'yes' === $settings['show_login_link'] ) : ?>
@@ -148,6 +153,10 @@ class Schrack_Registration_Renderer {
 
 		$user_id = absint( $user_id );
 		$this->store_customer_meta( $user_id, $data, $mode );
+
+		if ( 'yes' === $this->posted_text( Schrack_Newsletter::FIELD_NAME ) ) {
+			Schrack_Newsletter::set_user_subscription( $user_id, true, 'registration' );
+		}
 
 		if ( 'b2b' === $mode ) {
 			$this->notify_b2b_request( $user_id, $data );

@@ -78,6 +78,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<h2><?php esc_html_e( 'Sync Behavior', 'schrack-woocommerce-sync' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>
+				<th scope="row"><label for="schrack_catalog_format"><?php esc_html_e( 'Schrack catalog format', 'schrack-woocommerce-sync' ); ?></label></th>
+				<td>
+					<select id="schrack_catalog_format" name="schrack_settings[catalog_format]">
+						<option value="xml" <?php selected( $settings['catalog_format'] ?? 'xml', 'xml' ); ?>><?php esc_html_e( 'Detailed XML (all available properties/facets)', 'schrack-woocommerce-sync' ); ?></option>
+						<option value="csv" <?php selected( $settings['catalog_format'] ?? 'xml', 'csv' ); ?>><?php esc_html_e( 'Compact CSV (basic fields only)', 'schrack-woocommerce-sync' ); ?></option>
+					</select>
+					<p class="description"><?php esc_html_e( 'XML is streamed from disk and is recommended when product specifications and technical filters are required.', 'schrack-woocommerce-sync' ); ?></p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="schrack_default_markup"><?php esc_html_e( 'Default markup %', 'schrack-woocommerce-sync' ); ?></label></th>
 				<td><input id="schrack_default_markup" type="number" min="0" max="500" step="0.01" name="schrack_settings[default_markup]" value="<?php echo esc_attr( $settings['default_markup'] ); ?>"></td>
 			</tr>

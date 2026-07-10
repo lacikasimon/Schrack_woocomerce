@@ -75,7 +75,7 @@ class Schrack_Elementor_Header_Search_Widget extends \Elementor\Widget_Base {
 			array(
 				'label'   => __( 'Placeholder', 'schrack-woocommerce-sync' ),
 				'type'    => \Elementor\Controls_Manager::TEXT,
-				'default' => __( 'Cauta produse...', 'schrack-woocommerce-sync' ),
+				'default' => __( 'Cauta produse sau categorii...', 'schrack-woocommerce-sync' ),
 			)
 		);
 
@@ -107,6 +107,18 @@ class Schrack_Elementor_Header_Search_Widget extends \Elementor\Widget_Base {
 				'type'    => \Elementor\Controls_Manager::NUMBER,
 				'default' => 6,
 				'min'     => 3,
+				'max'     => 12,
+				'step'    => 1,
+			)
+		);
+
+		$this->add_control(
+			'max_category_results',
+			array(
+				'label'   => __( 'Categorii rapide', 'schrack-woocommerce-sync' ),
+				'type'    => \Elementor\Controls_Manager::NUMBER,
+				'default' => 6,
+				'min'     => 2,
 				'max'     => 12,
 				'step'    => 1,
 			)

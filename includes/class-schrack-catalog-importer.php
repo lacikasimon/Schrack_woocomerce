@@ -300,7 +300,7 @@ class Schrack_Catalog_Importer {
 	public function fetch_and_cache_catalog( string $format ): ?array {
 		$format = strtoupper( $format );
 
-		if ( 'CSV' !== $format ) {
+		if ( ! in_array( $format, array( 'CSV', 'XML' ), true ) ) {
 			return null;
 		}
 
@@ -325,7 +325,9 @@ class Schrack_Catalog_Importer {
 		$parse_started = microtime( true );
 
 		try {
-			$cache = $this->write_csv_catalog_cache_from_file( (string) $source['path'], $format );
+			$cache = 'XML' === $format
+				? $this->write_xml_catalog_cache_from_file( (string) $source['path'], $format )
+				: $this->write_csv_catalog_cache_from_file( (string) $source['path'], $format );
 		} finally {
 			$this->delete_temp_files( (array) ( $source['cleanup_paths'] ?? array() ) );
 		}
@@ -944,7 +946,9 @@ class Schrack_Catalog_Importer {
 	 * @return array<string,mixed>|null Null when the response should use the legacy parser.
 	 */
 	private function import_streamed_catalog_response( mixed $raw, string $format, int $limit, bool $manage_term_counting = true ): ?array {
-		if ( 'CSV' !== strtoupper( $format ) ) {
+		$format = strtoupper( $format );
+
+		if ( ! in_array( $format, array( 'CSV', 'XML' ), true ) ) {
 			return null;
 		}
 
@@ -966,7 +970,9 @@ class Schrack_Catalog_Importer {
 		$parse_started = microtime( true );
 
 		try {
-			$cache = $this->write_csv_catalog_cache_from_file( (string) $source['path'], $format );
+			$cache = 'XML' === $format
+				? $this->write_xml_catalog_cache_from_file( (string) $source['path'], $format )
+				: $this->write_csv_catalog_cache_from_file( (string) $source['path'], $format );
 		} finally {
 			$this->delete_temp_files( (array) ( $source['cleanup_paths'] ?? array() ) );
 		}
@@ -974,6 +980,10 @@ class Schrack_Catalog_Importer {
 		$parse_seconds = round( microtime( true ) - $parse_started, 2 );
 
 		if ( null === $cache ) {
+			if ( 'XML' === $format ) {
+				throw new RuntimeException( 'Could not stream the Schrack XML catalog safely.' );
+			}
+
 			return null;
 		}
 
@@ -1445,6 +1455,229 @@ class Schrack_Catalog_Importer {
 	}
 
 	/**
+	 * Streams the large Schrack XML catalog into the same JSONL cache used by
+	 * CSV imports. Only one <Item>/<Product> subtree is held in memory at once.
+	 *
+	 * @return array<string,mixed>|null
+	 */
+	private function write_xml_catalog_cache_from_file( string $path, string $format ): ?array {
+		if ( ! is_readable( $path ) || ! class_exists( 'XMLReader' ) || ! function_exists( 'simplexml_load_string' ) ) {
+			$this->logger->error( 'catalog', 'XMLReader and SimpleXML are required for the detailed Schrack XML catalog import.' );
+			return null;
+		}
+
+		$reader = new XMLReader();
+
+		if ( ! $reader->open( $path, null, LIBXML_NONET | LIBXML_COMPACT ) ) {
+			$this->logger->error( 'catalog', 'Could not open the downloaded Schrack XML catalog.' );
+			return null;
+		}
+
+		$items_temp = wp_tempnam( 'schrack-catalog-items' );
+
+		if ( ! $items_temp ) {
+			$reader->close();
+			$this->logger->warning( 'catalog', 'Could not create a temporary parsed Schrack XML catalog cache.' );
+			return null;
+		}
+
+		$output = fopen( $items_temp, 'wb' );
+
+		if ( false === $output ) {
+			$reader->close();
+			wp_delete_file( $items_temp );
+			$this->logger->warning( 'catalog', 'Could not open parsed Schrack XML catalog cache for writing.' );
+			return null;
+		}
+
+		$signature_context = hash_init( 'sha256' );
+		$rows_seen         = 0;
+		$rows_without_sku  = 0;
+		$written           = 0;
+		$write_failed      = false;
+		$parse_errors      = 0;
+
+		try {
+			while ( $reader->read() ) {
+				if ( ! $this->is_xml_catalog_item_element( $reader ) ) {
+					continue;
+				}
+
+				++$rows_seen;
+				$fragment = $reader->readOuterXml();
+				$row      = is_string( $fragment ) ? $this->xml_catalog_fragment_row( $fragment ) : array();
+
+				if ( empty( $row ) ) {
+					++$parse_errors;
+					continue;
+				}
+
+				$item = $this->normalize_catalog_row( $row );
+
+				if ( '' === $item['sku'] ) {
+					++$rows_without_sku;
+					continue;
+				}
+
+				hash_update( $signature_context, (string) $this->item_sku( $item ) . "\n" );
+				$encoded = wp_json_encode( $item );
+
+				if ( ! is_string( $encoded ) || false === fwrite( $output, $encoded . "\n" ) ) {
+					$write_failed = true;
+					break;
+				}
+
+				++$written;
+			}
+		} finally {
+			$reader->close();
+			fclose( $output );
+		}
+
+		$signature = hash_final( $signature_context );
+
+		if ( $write_failed ) {
+			wp_delete_file( $items_temp );
+			$this->logger->warning( 'catalog', 'Could not write parsed Schrack XML catalog cache.' );
+			return null;
+		}
+
+		if ( 0 === $written ) {
+			wp_delete_file( $items_temp );
+			$this->logger->warning(
+				'catalog',
+				'Schrack XML catalog did not contain importable product rows.',
+				null,
+				array(
+					'rows_seen'        => $rows_seen,
+					'rows_without_sku' => $rows_without_sku,
+					'parse_errors'     => $parse_errors,
+					'streamed'         => 'yes',
+				)
+			);
+
+			return $this->empty_streamed_catalog_cache( $format, $signature );
+		}
+
+		$cache = $this->finalize_streamed_catalog_cache( $format, $signature, $items_temp, $written );
+
+		if ( null === $cache ) {
+			return null;
+		}
+
+		$this->logger->debug(
+			'catalog',
+			'Parsed detailed Schrack XML catalog with XMLReader.',
+			null,
+			array(
+				'rows_seen'        => $rows_seen,
+				'items'            => $written,
+				'rows_without_sku' => $rows_without_sku,
+				'parse_errors'     => $parse_errors,
+				'streamed'         => 'yes',
+			)
+		);
+
+		return $cache;
+	}
+
+	/**
+	 * Returns whether XMLReader is positioned on one real catalog product.
+	 */
+	private function is_xml_catalog_item_element( XMLReader $reader ): bool {
+		return XMLReader::ELEMENT === $reader->nodeType
+			&& in_array( strtolower( $reader->localName ), array( 'item', 'product' ), true );
+	}
+
+	/**
+	 * Converts one standalone product XML fragment to a parser row, preserving
+	 * element attributes as well as repeated child elements.
+	 *
+	 * @return array<string|int,mixed>
+	 */
+	private function xml_catalog_fragment_row( string $fragment ): array {
+		$previous = libxml_use_internal_errors( true );
+		$node     = simplexml_load_string( $fragment, 'SimpleXMLElement', LIBXML_NONET | LIBXML_COMPACT );
+		libxml_clear_errors();
+		libxml_use_internal_errors( $previous );
+
+		if ( false === $node ) {
+			return array();
+		}
+
+		$nested_items = $node->xpath(
+			'.//*[' .
+			'(translate(local-name(), "ITEMPRODUCT", "itemproduct") = "item" or translate(local-name(), "ITEMPRODUCT", "itemproduct") = "product")' .
+			']'
+		);
+
+		if ( is_array( $nested_items ) && ! empty( $nested_items ) ) {
+			return array();
+		}
+
+		$row = $this->simplexml_catalog_value( $node );
+
+		return is_array( $row ) ? $row : array();
+	}
+
+	/**
+	 * Recursively converts SimpleXML without dropping XML attributes/namespaces.
+	 */
+	private function simplexml_catalog_value( SimpleXMLElement $node ): mixed {
+		$result             = array();
+		$seen_attributes    = array();
+		$namespace_prefixes = array_merge( array( null ), array_keys( $node->getNamespaces( true ) ) );
+
+		foreach ( $namespace_prefixes as $prefix ) {
+			$attributes = null === $prefix ? $node->attributes() : $node->attributes( (string) $prefix, true );
+
+			foreach ( $attributes as $name => $value ) {
+				$key = 'attribute_' . ( null !== $prefix && '' !== $prefix ? $prefix . '_' : '' ) . (string) $name;
+
+				if ( ! isset( $seen_attributes[ $key ] ) ) {
+					$result[ $key ]         = trim( (string) $value );
+					$seen_attributes[ $key ] = true;
+				}
+			}
+		}
+
+		$seen_children = array();
+
+		foreach ( $namespace_prefixes as $prefix ) {
+			$children = null === $prefix ? $node->children() : $node->children( (string) $prefix, true );
+
+			foreach ( $children as $child ) {
+				$key   = $child->getName();
+				$value = $this->simplexml_catalog_value( $child );
+
+				if ( ! isset( $seen_children[ $key ] ) ) {
+					$result[ $key ]        = $value;
+					$seen_children[ $key ] = true;
+					continue;
+				}
+
+				if ( ! is_array( $result[ $key ] ) || ! array_is_list( $result[ $key ] ) ) {
+					$result[ $key ] = array( $result[ $key ] );
+				}
+
+				$result[ $key ][] = $value;
+			}
+		}
+
+		$text = trim( (string) $node );
+
+		if ( empty( $result ) ) {
+			return $text;
+		}
+
+		if ( '' !== $text ) {
+			$result['_text'] = $text;
+		}
+
+		return $result;
+	}
+
+	/**
 	 * Creates a metadata-only empty cache descriptor.
 	 *
 	 * @return array<string,mixed>
@@ -1568,15 +1801,7 @@ class Schrack_Catalog_Importer {
 			return $this->debug_raw_csv_rows_streamed( $content, $limit );
 		}
 
-		if ( filter_var( $content, FILTER_VALIDATE_URL ) ) {
-			$content = $this->download_catalog_content( $content );
-		}
-
-		if ( '' === $content ) {
-			return array( 'error' => __( 'Could not download the Schrack catalog file.', 'schrack-woocommerce-sync' ) );
-		}
-
-		return $this->debug_raw_xml_rows( $content, $limit );
+		return $this->debug_raw_xml_rows_streamed( $content, $limit );
 	}
 
 	/**
@@ -1600,6 +1825,117 @@ class Schrack_Catalog_Importer {
 		} finally {
 			$this->delete_temp_files( (array) ( $source['cleanup_paths'] ?? array() ) );
 		}
+	}
+
+	/**
+	 * Downloads/reads the large XML catalog from disk and parses only the
+	 * requested product nodes with XMLReader.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function debug_raw_xml_rows_streamed( string $content, int $limit ): array {
+		$source = $this->catalog_response_source_file( $content );
+		unset( $content );
+
+		if ( null === $source ) {
+			return array( 'error' => __( 'Could not read the Schrack XML catalog file.', 'schrack-woocommerce-sync' ) );
+		}
+
+		try {
+			return $this->read_debug_xml_file( (string) $source['path'], $limit );
+		} finally {
+			$this->delete_temp_files( (array) ( $source['cleanup_paths'] ?? array() ) );
+		}
+	}
+
+	/**
+	 * Reads a bounded XML product sample while preserving nested properties,
+	 * facets, XML attributes, and a literal Facets fragment for diagnostics.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function read_debug_xml_file( string $path, int $limit ): array {
+		if ( ! is_readable( $path ) || ! class_exists( 'XMLReader' ) || ! function_exists( 'simplexml_load_string' ) ) {
+			return array( 'error' => __( 'XMLReader and SimpleXML are required to inspect the Schrack XML catalog.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$reader = new XMLReader();
+
+		if ( ! $reader->open( $path, null, LIBXML_NONET | LIBXML_COMPACT ) ) {
+			return array( 'error' => __( 'Could not open the downloaded Schrack XML catalog.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$rows           = array();
+		$root_structure = array();
+		$facets_raw_xml = null;
+		$started_at     = time();
+		$capped_early   = false;
+		$processed      = 0;
+
+		try {
+			while ( $reader->read() ) {
+				if ( XMLReader::ELEMENT === $reader->nodeType && 1 === $reader->depth ) {
+					$name                    = $reader->localName;
+					$root_structure[ $name ] = ( $root_structure[ $name ] ?? 0 ) + 1;
+				}
+
+				if ( ! $this->is_xml_catalog_item_element( $reader ) ) {
+					continue;
+				}
+
+				if ( count( $rows ) >= $limit ) {
+					break;
+				}
+
+				++$processed;
+
+				if ( 0 === $processed % 100 && $this->debug_export_should_stop( $started_at ) ) {
+					$capped_early = true;
+					break;
+				}
+
+				$fragment = $reader->readOuterXml();
+				$row      = is_string( $fragment ) ? $this->xml_catalog_fragment_row( $fragment ) : array();
+				$item     = $this->normalize_catalog_row( $row );
+
+				if ( '' === $item['sku'] ) {
+					continue;
+				}
+
+				if ( null === $facets_raw_xml && is_string( $fragment ) && false !== stripos( $fragment, 'facets' ) ) {
+					$previous = libxml_use_internal_errors( true );
+					$node     = simplexml_load_string( $fragment, 'SimpleXMLElement', LIBXML_NONET | LIBXML_COMPACT );
+					libxml_clear_errors();
+					libxml_use_internal_errors( $previous );
+
+					if ( false !== $node ) {
+						$facet_nodes = $node->xpath( './/*[translate(local-name(), "FACETS", "facets") = "facets"]' );
+
+						if ( is_array( $facet_nodes ) && isset( $facet_nodes[0] ) ) {
+							$facets_raw_xml = $facet_nodes[0]->asXML();
+						}
+					}
+				}
+
+				$rows[] = array(
+					'raw'                  => $row,
+					'sku'                  => $item['sku'],
+					'name'                 => $item['name'],
+					'technical_attributes' => $item['technical_attributes'],
+					'extracted_attributes' => $item['extracted_attributes'],
+				);
+			}
+		} finally {
+			$reader->close();
+		}
+
+		return array(
+			'format'         => 'XML',
+			'root_structure' => $root_structure,
+			'facets_raw_xml' => $facets_raw_xml,
+			'rows'           => $rows,
+			'capped_early'   => $capped_early,
+		);
 	}
 
 	/**
@@ -2177,8 +2513,9 @@ class Schrack_Catalog_Importer {
 		$items = array();
 
 		foreach ( $xml->xpath( self::CATALOG_ITEM_XPATH ) ?: array() as $node ) {
-			$row  = json_decode( wp_json_encode( $node ), true );
-			$item = $this->normalize_catalog_row( is_array( $row ) ? $row : array() );
+			$fragment = $node->asXML();
+			$row      = is_string( $fragment ) ? $this->xml_catalog_fragment_row( $fragment ) : array();
+			$item     = $this->normalize_catalog_row( $row );
 
 			if ( '' !== $item['sku'] ) {
 				$items[] = $item;
@@ -2250,7 +2587,13 @@ class Schrack_Catalog_Importer {
 	 */
 	private function normalize_catalog_row( array $row ): array {
 		$value_lookup  = $this->catalog_value_lookup( $row );
-		$get           = fn ( array $keys ): string => $this->find_catalog_value( $value_lookup, $keys );
+		$direct_lookup = $this->catalog_direct_value_lookup( $row );
+		$get           = function ( array $keys ) use ( $direct_lookup, $value_lookup ): string {
+			$direct = $this->find_catalog_value( $direct_lookup, $keys );
+
+			return '' !== $direct ? $direct : $this->find_catalog_value( $value_lookup, $keys );
+		};
+		$get_direct    = fn ( array $keys ): string => $this->find_catalog_value( $direct_lookup, $keys );
 		$category_path = $this->catalog_category_path( $value_lookup );
 
 		$item = array(
@@ -2262,7 +2605,12 @@ class Schrack_Catalog_Importer {
 			'ean'               => sanitize_text_field( $get( array( 'ean', 'gtin', 'barcode', 'barcodeno' ) ) ),
 			'image_url'         => $this->normalize_catalog_url( $get( array( 'image_url', 'imageurl', 'imageurl1', 'photo_url', 'photourl', 'foto_url', 'fotourl', 'foto', 'fotografie', 'photo', 'photograph', 'picture', 'pictureurl', 'bild', 'bildurl', 'artikelbild', 'image', 'image1', 'mainimage', 'mainimageurl', 'thumbnail', 'thumbnailurl', 'productimage', 'productimageurl', 'product_image', 'product_image_url', 'mediaurl' ) ) ),
 			'category_path'     => sanitize_text_field( '' !== $category_path ? $category_path : $get( array( 'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup' ) ) ),
-			'unit'              => sanitize_text_field( $get( array( 'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit' ) ) ),
+			// A generic nested <Unit> usually belongs to a technical property (mm,
+			// kg, V), not the product's sales unit. Only accept that generic key at
+			// product level; nested fallbacks must use an explicit sales-unit name.
+			'unit'              => sanitize_text_field( $get_direct( array( 'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit' ) ) ?: $get( array( 'unitatedemasura', 'mengeneinheit', 'salesunit', 'orderunit', 'salesuom' ) ) ),
+			'price_unit'        => sanitize_text_field( $get( array( 'pretunitar', 'pret_unitar', 'priceunit', 'price_unit', 'pricingunit' ) ) ),
+			'package_quantity'  => sanitize_text_field( $get( array( 'vpe', 'packquantity', 'packagequantity', 'packagingunit', 'packagingquantity' ) ) ),
 			'catalog_status'    => sanitize_text_field( $get( array( 'catalog_status', 'status' ) ) ),
 			// The merchandising "discount group" name (e.g. "EGLO Light", "Eglo Connect") is really a
 			// product series/collection label, not pricing data — only the numeric code and the actual
@@ -2273,6 +2621,7 @@ class Schrack_Catalog_Importer {
 		$item['technical_attributes'] = $this->catalog_technical_attributes( $row, $item );
 		$item['extracted_attributes'] = Schrack_Attribute_Extractor::extract( $item['name'] );
 		$item['dynamic_technical_attributes'] = $this->dynamic_catalog_technical_attributes( $item['technical_attributes'] );
+		$item['documents'] = $this->catalog_documents( $row, (string) $item['image_url'] );
 		$item['raw_feed_data'] = $this->catalog_raw_feed_fields( $row );
 
 		return $item;
@@ -2295,11 +2644,11 @@ class Schrack_Catalog_Importer {
 			$label = (string) ( $entry['label'] ?? '' );
 			$value = (string) ( $entry['value'] ?? '' );
 
-			if ( '' === $label || '' === $value || mb_strlen( $value ) > 40 || false !== stripos( $value, 'http' ) ) {
+			if ( '' === $label || '' === $value || mb_strlen( $value ) > 100 || false !== stripos( $value, 'http' ) ) {
 				continue;
 			}
 
-			$slug = sanitize_title( $label );
+			$slug = $this->catalog_attribute_slug( $label );
 
 			if ( '' === $slug || isset( $result[ $slug ] ) ) {
 				continue;
@@ -2312,6 +2661,21 @@ class Schrack_Catalog_Importer {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Builds a deterministic WooCommerce attribute slug within its 28-character
+	 * database limit. The hash suffix keeps similarly-prefixed XML property names
+	 * from collapsing into the same global taxonomy.
+	 */
+	private function catalog_attribute_slug( string $label ): string {
+		$slug = sanitize_title( $label );
+
+		if ( strlen( $slug ) <= 28 ) {
+			return $slug;
+		}
+
+		return rtrim( substr( $slug, 0, 21 ), '-' ) . '-' . substr( md5( $slug ), 0, 6 );
 	}
 
 	/**
@@ -2363,11 +2727,24 @@ class Schrack_Catalog_Importer {
 	 * @param array<string,bool>                  $sensitive_keys Internal/commercial keys.
 	 */
 	private function collect_catalog_technical_attributes( array $data, string $prefix, array &$items, array &$seen, array $core_values, array $excluded_keys, array $sensitive_keys ): void {
+		$pair = $this->catalog_named_value_pair( $data, $prefix );
+
+		if ( null !== $pair ) {
+			$this->add_catalog_technical_attribute( $pair['label'], $pair['value'], $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
+			return;
+		}
+
 		foreach ( $data as $key => $value ) {
 			$label = $this->catalog_technical_label( (string) $key, $prefix );
 
 			if ( is_array( $value ) ) {
-				if ( $this->array_is_scalar_list( $value ) ) {
+				$nested_pair = $this->catalog_named_value_pair( $value, $label );
+
+				if ( null !== $nested_pair ) {
+					$this->add_catalog_technical_attribute( $nested_pair['label'], $nested_pair['value'], $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
+				} elseif ( ! empty( $excluded_keys ) && preg_match( '/(document|datasheet|manual|cadfile|download)/', $this->catalog_key( $label ) ) ) {
+					continue;
+				} elseif ( $this->array_is_scalar_list( $value ) ) {
 					$this->add_catalog_technical_attribute( $label, $this->array_text_value( $value ), $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
 				} else {
 					$this->collect_catalog_technical_attributes( $value, $label, $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
@@ -2378,6 +2755,163 @@ class Schrack_Catalog_Importer {
 
 			$this->add_catalog_technical_attribute( $label, $value, $items, $seen, $core_values, $excluded_keys, $sensitive_keys );
 		}
+	}
+
+	/**
+	 * Recognizes common XML property/facet structures and joins their separate
+	 * Name/Value children into one useful specification. Without this step XML
+	 * would produce labels such as "Properties - Property - 0 - Name" instead of
+	 * the supplier-facing "Latime: 17,8 mm" pair needed by product pages/filters.
+	 *
+	 * @return array{label:string,value:string}|null
+	 */
+	private function catalog_named_value_pair( array $data, string $prefix ): ?array {
+		$container_key = $this->catalog_key( $prefix );
+
+		if ( '' === $container_key || ! preg_match( '/(propert|facet|attribut|specific|feature|characteristic|technical)/', $container_key ) ) {
+			return null;
+		}
+
+		$label_keys = array( 'name', 'label', 'title', 'key', 'propertyname', 'facetname', 'attributename', 'displayname', 'description', 'attributelabel' );
+		$value_keys = array( 'value', 'values', 'text', 'displayvalue', 'textvalue', 'propertyvalue', 'facetvalue', 'attributevalue', 'valuetext', '_text' );
+		$unit_keys  = array( 'unit', 'uom', 'unittext', 'measureunit' );
+		$label      = '';
+		$value      = '';
+		$unit       = '';
+
+		foreach ( $data as $key => $part ) {
+			$key_name = $this->catalog_key( (string) $key );
+			$key_name = preg_replace( '/^attribute/', '', $key_name ) ?? $key_name;
+
+			if ( '' === $label && in_array( $key_name, $label_keys, true ) ) {
+				$label = $this->catalog_pair_text( $part );
+				continue;
+			}
+
+			if ( '' === $value && in_array( $key_name, $value_keys, true ) ) {
+				$value = $this->catalog_pair_text( $part );
+				continue;
+			}
+
+			if ( '' === $unit && in_array( $key_name, $unit_keys, true ) ) {
+				$unit = $this->catalog_pair_text( $part );
+			}
+		}
+
+		if ( '' === $label || '' === $value ) {
+			return null;
+		}
+
+		if ( '' !== $unit && ! str_ends_with( strtolower( $value ), strtolower( $unit ) ) ) {
+			$value .= ' ' . $unit;
+		}
+
+		return array(
+			'label' => $label,
+			'value' => $value,
+		);
+	}
+
+	/**
+	 * Converts a scalar or a shallow scalar XML fragment into readable text.
+	 */
+	private function catalog_pair_text( mixed $value ): string {
+		if ( is_scalar( $value ) ) {
+			return $this->technical_text_value( $value );
+		}
+
+		if ( ! is_array( $value ) ) {
+			return '';
+		}
+
+		if ( $this->array_is_scalar_list( $value ) ) {
+			return $this->array_text_value( $value );
+		}
+
+		foreach ( array( '_text', 'text', 'value', 'displayvalue', 'textvalue', 'valuetext' ) as $candidate ) {
+			foreach ( $value as $key => $part ) {
+				if ( $candidate === $this->catalog_key( (string) $key ) ) {
+					return $this->catalog_pair_text( $part );
+				}
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Extracts public supplier documents (datasheets, CAD, drawings, manuals)
+	 * separately from filterable specifications.
+	 *
+	 * @return array<int,array{label:string,url:string}>
+	 */
+	private function catalog_documents( array $row, string $main_image_url = '' ): array {
+		$documents = array();
+		$seen      = array();
+
+		$this->collect_catalog_documents( $row, '', $documents, $seen, $main_image_url );
+
+		return $documents;
+	}
+
+	/**
+	 * @param array<int,array{label:string,url:string}> $documents Collected documents.
+	 * @param array<string,bool>                       $seen      URL duplicate guard.
+	 */
+	private function collect_catalog_documents( array $data, string $prefix, array &$documents, array &$seen, string $main_image_url ): void {
+		$direct_label = '';
+
+		foreach ( $data as $key => $value ) {
+			$key_name = preg_replace( '/^attribute/', '', $this->catalog_key( (string) $key ) ) ?? '';
+
+			if ( in_array( $key_name, array( 'name', 'label', 'title', 'description', 'documentname', 'filename' ), true ) && is_scalar( $value ) ) {
+				$direct_label = $this->technical_text_value( $value );
+				break;
+			}
+		}
+
+		foreach ( $data as $key => $value ) {
+			$label = $this->catalog_technical_label( (string) $key, $prefix );
+
+			if ( is_array( $value ) ) {
+				$this->collect_catalog_documents( $value, $label, $documents, $seen, $main_image_url );
+				continue;
+			}
+
+			if ( ! is_scalar( $value ) ) {
+				continue;
+			}
+
+			$url = $this->normalize_catalog_url( (string) $value );
+
+			if ( '' === $url || ! wp_http_validate_url( $url ) || $url === $main_image_url || isset( $seen[ $url ] ) || ! $this->is_catalog_document_url( $url, $label ) ) {
+				continue;
+			}
+
+			$seen[ $url ] = true;
+			$documents[]  = array(
+				'label' => sanitize_text_field( '' !== $direct_label ? $direct_label : $label ),
+				'url'   => esc_url_raw( $url ),
+			);
+		}
+	}
+
+	/**
+	 * Accepts downloadable technical files and image-based diagrams while
+	 * rejecting unrelated links embedded elsewhere in the feed.
+	 */
+	private function is_catalog_document_url( string $url, string $label ): bool {
+		$path      = strtolower( (string) wp_parse_url( $url, PHP_URL_PATH ) );
+		$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+
+		if ( in_array( $extension, array( 'pdf', 'dwg', 'dxf', 'stp', 'step', 'zip', 'doc', 'docx', 'xls', 'xlsx' ), true ) ) {
+			return true;
+		}
+
+		$label_key = $this->catalog_key( $label );
+
+		return in_array( $extension, array( 'jpg', 'jpeg', 'png', 'webp', 'svg' ), true )
+			&& (bool) preg_match( '/(document|datasheet|manual|cad|drawing|diagram|circuit|dimension|certificate|download|schema|schita)/', $label_key );
 	}
 
 	/**
@@ -2429,7 +2963,7 @@ class Schrack_Catalog_Importer {
 	private function catalog_core_values( array $item ): array {
 		$values = array();
 
-		foreach ( array( 'sku', 'name', 'short_description', 'description', 'manufacturer', 'ean', 'image_url', 'category_path', 'unit', 'catalog_status', 'product_line' ) as $key ) {
+		foreach ( array( 'sku', 'name', 'short_description', 'description', 'manufacturer', 'ean', 'image_url', 'category_path', 'unit', 'price_unit', 'package_quantity', 'catalog_status', 'product_line' ) as $key ) {
 			if ( isset( $item[ $key ] ) && is_scalar( $item[ $key ] ) ) {
 				$value = $this->catalog_key( wp_strip_all_tags( (string) $item[ $key ] ) );
 
@@ -2463,6 +2997,8 @@ class Schrack_Catalog_Importer {
 			'image_url', 'imageurl', 'imageurl1', 'photo_url', 'photourl', 'foto_url', 'fotourl', 'foto', 'fotografie', 'photo', 'photograph', 'picture', 'pictureurl', 'bild', 'bildurl', 'artikelbild', 'image', 'image1', 'mainimage', 'mainimageurl', 'thumbnail', 'thumbnailurl', 'productimage', 'productimageurl', 'product_image', 'product_image_url', 'mediaurl',
 			'category_path', 'categorypath', 'category', 'categories', 'warenhauptgruppe', 'warengruppe', 'productgroup', 'cataloggroup', 'maingroup', 'group',
 			'unit', 'uom', 'measure', 'unitatedemasura', 'mengeneinheit', 'salesunit',
+			'pretunitar', 'pret_unitar', 'priceunit', 'price_unit', 'pricingunit',
+			'vpe', 'packquantity', 'packagequantity', 'packagingunit', 'packagingquantity',
 			'catalog_status', 'status',
 			'discountgrouptext', 'businesslinetext', 'productline', 'serietext', 'seriestext',
 			'import', 'imported', 'importstatus', 'sync', 'syncstatus', 'lastsync', 'lastupdate', 'lastupdated', 'updated', 'updatedat', 'created', 'createdat', 'timestamp', 'cache', 'cursor',
@@ -2710,21 +3246,55 @@ class Schrack_Catalog_Importer {
 	}
 
 	/**
+	 * Builds a product-level lookup before the recursive lookup, preventing an
+	 * earlier Properties/Facets child named "Name", "Status", or "Unit" from
+	 * shadowing the corresponding product field later in the XML element.
+	 *
+	 * @return array<string,string>
+	 */
+	private function catalog_direct_value_lookup( array $row ): array {
+		$lookup = array();
+
+		foreach ( $row as $key => $value ) {
+			$normalized_key = $this->catalog_key( (string) $key );
+			$lookup_value   = $this->catalog_lookup_text( $value );
+
+			if ( '' === $normalized_key || '' === $lookup_value ) {
+				continue;
+			}
+
+			$lookup[ $normalized_key ] = $lookup_value;
+
+			if ( str_starts_with( $normalized_key, 'attribute' ) && strlen( $normalized_key ) > 9 ) {
+				$lookup[ substr( $normalized_key, 9 ) ] = $lookup_value;
+			}
+		}
+
+		return $lookup;
+	}
+
+	/**
 	 * @param array<string,string> $lookup Normalized first-value lookup by reference.
 	 */
 	private function collect_catalog_value_lookup( array $data, array &$lookup ): void {
 		foreach ( $data as $key => $value ) {
 			$normalized_key = $this->catalog_key( (string) $key );
+			$lookup_value   = '';
 
-			if ( '' !== $normalized_key && ! isset( $lookup[ $normalized_key ] ) ) {
-				if ( is_scalar( $value ) && '' !== (string) $value ) {
-					$lookup[ $normalized_key ] = (string) $value;
-				} elseif ( is_array( $value ) ) {
-					$scalar = $this->first_scalar_value( $value );
+			$lookup_value = $this->catalog_lookup_text( $value );
 
-					if ( '' !== $scalar ) {
-						$lookup[ $normalized_key ] = $scalar;
-					}
+			if ( '' !== $normalized_key && '' !== $lookup_value && ! isset( $lookup[ $normalized_key ] ) ) {
+				$lookup[ $normalized_key ] = $lookup_value;
+			}
+
+			// XML attributes are preserved as attribute_Foo to avoid overwriting
+			// child elements. Register their unprefixed alias too, so a product-level
+			// sku/name/supplier attribute maps like the equivalent XML element.
+			if ( str_starts_with( $normalized_key, 'attribute' ) && strlen( $normalized_key ) > 9 && '' !== $lookup_value ) {
+				$attribute_key = substr( $normalized_key, 9 );
+
+				if ( ! isset( $lookup[ $attribute_key ] ) ) {
+					$lookup[ $attribute_key ] = $lookup_value;
 				}
 			}
 
@@ -2732,6 +3302,28 @@ class Schrack_Catalog_Importer {
 				$this->collect_catalog_value_lookup( $value, $lookup );
 			}
 		}
+	}
+
+	/**
+	 * Reads the text content of an XML-derived value before considering element
+	 * attributes, whose insertion order must not change the actual field value.
+	 */
+	private function catalog_lookup_text( mixed $value ): string {
+		if ( is_scalar( $value ) ) {
+			return trim( (string) $value );
+		}
+
+		if ( ! is_array( $value ) ) {
+			return '';
+		}
+
+		foreach ( $value as $key => $part ) {
+			if ( 'text' === $this->catalog_key( (string) $key ) && is_scalar( $part ) ) {
+				return trim( (string) $part );
+			}
+		}
+
+		return $this->first_scalar_value( $value );
 	}
 
 	/**

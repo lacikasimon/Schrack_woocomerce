@@ -262,7 +262,22 @@
 	line-height: 1.35;
 }
 
-.schrack-account__field input {
+.schrack-account__terms--newsletter,
+.schrack-account__terms--preference {
+	background: #f6f8fa;
+	border: 1px solid #e2e6ea;
+	border-radius: 6px;
+	margin-top: 12px;
+	padding: 12px 14px;
+}
+
+.schrack-account__terms--preference {
+	margin-bottom: 18px;
+}
+
+.schrack-account__field input,
+.schrack-account__field select,
+.schrack-account__field textarea {
 	appearance: none;
 	background: #fff;
 	border: 1px solid var(--schrack-account-border);
@@ -277,7 +292,22 @@
 	width: 100%;
 }
 
-.schrack-account__field input:focus {
+.schrack-account__field textarea {
+	min-height: 108px;
+	resize: vertical;
+}
+
+.schrack-account__field select {
+	background-image: linear-gradient(45deg, transparent 50%, #65707c 50%), linear-gradient(135deg, #65707c 50%, transparent 50%);
+	background-position: calc(100% - 18px) 20px, calc(100% - 13px) 20px;
+	background-repeat: no-repeat;
+	background-size: 5px 5px, 5px 5px;
+	padding-right: 34px;
+}
+
+.schrack-account__field input:focus,
+.schrack-account__field select:focus,
+.schrack-account__field textarea:focus {
 	border-color: var(--schrack-account-accent);
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--schrack-account-accent) 16%, transparent);
 }
@@ -648,6 +678,18 @@
 	color: #135e96;
 }
 
+.schrack-account__order-status.is-return {
+	background: #fff8e5;
+	border-color: #f2d891;
+	color: #8a5b00;
+}
+
+.schrack-account__order-status.is-return-eligible {
+	background: #edf7ee;
+	border-color: #b8dfbd;
+	color: #24713b;
+}
+
 .schrack-account__order-status.is-on-hold,
 .schrack-account__order-status.is-pending {
 	background: #fff8e5;
@@ -814,6 +856,179 @@
 	white-space: nowrap;
 }
 
+.schrack-account__guest-return {
+	margin-top: 18px;
+}
+
+.schrack-account__return-panel {
+	display: grid;
+	gap: 16px;
+	min-width: 0;
+	scroll-margin-top: 24px;
+}
+
+.schrack-account__section > .schrack-account__return-panel {
+	border-top: 1px solid var(--schrack-account-border);
+	margin-top: 6px;
+	padding-top: 22px;
+}
+
+.schrack-account--native-return > .schrack-account__return-panel {
+	background: var(--schrack-account-surface);
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 8px;
+	box-shadow: var(--schrack-account-shadow);
+	margin-top: 22px;
+	padding: clamp(18px, 2.4vw, 28px);
+}
+
+.schrack-account__return-head {
+	align-items: center;
+	display: flex;
+	gap: 14px;
+	justify-content: space-between;
+}
+
+.schrack-account__return-head > div {
+	display: grid;
+	gap: 5px;
+	min-width: 0;
+}
+
+.schrack-account__return-head h4 {
+	color: var(--schrack-account-text);
+	font-size: 19px;
+	font-weight: 850;
+	line-height: 1.25;
+	margin: 0;
+}
+
+.schrack-account__return-deadline {
+	background: #eef5fb;
+	border: 1px solid #bdd7ec;
+	border-radius: 999px;
+	color: #135e96;
+	flex: 0 0 auto;
+	font-size: 12px;
+	font-weight: 850;
+	line-height: 1.25;
+	padding: 8px 11px;
+}
+
+.schrack-account__return-intro {
+	color: var(--schrack-account-muted);
+	font-size: 14px;
+	line-height: 1.5;
+	margin: 0;
+}
+
+.schrack-account__return-form {
+	display: grid;
+	gap: 16px;
+}
+
+.schrack-account__return-items {
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 8px;
+	display: grid;
+	overflow: hidden;
+}
+
+.schrack-account__return-items-head,
+.schrack-account__return-item {
+	align-items: center;
+	display: grid;
+	gap: 14px;
+	grid-template-columns: minmax(0, 1fr) 170px;
+}
+
+.schrack-account__return-items-head {
+	background: var(--schrack-account-soft);
+	color: var(--schrack-account-muted);
+	font-size: 11px;
+	font-weight: 850;
+	line-height: 1.25;
+	padding: 11px 14px;
+	text-transform: uppercase;
+}
+
+.schrack-account__return-item {
+	border-top: 1px solid var(--schrack-account-border);
+	cursor: default;
+	padding: 13px 14px;
+}
+
+.schrack-account__return-item > span {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.schrack-account__return-item strong {
+	color: var(--schrack-account-text);
+	font-size: 13px;
+	font-weight: 850;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.schrack-account__return-item small {
+	color: var(--schrack-account-muted);
+	font-size: 12px;
+	font-weight: 750;
+	line-height: 1.3;
+}
+
+.schrack-account__return-item input[type="number"] {
+	appearance: none;
+	background: #fff;
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 6px;
+	color: var(--schrack-account-text);
+	font: inherit;
+	font-weight: 800;
+	min-height: 42px;
+	outline: none;
+	padding: 9px 10px;
+	width: 100%;
+}
+
+.schrack-account__return-item input[type="number"]:focus {
+	border-color: var(--schrack-account-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--schrack-account-accent) 16%, transparent);
+}
+
+.schrack-account__return-message {
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 8px;
+	display: grid;
+	gap: 6px;
+	padding: 14px;
+}
+
+.schrack-account__return-message strong {
+	font-size: 14px;
+	font-weight: 850;
+	line-height: 1.3;
+}
+
+.schrack-account__return-message p {
+	font-size: 13px;
+	line-height: 1.45;
+	margin: 0;
+}
+
+.schrack-account__return-message.is-requested {
+	background: #fff8e5;
+	border-color: #f2d891;
+	color: #704b00;
+}
+
+.schrack-account__return-message.is-unavailable {
+	background: var(--schrack-account-soft);
+	color: #334050;
+}
+
 .schrack-account__empty {
 	display: grid;
 	gap: 14px;
@@ -869,9 +1084,14 @@
 
 	.schrack-account__welcome,
 	.schrack-account__panel-head,
-	.schrack-account__form-row {
+	.schrack-account__form-row,
+	.schrack-account__return-head {
 		align-items: stretch;
 		flex-direction: column;
+	}
+
+	.schrack-account__return-deadline {
+		width: fit-content;
 	}
 
 	.schrack-account__welcome-actions {
@@ -904,6 +1124,15 @@
 	}
 
 	.schrack-account__register-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.schrack-account__return-items-head {
+		display: none;
+	}
+
+	.schrack-account__return-item {
+		align-items: start;
 		grid-template-columns: 1fr;
 	}
 

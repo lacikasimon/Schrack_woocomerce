@@ -95,6 +95,13 @@
 	line-height: 1.3;
 }
 
+.schrack-register__terms--newsletter {
+	background: #f6f8fa;
+	border-radius: 6px;
+	margin-top: 12px;
+	padding: 12px 14px;
+}
+
 .schrack-register__field input {
 	appearance: none;
 	background: var(--schrack-register-surface);

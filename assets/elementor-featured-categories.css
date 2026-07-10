@@ -314,6 +314,13 @@
 	font-weight: 850;
 }
 
+.schrack-fcat__product-price .schrack-price-unit {
+	font-size: .85em;
+	font-weight: 700;
+	opacity: .72;
+	white-space: nowrap;
+}
+
 .schrack-fcat__mini-button {
 	background: transparent;
 	border: 1px solid var(--schrack-fcat-border);

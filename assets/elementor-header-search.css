@@ -160,6 +160,98 @@
 	overflow: hidden;
 }
 
+.schrack-header-search__category-section {
+	background: #f6f8fa;
+	border-bottom: 1px solid var(--schrack-header-search-border);
+	padding: 10px 10px 11px;
+}
+
+.schrack-header-search__product-section {
+	background: var(--schrack-header-search-surface);
+}
+
+.schrack-header-search__section-title {
+	color: var(--schrack-header-search-muted);
+	font-size: 10px;
+	font-weight: 900;
+	letter-spacing: 0.08em;
+	line-height: 1.2;
+	padding: 0 2px 7px;
+	text-transform: uppercase;
+}
+
+.schrack-header-search__product-section > .schrack-header-search__section-title {
+	padding: 10px 8px 2px;
+}
+
+.schrack-header-search__categories {
+	display: grid;
+	gap: 6px;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	max-height: 176px;
+	overflow: auto;
+}
+
+.schrack-header-search__category {
+	align-items: center;
+	background: #fff;
+	border: 1px solid #e1e5ea;
+	border-radius: max(5px, calc(var(--schrack-header-search-radius) - 1px));
+	color: var(--schrack-header-search-text);
+	display: grid;
+	gap: 7px;
+	grid-template-columns: 20px minmax(0, 1fr);
+	min-width: 0;
+	padding: 7px 8px;
+	text-decoration: none;
+}
+
+.schrack-header-search__category:hover,
+.schrack-header-search__category:focus {
+	background: color-mix(in srgb, var(--schrack-header-search-accent) 8%, #fff);
+	border-color: color-mix(in srgb, var(--schrack-header-search-accent) 24%, #e1e5ea);
+	color: var(--schrack-header-search-text);
+	outline: none;
+}
+
+.schrack-header-search__category-icon {
+	align-items: center;
+	background: color-mix(in srgb, var(--schrack-header-search-accent) 10%, #fff);
+	border-radius: 999px;
+	color: var(--schrack-header-search-accent);
+	display: flex;
+	font-size: 17px;
+	font-weight: 900;
+	height: 20px;
+	justify-content: center;
+	line-height: 1;
+	width: 20px;
+}
+
+.schrack-header-search__category-body {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.schrack-header-search__category-title {
+	font-size: 12px;
+	font-weight: 850;
+	line-height: 1.2;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.schrack-header-search__category-path {
+	color: var(--schrack-header-search-muted);
+	font-size: 9px;
+	line-height: 1.2;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .schrack-header-search__items {
 	display: grid;
 	max-height: 460px;
@@ -255,6 +347,13 @@
 
 .schrack-header-search__price ins {
 	text-decoration: none;
+}
+
+.schrack-header-search__price .schrack-price-unit {
+	color: var(--schrack-header-search-muted);
+	font-size: .85em;
+	font-weight: 700;
+	white-space: nowrap;
 }
 
 .schrack-header-search__price .schrack-b2b-price {

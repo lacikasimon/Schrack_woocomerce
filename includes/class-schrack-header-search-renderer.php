@@ -33,13 +33,14 @@ class Schrack_Header_Search_Renderer {
 			(int) $settings['max_width']
 		);
 		$config     = array(
-			'min_chars'    => $settings['min_chars'],
-			'max_results'  => $settings['max_results'],
-			'show_images'  => $settings['show_images'] ? 'yes' : 'no',
-			'show_price'   => $settings['show_price'] ? 'yes' : 'no',
-			'show_stock'   => $settings['show_stock'] ? 'yes' : 'no',
-			'enable_fuzzy' => $settings['enable_fuzzy'] ? 'yes' : 'no',
-			'fuzzy_pool'   => $settings['fuzzy_pool'],
+			'min_chars'            => $settings['min_chars'],
+			'max_results'          => $settings['max_results'],
+			'max_category_results' => $settings['max_category_results'],
+			'show_images'          => $settings['show_images'] ? 'yes' : 'no',
+			'show_price'           => $settings['show_price'] ? 'yes' : 'no',
+			'show_stock'           => $settings['show_stock'] ? 'yes' : 'no',
+			'enable_fuzzy'         => $settings['enable_fuzzy'] ? 'yes' : 'no',
+			'fuzzy_pool'           => $settings['fuzzy_pool'],
 		);
 		$classes    = array( 'schrack-header-search' );
 
@@ -67,7 +68,7 @@ class Schrack_Header_Search_Renderer {
 		>
 			<form class="schrack-header-search__form" role="search" method="get" action="<?php echo esc_url( $this->product_search_url() ); ?>">
 				<label class="schrack-header-search__label" for="<?php echo esc_attr( $instance_id . '-input' ); ?>">
-					<?php esc_html_e( 'Caută produse', 'schrack-woocommerce-sync' ); ?>
+					<?php esc_html_e( 'Caută produse sau categorii', 'schrack-woocommerce-sync' ); ?>
 				</label>
 				<span class="schrack-header-search__icon" aria-hidden="true">
 					<svg viewBox="0 0 24 24" focusable="false">
@@ -98,7 +99,7 @@ class Schrack_Header_Search_Renderer {
 				id="<?php echo esc_attr( $instance_id . '-results' ); ?>"
 				class="schrack-header-search__results"
 				role="listbox"
-				aria-label="<?php esc_attr_e( 'Rezultate cautare produse', 'schrack-woocommerce-sync' ); ?>"
+				aria-label="<?php esc_attr_e( 'Rezultate cautare categorii si produse', 'schrack-woocommerce-sync' ); ?>"
 				data-header-search-results
 				hidden
 			></div>
@@ -116,46 +117,146 @@ class Schrack_Header_Search_Renderer {
 	 */
 	public function render_results( string $search, array $settings ): array {
 		$settings = $this->sanitize_settings( $settings );
-		$search   = sanitize_text_field( $search );
-		$length   = function_exists( 'mb_strlen' ) ? mb_strlen( trim( $search ) ) : strlen( trim( $search ) );
+		$search   = trim( sanitize_text_field( $search ) );
+		$length   = function_exists( 'mb_strlen' ) ? mb_strlen( $search ) : strlen( $search );
 
-		if ( '' === trim( $search ) || $length < (int) $settings['min_chars'] ) {
+		if ( '' === $search || $length < (int) $settings['min_chars'] ) {
 			return array(
-				'html' => $this->empty_message(
+				'html'           => $this->empty_message(
 					sprintf(
 						/* translators: %d: minimum search length. */
 						__( 'Introdu cel putin %d caractere.', 'schrack-woocommerce-sync' ),
 						(int) $settings['min_chars']
 					)
 				),
-				'count' => 0,
+				'count'          => 0,
+				'category_count' => 0,
 			);
 		}
 
-		$products = $this->search_products( $search, $settings );
+		$categories = $this->search_categories( $search, (int) $settings['max_category_results'] );
+		$products   = $this->search_products( $search, $settings );
 
 		ob_start();
 		?>
 		<div class="schrack-header-search__panel">
-			<?php if ( empty( $products ) ) : ?>
-				<?php echo $this->empty_message( __( 'Nu s-au gasit produse.', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<?php if ( empty( $categories ) && empty( $products ) ) : ?>
+				<?php echo $this->empty_message( __( 'Nu s-au gasit categorii sau produse.', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php else : ?>
-				<div class="schrack-header-search__items">
-					<?php foreach ( $products as $product ) : ?>
-						<?php echo $this->result_item( $product, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-					<?php endforeach; ?>
-				</div>
-				<a class="schrack-header-search__all" href="<?php echo esc_url( $this->product_search_url( $search ) ); ?>">
-					<?php esc_html_e( 'Vezi toate rezultatele', 'schrack-woocommerce-sync' ); ?>
-				</a>
+				<?php if ( ! empty( $categories ) ) : ?>
+					<section class="schrack-header-search__category-section" role="group" aria-label="<?php esc_attr_e( 'Categorii', 'schrack-woocommerce-sync' ); ?>">
+						<div class="schrack-header-search__section-title">
+							<?php esc_html_e( 'Categorii', 'schrack-woocommerce-sync' ); ?>
+						</div>
+						<div class="schrack-header-search__categories">
+							<?php foreach ( $categories as $category ) : ?>
+								<?php echo $this->category_result_item( $category ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<?php endforeach; ?>
+						</div>
+					</section>
+				<?php endif; ?>
+
+				<section class="schrack-header-search__product-section" role="group" aria-label="<?php esc_attr_e( 'Produse', 'schrack-woocommerce-sync' ); ?>">
+					<div class="schrack-header-search__section-title">
+						<?php esc_html_e( 'Produse', 'schrack-woocommerce-sync' ); ?>
+					</div>
+					<?php if ( empty( $products ) ) : ?>
+						<?php echo $this->empty_message( __( 'Nu s-au gasit produse.', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php else : ?>
+						<div class="schrack-header-search__items">
+							<?php foreach ( $products as $product ) : ?>
+								<?php echo $this->result_item( $product, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<?php endforeach; ?>
+						</div>
+						<a class="schrack-header-search__all" href="<?php echo esc_url( $this->product_search_url( $search ) ); ?>">
+							<?php esc_html_e( 'Vezi toate rezultatele', 'schrack-woocommerce-sync' ); ?>
+						</a>
+					<?php endif; ?>
+				</section>
 			<?php endif; ?>
 		</div>
 		<?php
 
 		return array(
-			'html' => (string) ob_get_clean(),
-			'count' => count( $products ),
+			'html'           => (string) ob_get_clean(),
+			'count'          => count( $products ),
+			'category_count' => count( $categories ),
 		);
+	}
+
+	/**
+	 * Finds product categories whose names match the search text.
+	 *
+	 * @return array<int,WP_Term>
+	 */
+	private function search_categories( string $search, int $limit ): array {
+		if ( ! taxonomy_exists( 'product_cat' ) ) {
+			return array();
+		}
+
+		$terms = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'orderby'    => 'name',
+				'order'      => 'ASC',
+				'number'     => max( 48, $limit * 8 ),
+				'name__like' => $search,
+			)
+		);
+
+		if ( is_wp_error( $terms ) || ! is_array( $terms ) ) {
+			return array();
+		}
+
+		$categories = array_values(
+			array_filter(
+				$terms,
+				static fn( mixed $term ): bool => $term instanceof WP_Term
+			)
+		);
+		$needle = $this->normalize_search_text( $search );
+
+		usort(
+			$categories,
+			function ( WP_Term $left, WP_Term $right ) use ( $needle ): int {
+				$left_score  = $this->category_match_score( $needle, $left );
+				$right_score = $this->category_match_score( $needle, $right );
+
+				if ( $left_score === $right_score ) {
+					return strnatcasecmp( $left->name, $right->name );
+				}
+
+				return $right_score <=> $left_score;
+			}
+		);
+
+		return array_slice( $categories, 0, $limit );
+	}
+
+	/**
+	 * Ranks exact and prefix category-name matches above other substrings.
+	 */
+	private function category_match_score( string $needle, WP_Term $category ): int {
+		$name = $this->normalize_search_text( $category->name );
+
+		if ( '' === $needle || '' === $name ) {
+			return 0;
+		}
+
+		if ( $needle === $name ) {
+			return 400;
+		}
+
+		if ( 0 === strpos( $name, $needle ) ) {
+			return 300;
+		}
+
+		if ( false !== strpos( $name, ' ' . $needle ) ) {
+			return 250;
+		}
+
+		return false !== strpos( $name, $needle ) ? 200 : 0;
 	}
 
 	/**
@@ -617,6 +718,53 @@ class Schrack_Header_Search_Renderer {
 	}
 
 	/**
+	 * Renders one matching product-category link.
+	 */
+	private function category_result_item( WP_Term $category ): string {
+		$link = get_term_link( $category );
+
+		if ( is_wp_error( $link ) || ! is_string( $link ) || '' === $link ) {
+			return '';
+		}
+
+		$path = $this->category_path( $category );
+
+		ob_start();
+		?>
+		<a class="schrack-header-search__category" href="<?php echo esc_url( $link ); ?>" role="option">
+			<span class="schrack-header-search__category-icon" aria-hidden="true">›</span>
+			<span class="schrack-header-search__category-body">
+				<span class="schrack-header-search__category-title"><?php echo esc_html( $category->name ); ?></span>
+				<?php if ( $path !== $category->name ) : ?>
+					<span class="schrack-header-search__category-path"><?php echo esc_html( $path ); ?></span>
+				<?php endif; ?>
+			</span>
+		</a>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Returns a category breadcrumb so equally named nested terms remain clear.
+	 */
+	private function category_path( WP_Term $category ): string {
+		$parts = array();
+
+		foreach ( array_reverse( get_ancestors( (int) $category->term_id, 'product_cat', 'taxonomy' ) ) as $ancestor_id ) {
+			$ancestor = get_term( (int) $ancestor_id, 'product_cat' );
+
+			if ( $ancestor instanceof WP_Term && ! is_wp_error( $ancestor ) ) {
+				$parts[] = $ancestor->name;
+			}
+		}
+
+		$parts[] = $category->name;
+
+		return implode( ' / ', $parts );
+	}
+
+	/**
 	 * Renders one result item.
 	 *
 	 * @param array<string,mixed> $settings Settings.
@@ -690,19 +838,20 @@ class Schrack_Header_Search_Renderer {
 	 */
 	private function sanitize_settings( array $settings ): array {
 		return array(
-			'placeholder'  => sanitize_text_field( (string) ( $settings['placeholder'] ?? __( 'Caută produse, coduri, categorii...', 'schrack-woocommerce-sync' ) ) ),
-			'button_text'  => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Caută', 'schrack-woocommerce-sync' ) ) ),
-			'min_chars'    => max( 3, min( 5, absint( $settings['min_chars'] ?? 3 ) ) ),
-			'max_results'  => max( 3, min( 12, absint( $settings['max_results'] ?? 6 ) ) ),
-			'max_width'    => max( 240, min( 920, $this->slider_size( $settings['max_width'] ?? 820, 240, 920 ) ) ),
-			'show_images'  => $this->truthy( $settings['show_images'] ?? 'yes' ),
-			'show_price'   => $this->truthy( $settings['show_price'] ?? 'yes' ),
-			'show_stock'   => $this->truthy( $settings['show_stock'] ?? 'yes' ),
-			'enable_fuzzy' => $this->truthy( $settings['enable_fuzzy'] ?? 'yes' ),
-			'fuzzy_pool'   => max( 40, min( 240, absint( $settings['fuzzy_pool'] ?? 120 ) ) ),
-			'accent_color' => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#102033' ) ) ?: '#102033',
-			'action_color' => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#102033' ) ) ?: '#102033',
-			'radius'       => $this->slider_size( $settings['radius'] ?? 8, 0, 12 ),
+			'placeholder'          => sanitize_text_field( (string) ( $settings['placeholder'] ?? __( 'Caută produse, coduri, categorii...', 'schrack-woocommerce-sync' ) ) ),
+			'button_text'          => sanitize_text_field( (string) ( $settings['button_text'] ?? __( 'Caută', 'schrack-woocommerce-sync' ) ) ),
+			'min_chars'            => max( 3, min( 5, absint( $settings['min_chars'] ?? 3 ) ) ),
+			'max_results'          => max( 3, min( 12, absint( $settings['max_results'] ?? 6 ) ) ),
+			'max_category_results' => max( 2, min( 12, absint( $settings['max_category_results'] ?? 6 ) ) ),
+			'max_width'            => max( 240, min( 920, $this->slider_size( $settings['max_width'] ?? 820, 240, 920 ) ) ),
+			'show_images'          => $this->truthy( $settings['show_images'] ?? 'yes' ),
+			'show_price'           => $this->truthy( $settings['show_price'] ?? 'yes' ),
+			'show_stock'           => $this->truthy( $settings['show_stock'] ?? 'yes' ),
+			'enable_fuzzy'         => $this->truthy( $settings['enable_fuzzy'] ?? 'yes' ),
+			'fuzzy_pool'           => max( 40, min( 240, absint( $settings['fuzzy_pool'] ?? 120 ) ) ),
+			'accent_color'         => sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#102033' ) ) ?: '#102033',
+			'action_color'         => sanitize_hex_color( (string) ( $settings['action_color'] ?? '#102033' ) ) ?: '#102033',
+			'radius'               => $this->slider_size( $settings['radius'] ?? 8, 0, 12 ),
 		);
 	}
 

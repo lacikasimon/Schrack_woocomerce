@@ -74,6 +74,20 @@ class Schrack_Plugin {
 	private ?Schrack_B2B_Pricing $b2b_pricing = null;
 
 	/**
+	 * Newsletter subscription service.
+	 *
+	 * @var Schrack_Newsletter|null
+	 */
+	private ?Schrack_Newsletter $newsletter = null;
+
+	/**
+	 * Customer return request service.
+	 *
+	 * @var Schrack_Return_Manager|null
+	 */
+	private ?Schrack_Return_Manager $return_manager = null;
+
+	/**
 	 * Returns the singleton instance.
 	 */
 	public static function instance(): Schrack_Plugin {
@@ -98,6 +112,10 @@ class Schrack_Plugin {
 		$this->frontend_image_loader->init();
 		$this->b2b_pricing = new Schrack_B2B_Pricing();
 		$this->b2b_pricing->init();
+		$this->newsletter = new Schrack_Newsletter();
+		$this->newsletter->init();
+		$this->return_manager = new Schrack_Return_Manager();
+		$this->return_manager->init();
 		$this->elementor = new Schrack_Elementor();
 		$this->elementor->init();
 
@@ -137,6 +155,7 @@ class Schrack_Plugin {
 			'class-schrack-frontend-image-loader.php',
 			'class-schrack-stock-label.php',
 			'class-schrack-b2b-pricing.php',
+			'class-schrack-newsletter.php',
 			'class-schrack-catalog-importer.php',
 			'class-schrack-telesystem-importer.php',
 			'class-schrack-image-sync.php',
@@ -147,6 +166,7 @@ class Schrack_Plugin {
 			'class-schrack-header-search-renderer.php',
 			'class-schrack-product-page-renderer.php',
 			'class-schrack-registration-renderer.php',
+			'class-schrack-return-manager.php',
 			'class-schrack-account-renderer.php',
 			'class-schrack-cart-checkout-renderer.php',
 			'class-schrack-homepage-renderer.php',
@@ -188,9 +208,11 @@ class Schrack_Plugin {
 
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-settings.php';
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-logger.php';
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-newsletter.php';
 
 		Schrack_Settings::install_defaults();
 		Schrack_Logger::create_table();
+		Schrack_Newsletter::install_table();
 	}
 
 	/**

@@ -6,7 +6,7 @@ Professional WooCommerce plugin skeleton for importing supplier products and syn
 
 This plugin handles only:
 
-- Catalog import from Schrack SOAP `GetCatalogAs` or future Datanorm / CSV / XML sources.
+- Catalog import from Schrack SOAP `GetCatalogAs`, including streamed detailed XML properties, facets, and technical documents.
 - Separate Telesystem CSV feed import from the configured B2B feed URL.
 - Purchase price lookup through `GetItemPrice`.
 - Stock lookup through `GetStockItemQuantities`.
@@ -75,6 +75,7 @@ The admin settings page stores values through the WordPress Options API:
 - Import mode
 - Product publish status
 - Image media-library import toggle
+- Schrack catalog format: detailed XML (streamed from disk) or compact CSV
 - Image batch size
 - Parallel catalog workers
 - Parallel image workers
@@ -148,7 +149,11 @@ Price formula:
 sale_price = purchase_price * (1 + markup / 100) * (1 + vat_rate / 100)
 ```
 
-When the Schrack price response includes `PretUnitar`, the imported purchase price is first divided by that positive value. This converts package quotations such as a cable price per 100 metres into the price per metre before markup and VAT are applied.
+The catalog's `PretUnitar` value is stored per Schrack product. Every later price sync divides the quoted purchase price by that positive value exactly once, before markup and VAT are applied. This converts package quotations such as a cable price per 100 metres into the price per metre.
+
+For supplier-like product pages and technical filtering, use the default detailed XML catalog format. The importer reads the large XML response incrementally, pairs structured property/facet names with their values, promotes categorical values to global WooCommerce attributes, and stores datasheet/CAD/drawing links in a dedicated product document section. Attribute facets are recalculated when the shopper changes category, with an in-facet value search for longer lists.
+
+Frontend unit prices include the imported sales unit directly after the price (for example `301,60 lei / m.`) on product pages, product cards, search results, and cart unit-price rows.
 
 If a minimum margin is configured, the plugin uses the higher net value before applying TVA.
 
@@ -167,6 +172,11 @@ Stored meta fields:
 - `_schrack_last_price_sync`
 - `_schrack_last_stock_sync`
 - `_schrack_purchase_price`
+- `_schrack_purchase_price_raw`
+- `_schrack_price_unit`
+- `_schrack_package_quantity`
+- `_schrack_documents`
+- `_schrack_technical_attributes`
 - `_schrack_unit`
 - `_schrack_catalog_status`
 - `_schrack_image_url`
@@ -179,7 +189,7 @@ Stored meta fields:
 
 The product page widget shows mapped product identity fields, visible WooCommerce attributes, and stored Schrack technical attributes that are relevant to customers. Catalog imports populate `_schrack_technical_attributes` from extra public catalog columns while excluding duplicate core fields plus commercial, import, sync, and internal values.
 
-The customer/B2B account portal can be placed with the Elementor widget or with `[schrack_account_page]`. It renders a custom login form plus direct B2C and B2B registration choices for guests, and a WooCommerce account dashboard for logged-in users, including in-page orders, billing-address editing, account-detail editing, and B2B status from `_schrack_account_type` and `_schrack_b2b_status`. Store admins can edit those B2B fields from the WordPress user profile screen.
+The customer/B2B account portal can be placed with the Elementor widget or with `[schrack_account_page]`. It renders a custom login form plus direct B2C and B2B registration choices for guests, and a WooCommerce account dashboard for logged-in users, including in-page orders, billing-address editing, account-detail editing, and B2B status from `_schrack_account_type` and `_schrack_b2b_status`. Order details include a product-level return request form during the 14-day return window; guests can submit an order-number/email verified request from the account portal or a standalone `[schrack_return_form]` page. Return requests are visible on the dedicated `WooCommerce > Retururi` admin screen, in WooCommerce order lists, order details, and order notes. Store admins can edit the B2B fields from the WordPress user profile screen.
 
 ## Cron and Background Jobs
 

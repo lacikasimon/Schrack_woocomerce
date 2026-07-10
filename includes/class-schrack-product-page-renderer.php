@@ -104,6 +104,7 @@ class Schrack_Product_Page_Renderer {
 
 			<?php if ( $settings['show_specs'] ) : ?>
 				<?php echo $this->specifications( $product, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->documents( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php endif; ?>
 		</section>
 		<?php
@@ -390,6 +391,7 @@ class Schrack_Product_Page_Renderer {
 				$this->meta_item( __( 'EAN', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'ean', '_schrack_ean' ) ),
 				$this->meta_item( __( 'Producator', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'manufacturer', '_schrack_manufacturer' ) ),
 				$this->meta_item( __( 'Unitate', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'unit', '_schrack_unit' ) ),
+				$this->meta_item( __( 'Unitate de ambalare', 'schrack-woocommerce-sync' ), $this->package_quantity( $product ) ),
 				$this->meta_item( __( 'Status catalog', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'catalog_status', '_schrack_catalog_status' ) ),
 			)
 		);
@@ -480,6 +482,7 @@ class Schrack_Product_Page_Renderer {
 				$this->meta_item( __( 'EAN', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'ean', '_schrack_ean' ) ),
 				$this->meta_item( __( 'Producator', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'manufacturer', '_schrack_manufacturer' ) ),
 				$this->meta_item( __( 'Unitate', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'unit', '_schrack_unit' ) ),
+				$this->meta_item( __( 'Unitate de ambalare', 'schrack-woocommerce-sync' ), $this->package_quantity( $product ) ),
 				$this->meta_item( __( 'Status catalog', 'schrack-woocommerce-sync' ), $this->source_meta_text( $product, 'catalog_status', '_schrack_catalog_status' ) ),
 				$this->meta_item( __( 'Greutate', 'schrack-woocommerce-sync' ), $this->product_weight( $product ) ),
 				$this->meta_item( __( 'Dimensiuni', 'schrack-woocommerce-sync' ), $this->product_dimensions( $product ) ),
@@ -512,6 +515,75 @@ class Schrack_Product_Page_Renderer {
 						<span><?php echo esc_html( $item['label'] ); ?></span>
 						<strong><?php echo $this->spec_value_html( $item['value'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></strong>
 					</div>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders supplier datasheets, CAD files, drawings, and manuals stored by the
+	 * detailed catalog import.
+	 */
+	private function documents( WC_Product $product ): string {
+		$source = $this->catalog_source( $product );
+		$raw    = $product->get_meta( 'schrack' === $source ? '_schrack_documents' : '_' . $source . '_documents', true );
+
+		if ( ! is_string( $raw ) || '' === trim( $raw ) ) {
+			return '';
+		}
+
+		$decoded = json_decode( $raw, true );
+
+		if ( ! is_array( $decoded ) ) {
+			return '';
+		}
+
+		$documents = array();
+		$seen      = array();
+
+		foreach ( $decoded as $document ) {
+			if ( ! is_array( $document ) ) {
+				continue;
+			}
+
+			$url = esc_url_raw( (string) ( $document['url'] ?? '' ) );
+
+			if ( '' === $url || isset( $seen[ $url ] ) || ! wp_http_validate_url( $url ) ) {
+				continue;
+			}
+
+			$path      = (string) wp_parse_url( $url, PHP_URL_PATH );
+			$extension = strtoupper( pathinfo( $path, PATHINFO_EXTENSION ) );
+			$label     = sanitize_text_field( (string) ( $document['label'] ?? '' ) );
+
+			$seen[ $url ] = true;
+			$documents[]  = array(
+				'label'     => '' !== $label ? $label : __( 'Document produs', 'schrack-woocommerce-sync' ),
+				'url'       => $url,
+				'extension' => '' !== $extension ? $extension : __( 'Fisier', 'schrack-woocommerce-sync' ),
+			);
+		}
+
+		if ( empty( $documents ) ) {
+			return '';
+		}
+
+		ob_start();
+		?>
+		<div class="schrack-product-page__documents">
+			<div class="schrack-product-page__specs-head">
+				<h2><?php esc_html_e( 'Fise tehnice si documente', 'schrack-woocommerce-sync' ); ?></h2>
+				<span><?php echo esc_html( (string) count( $documents ) ); ?></span>
+			</div>
+			<div class="schrack-product-page__document-grid">
+				<?php foreach ( $documents as $document ) : ?>
+					<a href="<?php echo esc_url( $document['url'] ); ?>" target="_blank" rel="noopener noreferrer">
+						<b><?php echo esc_html( $document['extension'] ); ?></b>
+						<strong><?php echo esc_html( $document['label'] ); ?></strong>
+					</a>
 				<?php endforeach; ?>
 			</div>
 		</div>
@@ -561,6 +633,21 @@ class Schrack_Product_Page_Renderer {
 		}
 
 		return function_exists( 'wc_format_dimensions' ) ? wp_strip_all_tags( wc_format_dimensions( $dimensions ) ) : implode( ' x ', array_filter( $dimensions ) );
+	}
+
+	/**
+	 * Formats the catalog package quantity together with the product unit.
+	 */
+	private function package_quantity( WC_Product $product ): string {
+		$quantity = $this->meta_text( $product, '_schrack_package_quantity' );
+
+		if ( '' === $quantity ) {
+			return '';
+		}
+
+		$unit = $this->source_meta_text( $product, 'unit', '_schrack_unit' );
+
+		return trim( $quantity . ( '' !== $unit ? ' ' . $unit : '' ) );
 	}
 
 	/**

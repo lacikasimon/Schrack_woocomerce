@@ -306,7 +306,7 @@ class Schrack_Price_Sync {
 				$price = $this->extract_raw_price( $value );
 
 				if ( null !== $price ) {
-					return $this->apply_price_unit_divisor( $price, $node );
+					return $price;
 				}
 			}
 		}
@@ -318,9 +318,7 @@ class Schrack_Price_Sync {
 	 * Extracts a decimal price from unknown SOAP response shapes.
 	 */
 	public function extract_price( mixed $response ): ?float {
-		$price = $this->extract_raw_price( $response );
-
-		return null === $price ? null : $this->apply_price_unit_divisor( $price, $response );
+		return $this->extract_raw_price( $response );
 	}
 
 	/**
@@ -387,58 +385,8 @@ class Schrack_Price_Sync {
 	}
 
 	/**
-	 * Converts a package price to the price of one sale unit when Schrack sends
-	 * PretUnitar (for example, a cable price quoted per 100 metres).
-	 */
-	private function apply_price_unit_divisor( float $price, mixed $response ): float {
-		$price_unit = $this->extract_price_unit_divisor( $response );
-
-		return null !== $price_unit && $price_unit > 0.0 ? $price / $price_unit : $price;
-	}
-
-	/**
-	 * Finds a positive PretUnitar divisor in an item response node.
-	 */
-	private function extract_price_unit_divisor( mixed $response ): ?float {
-		if ( is_object( $response ) ) {
-			$response = get_object_vars( $response );
-		}
-
-		if ( ! is_array( $response ) ) {
-			return null;
-		}
-
-		foreach ( $response as $key => $value ) {
-			if (
-				! $this->is_price_unit_key( (string) $key ) ||
-				! is_scalar( $value ) ||
-				! $this->is_decimal_like( (string) $value )
-			) {
-				continue;
-			}
-
-			$price_unit = $this->normalize_price( (string) $value );
-
-			return null !== $price_unit && $price_unit > 0.0 ? $price_unit : null;
-		}
-
-		foreach ( $response as $value ) {
-			if ( ! is_array( $value ) && ! is_object( $value ) ) {
-				continue;
-			}
-
-			$price_unit = $this->extract_price_unit_divisor( $value );
-
-			if ( null !== $price_unit ) {
-				return $price_unit;
-			}
-		}
-
-		return null;
-	}
-
-	/**
-	 * Checks the normalized spelling used by the Schrack response field.
+	 * Keeps PretUnitar metadata from being mistaken for an actual price. The
+	 * product mapper applies the catalog-stored divisor exactly once.
 	 */
 	private function is_price_unit_key( string $key ): bool {
 		return 'pretunitar' === strtolower( preg_replace( '/[^a-z0-9]+/i', '', $key ) ?? '' );

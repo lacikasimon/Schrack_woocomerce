@@ -742,6 +742,7 @@ class Schrack_Cron {
 		}
 
 		$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
+		$format   = $this->catalog_format();
 		$limit    = $this->catalog_batch_limit();
 		$max_batches = $this->catalog_batches_per_run();
 		$started_at  = time();
@@ -776,7 +777,7 @@ class Schrack_Cron {
 					break;
 				}
 
-				$result = $importer->import_from_soap( 'CSV', $limit, false );
+				$result = $importer->import_from_soap( $format, $limit, false );
 				++$batches;
 
 				$total_processed           += (int) ( $result['processed'] ?? 0 );
@@ -895,9 +896,10 @@ class Schrack_Cron {
 		}
 
 		$importer = new Schrack_Catalog_Importer( $this->settings, $this->logger );
+		$format   = $this->catalog_format();
 
 		try {
-			$cache = $importer->fetch_and_cache_catalog( 'CSV' );
+			$cache = $importer->fetch_and_cache_catalog( $format );
 		} catch ( Schrack_Rate_Limit_Exception $exception ) {
 			$result = $this->handle_rate_limited_sync( 'catalog', 0, 0, $exception );
 
@@ -2739,6 +2741,15 @@ class Schrack_Cron {
 		$limit = max( 1, min( 5000, (int) $this->settings->get( 'catalog_batch_size', 500 ) ) );
 
 		return $this->is_low_memory_host() ? min( $limit, 500 ) : $limit;
+	}
+
+	/**
+	 * Returns the configured Schrack catalog source format.
+	 */
+	private function catalog_format(): string {
+		$format = strtoupper( sanitize_key( (string) $this->settings->get( 'catalog_format', 'xml' ) ) );
+
+		return in_array( $format, array( 'CSV', 'XML' ), true ) ? $format : 'XML';
 	}
 
 	/**

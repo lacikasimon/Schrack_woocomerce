@@ -764,20 +764,23 @@ class Schrack_Product_Mapper {
 	 * Updates WooCommerce regular price from a Schrack purchase price.
 	 */
 	public function update_price( int $product_id, float $purchase_price ): float {
-		$purchase_price = max( 0.0, $purchase_price );
-		$product = wc_get_product( $product_id );
+		$raw_purchase_price = max( 0.0, $purchase_price );
+		$product            = wc_get_product( $product_id );
 
 		if ( ! $product instanceof WC_Product ) {
 			throw new RuntimeException( 'WooCommerce product was not found.' );
 		}
 
-		$sale_price = $this->markup->calculate_sale_price( $purchase_price, $product_id );
-		$decimals   = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
-		$price      = function_exists( 'wc_format_decimal' ) ? wc_format_decimal( $sale_price, $decimals ) : number_format( $sale_price, $decimals, '.', '' );
+		$price_unit     = $this->product_price_unit( $product_id, $product );
+		$purchase_price = $this->unit_purchase_price( $raw_purchase_price, $price_unit );
+		$sale_price     = $this->markup->calculate_sale_price( $purchase_price, $product_id );
+		$decimals       = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
+		$price          = function_exists( 'wc_format_decimal' ) ? wc_format_decimal( $sale_price, $decimals ) : number_format( $sale_price, $decimals, '.', '' );
 
 		$product->set_regular_price( $price );
 		$product->set_price( $price );
 		$product->update_meta_data( '_schrack_purchase_price', $purchase_price );
+		$product->update_meta_data( '_schrack_purchase_price_raw', $raw_purchase_price );
 		$product->update_meta_data( '_schrack_vat_rate', $this->markup->vat_rate() );
 		$product->update_meta_data( '_schrack_last_price_sync', current_time( 'mysql' ) );
 		$product->save();
@@ -787,10 +790,12 @@ class Schrack_Product_Mapper {
 			'Updated WooCommerce price from Schrack purchase price.',
 			$product->get_sku(),
 			array(
-				'product_id'      => $product_id,
-				'purchase_price'  => $purchase_price,
+				'product_id'         => $product_id,
+				'raw_purchase_price' => $raw_purchase_price,
+				'price_unit'         => $price_unit,
+				'purchase_price'     => $purchase_price,
 				'woocommerce_price' => $sale_price,
-				'vat_rate'        => $this->markup->vat_rate(),
+				'vat_rate'           => $this->markup->vat_rate(),
 			)
 		);
 
@@ -801,7 +806,9 @@ class Schrack_Product_Mapper {
 	 * Updates price metadata and WooCommerce lookup rows without loading the product object.
 	 */
 	public function update_price_fast( int $product_id, float $purchase_price ): float {
-		$purchase_price = max( 0.0, $purchase_price );
+		$raw_purchase_price = max( 0.0, $purchase_price );
+		$price_unit     = $this->product_price_unit( $product_id );
+		$purchase_price = $this->unit_purchase_price( $raw_purchase_price, $price_unit );
 		$sale_price     = $this->markup->calculate_sale_price( $purchase_price, $product_id );
 		$decimals       = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
 		$price          = function_exists( 'wc_format_decimal' ) ? wc_format_decimal( $sale_price, $decimals ) : number_format( $sale_price, $decimals, '.', '' );
@@ -809,6 +816,7 @@ class Schrack_Product_Mapper {
 		update_post_meta( $product_id, '_regular_price', $price );
 		update_post_meta( $product_id, '_price', $price );
 		update_post_meta( $product_id, '_schrack_purchase_price', $purchase_price );
+		update_post_meta( $product_id, '_schrack_purchase_price_raw', $raw_purchase_price );
 		update_post_meta( $product_id, '_schrack_vat_rate', $this->markup->vat_rate() );
 		update_post_meta( $product_id, '_schrack_last_price_sync', current_time( 'mysql' ) );
 
@@ -821,6 +829,8 @@ class Schrack_Product_Mapper {
 			null,
 			array(
 				'product_id'         => $product_id,
+				'raw_purchase_price' => $raw_purchase_price,
+				'price_unit'         => $price_unit,
 				'purchase_price'     => $purchase_price,
 				'woocommerce_price'  => $sale_price,
 				'vat_rate'           => $this->markup->vat_rate(),
@@ -829,6 +839,32 @@ class Schrack_Product_Mapper {
 		);
 
 		return $sale_price;
+	}
+
+	/**
+	 * Returns the positive catalog price unit stored for a Schrack product.
+	 * PretUnitar is 100 for products quoted per 100 metres and 1 otherwise.
+	 */
+	private function product_price_unit( int $product_id, ?WC_Product $product = null ): float {
+		$value = $product instanceof WC_Product
+			? $product->get_meta( '_schrack_price_unit', true )
+			: get_post_meta( $product_id, '_schrack_price_unit', true );
+
+		if ( ! is_scalar( $value ) ) {
+			return 1.0;
+		}
+
+		$value = str_replace( ',', '.', trim( (string) $value ) );
+		$unit  = is_numeric( $value ) ? (float) $value : 1.0;
+
+		return $unit > 0.0 ? $unit : 1.0;
+	}
+
+	/**
+	 * Converts a quoted package price to one WooCommerce sale unit.
+	 */
+	private function unit_purchase_price( float $raw_purchase_price, float $price_unit ): float {
+		return max( 0.0, $raw_purchase_price ) / ( $price_unit > 0.0 ? $price_unit : 1.0 );
 	}
 
 	/**
@@ -1082,6 +1118,8 @@ class Schrack_Product_Mapper {
 			$this->update_optional_meta( $product, '_schrack_ean', $data, 'ean', $is_new );
 			$this->update_optional_meta( $product, '_schrack_manufacturer', $data, 'manufacturer', $is_new );
 			$this->update_optional_meta( $product, '_schrack_unit', $data, 'unit', $is_new );
+			$this->update_optional_meta( $product, '_schrack_price_unit', $data, 'price_unit', $is_new );
+			$this->update_optional_meta( $product, '_schrack_package_quantity', $data, 'package_quantity', $is_new );
 			$this->update_optional_meta( $product, '_schrack_catalog_status', $data, 'catalog_status', $is_new );
 			$this->update_optional_meta( $product, '_schrack_product_line', $data, 'product_line', $is_new );
 		} else {
@@ -1104,6 +1142,11 @@ class Schrack_Product_Mapper {
 		if ( ! empty( $data['technical_attributes'] ) ) {
 			$technical_meta_key = 'schrack' === $source ? '_schrack_technical_attributes' : $this->source_meta_key( $source, 'technical_attributes' );
 			$product->update_meta_data( $technical_meta_key, wp_json_encode( $data['technical_attributes'] ) );
+		}
+
+		if ( ! empty( $data['documents'] ) && is_array( $data['documents'] ) ) {
+			$documents_meta_key = 'schrack' === $source ? '_schrack_documents' : $this->source_meta_key( $source, 'documents' );
+			$product->update_meta_data( $documents_meta_key, wp_json_encode( $data['documents'] ) );
 		}
 
 		$this->assign_extracted_attributes( $product, $data );
@@ -1235,9 +1278,25 @@ class Schrack_Product_Mapper {
 	 */
 	private function normalized_dynamic_attributes( array $entries ): array {
 		$shared_slugs_by_label = array(
-			'culoare'  => 'color',
-			'color'    => 'color',
-			'material' => 'material',
+			'culoare'                  => 'color',
+			'color'                    => 'color',
+			'material'                 => 'material',
+			'grad de protectie ip'     => 'ip-rating',
+			'grad protectie ip'        => 'ip-rating',
+			'ip rating'                => 'ip-rating',
+			'tensiune'                 => 'voltage',
+			'tensiune nominala'        => 'voltage',
+			'putere'                   => 'wattage',
+			'curent nominal'           => 'amperage',
+			'numar poli'               => 'poles',
+			'numar de poli'            => 'poles',
+			'capacitate de rupere'     => 'breaking-capacity',
+			'temperatura de culoare'   => 'color-temperature',
+			'flux luminos'             => 'lumens',
+			'curent rezidual'          => 'residual-current',
+			'protocol'                 => 'protocol',
+			'unghi'                    => 'beam-angle',
+			'unghi fascicul'           => 'beam-angle',
 		);
 
 		$result = array();
@@ -1250,7 +1309,9 @@ class Schrack_Product_Mapper {
 				continue;
 			}
 
-			$slug = $shared_slugs_by_label[ strtolower( $label ) ] ?? sanitize_key( (string) $key );
+			$normalized_label = function_exists( 'remove_accents' ) ? remove_accents( $label ) : $label;
+			$normalized_label = strtolower( trim( preg_replace( '/[^a-z0-9]+/i', ' ', $normalized_label ) ?? $normalized_label ) );
+			$slug             = $shared_slugs_by_label[ $normalized_label ] ?? sanitize_key( (string) $key );
 
 			if ( '' === $slug || isset( $result[ $slug ] ) ) {
 				continue;

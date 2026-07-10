@@ -1400,6 +1400,13 @@
 	line-height: 1.25;
 }
 
+.schrack-home__product-price .schrack-price-unit {
+	color: var(--schrack-home-muted);
+	font-size: .85em;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
 .schrack-home__product-price .schrack-b2b-price {
 	display: grid;
 	gap: 2px;

@@ -101,11 +101,14 @@ class Schrack_B2B_Pricing {
 	 * @param WC_Product $product Product object.
 	 */
 	public function price_html( string $price_html, WC_Product $product ): string {
-		return $this->append_full_price_html( $price_html, $product );
+		$price_html = $this->append_full_price_html( $price_html, $product );
+
+		return $this->append_measurement_unit_html( $price_html, $product );
 	}
 
 	/**
-	 * Adds the full unit price in cart rows for B2B users.
+	 * Adds the full B2B price when applicable and the measurement unit in cart
+	 * unit-price rows.
 	 *
 	 * @param string              $price_html Cart item unit price HTML.
 	 * @param array<string,mixed> $cart_item Cart item data.
@@ -120,7 +123,58 @@ class Schrack_B2B_Pricing {
 			return $price_html;
 		}
 
-		return $this->append_full_price_html( $price_html, $product );
+		$price_html = $this->append_full_price_html( $price_html, $product );
+
+		return $this->append_measurement_unit_html( $price_html, $product );
+	}
+
+	/**
+	 * Appends the supplier sales unit to displayed unit prices, e.g.
+	 * "301,60 lei / m.". Line subtotals intentionally remain totals without a
+	 * unit suffix.
+	 */
+	private function append_measurement_unit_html( string $price_html, WC_Product $product ): string {
+		if (
+			$this->should_skip_pricing() ||
+			'' === trim( wp_strip_all_tags( $price_html ) ) ||
+			false !== strpos( $price_html, 'schrack-price-unit' )
+		) {
+			return $price_html;
+		}
+
+		$unit = $this->product_measurement_unit( $product );
+
+		if ( '' === $unit ) {
+			return $price_html;
+		}
+
+		return sprintf(
+			'%1$s<span class="schrack-price-unit" aria-label="%2$s"> / %3$s</span>',
+			$price_html,
+			esc_attr__( 'Unitate de masura', 'schrack-woocommerce-sync' ),
+			esc_html( $unit )
+		);
+	}
+
+	/**
+	 * Reads the source-specific imported sales unit, falling back from a
+	 * variation to its parent product when needed.
+	 */
+	private function product_measurement_unit( WC_Product $product ): string {
+		$source = sanitize_key( (string) $product->get_meta( '_schrack_catalog_source', true ) );
+		$source = '' !== $source ? $source : 'schrack';
+		$key    = 'schrack' === $source ? '_schrack_unit' : '_' . $source . '_unit';
+		$unit   = $product->get_meta( $key, true );
+
+		if ( ( ! is_scalar( $unit ) || '' === trim( (string) $unit ) ) && $product->is_type( 'variation' ) ) {
+			$parent = wc_get_product( $product->get_parent_id() );
+
+			if ( $parent instanceof WC_Product ) {
+				return $this->product_measurement_unit( $parent );
+			}
+		}
+
+		return is_scalar( $unit ) ? sanitize_text_field( trim( (string) $unit ) ) : '';
 	}
 
 	/**

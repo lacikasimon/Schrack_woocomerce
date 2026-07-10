@@ -196,6 +196,43 @@
 		}
 	}
 
+	function refreshAttributeFacets(root, html) {
+		var current = root.querySelector('[data-attribute-facets]');
+		var wrapper;
+		var incoming;
+
+		if (!current || typeof html !== 'string') {
+			return;
+		}
+
+		wrapper = document.createElement('div');
+		wrapper.innerHTML = html;
+		incoming = wrapper.querySelector('[data-attribute-facets]');
+
+		if (incoming) {
+			current.replaceWith(incoming);
+		}
+	}
+
+	function filterAttributeOptions(input) {
+		var group = input.closest('.schrack-attribute-filter');
+		var term = input.value.trim().toLowerCase();
+
+		if (!group) {
+			return;
+		}
+
+		Array.prototype.forEach.call(group.querySelectorAll('[data-attribute-option]'), function (option) {
+			option.hidden = term !== '' && option.textContent.toLowerCase().indexOf(term) === -1;
+		});
+	}
+
+	function clearAttributeSelections(root) {
+		Array.prototype.forEach.call(root.querySelectorAll('[data-attribute-facets] input[type="checkbox"]:checked'), function (input) {
+			input.checked = false;
+		});
+	}
+
 	function requestProducts(root, page, options) {
 		var form = root.querySelector('.schrack-product-filter__form');
 		var results = root.querySelector('.schrack-product-filter__results');
@@ -236,6 +273,8 @@
 				appendResults(results, payload.data.html);
 			} else {
 				results.innerHTML = payload.data.html;
+				refreshAttributeFacets(root, payload.data.facets_html);
+				updateActiveFilterCount(root);
 			}
 		}).catch(function () {
 			results.innerHTML = '<div class="schrack-product-filter__empty"><strong>Filtrarea a esuat.</strong><span>Reincarca pagina si incearca din nou.</span></div>';
@@ -414,6 +453,11 @@
 				return;
 			}
 
+			if (event.target.matches('[data-attribute-filter-search]')) {
+				filterAttributeOptions(event.target);
+				return;
+			}
+
 			if (event.target === categorySearch) {
 				setSelectedCategory(root, '', event.target.value);
 				updateActiveFilterCount(root);
@@ -468,6 +512,7 @@
 
 			if (categoryOption) {
 				event.preventDefault();
+				clearAttributeSelections(root);
 				setSelectedCategory(root, categoryOption.getAttribute('data-category-id'), categoryOption.getAttribute('data-category-label'));
 				updateActiveFilterCount(root);
 				requestProducts(root, 1);
@@ -476,6 +521,7 @@
 
 			if (categoryClear) {
 				event.preventDefault();
+				clearAttributeSelections(root);
 				setSelectedCategory(root, '', '');
 				updateActiveFilterCount(root);
 				requestProducts(root, 1);

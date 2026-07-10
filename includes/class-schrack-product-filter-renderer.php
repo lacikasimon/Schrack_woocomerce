@@ -46,7 +46,6 @@ class Schrack_Product_Filter_Renderer {
 		$active_filter_count = $this->active_filter_count( $filters );
 		$manufacturers = $settings['show_manufacturer_filter'] ? $this->manufacturer_options( $filters['category'] ) : array();
 		$product_lines = $settings['show_product_line_filter'] ? $this->product_line_options( $filters['category'] ) : array();
-		$attribute_filter_groups = $settings['show_attribute_filters'] ? $this->attribute_filter_options( $filters['category'] ) : array();
 		$style         = $this->inline_style( $settings );
 
 		ob_start();
@@ -167,39 +166,8 @@ class Schrack_Product_Filter_Renderer {
 							</label>
 							<?php endif; ?>
 
-							<?php if ( $settings['show_attribute_filters'] && ! empty( $attribute_filter_groups ) ) : ?>
-							<div class="schrack-product-filter__attributes">
-								<?php foreach ( $attribute_filter_groups as $taxonomy => $group ) : ?>
-									<?php
-									$selected_ids = $filters['attributes'][ $taxonomy ] ?? array();
-									$has_selection = ! empty( $selected_ids );
-									?>
-									<details class="schrack-attribute-filter" <?php echo $has_selection ? 'open' : ''; ?>>
-										<summary class="schrack-attribute-filter__summary">
-											<span><?php echo esc_html( $group['label'] ); ?></span>
-											<?php if ( $has_selection ) : ?>
-												<span class="schrack-attribute-filter__badge"><?php echo esc_html( (string) count( $selected_ids ) ); ?></span>
-											<?php endif; ?>
-										</summary>
-										<div class="schrack-attribute-filter__options">
-											<?php foreach ( $group['terms'] as $term ) : ?>
-												<label class="schrack-attribute-filter__option">
-													<input
-														type="checkbox"
-														name="attr[<?php echo esc_attr( $taxonomy ); ?>][]"
-														value="<?php echo esc_attr( (string) $term['id'] ); ?>"
-														<?php checked( in_array( $term['id'], $selected_ids, true ) ); ?>
-													>
-													<span class="schrack-attribute-filter__chip">
-														<?php echo esc_html( $term['name'] ); ?>
-														<i><?php echo esc_html( (string) $term['count'] ); ?></i>
-													</span>
-												</label>
-											<?php endforeach; ?>
-										</div>
-									</details>
-								<?php endforeach; ?>
-							</div>
+							<?php if ( $settings['show_attribute_filters'] ) : ?>
+								<?php echo $this->attribute_filters_html( $filters ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 							<?php endif; ?>
 
 							<?php if ( $settings['show_price_filter'] ) : ?>
@@ -300,6 +268,7 @@ class Schrack_Product_Filter_Renderer {
 
 			return array(
 				'html'        => (string) ob_get_clean(),
+				'facets_html' => $settings['show_attribute_filters'] ? $this->attribute_filters_html( $filters ) : null,
 				'summary'     => $summary,
 				'page'        => 1,
 				'has_more'    => 'no',
@@ -345,12 +314,67 @@ class Schrack_Product_Filter_Renderer {
 
 		return array(
 			'html'        => (string) ob_get_clean(),
+			'facets_html' => $settings['show_attribute_filters'] && 1 === (int) $filters['paged'] ? $this->attribute_filters_html( $filters ) : null,
 			'summary'     => $summary,
 			'page'        => $filters['paged'],
 			'has_more'    => $has_more ? 'yes' : 'no',
 			'total_pages' => $this->uses_fast_load_more( $settings ) ? null : max( 1, (int) $query->max_num_pages ),
 			'total'       => $this->uses_fast_load_more( $settings ) ? null : (int) $query->found_posts,
 		);
+	}
+
+	/**
+	 * Renders category-scoped technical attribute facets for both the initial
+	 * page and AJAX refreshes.
+	 *
+	 * @param array<string,mixed> $filters Sanitized frontend filters.
+	 */
+	private function attribute_filters_html( array $filters ): string {
+		$groups = $this->attribute_filter_options( (int) ( $filters['category'] ?? 0 ) );
+
+		ob_start();
+		?>
+		<div class="schrack-product-filter__attributes" data-attribute-facets>
+			<?php foreach ( $groups as $taxonomy => $group ) : ?>
+				<?php
+				$selected_ids = array_map( 'absint', (array) ( $filters['attributes'][ $taxonomy ] ?? array() ) );
+				$has_selection = ! empty( $selected_ids );
+				?>
+				<details class="schrack-attribute-filter" <?php echo $has_selection ? 'open' : ''; ?>>
+					<summary class="schrack-attribute-filter__summary">
+						<span><?php echo esc_html( $group['label'] ); ?></span>
+						<?php if ( $has_selection ) : ?>
+							<span class="schrack-attribute-filter__badge"><?php echo esc_html( (string) count( $selected_ids ) ); ?></span>
+						<?php endif; ?>
+					</summary>
+					<?php if ( count( $group['terms'] ) > 8 ) : ?>
+						<label class="schrack-attribute-filter__search">
+							<span class="screen-reader-text"><?php echo esc_html( sprintf( __( 'Cauta in %s', 'schrack-woocommerce-sync' ), $group['label'] ) ); ?></span>
+							<input type="search" data-attribute-filter-search autocomplete="off" placeholder="<?php esc_attr_e( 'Cauta valoare', 'schrack-woocommerce-sync' ); ?>">
+						</label>
+					<?php endif; ?>
+					<div class="schrack-attribute-filter__options">
+						<?php foreach ( $group['terms'] as $term ) : ?>
+							<label class="schrack-attribute-filter__option" data-attribute-option>
+								<input
+									type="checkbox"
+									name="attr[<?php echo esc_attr( $taxonomy ); ?>][]"
+									value="<?php echo esc_attr( (string) $term['id'] ); ?>"
+									<?php checked( in_array( $term['id'], $selected_ids, true ) ); ?>
+								>
+								<span class="schrack-attribute-filter__chip">
+									<?php echo esc_html( $term['name'] ); ?>
+									<i><?php echo esc_html( (string) $term['count'] ); ?></i>
+								</span>
+							</label>
+						<?php endforeach; ?>
+					</div>
+				</details>
+			<?php endforeach; ?>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
 	}
 
 	/**
@@ -2222,11 +2246,10 @@ class Schrack_Product_Filter_Renderer {
 	 * available product: the curated set recovered by Schrack_Attribute_Extractor
 	 * (IP rating, voltage, wattage, etc.) plus any dynamically-discovered ones
 	 * (e.g. Telesystem's per-category "Rezolutie Megapixel", "Standard WiFi") from
-	 * the schrack_wc_sync_dynamic_attributes registry. Dynamic taxonomies are
-	 * additionally capped at a maximum term count so a near-unique-per-product
-	 * feed column can't turn into an unusable wall of one-off checkboxes; the
-	 * curated set is exempt since some of those (wattage, lumens) are legitimately
-	 * high-cardinality and already work fine in production.
+	 * the schrack_wc_sync_dynamic_attributes registry. On the unscoped catalog
+	 * landing page only, near-unique dynamic fields are held back; as soon as a
+	 * category is selected every value actually present in that category is made
+	 * available and searchable.
 	 *
 	 * @return array<string,array{slug:string,label:string,terms:array<int,array{id:int,name:string,count:int}>}>
 	 */
@@ -2245,8 +2268,8 @@ class Schrack_Product_Filter_Renderer {
 			return $result;
 		}
 
-		$max_dynamic_terms = 100;
-		$slugs              = array();
+		$max_unscoped_dynamic_terms = 100;
+		$slugs                        = array();
 
 		if ( class_exists( 'Schrack_Attribute_Extractor' ) ) {
 			foreach ( Schrack_Attribute_Extractor::slugs() as $slug ) {
@@ -2292,10 +2315,6 @@ class Schrack_Product_Filter_Renderer {
 				continue;
 			}
 
-			if ( $meta['dynamic'] && count( $terms ) > $max_dynamic_terms ) {
-				continue;
-			}
-
 			$available_counts = $this->available_term_counts(
 				$taxonomy,
 				array_map( static fn ( WP_Term $term ): int => (int) $term->term_id, array_filter( $terms, static fn ( mixed $term ): bool => $term instanceof WP_Term ) ),
@@ -2323,6 +2342,10 @@ class Schrack_Product_Filter_Renderer {
 			}
 
 			if ( empty( $term_options ) ) {
+				continue;
+			}
+
+			if ( $meta['dynamic'] && $category_id <= 0 && count( $term_options ) > $max_unscoped_dynamic_terms ) {
 				continue;
 			}
 
