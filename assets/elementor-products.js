@@ -1,25 +1,141 @@
 (function () {
 	'use strict';
 
+	var configCache = new WeakMap();
+	var requestStates = new WeakMap();
+	var categoryExplorerIndexes = new WeakMap();
+	var attributeOptionIndexes = new WeakMap();
+	var scheduledLocalFilters = new WeakMap();
+	var productCacheTtl = 30000;
+	var categoryCacheTtl = 60000;
+
 	function parseConfig(root) {
-		try {
-			return JSON.parse(root.getAttribute('data-config') || '{}');
-		} catch (error) {
-			return {};
+		var config;
+
+		if (configCache.has(root)) {
+			return configCache.get(root);
 		}
+
+		try {
+			config = JSON.parse(root.getAttribute('data-config') || '{}');
+		} catch (error) {
+			config = {};
+		}
+
+		configCache.set(root, config);
+
+		return config;
 	}
 
 	function debounce(callback, wait) {
 		var timeoutId;
-
-		return function () {
+		var debounced = function () {
 			var args = arguments;
 
-			window.clearTimeout(timeoutId);
+			debounced.cancel();
 			timeoutId = window.setTimeout(function () {
+				timeoutId = null;
 				callback.apply(null, args);
 			}, wait);
 		};
+
+		debounced.cancel = function () {
+			if (timeoutId) {
+				window.clearTimeout(timeoutId);
+				timeoutId = null;
+			}
+		};
+
+		return debounced;
+	}
+
+	function normalizeSearchText(text) {
+		var value = (text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+		return typeof value.normalize === 'function'
+			? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+			: value;
+	}
+
+	function requestState(root) {
+		var state;
+
+		if (requestStates.has(root)) {
+			return requestStates.get(root);
+		}
+
+		state = {
+			categoryCache: new Map(),
+			categoryController: null,
+			categoryKey: '',
+			categorySequence: 0,
+			config: parseConfig(root),
+			productCache: new Map(),
+			productController: null,
+			productKey: '',
+			productSequence: 0
+		};
+		state.configJson = JSON.stringify(state.config);
+		requestStates.set(root, state);
+
+		return state;
+	}
+
+	function cacheGet(cache, key, ttl) {
+		var entry = cache.get(key);
+
+		if (!entry) {
+			return null;
+		}
+
+		if (Date.now() - entry.time > ttl) {
+			cache.delete(key);
+			return null;
+		}
+
+		cache.delete(key);
+		cache.set(key, entry);
+
+		return entry.value;
+	}
+
+	function cacheSet(cache, key, value, limit) {
+		var oldestKey;
+
+		cache.delete(key);
+		cache.set(key, { time: Date.now(), value: value });
+
+		if (cache.size > limit) {
+			oldestKey = cache.keys().next().value;
+			cache.delete(oldestKey);
+		}
+	}
+
+	function newController() {
+		return typeof window.AbortController === 'function' ? new window.AbortController() : null;
+	}
+
+	function cancelController(controller) {
+		if (controller && typeof controller.abort === 'function') {
+			controller.abort();
+		}
+	}
+
+	function isAbortError(error) {
+		return Boolean(error && error.name === 'AbortError');
+	}
+
+	function scheduleLocalFilter(input, callback) {
+		var currentFrame = scheduledLocalFilters.get(input);
+
+		if (currentFrame) {
+			window.cancelAnimationFrame(currentFrame);
+		}
+
+		scheduledLocalFilters.set(input, window.requestAnimationFrame(function () {
+			scheduledLocalFilters.delete(input);
+			callback(input);
+		}));
 	}
 
 	function setLoading(root, loading) {
@@ -84,7 +200,7 @@
 		var manufacturer = form.querySelector('select[name="manufacturer"]');
 		var productLine = form.querySelector('select[name="product_line"]');
 		var specialOffer = form.querySelector('input[name="special_offer_only"]');
-		var attrGroups = {};
+		var attrGroups = new Set();
 
 		if (search && search.value.trim() !== '') {
 			count++;
@@ -111,10 +227,10 @@
 		}
 
 		Array.prototype.forEach.call(form.querySelectorAll('input[name^="attr["]:checked'), function (input) {
-			attrGroups[input.name] = true;
+			attrGroups.add(input.name);
 		});
 
-		count += Object.keys(attrGroups).length;
+		count += attrGroups.size;
 
 		badge.textContent = String(count);
 		badge.hidden = count === 0;
@@ -123,9 +239,30 @@
 	function restoreCategoryExplorerDefault(grid) {
 		var expanded = grid.getAttribute('data-expanded') === 'yes';
 
-		Array.prototype.forEach.call(grid.querySelectorAll('.schrack-category-explorer__card'), function (card) {
-			card.hidden = !expanded && card.hasAttribute('data-overflow');
+		categoryExplorerCards(grid).forEach(function (record) {
+			record.element.hidden = !expanded && record.overflow;
 		});
+	}
+
+	function categoryExplorerCards(grid) {
+		var records;
+
+		if (categoryExplorerIndexes.has(grid)) {
+			return categoryExplorerIndexes.get(grid);
+		}
+
+		records = Array.prototype.map.call(grid.querySelectorAll('.schrack-category-explorer__card'), function (card) {
+			var nameEl = card.querySelector('.schrack-category-explorer__name');
+
+			return {
+				element: card,
+				key: normalizeSearchText(nameEl ? nameEl.textContent : ''),
+				overflow: card.hasAttribute('data-overflow')
+			};
+		});
+		categoryExplorerIndexes.set(grid, records);
+
+		return records;
 	}
 
 	function filterCategoryExplorer(input) {
@@ -137,7 +274,7 @@
 			return;
 		}
 
-		var term = input.value.trim().toLowerCase();
+		var term = normalizeSearchText(input.value);
 
 		if (term === '') {
 			restoreCategoryExplorerDefault(grid);
@@ -153,10 +290,8 @@
 			toggle.hidden = true;
 		}
 
-		Array.prototype.forEach.call(grid.querySelectorAll('.schrack-category-explorer__card'), function (card) {
-			var nameEl = card.querySelector('.schrack-category-explorer__name');
-			var name = nameEl ? nameEl.textContent : '';
-			card.hidden = name.toLowerCase().indexOf(term) === -1;
+		categoryExplorerCards(grid).forEach(function (record) {
+			record.element.hidden = record.key.indexOf(term) === -1;
 		});
 	}
 
@@ -168,6 +303,7 @@
 		var incomingGrid;
 		var incomingSummary;
 		var incomingPagination;
+		var fragment;
 
 		wrapper.innerHTML = html;
 		incomingGrid = wrapper.querySelector('.schrack-product-filter__grid');
@@ -179,9 +315,13 @@
 			return;
 		}
 
-		Array.prototype.forEach.call(incomingGrid.children, function (card) {
-			currentGrid.appendChild(card);
-		});
+		fragment = document.createDocumentFragment();
+
+		while (incomingGrid.firstElementChild) {
+			fragment.appendChild(incomingGrid.firstElementChild);
+		}
+
+		currentGrid.appendChild(fragment);
 
 		if (currentSummary && incomingSummary) {
 			currentSummary.replaceWith(incomingSummary);
@@ -216,14 +356,27 @@
 
 	function filterAttributeOptions(input) {
 		var group = input.closest('.schrack-attribute-filter');
-		var term = input.value.trim().toLowerCase();
+		var term = normalizeSearchText(input.value);
+		var options;
 
 		if (!group) {
 			return;
 		}
 
-		Array.prototype.forEach.call(group.querySelectorAll('[data-attribute-option]'), function (option) {
-			option.hidden = term !== '' && option.textContent.toLowerCase().indexOf(term) === -1;
+		if (attributeOptionIndexes.has(group)) {
+			options = attributeOptionIndexes.get(group);
+		} else {
+			options = Array.prototype.map.call(group.querySelectorAll('[data-attribute-option]'), function (option) {
+				return {
+					element: option,
+					key: normalizeSearchText(option.textContent)
+				};
+			});
+			attributeOptionIndexes.set(group, options);
+		}
+
+		options.forEach(function (record) {
+			record.element.hidden = term !== '' && record.key.indexOf(term) === -1;
 		});
 	}
 
@@ -233,53 +386,157 @@
 		});
 	}
 
+	function cancelProductRequest(root) {
+		var state = requestState(root);
+
+		state.productSequence++;
+		cancelController(state.productController);
+		state.productController = null;
+		state.productKey = '';
+		setLoading(root, false);
+	}
+
+	function applyProductPayload(root, results, data, append) {
+		if (append) {
+			appendResults(results, data.html);
+			return;
+		}
+
+		results.innerHTML = data.html;
+		refreshAttributeFacets(root, data.facets_html);
+		updateActiveFilterCount(root);
+	}
+
+	function showMinimumSearchMessage(root, minimum) {
+		var results = root.querySelector('.schrack-product-filter__results');
+
+		cancelProductRequest(root);
+
+		if (results) {
+			results.innerHTML = '<div class="schrack-product-filter__empty"><strong>Continuă căutarea.</strong><span>Introdu cel puțin ' + String(minimum) + ' caractere.</span></div>';
+		}
+	}
+
+	function productRequestBody(root, form, page) {
+		var state = requestState(root);
+		var body = new URLSearchParams(new FormData(form));
+
+		body.set('action', root.getAttribute('data-action') || '');
+		body.set('nonce', root.getAttribute('data-nonce') || '');
+		body.set('config', state.configJson);
+		body.set('paged', String(page || 1));
+
+		return body.toString();
+	}
+
+	function renderCachedProducts(root, page) {
+		var form = root.querySelector('.schrack-product-filter__form');
+		var results = root.querySelector('.schrack-product-filter__results');
+		var state = requestState(root);
+		var cacheKey;
+		var cached;
+
+		if (!form || !results) {
+			return false;
+		}
+
+		cacheKey = productRequestBody(root, form, page);
+		cached = cacheGet(state.productCache, cacheKey, productCacheTtl);
+
+		if (cached === null) {
+			return false;
+		}
+
+		cancelProductRequest(root);
+		applyProductPayload(root, results, cached, false);
+
+		return true;
+	}
+
 	function requestProducts(root, page, options) {
 		var form = root.querySelector('.schrack-product-filter__form');
 		var results = root.querySelector('.schrack-product-filter__results');
 		var ajaxUrl = root.getAttribute('data-ajax-url');
 		var action = root.getAttribute('data-action');
 		var nonce = root.getAttribute('data-nonce');
-		var config = parseConfig(root);
+		var state = requestState(root);
 		var append = options && options.append;
-		var body;
+		var bodyString;
+		var cacheKey;
+		var cached;
+		var controller;
+		var fetchOptions;
+		var requestId;
 
 		if (!form || !results || !ajaxUrl || !action || !nonce) {
 			return;
 		}
 
-		body = new URLSearchParams(new FormData(form));
-		body.set('action', action);
-		body.set('nonce', nonce);
-		body.set('config', JSON.stringify(config));
-		body.set('paged', String(page || 1));
+		bodyString = productRequestBody(root, form, page);
+		cacheKey = bodyString;
+		cached = cacheGet(state.productCache, cacheKey, productCacheTtl);
+
+		if (cached) {
+			cancelProductRequest(root);
+			applyProductPayload(root, results, cached, append);
+			return;
+		}
+
+		if (state.productController && state.productKey === cacheKey) {
+			return;
+		}
+
+		cancelController(state.productController);
+		state.productSequence++;
+		requestId = state.productSequence;
+		controller = newController();
+		state.productController = controller;
+		state.productKey = cacheKey;
 
 		setLoading(root, true);
 
-		window.fetch(ajaxUrl, {
+		fetchOptions = {
 			method: 'POST',
 			credentials: 'same-origin',
 			headers: {
 				'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
 			},
-			body: body.toString()
-		}).then(function (response) {
+			body: bodyString
+		};
+
+		if (controller) {
+			fetchOptions.signal = controller.signal;
+		}
+
+		window.fetch(ajaxUrl, fetchOptions).then(function (response) {
+			if (!response.ok) {
+				throw new Error('Filter request failed');
+			}
+
 			return response.json();
 		}).then(function (payload) {
 			if (!payload || !payload.success || !payload.data || typeof payload.data.html !== 'string') {
 				throw new Error('Invalid filter response');
 			}
 
-			if (append) {
-				appendResults(results, payload.data.html);
-			} else {
-				results.innerHTML = payload.data.html;
-				refreshAttributeFacets(root, payload.data.facets_html);
-				updateActiveFilterCount(root);
+			if (requestId !== state.productSequence) {
+				return;
 			}
-		}).catch(function () {
+
+			cacheSet(state.productCache, cacheKey, payload.data, 12);
+			applyProductPayload(root, results, payload.data, append);
+		}).catch(function (error) {
+			if (isAbortError(error) || requestId !== state.productSequence) {
+				return;
+			}
+
 			results.innerHTML = '<div class="schrack-product-filter__empty"><strong>Filtrarea a esuat.</strong><span>Reincarca pagina si incearca din nou.</span></div>';
 		}).finally(function () {
-			setLoading(root, false);
+			if (requestId === state.productSequence) {
+				state.productController = null;
+				state.productKey = '';
+				setLoading(root, false);
+			}
 		});
 	}
 
@@ -294,8 +551,19 @@
 		};
 	}
 
+	function cancelCategoryRequest(root) {
+		var state = requestState(root);
+
+		state.categorySequence++;
+		cancelController(state.categoryController);
+		state.categoryController = null;
+		state.categoryKey = '';
+	}
+
 	function closeCategoryResults(root) {
 		var picker = categoryPicker(root);
+
+		cancelCategoryRequest(root);
 
 		if (picker.results) {
 			picker.results.hidden = true;
@@ -376,8 +644,14 @@
 		var action = root.getAttribute('data-category-action');
 		var nonce = root.getAttribute('data-nonce');
 		var picker = categoryPicker(root);
-		var config = parseConfig(root);
+		var state = requestState(root);
 		var body;
+		var bodyString;
+		var cacheKey;
+		var cached;
+		var controller;
+		var fetchOptions;
+		var requestId;
 
 		if (!ajaxUrl || !action || !nonce || !picker.results) {
 			return;
@@ -388,48 +662,105 @@
 		body.set('nonce', nonce);
 		body.set('search', search || '');
 		body.set('selected', picker.hidden ? picker.hidden.value : '');
-		body.set('limit', String(config.category_results_limit || 30));
+		body.set('limit', String(state.config.category_results_limit || 30));
+		bodyString = body.toString();
+		cacheKey = bodyString;
+		cached = cacheGet(state.categoryCache, cacheKey, categoryCacheTtl);
+
+		if (cached !== null) {
+			cancelCategoryRequest(root);
+			setCategoryResults(root, cached);
+			return;
+		}
+
+		if (state.categoryController && state.categoryKey === cacheKey) {
+			return;
+		}
+
+		cancelController(state.categoryController);
+		state.categorySequence++;
+		requestId = state.categorySequence;
+		controller = newController();
+		state.categoryController = controller;
+		state.categoryKey = cacheKey;
 
 		picker.results.innerHTML = '<div class="schrack-category-picker__empty">Se cauta...</div>';
 		picker.results.hidden = false;
+		if (picker.input) {
+			picker.input.setAttribute('aria-expanded', 'true');
+		}
 
-		window.fetch(ajaxUrl, {
+		fetchOptions = {
 			method: 'POST',
 			credentials: 'same-origin',
 			headers: {
 				'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
 			},
-			body: body.toString()
-		}).then(function (response) {
+			body: bodyString
+		};
+
+		if (controller) {
+			fetchOptions.signal = controller.signal;
+		}
+
+		window.fetch(ajaxUrl, fetchOptions).then(function (response) {
+			if (!response.ok) {
+				throw new Error('Category request failed');
+			}
+
 			return response.json();
 		}).then(function (payload) {
 			if (!payload || !payload.success || !payload.data || typeof payload.data.html !== 'string') {
 				throw new Error('Invalid category response');
 			}
 
+			if (requestId !== state.categorySequence) {
+				return;
+			}
+
+			cacheSet(state.categoryCache, cacheKey, payload.data.html, 20);
 			setCategoryResults(root, payload.data.html);
-		}).catch(function () {
+		}).catch(function (error) {
+			if (isAbortError(error) || requestId !== state.categorySequence) {
+				return;
+			}
+
 			setCategoryResults(root, '<div class="schrack-category-picker__empty">Cautarea categoriilor a esuat.</div>');
+		}).finally(function () {
+			if (requestId === state.categorySequence) {
+				state.categoryController = null;
+				state.categoryKey = '';
+			}
 		});
 	}
 
 	function initFilter(root) {
-		var form = root.querySelector('.schrack-product-filter__form');
-		var categorySearch = root.querySelector('[data-category-search]');
-		var delayedRequest = debounce(function () {
-			requestProducts(root, 1);
-		}, 450);
-		var delayedCategoryRequest = debounce(function () {
-			requestCategories(root, categorySearchTerm(root));
-		}, 250);
+		var form;
+		var categorySearch;
+		var config;
+		var minSearchChars;
+		var delayedRequest;
+		var delayedCategoryRequest;
 
 		if (root.getAttribute('data-filter-ready') === 'yes') {
 			return;
 		}
 
+		form = root.querySelector('.schrack-product-filter__form');
+		categorySearch = root.querySelector('[data-category-search]');
+
 		if (!form) {
 			return;
 		}
+
+		config = requestState(root).config;
+		minSearchChars = parseInt(config.min_search_chars, 10) || 2;
+		delayedRequest = debounce(function () {
+			requestProducts(root, 1);
+		}, 350);
+		delayedCategoryRequest = debounce(function () {
+			requestCategories(root, categorySearchTerm(root));
+		}, 180);
 
 		root.setAttribute('data-filter-ready', 'yes');
 		syncSelectedCategory(root);
@@ -437,12 +768,23 @@
 		updateActiveFilterCount(root);
 
 		form.addEventListener('submit', function (event) {
+			var searchInput = form.querySelector('input[name="search"]');
+			var searchValue = searchInput ? searchInput.value.trim() : '';
+
 			event.preventDefault();
+			delayedRequest.cancel();
+
+			if (searchValue && searchValue.length < minSearchChars) {
+				showMinimumSearchMessage(root, minSearchChars);
+				return;
+			}
+
 			requestProducts(root, 1);
 		});
 
 		form.addEventListener('change', function (event) {
 			if (event.target && event.target.matches('select, input[type="checkbox"]')) {
+				delayedRequest.cancel();
 				updateActiveFilterCount(root);
 				requestProducts(root, 1);
 			}
@@ -453,8 +795,12 @@
 				return;
 			}
 
+			if (event.isComposing) {
+				return;
+			}
+
 			if (event.target.matches('[data-attribute-filter-search]')) {
-				filterAttributeOptions(event.target);
+				scheduleLocalFilter(event.target, filterAttributeOptions);
 				return;
 			}
 
@@ -467,12 +813,28 @@
 
 			syncPricePresetState(root);
 			updateActiveFilterCount(root);
+
+			if (event.target.matches('input[name="search"]')) {
+				var searchValue = event.target.value.trim();
+
+				if (searchValue && searchValue.length < minSearchChars) {
+					delayedRequest.cancel();
+					showMinimumSearchMessage(root, minSearchChars);
+					return;
+				}
+			}
+
+			if (renderCachedProducts(root, 1)) {
+				delayedRequest.cancel();
+				return;
+			}
+
 			delayedRequest();
 		});
 
 		root.addEventListener('input', function (event) {
 			if (event.target && event.target.matches('[data-category-explorer-search]')) {
-				filterCategoryExplorer(event.target);
+				scheduleLocalFilter(event.target, filterCategoryExplorer);
 			}
 		});
 
@@ -506,12 +868,15 @@
 
 			if (pricePreset) {
 				event.preventDefault();
+				delayedRequest.cancel();
 				setPriceRange(root, pricePreset);
 				return;
 			}
 
 			if (categoryOption) {
 				event.preventDefault();
+				delayedRequest.cancel();
+				delayedCategoryRequest.cancel();
 				clearAttributeSelections(root);
 				setSelectedCategory(root, categoryOption.getAttribute('data-category-id'), categoryOption.getAttribute('data-category-label'));
 				updateActiveFilterCount(root);
@@ -521,6 +886,8 @@
 
 			if (categoryClear) {
 				event.preventDefault();
+				delayedRequest.cancel();
+				delayedCategoryRequest.cancel();
 				clearAttributeSelections(root);
 				setSelectedCategory(root, '', '');
 				updateActiveFilterCount(root);
@@ -530,6 +897,7 @@
 
 			if (pageButton) {
 				event.preventDefault();
+				delayedRequest.cancel();
 
 				if (!pageButton.disabled) {
 					requestProducts(
@@ -542,6 +910,8 @@
 
 			if (resetButton) {
 				event.preventDefault();
+				delayedRequest.cancel();
+				delayedCategoryRequest.cancel();
 				form.reset();
 				resetSelectedCategory(root);
 				syncPricePresetState(root);

@@ -1,27 +1,384 @@
-body.schrack-shop-archive-page .title h1,
-body.schrack-shop-archive-page .title_outer h1 {
-	color: #17202a !important;
-	font-size: 34px !important;
-	font-weight: 850 !important;
-	letter-spacing: 0 !important;
-	line-height: 1.12 !important;
-	text-transform: none !important;
+:root {
+	--schrack-shop-accent: #1f6fb2;
+	--schrack-shop-accent-bright: #5fb0ec;
+	--schrack-shop-bg: #f2f4f7;
+	--schrack-shop-border: #e3e7eb;
+	--schrack-shop-ink: #101826;
+	--schrack-shop-muted: #657180;
+	--schrack-shop-panel: #fff;
+	--schrack-shop-shadow: 0 4px 18px rgba(11, 18, 32, 0.06);
+	--schrack-shop-shadow-hover: 0 18px 34px rgba(11, 18, 32, 0.14);
 }
 
-body.schrack-shop-archive-page .breadcrumb,
-body.schrack-shop-archive-page .breadcrumbs {
-	letter-spacing: 0 !important;
-	text-transform: none !important;
+body.schrack-shop-archive-page .content,
+body.schrack-shop-archive-page .content_inner {
+	background: var(--schrack-shop-bg);
+}
+
+body.schrack-shop-archive-page .content {
+	overflow-x: clip;
+}
+
+body.schrack-shop-main-page .title_outer,
+body.schrack-shop-main-page > .wrapper .title_outer,
+body.schrack-shop-main-page .content > .title,
+body.schrack-shop-main-page .woocommerce-products-header {
+	display: none !important;
 }
 
 body.schrack-shop-archive-page .container_inner.default_template_holder {
-	padding-top: 28px !important;
+	box-sizing: border-box;
+	max-width: 1480px;
+	padding: 34px 32px 76px !important;
+	width: 100%;
 }
 
+/* Main shop hero. The theme header and footer intentionally remain outside this scope. */
+.schrack-shop-redesign,
+.schrack-shop-redesign *,
+.schrack-shop-redesign *::before,
+.schrack-shop-redesign *::after {
+	box-sizing: border-box;
+}
+
+.schrack-shop-redesign {
+	color: var(--schrack-shop-ink);
+	margin-left: calc(50% - 50vw);
+	position: relative;
+	width: 100vw;
+	z-index: 1;
+}
+
+.schrack-shop-redesign .screen-reader-text {
+	clip: rect(1px, 1px, 1px, 1px);
+	clip-path: inset(50%);
+	height: 1px;
+	margin: -1px;
+	overflow: hidden;
+	padding: 0;
+	position: absolute !important;
+	white-space: nowrap;
+	width: 1px;
+}
+
+.schrack-shop-hero {
+	background: linear-gradient(120deg, #171a4a 0%, #1f2f80 45%, #3c2a86 84%, #4b2f8c 100%);
+	min-height: 530px;
+	overflow: hidden;
+	padding: 64px max(32px, calc((100vw - 1480px) / 2 + 32px)) 104px;
+	position: relative;
+}
+
+.schrack-shop-hero__grid {
+	background-image: linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+	background-size: 42px 42px;
+	inset: 0;
+	mask-image: linear-gradient(to bottom, #000, transparent 90%);
+	pointer-events: none;
+	position: absolute;
+}
+
+.schrack-shop-hero::after {
+	background: radial-gradient(circle, rgba(95, 176, 236, 0.2), transparent 68%);
+	content: "";
+	height: 620px;
+	pointer-events: none;
+	position: absolute;
+	right: -50px;
+	top: -190px;
+	width: 620px;
+}
+
+.schrack-shop-hero__worker {
+	bottom: -25px;
+	height: 112%;
+	max-height: 660px;
+	object-fit: contain;
+	object-position: bottom right;
+	pointer-events: none;
+	position: absolute;
+	right: max(0px, calc((100vw - 1680px) / 2));
+	width: auto;
+	z-index: 1;
+}
+
+.schrack-shop-hero__content {
+	max-width: 610px;
+	position: relative;
+	z-index: 2;
+}
+
+.schrack-shop-hero__eyebrow {
+	align-items: center;
+	background: rgba(255, 255, 255, 0.075);
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	border-radius: 999px;
+	color: #e8ecf3;
+	display: inline-flex;
+	font-size: 12.5px;
+	font-weight: 650;
+	gap: 9px;
+	line-height: 1.35;
+	margin: 0 0 22px;
+	padding: 8px 14px;
+}
+
+.schrack-shop-hero__eyebrow span {
+	animation: schrack-shop-glow 1.8s ease-in-out infinite;
+	background: var(--schrack-shop-accent-bright);
+	border-radius: 50%;
+	box-shadow: 0 0 0 5px rgba(95, 176, 236, 0.13);
+	flex: 0 0 7px;
+	height: 7px;
+	width: 7px;
+}
+
+.schrack-shop-hero h1 {
+	color: #fff !important;
+	font-family: Manrope, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+	font-size: clamp(34px, 3vw, 49px) !important;
+	font-weight: 800 !important;
+	letter-spacing: -0.035em !important;
+	line-height: 1.08 !important;
+	margin: 0 0 18px !important;
+	text-transform: none !important;
+}
+
+.schrack-shop-hero h1 span {
+	background: linear-gradient(90deg, #5fb0ec, #91d2ff);
+	background-clip: text;
+	color: transparent;
+	display: block;
+	-webkit-background-clip: text;
+}
+
+.schrack-shop-hero__lead {
+	color: #c7cee2;
+	font-size: 15px;
+	font-weight: 450;
+	line-height: 1.65;
+	margin: 0 0 28px;
+	max-width: 580px;
+}
+
+.schrack-shop-hero__search {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	margin: 0 0 32px;
+	max-width: 590px;
+}
+
+.schrack-shop-hero__search input {
+	appearance: none;
+	background: rgba(255, 255, 255, 0.98);
+	border: 0;
+	border-radius: 12px 0 0 12px;
+	box-shadow: none;
+	color: var(--schrack-shop-ink);
+	font: inherit;
+	font-size: 14px;
+	min-height: 54px;
+	min-width: 0;
+	outline: 0;
+	padding: 14px 18px;
+	width: 100%;
+}
+
+.schrack-shop-hero__search input:focus {
+	box-shadow: inset 0 0 0 3px rgba(95, 176, 236, 0.45);
+}
+
+.schrack-shop-hero__search button {
+	background: linear-gradient(135deg, var(--schrack-shop-accent), var(--schrack-shop-accent-bright));
+	border: 0;
+	border-radius: 0 12px 12px 0;
+	color: #fff;
+	cursor: pointer;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 800;
+	min-height: 54px;
+	padding: 14px 28px;
+	transition: filter 160ms ease, transform 160ms ease;
+}
+
+.schrack-shop-hero__search button:hover,
+.schrack-shop-hero__search button:focus-visible {
+	filter: brightness(1.08);
+	transform: translateY(-1px);
+}
+
+.schrack-shop-hero__stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 22px 34px;
+}
+
+.schrack-shop-hero__stat {
+	display: grid;
+	gap: 3px;
+}
+
+.schrack-shop-hero__stat strong {
+	color: #fff;
+	font-family: Manrope, Inter, sans-serif;
+	font-size: 24px;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.schrack-shop-hero__stat span {
+	color: #929db5;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+@keyframes schrack-shop-glow {
+	0%,
+	100% {
+		opacity: 0.55;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+/* Root category overview. */
+.schrack-shop-categories {
+	margin: -52px auto 44px;
+	max-width: 1480px;
+	padding: 0 32px;
+	position: relative;
+	z-index: 3;
+}
+
+.schrack-shop-categories__grid {
+	display: grid;
+	gap: 14px;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.schrack-shop-category-card {
+	--schrack-category-a: #1f6fb2;
+	--schrack-category-b: #5fb0ec;
+	background: #fff;
+	border: 1px solid rgba(227, 231, 235, 0.85);
+	border-radius: 16px;
+	box-shadow: 0 8px 28px rgba(11, 18, 32, 0.1);
+	color: var(--schrack-shop-ink);
+	display: flex;
+	flex-direction: column;
+	min-height: 166px;
+	min-width: 0;
+	padding: 16px;
+	text-decoration: none;
+	transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.schrack-shop-category-card[data-tone="2"] {
+	--schrack-category-a: #2b8a5e;
+	--schrack-category-b: #4fbf8a;
+}
+
+.schrack-shop-category-card[data-tone="3"] {
+	--schrack-category-a: #7a4fc2;
+	--schrack-category-b: #a480e6;
+}
+
+.schrack-shop-category-card[data-tone="4"] {
+	--schrack-category-a: #c27a1f;
+	--schrack-category-b: #e6a94f;
+}
+
+.schrack-shop-category-card[data-tone="5"] {
+	--schrack-category-a: #c23b22;
+	--schrack-category-b: #e2683f;
+}
+
+.schrack-shop-category-card:hover,
+.schrack-shop-category-card:focus-visible {
+	border-color: color-mix(in srgb, var(--schrack-category-a) 32%, var(--schrack-shop-border));
+	box-shadow: var(--schrack-shop-shadow-hover);
+	color: var(--schrack-shop-ink);
+	outline: none;
+	transform: translateY(-4px);
+}
+
+.schrack-shop-category-card__initials {
+	align-items: center;
+	background: linear-gradient(135deg, var(--schrack-category-a), var(--schrack-category-b));
+	border-radius: 11px;
+	box-shadow: 0 6px 15px color-mix(in srgb, var(--schrack-category-a) 30%, transparent);
+	color: #fff;
+	display: inline-flex;
+	font-size: 13px;
+	font-weight: 850;
+	height: 40px;
+	justify-content: center;
+	margin-bottom: 12px;
+	width: 40px;
+}
+
+.schrack-shop-category-card > strong {
+	display: -webkit-box;
+	font-size: 13px;
+	font-weight: 800;
+	line-height: 1.32;
+	min-height: 2.64em;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+}
+
+.schrack-shop-category-card__meta {
+	align-items: center;
+	color: #8a96a1;
+	display: flex;
+	font-size: 11.5px;
+	font-weight: 650;
+	gap: 10px;
+	justify-content: space-between;
+	margin-top: auto;
+	padding-top: 10px;
+}
+
+.schrack-shop-category-card__meta > span:last-child {
+	color: var(--schrack-category-a);
+	font-size: 16px;
+	font-weight: 850;
+}
+
+.schrack-shop-categories__all {
+	align-items: center;
+	background: linear-gradient(90deg, var(--schrack-shop-accent), var(--schrack-shop-accent-bright));
+	border-radius: 14px;
+	box-shadow: 0 8px 20px rgba(31, 111, 178, 0.2);
+	color: #fff;
+	display: flex;
+	font-size: 13.5px;
+	font-weight: 800;
+	gap: 9px;
+	justify-content: center;
+	margin-top: 14px;
+	min-height: 46px;
+	padding: 11px 16px;
+	text-decoration: none;
+	transition: filter 160ms ease, transform 160ms ease;
+}
+
+.schrack-shop-categories__all:hover,
+.schrack-shop-categories__all:focus-visible {
+	color: #fff;
+	filter: brightness(1.07);
+	outline: none;
+	transform: translateY(-1px);
+}
+
+/* Existing WooCommerce archive layout. */
 body.schrack-shop-archive-page .two_columns_25_75 {
 	display: grid !important;
-	gap: 28px;
-	grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+	gap: 26px;
+	grid-template-columns: minmax(250px, 278px) minmax(0, 1fr);
 }
 
 body.schrack-shop-archive-page .two_columns_25_75 .column1,
@@ -38,52 +395,55 @@ body.schrack-shop-archive-page .two_columns_25_75 .column2 .column_inner {
 
 body.schrack-shop-archive-page .sidebar {
 	background: #fff;
-	border: 1px solid #d9dee7;
-	border-radius: 8px;
-	box-shadow: 0 14px 34px rgba(23, 32, 42, 0.07);
-	max-height: min(72vh, 760px);
+	border: 0;
+	border-radius: 18px;
+	box-shadow: var(--schrack-shop-shadow);
+	max-height: min(76vh, 820px);
 	overflow: auto !important;
-	padding: 14px;
+	padding: 20px;
 	position: sticky;
 	scrollbar-gutter: stable;
-	top: 18px;
+	top: 20px;
 }
 
 body.admin-bar.schrack-shop-archive-page .sidebar {
-	top: 50px;
+	top: 52px;
 }
 
 body.schrack-shop-archive-page .sidebar h4,
 body.schrack-shop-archive-page .sidebar .widgettitle {
-	color: #17202a;
-	font-size: 15px !important;
-	font-weight: 850 !important;
+	color: var(--schrack-shop-ink) !important;
+	font-family: Manrope, Inter, sans-serif !important;
+	font-size: 16px !important;
+	font-weight: 800 !important;
 	letter-spacing: 0 !important;
 	line-height: 1.2 !important;
-	margin: 0 0 12px !important;
+	margin: 0 0 16px !important;
 	text-transform: none !important;
 }
 
 body.schrack-shop-archive-page .schrack-shop-category-tools {
-	margin: 0 0 12px;
+	margin: 0 0 14px;
 }
 
 body.schrack-shop-archive-page .schrack-shop-category-tools input {
-	background: #f6f8fa;
-	border: 1px solid #d9dee7;
-	border-radius: 6px;
+	appearance: none;
+	background: #f7f8fa;
+	border: 1px solid var(--schrack-shop-border);
+	border-radius: 9px;
 	box-shadow: none;
-	color: #17202a;
+	color: var(--schrack-shop-ink);
 	font: inherit;
 	font-size: 13px;
-	min-height: 40px;
-	padding: 8px 10px;
+	min-height: 42px;
+	padding: 9px 11px;
 	width: 100%;
 }
 
 body.schrack-shop-archive-page .schrack-shop-category-tools input:focus {
-	border-color: #135e96;
-	box-shadow: 0 0 0 3px rgba(19, 94, 150, 0.14);
+	background: #fff;
+	border-color: var(--schrack-shop-accent);
+	box-shadow: 0 0 0 3px rgba(31, 111, 178, 0.14);
 	outline: 0;
 }
 
@@ -115,46 +475,53 @@ body.schrack-shop-archive-page .sidebar .wp-block-spacer {
 body.schrack-shop-archive-page .product-categories ul,
 body.schrack-shop-archive-page .wc-block-product-categories-list ul,
 body.schrack-shop-archive-page .wc-block-product-categories-list .wc-block-product-categories-list {
-	border-left: 1px solid #e3e8ef;
+	border-left: 1px solid var(--schrack-shop-border);
 	margin: 5px 0 5px 10px;
 	padding-left: 10px;
 }
 
 body.schrack-shop-archive-page .sidebar a {
-	border-radius: 6px;
-	color: #334050;
+	border-radius: 8px;
+	color: #3a4652;
 	display: block;
-	font-size: 12px;
-	font-weight: 700;
+	font-size: 12.5px;
+	font-weight: 650;
 	letter-spacing: 0;
-	line-height: 1.25;
+	line-height: 1.28;
 	overflow-wrap: anywhere;
-	padding: 6px 7px;
+	padding: 7px 8px;
 	text-decoration: none;
 	text-transform: none;
-	word-break: normal;
 }
 
 body.schrack-shop-archive-page .sidebar a:hover,
-body.schrack-shop-archive-page .sidebar a:focus {
+body.schrack-shop-archive-page .sidebar a:focus,
+body.schrack-shop-archive-page .sidebar .current-cat > a {
 	background: #eef5fb;
-	color: #135e96;
+	color: var(--schrack-shop-accent);
 }
 
 body.schrack-shop-archive-page .sidebar .count,
 body.schrack-shop-archive-page .sidebar .wc-block-product-categories-list-item-count {
-	color: #65707c;
+	color: #a0a8b1;
 	display: inline-flex;
 	font-size: 11px;
-	font-weight: 800;
+	font-weight: 750;
 	margin-left: 6px;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products .woocommerce {
-	display: grid;
-	gap: 16px;
-	grid-template-columns: minmax(0, 1fr) auto;
-	min-width: 0;
+.schrack-shop-toolbar {
+	align-items: center;
+	background: rgba(255, 255, 255, 0.88);
+	border: 1px solid rgba(227, 231, 235, 0.8);
+	border-radius: 14px;
+	box-shadow: var(--schrack-shop-shadow);
+	display: flex;
+	gap: 14px;
+	justify-content: space-between;
+	margin-bottom: 20px;
+	min-height: 66px;
+	padding: 12px 16px;
 }
 
 body.schrack-shop-archive-page .woocommerce-result-count,
@@ -165,46 +532,96 @@ body.schrack-shop-archive-page .woocommerce-ordering {
 }
 
 body.schrack-shop-archive-page .woocommerce-result-count {
-	align-self: center;
-	color: #65707c;
+	color: var(--schrack-shop-muted);
 	font-size: 13px;
-	font-weight: 750;
+	font-weight: 650;
 	line-height: 1.3 !important;
-	order: 1;
+}
+
+.schrack-shop-toolbar__controls {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	margin-left: auto;
 }
 
 body.schrack-shop-archive-page .woocommerce-ordering {
-	order: 2;
-	width: min(100%, 300px);
+	width: min(100%, 250px);
 }
 
 body.schrack-shop-archive-page .woocommerce-ordering select {
+	appearance: auto;
 	background: #fff;
-	border: 1px solid #d9dee7;
-	border-radius: 6px;
-	color: #17202a;
+	border: 1px solid var(--schrack-shop-border);
+	border-radius: 9px;
+	box-shadow: none;
+	color: var(--schrack-shop-ink);
 	font-size: 13px;
-	font-weight: 700;
+	font-weight: 650;
 	min-height: 42px;
-	padding: 8px 36px 8px 10px;
+	padding: 8px 34px 8px 11px;
 	width: 100%;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products {
+.schrack-shop-view-toggle {
+	background: #f4f6f8;
+	border-radius: 9px;
+	display: inline-flex;
+	flex: 0 0 auto;
+	gap: 3px;
+	padding: 3px;
+}
+
+.schrack-shop-view-toggle button {
+	align-items: center;
+	background: transparent;
+	border: 0;
+	border-radius: 7px;
+	color: #778391;
+	cursor: pointer;
+	display: inline-flex;
+	font: inherit;
+	font-size: 17px;
+	font-weight: 800;
+	height: 36px;
+	justify-content: center;
+	padding: 0;
+	width: 40px;
+}
+
+.schrack-shop-view-toggle button:hover,
+.schrack-shop-view-toggle button:focus-visible {
+	color: var(--schrack-shop-accent);
+	outline: none;
+}
+
+.schrack-shop-view-toggle button[aria-pressed="true"] {
+	background: #fff;
+	box-shadow: 0 2px 7px rgba(11, 18, 32, 0.1);
+	color: var(--schrack-shop-ink);
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products .woocommerce {
+	display: block;
+	min-width: 0;
+}
+
+body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products,
+body.schrack-shop-archive-page .woocommerce ul.products,
+body.schrack-shop-archive-page ul.products {
 	display: grid !important;
 	gap: 18px !important;
-	grid-column: 1 / -1;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)) !important;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)) !important;
 	margin: 0 !important;
 	min-width: 0;
 	padding: 0 !important;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product {
+body.schrack-shop-archive-page ul.products li.product {
 	background: #fff;
-	border: 1px solid #d9dee7;
-	border-radius: 8px;
-	box-shadow: 0 14px 34px rgba(23, 32, 42, 0.07);
+	border: 1px solid rgba(227, 231, 235, 0.9);
+	border-radius: 18px;
+	box-shadow: 0 4px 16px rgba(11, 18, 32, 0.06);
 	display: flex !important;
 	flex-direction: column;
 	float: none !important;
@@ -212,21 +629,26 @@ body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.product
 	min-width: 0;
 	overflow: hidden;
 	padding: 0 !important;
-	transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+	position: relative;
+	transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 	width: auto !important;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product:hover {
-	border-color: #bfcbd9;
-	box-shadow: 0 18px 40px rgba(23, 32, 42, 0.11);
-	transform: translateY(-2px);
+body.schrack-shop-archive-page ul.products li.product:hover {
+	border-color: rgba(31, 111, 178, 0.34);
+	box-shadow: var(--schrack-shop-shadow-hover);
+	transform: translateY(-5px);
+}
+
+body.schrack-shop-archive-page .top-product-section,
+body.schrack-shop-archive-page ul.products li.product > a:first-child .attachment-woocommerce_thumbnail,
+body.schrack-shop-archive-page ul.products li.product > a:first-child .woocommerce-placeholder {
+	background: linear-gradient(135deg, rgba(31, 111, 178, 0.12), rgba(95, 176, 236, 0.04));
 }
 
 body.schrack-shop-archive-page .top-product-section {
-	aspect-ratio: 1 / 1;
-	background: #f6f8fa;
-	border-bottom: 1px solid #e3e8ef;
 	display: grid !important;
+	height: 170px;
 	min-height: 0;
 	place-items: center;
 	position: relative;
@@ -242,88 +664,99 @@ body.schrack-shop-archive-page .top-product-section .image-wrapper {
 	width: 100%;
 }
 
-body.schrack-shop-archive-page .top-product-section img {
+body.schrack-shop-archive-page .top-product-section img,
+body.schrack-shop-archive-page ul.products li.product img {
 	display: block;
 	height: 100% !important;
+	margin: 0 !important;
 	object-fit: contain;
-	padding: 14px;
+	padding: 13px;
 	width: 100% !important;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product a.product-info {
-	color: #17202a;
-	display: grid !important;
-	flex: 1 1 auto;
-	gap: 9px;
-	min-width: 0;
-	padding: 12px;
+body.schrack-shop-archive-page ul.products li.product > a:first-child:not(.button):not(.added_to_cart) {
+	color: var(--schrack-shop-ink);
+	display: block;
 	text-decoration: none;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product h6,
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .woocommerce-loop-product__title {
-	color: #17202a;
+body.schrack-shop-archive-page ul.products li.product a.product-info {
+	color: var(--schrack-shop-ink);
+	display: grid !important;
+	flex: 1 1 auto;
+	gap: 8px;
+	min-width: 0;
+	padding: 16px;
+	text-decoration: none;
+}
+
+body.schrack-shop-archive-page ul.products li.product h2,
+body.schrack-shop-archive-page ul.products li.product h6,
+body.schrack-shop-archive-page ul.products li.product .woocommerce-loop-product__title {
+	color: var(--schrack-shop-ink) !important;
 	display: -webkit-box;
-	font-size: 13px !important;
-	font-weight: 800 !important;
+	font-size: 13.5px !important;
+	font-weight: 750 !important;
 	letter-spacing: 0 !important;
-	line-height: 1.3 !important;
+	line-height: 1.38 !important;
 	margin: 0 !important;
-	min-height: calc(1.3em * 3);
+	min-height: calc(1.38em * 3);
 	overflow: hidden;
 	overflow-wrap: anywhere;
+	padding: 16px 16px 0;
 	text-transform: none !important;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 3;
-	word-break: normal;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .price {
-	color: #17202a !important;
+body.schrack-shop-archive-page ul.products li.product a.product-info h2,
+body.schrack-shop-archive-page ul.products li.product a.product-info h6,
+body.schrack-shop-archive-page ul.products li.product a.product-info .woocommerce-loop-product__title {
+	padding: 0;
+}
+
+body.schrack-shop-archive-page ul.products li.product .price {
+	color: var(--schrack-shop-ink) !important;
 	display: block !important;
-	font-size: 18px !important;
-	font-weight: 850 !important;
+	font-family: Manrope, Inter, sans-serif;
+	font-size: 17px !important;
+	font-weight: 800 !important;
 	letter-spacing: 0 !important;
-	line-height: 1.1 !important;
+	line-height: 1.2 !important;
 	margin: auto 0 0 !important;
+	padding: 8px 16px 0;
 	text-transform: none !important;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .price::after {
-	color: #65707c;
-	content: "Pret cu TVA";
-	display: block;
-	font-size: 10px;
-	font-weight: 750;
-	letter-spacing: 0;
-	line-height: 1.1;
-	margin-top: 4px;
-	text-transform: none;
+body.schrack-shop-archive-page ul.products li.product a.product-info .price {
+	padding: 0;
 }
 
-body.schrack-shop-archive-page .out-of-stock-button {
+body.schrack-shop-archive-page .out-of-stock-button,
+body.schrack-shop-archive-page ul.products li.product .stock.out-of-stock {
 	align-items: center;
-	background: #fff5f5 !important;
-	border: 1px solid #efc5c5 !important;
+	background: rgba(255, 255, 255, 0.94) !important;
+	border: 0 !important;
 	border-radius: 999px !important;
-	box-shadow: 0 8px 20px rgba(23, 32, 42, 0.1);
+	box-shadow: 0 4px 12px rgba(11, 18, 32, 0.1);
 	color: #9f2426 !important;
 	display: inline-flex !important;
 	font-family: inherit !important;
-	font-size: 0 !important;
-	font-weight: 850 !important;
+	font-size: 11px !important;
+	font-weight: 800 !important;
 	height: auto !important;
 	justify-content: center;
-	left: 10px !important;
+	left: 12px !important;
 	letter-spacing: 0 !important;
 	line-height: 1 !important;
 	min-height: 28px;
 	min-width: 0 !important;
-	padding: 7px 9px !important;
+	padding: 7px 10px !important;
 	position: absolute !important;
 	text-transform: none !important;
-	top: 10px !important;
+	top: 12px !important;
 	width: auto !important;
+	z-index: 2;
 }
 
 body.schrack-shop-archive-page .out-of-stock-button-inner {
@@ -338,68 +771,541 @@ body.schrack-shop-archive-page .out-of-stock-button-inner::after {
 	white-space: nowrap;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .button,
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products li.product .added_to_cart {
+body.schrack-shop-archive-page ul.products li.product .add_to_cart_button {
 	align-items: center !important;
-	background: #b32d2e !important;
-	border: 1px solid #b32d2e !important;
-	border-radius: 6px !important;
+	align-self: flex-end;
+	background: var(--schrack-shop-ink) !important;
+	border: 0 !important;
+	border-radius: 11px !important;
 	color: #fff !important;
 	display: inline-flex !important;
-	font-size: 12px !important;
+	font-size: 0 !important;
 	font-weight: 850 !important;
+	height: 40px;
 	justify-content: center !important;
 	line-height: 1 !important;
-	min-height: 38px;
-	padding: 0 12px !important;
+	margin: 13px 16px 16px auto !important;
+	min-height: 40px;
+	padding: 0 !important;
 	text-align: center !important;
 	text-decoration: none !important;
-	text-transform: uppercase !important;
-	white-space: normal;
-	width: 100%;
+	text-transform: none !important;
+	transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+	width: 40px;
 }
 
-body.schrack-shop-archive-page .elementor-widget-woocommerce-products .woocommerce-pagination {
-	grid-column: 1 / -1;
+body.schrack-shop-archive-page ul.products li.product .add_to_cart_button::before {
+	content: "+";
+	font-family: inherit;
+	font-size: 22px;
+	font-weight: 500;
+	line-height: 1;
+}
+
+body.schrack-shop-archive-page ul.products li.product .add_to_cart_button::after {
+	content: none !important;
+	display: none !important;
+}
+
+body.schrack-shop-archive-page ul.products li.product .add_to_cart_button:hover,
+body.schrack-shop-archive-page ul.products li.product .add_to_cart_button:focus {
+	background: var(--schrack-shop-accent) !important;
+	color: #fff !important;
+	transform: translateY(-1px);
+}
+
+body.schrack-shop-archive-page ul.products li.product .button:not(.add_to_cart_button) {
+	align-items: center !important;
+	align-self: stretch;
+	background: var(--schrack-shop-ink) !important;
+	border: 0 !important;
+	border-radius: 10px !important;
+	color: #fff !important;
+	display: inline-flex !important;
+	font-size: 11px !important;
+	font-weight: 800 !important;
+	justify-content: center !important;
+	line-height: 1.2 !important;
+	margin: 13px 16px 16px !important;
+	min-height: 40px;
+	padding: 9px 13px !important;
+	text-align: center !important;
+	text-decoration: none !important;
+	text-transform: none !important;
+	transition: background-color 160ms ease, transform 160ms ease;
+	width: auto;
+}
+
+body.schrack-shop-archive-page ul.products li.product .button:not(.add_to_cart_button):hover,
+body.schrack-shop-archive-page ul.products li.product .button:not(.add_to_cart_button):focus {
+	background: var(--schrack-shop-accent) !important;
+	color: #fff !important;
+	transform: translateY(-1px);
+}
+
+body.schrack-shop-archive-page ul.products li.product .button:not(.add_to_cart_button)::before,
+body.schrack-shop-archive-page ul.products li.product .button:not(.add_to_cart_button)::after {
+	content: none !important;
+	display: none !important;
+}
+
+body.schrack-shop-archive-page ul.products li.product .added_to_cart {
+	background: #eef5fb;
+	border-radius: 9px;
+	color: var(--schrack-shop-accent);
+	font-size: 11px;
+	font-weight: 800;
+	margin: -8px 16px 14px;
+	padding: 8px 10px;
+	text-align: center;
+	text-decoration: none;
+}
+
+body.schrack-shop-archive-page .woocommerce-pagination {
+	margin-top: 32px;
+}
+
+/* Custom Schrack filter widget gets the same visual language and real controls. */
+body.schrack-shop-archive-page .schrack-product-filter {
+	--schrack-filter-accent: var(--schrack-shop-accent) !important;
+	--schrack-filter-action: var(--schrack-shop-ink) !important;
+	--schrack-filter-border: var(--schrack-shop-border) !important;
+	--schrack-filter-muted: var(--schrack-shop-muted) !important;
+	--schrack-filter-panel: #f7f8fa !important;
+	--schrack-filter-surface: #fff !important;
+	--schrack-filter-text: var(--schrack-shop-ink) !important;
+	--schrack-filter-sidebar-width: 278px !important;
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter__layout {
+	gap: 26px;
+	grid-template-columns: minmax(250px, 278px) minmax(0, 1fr);
+}
+
+body.schrack-shop-archive-page .schrack-product-filter__form {
+	border: 0;
+	border-radius: 18px;
+	box-shadow: var(--schrack-shop-shadow);
+	padding: 20px;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter__sidebar-head {
+	font-family: Manrope, Inter, sans-serif;
+	font-size: 16px;
+	font-weight: 800;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter__field input,
+body.schrack-shop-archive-page .schrack-product-filter__field select {
+	border-radius: 9px;
+	min-height: 42px;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter__button {
+	background: linear-gradient(90deg, var(--schrack-shop-accent), var(--schrack-shop-accent-bright));
+	border: 0;
+	border-radius: 11px;
+	min-height: 44px;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter__reset {
+	border-radius: 11px;
+	min-height: 44px;
+}
+
+body.schrack-shop-has-intro .schrack-category-explorer {
+	display: none;
+}
+
+body.schrack-shop-archive-page .schrack-shop-filter-toolbar {
+	margin-bottom: 20px;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter__summary {
+	color: var(--schrack-shop-muted);
+	font-size: 13px;
+	font-weight: 650;
+	margin: 0 0 14px;
+}
+
+body.schrack-shop-archive-page .schrack-shop-filter-toolbar + .schrack-product-filter__results > .schrack-product-filter__summary {
+	display: none;
+}
+
+body.schrack-shop-archive-page .schrack-shop-filter-toolbar__summary {
+	color: var(--schrack-shop-muted);
+	font-size: 13px;
+	font-weight: 650;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter__grid {
+	gap: 18px;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+
+body.schrack-shop-archive-page .schrack-product-card {
+	border: 1px solid rgba(227, 231, 235, 0.9);
+	border-radius: 18px;
+	box-shadow: 0 4px 16px rgba(11, 18, 32, 0.06);
+	transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+body.schrack-shop-archive-page .schrack-product-card:hover {
+	border-color: rgba(31, 111, 178, 0.34);
+	box-shadow: var(--schrack-shop-shadow-hover);
+	transform: translateY(-5px);
+}
+
+body.schrack-shop-archive-page .schrack-product-card__image {
+	aspect-ratio: auto;
+	background: linear-gradient(135deg, rgba(31, 111, 178, 0.12), rgba(95, 176, 236, 0.04));
+	height: 170px;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__image img {
+	padding: 13px;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__body {
+	gap: 8px;
+	padding: 16px;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__categories {
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: 0.035em;
+	order: -1;
+	text-transform: uppercase;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__title {
+	font-size: 13.5px;
+	font-weight: 750;
+	line-height: 1.38;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__price {
+	font-family: Manrope, Inter, sans-serif;
+	font-size: 17px;
+	font-weight: 800;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__stock {
+	background: rgba(255, 255, 255, 0.94);
+	border: 0;
+	box-shadow: 0 3px 9px rgba(11, 18, 32, 0.08);
+	font-size: 10.5px;
+	padding: 6px 8px;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__actions {
+	border: 0;
+	padding: 0 16px 16px;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__details {
+	border-radius: 10px;
+	min-height: 40px;
+}
+
+body.schrack-shop-archive-page .schrack-product-card__cart {
+	background: var(--schrack-shop-ink);
+	border-color: var(--schrack-shop-ink);
+	border-radius: 10px;
+	min-height: 40px;
+}
+
+/* List view for both archive card types. */
+body.schrack-shop-list-view.schrack-shop-archive-page ul.products {
+	display: flex !important;
+	flex-direction: column;
+	gap: 10px !important;
+}
+
+body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product {
+	align-items: center;
+	display: grid !important;
+	grid-template-columns: 150px minmax(0, 1fr) auto;
+	grid-template-rows: auto auto;
+	min-height: 150px;
+	overflow: visible;
+}
+
+body.schrack-shop-list-view.schrack-shop-archive-page .top-product-section,
+body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product > a:first-child:not(.button):not(.added_to_cart) {
+	grid-column: 1;
+	grid-row: 1 / span 2;
+	height: 150px;
+	overflow: hidden;
+}
+
+body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product a.product-info {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	padding: 18px;
+}
+
+body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product .button,
+body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product .add_to_cart_button {
+	grid-column: 3;
+	grid-row: 1 / span 2;
+	margin: 0 20px !important;
+}
+
+body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product .button:not(.add_to_cart_button) {
+	align-self: center;
+	max-width: 150px;
+	min-width: 118px;
+	width: auto;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-filter__grid {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card {
+	align-items: center;
+	display: grid;
+	grid-template-columns: 150px minmax(0, 1fr) minmax(190px, auto);
+	grid-template-rows: 1fr;
+	min-height: 150px;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__image {
+	height: 150px;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__body {
+	padding: 18px;
+}
+
+body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__actions,
+body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__actions.has-cart {
+	border-left: 1px solid var(--schrack-shop-border);
+	display: grid;
+	grid-template-columns: 1fr;
+	padding: 18px;
+}
+
+@media (max-width: 1180px) {
+	.schrack-shop-hero__content {
+		max-width: 54%;
+	}
+
+	.schrack-shop-hero__worker {
+		right: -80px;
+	}
+
+	.schrack-shop-categories__grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
 }
 
 @media (max-width: 900px) {
-	body.schrack-shop-archive-page .two_columns_25_75 {
-		display: grid !important;
+	body.schrack-shop-archive-page .container_inner.default_template_holder {
+		padding-inline: 22px !important;
+	}
+
+	.schrack-shop-hero {
+		min-height: 500px;
+		padding-inline: 28px;
+	}
+
+	.schrack-shop-hero__content {
+		max-width: 62%;
+	}
+
+	.schrack-shop-hero__worker {
+		opacity: 0.7;
+		right: -165px;
+	}
+
+	.schrack-shop-categories {
+		padding-inline: 22px;
+	}
+
+	body.schrack-shop-archive-page .two_columns_25_75,
+	body.schrack-shop-archive-page .schrack-product-filter__layout {
 		grid-template-columns: 1fr;
 	}
 
-	body.schrack-shop-archive-page .sidebar {
-		max-height: 360px;
-		position: relative;
-		top: auto;
+	body.schrack-shop-archive-page .sidebar,
+	body.schrack-shop-archive-page .schrack-product-filter__sidebar {
+		max-height: none;
+		position: static;
 	}
 
-	body.schrack-shop-archive-page .elementor-widget-woocommerce-products .woocommerce {
-		grid-template-columns: 1fr;
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card {
+		grid-template-columns: 140px minmax(0, 1fr);
 	}
 
-	body.schrack-shop-archive-page .woocommerce-ordering {
-		order: 1;
-		width: 100%;
-	}
-
-	body.schrack-shop-archive-page .woocommerce-result-count {
-		order: 2;
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__actions,
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__actions.has-cart {
+		border-left: 0;
+		grid-column: 2;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		padding: 0 18px 18px;
 	}
 }
 
-@media (max-width: 560px) {
+@media (max-width: 720px) {
+	.schrack-shop-hero {
+		min-height: auto;
+		padding: 44px 20px 88px;
+	}
+
+	.schrack-shop-hero__worker {
+		display: none;
+	}
+
+	.schrack-shop-hero__content {
+		max-width: none;
+	}
+
+	.schrack-shop-hero h1 {
+		font-size: 34px !important;
+	}
+
+	.schrack-shop-categories {
+		margin-top: -48px;
+		padding-inline: 18px;
+	}
+
+	.schrack-shop-categories__grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.schrack-shop-category-card {
+		min-height: 158px;
+	}
+
+	.schrack-shop-toolbar {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.schrack-shop-toolbar__controls {
+		justify-content: space-between;
+		margin-left: 0;
+	}
+
+	body.schrack-shop-archive-page .woocommerce-ordering {
+		flex: 1 1 auto;
+		width: auto;
+	}
+
+	body.schrack-shop-list-view.schrack-shop-archive-page ul.products,
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-filter__grid {
+		display: grid !important;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product,
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card {
+		display: flex !important;
+		min-height: 0;
+	}
+
+	body.schrack-shop-list-view.schrack-shop-archive-page .top-product-section,
+	body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product > a:first-child:not(.button):not(.added_to_cart),
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__image {
+		height: 170px;
+	}
+
+	body.schrack-shop-list-view.schrack-shop-archive-page ul.products li.product .button:not(.add_to_cart_button) {
+		align-self: stretch;
+		margin: 13px 16px 16px !important;
+		max-width: none;
+		width: auto;
+	}
+
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__actions,
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-card__actions.has-cart {
+		border: 0;
+		display: grid;
+		grid-template-columns: 1fr;
+		padding: 0 16px 16px;
+	}
+}
+
+@media (max-width: 520px) {
 	body.schrack-shop-archive-page .container_inner.default_template_holder {
-		padding-top: 18px !important;
+		padding: 24px 16px 58px !important;
 	}
 
-	body.schrack-shop-archive-page .title h1,
-	body.schrack-shop-archive-page .title_outer h1 {
-		font-size: 28px !important;
+	.schrack-shop-hero h1 {
+		font-size: 30px !important;
 	}
 
-	body.schrack-shop-archive-page .elementor-widget-woocommerce-products ul.products {
+	.schrack-shop-hero__eyebrow {
+		align-items: flex-start;
+		border-radius: 14px;
+	}
+
+	.schrack-shop-hero__eyebrow span {
+		margin-top: 5px;
+	}
+
+	.schrack-shop-hero__search {
+		grid-template-columns: 1fr;
+	}
+
+	.schrack-shop-hero__search input {
+		border-radius: 12px 12px 0 0;
+	}
+
+	.schrack-shop-hero__search button {
+		border-radius: 0 0 12px 12px;
+	}
+
+	.schrack-shop-hero__stats {
+		gap: 18px 24px;
+	}
+
+	.schrack-shop-hero__stat {
+		min-width: calc(50% - 12px);
+	}
+
+	.schrack-shop-categories {
+		padding-inline: 12px;
+	}
+
+	.schrack-shop-categories__grid,
+	body.schrack-shop-list-view.schrack-shop-archive-page ul.products,
+	body.schrack-shop-archive-page .schrack-product-filter.is-list-view .schrack-product-filter__grid,
+	body.schrack-shop-archive-page ul.products,
+	body.schrack-shop-archive-page .schrack-product-filter__grid {
 		grid-template-columns: 1fr !important;
+	}
+
+	.schrack-shop-category-card {
+		min-height: 150px;
+	}
+
+	.schrack-shop-toolbar__controls {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.schrack-shop-view-toggle {
+		align-self: flex-end;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.schrack-shop-hero__eyebrow span {
+		animation: none;
+	}
+
+	.schrack-shop-category-card,
+	.schrack-shop-categories__all,
+	.schrack-shop-hero__search button,
+	body.schrack-shop-archive-page ul.products li.product,
+	body.schrack-shop-archive-page .schrack-product-card {
+		transition: none;
 	}
 }
