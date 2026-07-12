@@ -1341,19 +1341,33 @@ body.schrack-shop-archive-page .schrack-product-card__stock {
 
 body.schrack-shop-archive-page .schrack-product-card__actions {
 	border: 0;
-	padding: 0 16px 16px;
+	gap: 10px;
+	padding: 0 18px 18px;
 }
 
 body.schrack-shop-archive-page .schrack-product-card__details {
 	border-radius: 10px;
-	min-height: 40px;
+	min-height: 44px;
+	padding-inline: 14px;
 }
 
-body.schrack-shop-archive-page .schrack-product-card__cart {
+body.schrack-shop-archive-page a.schrack-product-card__cart.button,
+body.schrack-shop-archive-page .schrack-product-card__actions .added_to_cart {
 	background: var(--schrack-shop-ink);
 	border-color: var(--schrack-shop-ink);
 	border-radius: 10px;
-	min-height: 40px;
+	color: #fff !important;
+	min-height: 44px;
+	padding-inline: 14px !important;
+}
+
+body.schrack-shop-archive-page a.schrack-product-card__cart.button:hover,
+body.schrack-shop-archive-page a.schrack-product-card__cart.button:focus,
+body.schrack-shop-archive-page .schrack-product-card__actions .added_to_cart:hover,
+body.schrack-shop-archive-page .schrack-product-card__actions .added_to_cart:focus {
+	background: var(--schrack-shop-accent);
+	border-color: var(--schrack-shop-accent);
+	color: #fff !important;
 }
 
 /* List view for both archive card types. */

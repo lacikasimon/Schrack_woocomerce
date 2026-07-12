@@ -1230,20 +1230,21 @@
 .schrack-product-card__cart,
 .schrack-product-card__actions .added_to_cart {
 	align-items: center !important;
+	color: #fff !important;
 	font-size: 12px;
-	height: 40px;
+	height: auto;
 	justify-content: center !important;
-	line-height: 1 !important;
-	min-height: 40px;
-	overflow-wrap: normal;
-	padding: 0 8px !important;
+	line-height: 1.2 !important;
+	min-height: 44px;
+	overflow-wrap: anywhere;
+	padding: 9px 14px !important;
 	place-content: center;
 	place-items: center;
 	text-align: center !important;
 	text-align-last: center;
 	text-indent: 0 !important;
 	text-transform: uppercase;
-	white-space: nowrap;
+	white-space: normal;
 }
 
 .schrack-product-card__cart::before,
