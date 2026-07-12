@@ -22,7 +22,7 @@
 
 		root.classList.remove('is-open', 'is-opening');
 		toggle.setAttribute('aria-expanded', 'false');
-		toggle.setAttribute('aria-label', 'Deschide suport client');
+		toggle.setAttribute('aria-label', 'Deschide WhatsApp și suport client');
 		panel.hidden = true;
 	}
 

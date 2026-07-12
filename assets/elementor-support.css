@@ -32,6 +32,11 @@
 	width: 20px;
 }
 
+.schrack-support svg.schrack-support__icon--whatsapp {
+	fill: currentColor;
+	stroke: none;
+}
+
 .schrack-support__panel {
 	background: #fff;
 	border: 1px solid color-mix(in srgb, var(--schrack-support-accent) 18%, #dbeafe);
@@ -159,7 +164,7 @@
 
 .schrack-support__toggle {
 	align-items: center;
-	background: var(--schrack-support-deep);
+	background: var(--schrack-support-action);
 	border: 0;
 	border-radius: 999px;
 	box-shadow: 0 16px 36px rgba(15, 23, 42, 0.25), 0 0 0 4px #fff;
@@ -176,7 +181,7 @@
 
 .schrack-support__toggle:hover,
 .schrack-support__toggle:focus-visible {
-	background: color-mix(in srgb, var(--schrack-support-accent) 46%, var(--schrack-support-deep));
+	background: color-mix(in srgb, var(--schrack-support-action) 82%, #052e16);
 	outline: none;
 	transform: translateY(-1px);
 }

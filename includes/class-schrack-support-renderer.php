@@ -68,7 +68,7 @@ class Schrack_Support_Renderer {
 
 				<div class="schrack-support__body">
 					<a class="schrack-support__action is-whatsapp" href="<?php echo esc_url( $this->whatsapp_url( $settings ) ); ?>" target="_blank" rel="noopener noreferrer">
-						<?php echo $this->icon( 'message' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+						<?php echo $this->icon( 'whatsapp' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 						<span><?php echo esc_html( $settings['whatsapp_label'] ); ?></span>
 					</a>
 
@@ -89,12 +89,12 @@ class Schrack_Support_Renderer {
 			<button
 				class="schrack-support__toggle"
 				type="button"
-				aria-label="<?php esc_attr_e( 'Deschide suport client', 'schrack-woocommerce-sync' ); ?>"
+				aria-label="<?php esc_attr_e( 'Deschide WhatsApp și suport client', 'schrack-woocommerce-sync' ); ?>"
 				aria-controls="<?php echo esc_attr( $panel_id ); ?>"
 				aria-expanded="false"
 				data-support-toggle
 			>
-				<span class="schrack-support__toggle-open" aria-hidden="true"><?php echo $this->icon( 'message' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+				<span class="schrack-support__toggle-open" aria-hidden="true"><?php echo $this->icon( 'whatsapp' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 				<span class="schrack-support__toggle-close" aria-hidden="true"><?php echo $this->icon( 'close' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 			</button>
 		</div>
@@ -166,7 +166,7 @@ class Schrack_Support_Renderer {
 	 */
 	private function icon( string $name ): string {
 		$icons = array(
-			'message' => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.7 8.7 0 0 1-3.8-.9L3 20l1.1-4.8a8.2 8.2 0 0 1-.9-3.7 8.4 8.4 0 0 1 17.8 0Z"/><path d="M8 10.5h8M8 14h5"/></svg>',
+			'whatsapp' => '<svg class="schrack-support__icon--whatsapp" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994.001C3.627.001.068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L.001 16l4.204-1.102a7.93 7.93 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93a7.9 7.9 0 0 0-2.328-5.607m-5.607 12.2a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.066-.315-.099-.445.099-.133.197-.513.646-.627.775-.116.133-.232.15-.43.05-1.17-.578-1.94-1.034-2.718-2.348-.205-.353.205-.329.59-1.096.066-.133.033-.25-.017-.349-.05-.099-.445-1.074-.61-1.47-.16-.389-.323-.335-.445-.34-.116-.007-.249-.007-.381-.007a.73.73 0 0 0-.529.25c-.182.198-.694.678-.694 1.654s.71 1.916.81 2.049c.098.132 1.394 2.132 3.383 2.992.47.205.84.33 1.129.422.475.151.906.129 1.248.078.38-.058 1.171-.48 1.338-.943.164-.462.164-.858.116-.943-.05-.083-.182-.132-.38-.23" fill="currentColor" stroke="none"/></svg>',
 			'phone'   => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>',
 			'send'    => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></svg>',
 			'close'   => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
