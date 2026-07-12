@@ -501,6 +501,7 @@ class Schrack_Account_Renderer {
 	private function account_section_panel( string $section, int $user_id, array $settings ): string {
 		return match ( $section ) {
 			'orders'     => $this->orders_section( $user_id, $settings ),
+			'returns'    => $this->returns_section( $user_id ),
 			'order'      => $this->order_detail_section( $user_id ),
 			'addresses'  => $this->address_form_section( $user_id ),
 			'account'    => $this->account_form_section( $user_id ),
@@ -541,6 +542,59 @@ class Schrack_Account_Renderer {
 						<?php if ( $order instanceof WC_Order ) : ?>
 							<?php echo $this->order_card( $order ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 						<?php endif; ?>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders orders with an available or already submitted return request.
+	 */
+	private function returns_section( int $user_id ): string {
+		$return_manager = new Schrack_Return_Manager();
+		$return_orders  = array();
+
+		foreach ( $this->recent_orders( $user_id, 50 ) as $order ) {
+			if ( ! $order instanceof WC_Order ) {
+				continue;
+			}
+
+			$request     = $return_manager->latest_request( $order );
+			$eligibility = $return_manager->get_eligibility( $order );
+
+			if ( is_array( $request ) || $eligibility['eligible'] ) {
+				$return_orders[] = array(
+					'order'       => $order,
+					'has_request' => is_array( $request ),
+					'eligibility' => $eligibility,
+				);
+			}
+		}
+
+		ob_start();
+		?>
+		<div class="schrack-account__panel schrack-account__panel--wide schrack-account__section" id="schrack-account-returns">
+			<div class="schrack-account__panel-head">
+				<div>
+					<h3><?php esc_html_e( 'Retur', 'schrack-woocommerce-sync' ); ?></h3>
+					<p><?php esc_html_e( 'Alege comanda pentru care vrei sa soliciti un retur sau verifica starea unei cereri trimise.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
+				<a href="<?php echo esc_url( $this->section_url( 'dashboard' ) ); ?>"><?php esc_html_e( 'Inapoi la sumar', 'schrack-woocommerce-sync' ); ?></a>
+			</div>
+
+			<?php if ( empty( $return_orders ) ) : ?>
+				<div class="schrack-account__empty">
+					<p><?php esc_html_e( 'Nu exista momentan comenzi eligibile sau cereri de retur in acest cont.', 'schrack-woocommerce-sync' ); ?></p>
+					<a class="schrack-account__button is-secondary" href="<?php echo esc_url( $this->section_url( 'orders' ) ); ?>"><?php esc_html_e( 'Vezi comenzile mele', 'schrack-woocommerce-sync' ); ?></a>
+				</div>
+			<?php else : ?>
+				<div class="schrack-account__order-list is-full">
+					<?php foreach ( $return_orders as $return_order ) : ?>
+						<?php echo $this->return_order_card( $return_order['order'], $return_order['has_request'], $return_order['eligibility'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
@@ -899,6 +953,7 @@ class Schrack_Account_Renderer {
 		$active_link = 'order' === $active_section ? 'orders' : $active_section;
 		$links = array(
 			array( 'section' => 'orders', 'label' => __( 'Comenzile mele', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'orders' ) ),
+			array( 'section' => 'returns', 'label' => __( 'Retur', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'returns' ) ),
 			array( 'section' => 'addresses', 'label' => __( 'Adrese facturare si livrare', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'addresses' ) ),
 			array( 'section' => 'account', 'label' => __( 'Detalii cont', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'account' ) ),
 			array( 'section' => 'newsletter', 'label' => __( 'Newsletter', 'schrack-woocommerce-sync' ), 'url' => $this->section_url( 'newsletter' ) ),
@@ -919,7 +974,7 @@ class Schrack_Account_Renderer {
 			<div class="schrack-account__panel-head">
 				<div>
 					<h3><?php esc_html_e( 'Actiuni rapide', 'schrack-woocommerce-sync' ); ?></h3>
-					<p><?php esc_html_e( 'Navigare directa in cont, comenzi, facturare si cos.', 'schrack-woocommerce-sync' ); ?></p>
+					<p><?php esc_html_e( 'Navigare directa in cont, comenzi, retururi, facturare si cos.', 'schrack-woocommerce-sync' ); ?></p>
 				</div>
 			</div>
 			<div class="schrack-account__link-list">
@@ -1003,6 +1058,50 @@ class Schrack_Account_Renderer {
 				<small><?php esc_html_e( 'Total', 'schrack-woocommerce-sync' ); ?></small>
 				<strong><?php echo wp_kses_post( $order->get_formatted_order_total() ); ?></strong>
 				<em><?php esc_html_e( 'Detalii', 'schrack-woocommerce-sync' ); ?></em>
+			</span>
+		</a>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders one order entry for the returns overview.
+	 *
+	 * @param array{eligible:bool,message:string,deadline:string,days_remaining:int} $eligibility Return eligibility.
+	 */
+	private function return_order_card( WC_Order $order, bool $has_request, array $eligibility ): string {
+		$order_date = $order->get_date_created();
+		$items      = $this->order_preview_items( $order );
+		$label      = $has_request
+			? __( 'Retur solicitat', 'schrack-woocommerce-sync' )
+			: sprintf(
+				/* translators: %d: remaining return days. */
+				_n( 'Retur disponibil: %d zi', 'Retur disponibil: %d zile', $eligibility['days_remaining'], 'schrack-woocommerce-sync' ),
+				$eligibility['days_remaining']
+			);
+		$action     = $has_request ? __( 'Vezi returul', 'schrack-woocommerce-sync' ) : __( 'Solicita retur', 'schrack-woocommerce-sync' );
+
+		ob_start();
+		?>
+		<a class="schrack-account__order-row" href="<?php echo esc_url( $this->return_order_url( (int) $order->get_id() ) ); ?>">
+			<span class="schrack-account__order-main">
+				<strong>#<?php echo esc_html( $order->get_order_number() ); ?></strong>
+				<small><?php echo esc_html( $order_date ? wc_format_datetime( $order_date ) : '-' ); ?></small>
+				<em class="schrack-account__order-status <?php echo esc_attr( $has_request ? 'is-return' : 'is-return-eligible' ); ?>"><?php echo esc_html( $label ); ?></em>
+			</span>
+			<span class="schrack-account__order-products">
+				<strong><?php echo esc_html( $this->order_item_count_label( $order ) ); ?></strong>
+				<small><?php echo esc_html( $items ); ?></small>
+			</span>
+			<span class="schrack-account__order-commercial">
+				<small><?php esc_html_e( 'Termen retur', 'schrack-woocommerce-sync' ); ?></small>
+				<strong><?php echo esc_html( '' !== $eligibility['deadline'] ? $eligibility['deadline'] : '-' ); ?></strong>
+			</span>
+			<span class="schrack-account__order-total">
+				<small><?php esc_html_e( 'Comanda', 'schrack-woocommerce-sync' ); ?></small>
+				<strong><?php echo wp_kses_post( $order->get_formatted_order_total() ); ?></strong>
+				<em><?php echo esc_html( $action ); ?></em>
 			</span>
 		</a>
 		<?php
@@ -1625,7 +1724,7 @@ class Schrack_Account_Renderer {
 	private function active_section(): string {
 		$has_section = isset( $_GET[ self::SECTION_QUERY_ARG ] );
 		$section     = $has_section ? sanitize_key( wp_unslash( (string) $_GET[ self::SECTION_QUERY_ARG ] ) ) : $this->section_from_woocommerce_endpoint();
-		$allowed = array( 'dashboard', 'orders', 'order', 'addresses', 'account', 'newsletter' );
+		$allowed = array( 'dashboard', 'orders', 'returns', 'order', 'addresses', 'account', 'newsletter' );
 		$order_id = $this->requested_order_id();
 
 		if ( 'order' === $section && 0 === $order_id ) {
@@ -1659,6 +1758,19 @@ class Schrack_Account_Renderer {
 			),
 			$this->account_page_url()
 		) . '#schrack-account-order';
+	}
+
+	/**
+	 * Returns the order URL focused on the return panel.
+	 */
+	private function return_order_url( int $order_id ): string {
+		return add_query_arg(
+			array(
+				self::SECTION_QUERY_ARG => 'order',
+				self::ORDER_QUERY_ARG   => max( 0, $order_id ),
+			),
+			$this->account_page_url()
+		) . '#schrack-order-return';
 	}
 
 	/**

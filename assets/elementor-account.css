@@ -636,6 +636,7 @@
 
 .schrack-account__order-main strong,
 .schrack-account__order-products strong,
+.schrack-account__order-commercial strong,
 .schrack-account__order-total strong {
 	color: var(--schrack-account-text);
 	font-size: 15px;
