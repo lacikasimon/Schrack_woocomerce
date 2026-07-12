@@ -69,6 +69,12 @@ class Schrack_Product_Filter_Renderer {
 			<div class="schrack-product-filter__layout">
 				<aside class="schrack-product-filter__sidebar">
 					<form id="<?php echo esc_attr( $form_id ); ?>" class="schrack-product-filter__form" method="get">
+						<input
+							type="hidden"
+							name="include_descendants"
+			value="<?php echo esc_attr( ! empty( $filters['include_descendants'] ) ? 'yes' : 'no' ); ?>"
+							data-include-descendant-products
+						>
 						<div class="schrack-product-filter__sidebar-head">
 							<div class="schrack-product-filter__sidebar-title">
 								<span><?php esc_html_e( 'Filtre', 'schrack-woocommerce-sync' ); ?></span>
@@ -508,6 +514,7 @@ class Schrack_Product_Filter_Renderer {
 			'min_price'            => '',
 			'max_price'            => '',
 			'include_out_of_stock' => 'no',
+			'include_descendants'  => 'no',
 			'manufacturer'         => '',
 			'product_line'         => '',
 			'special_offer_only'   => 'no',
@@ -543,7 +550,7 @@ class Schrack_Product_Filter_Renderer {
 			}
 		}
 
-		foreach ( array( 'category_search', 'min_price', 'max_price', 'include_out_of_stock', 'manufacturer', 'product_line', 'special_offer_only', 'orderby', 'paged' ) as $key ) {
+		foreach ( array( 'category_search', 'min_price', 'max_price', 'include_out_of_stock', 'include_descendants', 'manufacturer', 'product_line', 'special_offer_only', 'orderby', 'paged' ) as $key ) {
 			$value = $this->request_value( $key );
 
 			if ( '' !== $value ) {
@@ -1024,6 +1031,12 @@ class Schrack_Product_Filter_Renderer {
 
 		$visible_category_limit = 8;
 		$hidden_category_count  = max( 0, count( $child_categories ) - $visible_category_limit );
+		$show_descendant_products = $current_category instanceof WP_Term
+			&& ! empty( $child_categories )
+			&& ! $this->truthy( $filters['include_descendants'] ?? false );
+		$descendant_product_count = $show_descendant_products
+			? $this->available_product_count_for_category_tree( (int) $current_category->term_id )
+			: 0;
 
 		$title       = $current_category instanceof WP_Term ? $current_category->name : __( 'Categorii produse', 'schrack-woocommerce-sync' );
 		$eyebrow     = $current_category instanceof WP_Term ? __( 'Categoria curenta', 'schrack-woocommerce-sync' ) : __( 'Catalog produse', 'schrack-woocommerce-sync' );
@@ -1047,6 +1060,24 @@ class Schrack_Product_Filter_Renderer {
 
 			<?php if ( '' !== $description ) : ?>
 				<p class="schrack-category-explorer__description"><?php echo esc_html( wp_trim_words( $description, 28 ) ); ?></p>
+			<?php endif; ?>
+
+			<?php if ( $show_descendant_products && $descendant_product_count > 0 ) : ?>
+				<button type="button" class="schrack-category-explorer__products" data-category-explorer-products>
+					<span><?php esc_html_e( 'Vezi toate produsele din subcategorii', 'schrack-woocommerce-sync' ); ?></span>
+					<small>
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: %s: available product count in the current category tree. */
+								__( '%s produse disponibile', 'schrack-woocommerce-sync' ),
+								number_format_i18n( $descendant_product_count )
+							)
+						);
+						?>
+					</small>
+					<span class="schrack-category-explorer__products-arrow" aria-hidden="true">&rarr;</span>
+				</button>
 			<?php endif; ?>
 
 			<?php if ( count( $child_categories ) > $visible_category_limit ) : ?>
@@ -1149,6 +1180,10 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function should_show_category_level_only( array $filters ): bool {
 		$category_id = absint( $filters['category'] ?? 0 );
+
+		if ( $this->truthy( $filters['include_descendants'] ?? false ) ) {
+			return false;
+		}
 
 		if ( $category_id <= 0 || ! $this->is_plain_category_browse( $filters ) ) {
 			return false;
@@ -2579,6 +2614,7 @@ class Schrack_Product_Filter_Renderer {
 			'min_price'            => $min_price,
 			'max_price'            => $max_price,
 			'include_out_of_stock' => $this->truthy( $filters['include_out_of_stock'] ?? 'no' ),
+			'include_descendants'  => $this->truthy( $filters['include_descendants'] ?? 'no' ),
 			'manufacturer'         => sanitize_text_field( (string) ( $filters['manufacturer'] ?? '' ) ),
 			'product_line'         => sanitize_text_field( (string) ( $filters['product_line'] ?? '' ) ),
 			'special_offer_only'   => $this->truthy( $filters['special_offer_only'] ?? 'no' ),

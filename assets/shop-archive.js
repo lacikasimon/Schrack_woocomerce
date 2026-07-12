@@ -350,6 +350,15 @@
 			catalog.id = 'schrack-shop-catalog';
 		}
 
+		if (window.location.hash === '#schrack-shop-catalog') {
+			window.requestAnimationFrame(function () {
+				catalog.scrollIntoView({
+					behavior: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+					block: 'start'
+				});
+			});
+		}
+
 		document.querySelectorAll('[data-shop-category-jump]').forEach(function (link) {
 			link.addEventListener('click', function (event) {
 				var searchInput = document.querySelector('.schrack-shop-category-tools input, [data-category-search]');

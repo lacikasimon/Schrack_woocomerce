@@ -75,14 +75,14 @@ class Schrack_Elementor {
 			'schrack-wc-product-filter',
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-products.css',
 			array(),
-			SCHRACK_WC_SYNC_VERSION
+			$this->asset_version( 'assets/elementor-products.css' )
 		);
 
 		wp_register_script(
 			'schrack-wc-product-filter',
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-products.js',
 			array(),
-			SCHRACK_WC_SYNC_VERSION,
+			$this->asset_version( 'assets/elementor-products.js' ),
 			$this->deferred_script_args()
 		);
 
@@ -314,10 +314,16 @@ class Schrack_Elementor {
 		$product_count  = $is_category ? $this->shop_category_available_product_count( $category ) : $this->shop_available_product_count();
 		$category_count = $is_category ? $this->shop_child_category_count( $category ) : $this->shop_category_count();
 		$categories     = $is_category ? array() : $this->shop_root_categories();
-		$description    = '';
+		$description      = '';
+		$all_products_url = '';
 
 		if ( $is_category ) {
 			$description = wp_trim_words( wp_strip_all_tags( term_description( (int) $category->term_id, 'product_cat' ) ), 28, '…' );
+			$category_link = get_term_link( $category, 'product_cat' );
+
+			if ( $category_count > 0 && ! is_wp_error( $category_link ) ) {
+				$all_products_url = add_query_arg( 'include_descendants', 'yes', (string) $category_link ) . '#schrack-shop-catalog';
+			}
 
 			if ( '' === $description ) {
 				$description = sprintf(
@@ -421,6 +427,16 @@ class Schrack_Elementor {
 							</div>
 						<?php endforeach; ?>
 					</div>
+
+					<?php if ( '' !== $all_products_url && ! $this->descendant_products_requested() ) : ?>
+						<a class="schrack-shop-hero__all-products" href="<?php echo esc_url( $all_products_url ); ?>">
+							<span>
+								<strong><?php esc_html_e( 'Vezi toate produsele', 'schrack-woocommerce-sync' ); ?></strong>
+								<small><?php esc_html_e( 'Inclusiv produsele din toate subcategoriile', 'schrack-woocommerce-sync' ); ?></small>
+							</span>
+							<i aria-hidden="true">&rarr;</i>
+						</a>
+					<?php endif; ?>
 				</div>
 			</section>
 
@@ -590,10 +606,25 @@ class Schrack_Elementor {
 	 */
 	public function category_archive_display_mode( string $display_mode ): string {
 		if ( $this->current_product_category_has_children() ) {
-			return 'subcategories';
+			return $this->descendant_products_requested() ? 'both' : 'subcategories';
 		}
 
 		return $display_mode;
+	}
+
+	/**
+	 * Returns whether the shopper explicitly requested the complete product tree.
+	 */
+	private function descendant_products_requested(): bool {
+		$raw_value = isset( $_GET['include_descendants'] ) ? $_GET['include_descendants'] : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+		if ( ! is_scalar( $raw_value ) ) {
+			return false;
+		}
+
+		$value = sanitize_text_field( wp_unslash( (string) $raw_value ) );
+
+		return in_array( strtolower( $value ), array( '1', 'yes', 'true' ), true );
 	}
 
 	/**
@@ -1087,6 +1118,9 @@ class Schrack_Elementor {
 			'include_out_of_stock' => isset( $_POST['stock_filter_present'] )
 				? ( isset( $_POST['in_stock_only'] ) ? 'no' : 'yes' )
 				: ( isset( $_POST['include_out_of_stock'] ) ? wp_unslash( (string) $_POST['include_out_of_stock'] ) : '' ),
+			'include_descendants'  => isset( $_POST['include_descendants'] ) && is_scalar( $_POST['include_descendants'] )
+				? wp_unslash( (string) $_POST['include_descendants'] )
+				: 'no',
 			'manufacturer'         => isset( $_POST['manufacturer'] ) ? wp_unslash( (string) $_POST['manufacturer'] ) : '',
 			'product_line'         => isset( $_POST['product_line'] ) ? wp_unslash( (string) $_POST['product_line'] ) : '',
 			'special_offer_only'   => isset( $_POST['special_offer_only'] ) ? wp_unslash( (string) $_POST['special_offer_only'] ) : '',

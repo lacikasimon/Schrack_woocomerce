@@ -251,6 +251,65 @@ body.schrack-shop-archive-page .container_inner.default_template_holder {
 	font-weight: 600;
 }
 
+.schrack-shop-hero__all-products {
+	align-items: center;
+	background: rgba(255, 255, 255, 0.11);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 12px;
+	color: #fff;
+	display: inline-flex;
+	gap: 16px;
+	justify-content: space-between;
+	margin-top: 24px;
+	max-width: 430px;
+	min-height: 58px;
+	padding: 11px 12px 11px 16px;
+	text-decoration: none;
+	transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+	width: 100%;
+}
+
+.schrack-shop-hero__all-products > span {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+
+.schrack-shop-hero__all-products strong {
+	color: #fff;
+	font-size: 14px;
+	font-weight: 800;
+	line-height: 1.25;
+}
+
+.schrack-shop-hero__all-products small {
+	color: #cbd7ea;
+	font-size: 11.5px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.schrack-shop-hero__all-products i {
+	align-items: center;
+	background: linear-gradient(135deg, var(--schrack-shop-accent), var(--schrack-shop-accent-bright));
+	border-radius: 999px;
+	display: inline-flex;
+	flex: 0 0 34px;
+	font-size: 18px;
+	font-style: normal;
+	height: 34px;
+	justify-content: center;
+}
+
+.schrack-shop-hero__all-products:hover,
+.schrack-shop-hero__all-products:focus-visible {
+	background: rgba(255, 255, 255, 0.17);
+	border-color: rgba(255, 255, 255, 0.36);
+	color: #fff;
+	outline: none;
+	transform: translateY(-1px);
+}
+
 @keyframes schrack-shop-glow {
 	0%,
 	100% {
