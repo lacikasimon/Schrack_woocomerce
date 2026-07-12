@@ -279,37 +279,63 @@ class Schrack_Elementor {
 			$classes[] = 'schrack-shop-main-page';
 		}
 
+		if ( $this->current_product_category() instanceof WP_Term ) {
+			$classes[] = 'schrack-shop-category-page';
+		}
+
+		if ( $this->is_shop_intro_context() ) {
+			$classes[] = 'schrack-shop-has-intro';
+		}
+
 		return $classes;
 	}
 
 	/**
-	 * Renders the redesigned content introduction on the main shop page.
+	 * Renders the shared catalog introduction on shop and product-category pages.
 	 *
 	 * The active theme remains responsible for the site header and footer. This
 	 * block is attached to the WooCommerce content hook before the catalog
 	 * wrapper so it can use the full available width without replacing either.
 	 */
 	public function render_shop_archive_intro(): void {
-		if ( $this->shop_intro_rendered || ! $this->is_main_shop_page() ) {
+		if ( $this->shop_intro_rendered || ! $this->is_shop_intro_context() ) {
 			return;
 		}
 
 		$this->shop_intro_rendered = true;
 
+		$category       = $this->current_product_category();
+		$is_category    = $category instanceof WP_Term;
 		$shop_url       = get_permalink( wc_get_page_id( 'shop' ) );
 		$shop_url       = is_string( $shop_url ) && '' !== $shop_url ? $shop_url : home_url( '/' );
+		$search_action  = $is_category ? get_term_link( $category, 'product_cat' ) : $shop_url;
+		$search_action  = is_wp_error( $search_action ) ? $shop_url : (string) $search_action;
 		$search_value   = isset( $_GET['search'] ) ? sanitize_text_field( wp_unslash( $_GET['search'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$product_count  = $this->shop_available_product_count();
-		$category_count = $this->shop_category_count();
-		$categories     = $this->shop_root_categories();
-		$stats          = array(
+		$product_count  = $is_category ? $this->shop_category_available_product_count( $category ) : $this->shop_available_product_count();
+		$category_count = $is_category ? $this->shop_child_category_count( $category ) : $this->shop_category_count();
+		$categories     = $is_category ? array() : $this->shop_root_categories();
+		$description    = '';
+
+		if ( $is_category ) {
+			$description = wp_trim_words( wp_strip_all_tags( term_description( (int) $category->term_id, 'product_cat' ) ), 28, '…' );
+
+			if ( '' === $description ) {
+				$description = sprintf(
+					/* translators: %s: product category name. */
+					__( 'Descoperă gama profesională %s, selectată pentru instalații sigure și proiecte executate eficient.', 'schrack-woocommerce-sync' ),
+					$category->name
+				);
+			}
+		}
+
+		$stats = array(
 			array(
 				'value' => number_format_i18n( $product_count ),
-				'label' => __( 'Produse disponibile', 'schrack-woocommerce-sync' ),
+				'label' => $is_category ? __( 'Produse în stoc', 'schrack-woocommerce-sync' ) : __( 'Produse disponibile', 'schrack-woocommerce-sync' ),
 			),
 			array(
 				'value' => number_format_i18n( $category_count ),
-				'label' => __( 'Categorii', 'schrack-woocommerce-sync' ),
+				'label' => $is_category ? __( 'Subcategorii', 'schrack-woocommerce-sync' ) : __( 'Categorii', 'schrack-woocommerce-sync' ),
 			),
 			array(
 				'value' => 'B2B',
@@ -318,7 +344,7 @@ class Schrack_Elementor {
 		);
 		?>
 		<div class="schrack-shop-redesign" data-shop-redesign>
-			<section class="schrack-shop-hero" aria-labelledby="schrack-shop-hero-title">
+			<section class="schrack-shop-hero<?php echo $is_category ? ' schrack-shop-hero--category' : ''; ?>" aria-labelledby="schrack-shop-hero-title">
 				<div class="schrack-shop-hero__grid" aria-hidden="true"></div>
 				<picture>
 					<source srcset="<?php echo esc_url( SCHRACK_WC_SYNC_URL . 'assets/shop-hero-technician.webp' ); ?>" type="image/webp">
@@ -336,7 +362,15 @@ class Schrack_Elementor {
 					<p class="schrack-shop-hero__eyebrow">
 						<span aria-hidden="true"></span>
 						<?php
-						if ( $product_count > 0 ) {
+						if ( $is_category ) {
+							echo esc_html(
+								sprintf(
+									/* translators: %s: available product count. */
+									__( 'Categorie produse · %s produse în stoc', 'schrack-woocommerce-sync' ),
+									number_format_i18n( $product_count )
+								)
+							);
+						} elseif ( $product_count > 0 ) {
 							echo esc_html(
 								sprintf(
 									/* translators: %s: available product count. */
@@ -350,14 +384,22 @@ class Schrack_Elementor {
 						?>
 					</p>
 					<h1 id="schrack-shop-hero-title">
-						<?php esc_html_e( 'Tot ce ai nevoie pentru instalații electrice', 'schrack-woocommerce-sync' ); ?>
-						<span><?php esc_html_e( '— într-un singur loc', 'schrack-woocommerce-sync' ); ?></span>
+						<?php if ( $is_category ) : ?>
+							<span><?php echo esc_html( $category->name ); ?></span>
+						<?php else : ?>
+							<?php esc_html_e( 'Tot ce ai nevoie pentru instalații electrice', 'schrack-woocommerce-sync' ); ?>
+							<span><?php esc_html_e( '— într-un singur loc', 'schrack-woocommerce-sync' ); ?></span>
+						<?php endif; ?>
 					</h1>
 					<p class="schrack-shop-hero__lead">
-						<?php esc_html_e( 'Cabluri, aparataj, iluminat, rețelistică și automatizări — din stoc pentru livrare rapidă sau pentru proiecte B2B la scară largă.', 'schrack-woocommerce-sync' ); ?>
+						<?php if ( $is_category ) : ?>
+							<?php echo esc_html( $description ); ?>
+						<?php else : ?>
+							<?php esc_html_e( 'Cabluri, aparataj, iluminat, rețelistică și automatizări — din stoc pentru livrare rapidă sau pentru proiecte B2B la scară largă.', 'schrack-woocommerce-sync' ); ?>
+						<?php endif; ?>
 					</p>
 
-					<form class="schrack-shop-hero__search" role="search" method="get" action="<?php echo esc_url( $shop_url ); ?>">
+					<form class="schrack-shop-hero__search" role="search" method="get" action="<?php echo esc_url( $search_action ); ?>">
 						<label class="screen-reader-text" for="schrack-shop-hero-search">
 							<?php esc_html_e( 'Caută în catalog', 'schrack-woocommerce-sync' ); ?>
 						</label>
@@ -366,7 +408,7 @@ class Schrack_Elementor {
 							type="search"
 							name="search"
 							value="<?php echo esc_attr( $search_value ); ?>"
-							placeholder="<?php esc_attr_e( 'Caută după cod, EAN sau denumire...', 'schrack-woocommerce-sync' ); ?>"
+							placeholder="<?php echo esc_attr( $is_category ? __( 'Caută în această categorie...', 'schrack-woocommerce-sync' ) : __( 'Caută după cod, EAN sau denumire...', 'schrack-woocommerce-sync' ) ); ?>"
 						>
 						<button type="submit"><?php esc_html_e( 'Caută', 'schrack-woocommerce-sync' ); ?></button>
 					</form>
@@ -451,7 +493,10 @@ class Schrack_Elementor {
 	 * this fallback keeps the hero search functional on native product archives.
 	 */
 	public function apply_shop_archive_search( WP_Query $query ): void {
-		if ( is_admin() || ! $query->is_main_query() || ! $query->is_post_type_archive( 'product' ) ) {
+		$is_product_archive  = $query->is_post_type_archive( 'product' );
+		$is_product_category = $query->is_tax( 'product_cat' );
+
+		if ( is_admin() || ! $query->is_main_query() || ( ! $is_product_archive && ! $is_product_category ) ) {
 			return;
 		}
 
@@ -575,6 +620,26 @@ class Schrack_Elementor {
 	}
 
 	/**
+	 * Returns the current product category, when the request is a category archive.
+	 */
+	private function current_product_category(): ?WP_Term {
+		if ( is_admin() || ! function_exists( 'is_product_category' ) || ! is_product_category() ) {
+			return null;
+		}
+
+		$term = get_queried_object();
+
+		return $term instanceof WP_Term && 'product_cat' === $term->taxonomy ? $term : null;
+	}
+
+	/**
+	 * Returns whether the shared shop introduction belongs on this request.
+	 */
+	private function is_shop_intro_context(): bool {
+		return $this->is_main_shop_page() || $this->current_product_category() instanceof WP_Term;
+	}
+
+	/**
 	 * Counts products that can currently be shown in the catalog.
 	 */
 	private function shop_available_product_count(): int {
@@ -593,7 +658,7 @@ class Schrack_Elementor {
 					'paginate'     => true,
 					'return'       => 'ids',
 					'status'       => 'publish',
-					'stock_status' => array( 'instock', 'onbackorder' ),
+					'stock_status' => 'instock',
 				)
 			);
 
@@ -610,6 +675,57 @@ class Schrack_Elementor {
 		set_transient( 'schrack_shop_available_product_count', $count, 5 * MINUTE_IN_SECONDS );
 
 		return $count;
+	}
+
+	/**
+	 * Counts strictly in-stock products in one product category.
+	 */
+	private function shop_category_available_product_count( WP_Term $category ): int {
+		$cache_key = 'schrack_shop_category_stock_count_' . (int) $category->term_id;
+		$cached    = get_transient( $cache_key );
+
+		if ( false !== $cached ) {
+			return max( 0, absint( $cached ) );
+		}
+
+		$count = 0;
+
+		if ( function_exists( 'wc_get_products' ) ) {
+			$result = wc_get_products(
+				array(
+					'category'     => array( $category->slug ),
+					'limit'        => 1,
+					'paginate'     => true,
+					'return'       => 'ids',
+					'status'       => 'publish',
+					'stock_status' => 'instock',
+				)
+			);
+
+			if ( is_object( $result ) && isset( $result->total ) ) {
+				$count = absint( $result->total );
+			}
+		}
+
+		set_transient( $cache_key, $count, 5 * MINUTE_IN_SECONDS );
+
+		return $count;
+	}
+
+	/**
+	 * Counts direct, non-empty child categories for the category banner.
+	 */
+	private function shop_child_category_count( WP_Term $category ): int {
+		$children = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => true,
+				'fields'     => 'ids',
+				'parent'     => (int) $category->term_id,
+			)
+		);
+
+		return is_array( $children ) ? count( $children ) : 0;
 	}
 
 	/**
