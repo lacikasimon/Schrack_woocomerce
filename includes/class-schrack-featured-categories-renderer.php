@@ -175,10 +175,23 @@ class Schrack_Featured_Categories_Renderer {
 			<?php if ( ! empty( $terms ) ) : ?>
 				<nav class="schrack-fcat__nav" aria-label="<?php esc_attr_e( 'Categorii principale', 'schrack-woocommerce-sync' ); ?>" data-fcat-nav>
 					<ul class="schrack-fcat__nav-list">
-						<?php foreach ( $terms as $term ) : ?>
+						<?php foreach ( $terms as $index => $term ) : ?>
+							<?php $image_url = $this->category_banner_image_url( $term ); ?>
 							<li class="schrack-fcat__nav-item">
 								<a class="schrack-fcat__nav-link" href="<?php echo esc_url( $this->term_link( $term ) ); ?>">
-									<?php echo esc_html( $term->name ); ?>
+									<span class="schrack-fcat__nav-media" aria-hidden="true">
+										<?php if ( '' !== $image_url ) : ?>
+											<img
+												src="<?php echo esc_url( $image_url ); ?>"
+												alt=""
+												decoding="async"
+												loading="<?php echo esc_attr( $index < 5 ? 'eager' : 'lazy' ); ?>"
+												<?php if ( 0 === $index ) : ?>fetchpriority="high"<?php endif; ?>
+											>
+										<?php endif; ?>
+									</span>
+									<span class="schrack-fcat__nav-shade" aria-hidden="true"></span>
+									<span class="schrack-fcat__nav-label"><?php echo esc_html( $term->name ); ?></span>
 								</a>
 							</li>
 						<?php endforeach; ?>
@@ -312,10 +325,11 @@ class Schrack_Featured_Categories_Renderer {
 		}
 
 		$args = array(
-			'status'   => 'publish',
-			'limit'    => $limit,
-			'category' => array( $term->slug ),
-			'return'   => 'objects',
+			'status'       => 'publish',
+			'stock_status' => 'instock',
+			'limit'        => $limit,
+			'category'     => array( $term->slug ),
+			'return'       => 'objects',
 		);
 
 		switch ( $orderby ) {
@@ -345,9 +359,27 @@ class Schrack_Featured_Categories_Renderer {
 		return array_values(
 			array_filter(
 				$products,
-				static fn( $product ): bool => $product instanceof WC_Product && $product->is_visible()
+				static fn( $product ): bool => $product instanceof WC_Product
+					&& $product->is_visible()
+					&& $product->is_in_stock()
+					&& 'instock' === $product->get_stock_status()
 			)
 		);
+	}
+
+	/**
+	 * Returns a project-owned banner image URL for one main category.
+	 */
+	private function category_banner_image_url( WP_Term $term ): string {
+		$filename      = sanitize_file_name( (string) $term->slug ) . '.webp';
+		$relative_path = 'assets/home-category-banners/' . $filename;
+		$absolute_path = SCHRACK_WC_SYNC_PATH . $relative_path;
+
+		if ( is_readable( $absolute_path ) ) {
+			return SCHRACK_WC_SYNC_URL . $relative_path;
+		}
+
+		return '';
 	}
 
 	/**

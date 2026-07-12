@@ -979,7 +979,11 @@ body.schrack-shop-archive-page .schrack-attribute-filter__summary {
 	line-height: 1.3;
 	list-style: none;
 	min-height: 22px;
+	min-width: 0;
+	overflow-wrap: anywhere;
 	padding: 0;
+	white-space: normal;
+	word-break: normal;
 }
 
 body.schrack-shop-archive-page .schrack-product-filter__section-title::after,
@@ -1017,7 +1021,7 @@ body.schrack-shop-archive-page .schrack-product-filter__category-shortcuts {
 }
 
 body.schrack-shop-archive-page .schrack-product-filter__category-shortcut {
-	align-items: center;
+	align-items: start;
 	background: transparent;
 	border: 0;
 	color: #3a4652;
@@ -1028,12 +1032,16 @@ body.schrack-shop-archive-page .schrack-product-filter__category-shortcut {
 	gap: 9px;
 	grid-template-columns: 17px minmax(0, 1fr) auto;
 	line-height: 1.35;
+	max-width: 100%;
+	min-width: 0;
 	padding: 7px 0;
 	text-align: left;
+	white-space: normal !important;
 	width: 100%;
 }
 
 body.schrack-shop-archive-page .schrack-product-filter__category-check {
+	align-self: start;
 	align-items: center;
 	background: #fff;
 	border: 1.5px solid #c9d0d6;
@@ -1053,12 +1061,21 @@ body.schrack-shop-archive-page .schrack-product-filter__category-shortcut.is-sel
 }
 
 body.schrack-shop-archive-page .schrack-product-filter__category-name {
+	max-width: 100%;
 	min-width: 0;
+	overflow: visible;
+	overflow-wrap: anywhere;
+	text-overflow: clip;
+	white-space: normal !important;
+	word-break: normal;
 }
 
 body.schrack-shop-archive-page .schrack-product-filter__category-count {
+	align-self: start;
 	color: #a7b0b9;
 	font-size: 12px;
+	line-height: 1.35;
+	white-space: nowrap;
 }
 
 body.schrack-shop-archive-page .schrack-product-filter__category-shortcut:hover .schrack-product-filter__category-name,
@@ -1236,6 +1253,10 @@ body.schrack-shop-archive-page .schrack-shop-filter-toolbar__summary {
 	color: var(--schrack-shop-muted);
 	font-size: 13.5px;
 	font-weight: 400;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	white-space: normal;
+	word-break: normal;
 }
 
 body.schrack-shop-archive-page .schrack-shop-filter-toolbar__summary strong {

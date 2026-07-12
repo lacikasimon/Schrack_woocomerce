@@ -939,11 +939,12 @@ class Schrack_Homepage_Renderer {
 		}
 
 		$args = array(
-			'status'  => 'publish',
-			'limit'   => (int) $settings['recommended_product_limit'],
-			'orderby' => 'popularity',
-			'order'   => 'DESC',
-			'return'  => 'objects',
+			'status'       => 'publish',
+			'stock_status' => 'instock',
+			'limit'        => (int) $settings['recommended_product_limit'],
+			'orderby'      => 'popularity',
+			'order'        => 'DESC',
+			'return'       => 'objects',
 		);
 
 		$slugs = $this->recommended_term_slugs( $terms );
@@ -966,7 +967,10 @@ class Schrack_Homepage_Renderer {
 		return array_values(
 			array_filter(
 				$products,
-				static fn( $product ): bool => $product instanceof WC_Product && $product->is_visible()
+				static fn( $product ): bool => $product instanceof WC_Product
+					&& $product->is_visible()
+					&& $product->is_in_stock()
+					&& 'instock' === $product->get_stock_status()
 			)
 		);
 	}

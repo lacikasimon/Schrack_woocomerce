@@ -15,12 +15,11 @@
 
 		root.setAttribute('data-fcat-nav-ready', 'yes');
 
-		var navHeight = nav.offsetHeight || 64;
 		var sentinel = document.createElement('div');
 
 		sentinel.setAttribute('aria-hidden', 'true');
 		sentinel.style.position = 'absolute';
-		sentinel.style.top = '0';
+		sentinel.style.bottom = '0';
 		sentinel.style.left = '0';
 		sentinel.style.height = '1px';
 		sentinel.style.width = '1px';
@@ -32,10 +31,7 @@
 					nav.classList.toggle('is-fixed', !entry.isIntersecting);
 				});
 			},
-			{
-				rootMargin: '-' + navHeight + 'px 0px 0px 0px',
-				threshold: 0
-			}
+			{ threshold: 0 }
 		);
 
 		observer.observe(sentinel);

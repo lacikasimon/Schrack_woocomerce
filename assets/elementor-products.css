@@ -125,6 +125,10 @@
 	justify-content: space-between;
 	list-style: none;
 	min-height: 32px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	white-space: normal;
+	word-break: normal;
 }
 
 .schrack-product-filter__section-title::-webkit-details-marker {
@@ -164,7 +168,7 @@
 }
 
 .schrack-product-filter__category-shortcut {
-	align-items: center;
+	align-items: start;
 	background: transparent;
 	border: 0;
 	color: var(--schrack-filter-text);
@@ -174,12 +178,17 @@
 	font-size: 13px;
 	gap: 8px;
 	grid-template-columns: 17px minmax(0, 1fr) auto;
+	line-height: 1.35;
+	max-width: 100%;
+	min-width: 0;
 	padding: 6px 0;
 	text-align: left;
+	white-space: normal;
 	width: 100%;
 }
 
 .schrack-product-filter__category-check {
+	align-self: start;
 	align-items: center;
 	background: #fff;
 	border: 1.5px solid var(--schrack-filter-border);
@@ -192,14 +201,27 @@
 	width: 17px;
 }
 
+.schrack-product-filter__category-name {
+	max-width: 100%;
+	min-width: 0;
+	overflow: visible;
+	overflow-wrap: anywhere;
+	text-overflow: clip;
+	white-space: normal !important;
+	word-break: normal;
+}
+
 .schrack-product-filter__category-shortcut.is-selected .schrack-product-filter__category-check {
 	background: var(--schrack-filter-accent);
 	border-color: var(--schrack-filter-accent);
 }
 
 .schrack-product-filter__category-count {
+	align-self: start;
 	color: var(--schrack-filter-muted);
 	font-size: 12px;
+	line-height: 1.35;
+	white-space: nowrap;
 }
 
 .schrack-product-filter__availability {
