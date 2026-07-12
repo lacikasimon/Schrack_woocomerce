@@ -968,7 +968,9 @@ class Schrack_Elementor {
 			'category_search'      => isset( $_POST['category_search'] ) ? wp_unslash( (string) $_POST['category_search'] ) : '',
 			'min_price'            => isset( $_POST['min_price'] ) ? wp_unslash( (string) $_POST['min_price'] ) : '',
 			'max_price'            => isset( $_POST['max_price'] ) ? wp_unslash( (string) $_POST['max_price'] ) : '',
-			'include_out_of_stock' => isset( $_POST['include_out_of_stock'] ) ? wp_unslash( (string) $_POST['include_out_of_stock'] ) : '',
+			'include_out_of_stock' => isset( $_POST['stock_filter_present'] )
+				? ( isset( $_POST['in_stock_only'] ) ? 'no' : 'yes' )
+				: ( isset( $_POST['include_out_of_stock'] ) ? wp_unslash( (string) $_POST['include_out_of_stock'] ) : '' ),
 			'manufacturer'         => isset( $_POST['manufacturer'] ) ? wp_unslash( (string) $_POST['manufacturer'] ) : '',
 			'product_line'         => isset( $_POST['product_line'] ) ? wp_unslash( (string) $_POST['product_line'] ) : '',
 			'special_offer_only'   => isset( $_POST['special_offer_only'] ) ? wp_unslash( (string) $_POST['special_offer_only'] ) : '',

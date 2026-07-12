@@ -37,16 +37,22 @@ class Schrack_Product_Filter_Renderer {
 		$settings    = $this->sanitize_settings( $settings );
 		$settings    = $this->settings_with_request_category( $settings );
 		$instance_id = '' !== $instance_id ? sanitize_html_class( $instance_id ) : 'schrack-products-' . wp_rand( 1000, 999999 );
-		$filters     = $this->sanitize_filters( $this->request_filters( $settings ) );
-		$results     = $this->render_results( $settings, $filters );
-		$config      = $this->public_settings( $settings );
-		$category    = $this->category_for_picker( $filters['category'] );
-		$default_category = $this->category_for_picker( $settings['default_category'] );
-		$category_search_value = $category['id'] > 0 ? $category['label'] : $filters['category_search'];
-		$active_filter_count = $this->active_filter_count( $filters );
-		$manufacturers = $settings['show_manufacturer_filter'] ? $this->manufacturer_options( $filters['category'] ) : array();
-		$product_lines = $settings['show_product_line_filter'] ? $this->product_line_options( $filters['category'] ) : array();
-		$style         = $this->inline_style( $settings );
+		$form_id             = $instance_id . '-filter-form';
+		$filters             = $this->sanitize_filters( $this->request_filters( $settings ) );
+		$results             = $this->render_results( $settings, $filters );
+		$config              = $this->public_settings( $settings );
+		$category            = $this->category_for_picker( $filters['category'] );
+		$default_category    = $this->category_for_picker( $settings['default_category'] );
+		$sidebar_categories  = $settings['show_category_filter'] ? $this->direct_child_categories( 0 ) : array();
+		usort( $sidebar_categories, static fn ( WP_Term $a, WP_Term $b ): int => (int) $b->count <=> (int) $a->count );
+		$sidebar_categories   = array_slice( $sidebar_categories, 0, 6 );
+		$sidebar_category_ids = array_map( static fn ( WP_Term $term ): int => (int) $term->term_id, $sidebar_categories );
+		$category_search_value = $category['id'] > 0 && ! in_array( (int) $category['id'], $sidebar_category_ids, true ) ? $category['label'] : $filters['category_search'];
+		$active_filter_count  = $this->active_filter_count( $filters );
+		$manufacturers        = $settings['show_manufacturer_filter'] ? $this->manufacturer_options( $filters['category'] ) : array();
+		$product_lines        = $settings['show_product_line_filter'] ? $this->product_line_options( $filters['category'] ) : array();
+		$show_special_offer   = $settings['show_special_offer_filter'] && $this->has_special_offer_products( $filters['category'] );
+		$style                = $this->inline_style( $settings );
 
 		ob_start();
 		?>
@@ -62,71 +68,124 @@ class Schrack_Product_Filter_Renderer {
 		>
 			<div class="schrack-product-filter__layout">
 				<aside class="schrack-product-filter__sidebar">
-					<form class="schrack-product-filter__form" method="get">
+					<form id="<?php echo esc_attr( $form_id ); ?>" class="schrack-product-filter__form" method="get">
 						<div class="schrack-product-filter__sidebar-head">
-							<span><?php esc_html_e( 'Filtre', 'schrack-woocommerce-sync' ); ?></span>
-							<span class="schrack-product-filter__active-count" data-active-filter-count <?php echo $active_filter_count > 0 ? '' : 'hidden'; ?>><?php echo esc_html( (string) $active_filter_count ); ?></span>
+							<div class="schrack-product-filter__sidebar-title">
+								<span><?php esc_html_e( 'Filtre', 'schrack-woocommerce-sync' ); ?></span>
+								<span class="schrack-product-filter__active-count" data-active-filter-count <?php echo $active_filter_count > 0 ? '' : 'hidden'; ?>><?php echo esc_html( (string) $active_filter_count ); ?></span>
+							</div>
+							<button type="button" class="schrack-product-filter__reset schrack-product-filter__reset--header" data-filter-reset>
+								<?php esc_html_e( 'Resetează', 'schrack-woocommerce-sync' ); ?>
+							</button>
 						</div>
 
 						<div class="schrack-product-filter__controls">
 							<?php if ( $settings['show_search'] ) : ?>
-							<label class="schrack-product-filter__field">
+							<label class="schrack-product-filter__field schrack-product-filter__field--search">
 								<span><?php esc_html_e( 'Cauta produse', 'schrack-woocommerce-sync' ); ?></span>
-								<input type="search" name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="<?php esc_attr_e( 'Nume produs', 'schrack-woocommerce-sync' ); ?>">
-							</label>
-							<?php endif; ?>
-
-							<?php if ( $settings['show_stock_filter'] ) : ?>
-							<label class="schrack-product-filter__check">
-								<input type="checkbox" name="include_out_of_stock" value="yes" <?php checked( $filters['include_out_of_stock'] ); ?>>
-								<span><?php esc_html_e( 'Afiseaza si produsele fara stoc', 'schrack-woocommerce-sync' ); ?></span>
-							</label>
-							<?php endif; ?>
-
-							<?php if ( $settings['show_special_offer_filter'] && $this->has_special_offer_products( $filters['category'] ) ) : ?>
-							<label class="schrack-product-filter__check">
-								<input type="checkbox" name="special_offer_only" value="yes" <?php checked( $filters['special_offer_only'] ); ?>>
-								<span><?php esc_html_e( 'Doar oferte speciale', 'schrack-woocommerce-sync' ); ?></span>
+								<input type="search" name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="<?php esc_attr_e( 'Caută după cod sau denumire', 'schrack-woocommerce-sync' ); ?>">
 							</label>
 							<?php endif; ?>
 
 							<?php if ( $settings['show_category_filter'] ) : ?>
-							<div
-								class="schrack-category-picker"
-								data-category-picker
-								data-default-category-id="<?php echo esc_attr( (string) $default_category['id'] ); ?>"
-								data-default-category-label="<?php echo esc_attr( $default_category['label'] ); ?>"
-							>
-								<?php if ( $settings['show_category_search'] ) : ?>
-									<label class="schrack-product-filter__field">
-										<span><?php esc_html_e( 'Categorie', 'schrack-woocommerce-sync' ); ?></span>
-										<input
-											type="search"
-											name="category_search"
-											value="<?php echo esc_attr( $category_search_value ); ?>"
-											data-category-search
-											autocomplete="off"
-											placeholder="<?php esc_attr_e( 'Cauta categorie', 'schrack-woocommerce-sync' ); ?>"
-											aria-expanded="false"
-										>
-									</label>
-								<?php endif; ?>
-								<input type="hidden" name="category" value="<?php echo esc_attr( (string) $category['id'] ); ?>" data-category-id>
-								<div class="schrack-category-picker__selected" data-category-selected <?php echo $category['id'] > 0 ? '' : 'hidden'; ?>>
-									<span data-category-selected-label><?php echo esc_html( $category['label'] ); ?></span>
-									<button type="button" data-category-clear aria-label="<?php esc_attr_e( 'Sterge categoria', 'schrack-woocommerce-sync' ); ?>">&times;</button>
+							<details class="schrack-product-filter__section" open>
+								<summary class="schrack-product-filter__section-title"><?php esc_html_e( 'Categorie', 'schrack-woocommerce-sync' ); ?></summary>
+								<div class="schrack-product-filter__section-body">
+									<?php if ( ! empty( $sidebar_categories ) ) : ?>
+									<div class="schrack-product-filter__category-shortcuts">
+										<?php foreach ( $sidebar_categories as $sidebar_category ) : ?>
+											<?php $is_sidebar_category_selected = (int) $category['id'] === (int) $sidebar_category->term_id; ?>
+											<button
+												type="button"
+												class="schrack-product-filter__category-shortcut <?php echo $is_sidebar_category_selected ? 'is-selected' : ''; ?>"
+												data-category-option
+												data-category-id="<?php echo esc_attr( (string) $sidebar_category->term_id ); ?>"
+												data-category-label="<?php echo esc_attr( $sidebar_category->name ); ?>"
+											>
+												<span class="schrack-product-filter__category-check" aria-hidden="true"><?php echo $is_sidebar_category_selected ? '✓' : ''; ?></span>
+												<span class="schrack-product-filter__category-name"><?php echo esc_html( $sidebar_category->name ); ?></span>
+												<span class="schrack-product-filter__category-count"><?php echo esc_html( number_format_i18n( (int) $sidebar_category->count ) ); ?></span>
+											</button>
+										<?php endforeach; ?>
+									</div>
+									<?php endif; ?>
+									<div
+										class="schrack-category-picker"
+										data-category-picker
+										data-default-category-id="<?php echo esc_attr( (string) $default_category['id'] ); ?>"
+										data-default-category-label="<?php echo esc_attr( $default_category['label'] ); ?>"
+									>
+										<?php if ( $settings['show_category_search'] ) : ?>
+											<label class="schrack-product-filter__field schrack-product-filter__field--section-input">
+												<span class="screen-reader-text"><?php esc_html_e( 'Categorie', 'schrack-woocommerce-sync' ); ?></span>
+												<input
+													type="search"
+													name="category_search"
+													value="<?php echo esc_attr( $category_search_value ); ?>"
+													data-category-search
+													autocomplete="off"
+													placeholder="<?php esc_attr_e( 'Caută categorie', 'schrack-woocommerce-sync' ); ?>"
+													aria-expanded="false"
+												>
+											</label>
+										<?php endif; ?>
+										<input type="hidden" name="category" value="<?php echo esc_attr( (string) $category['id'] ); ?>" data-category-id>
+										<div class="schrack-category-picker__selected" data-category-selected <?php echo $category['id'] > 0 ? '' : 'hidden'; ?>>
+											<span data-category-selected-label><?php echo esc_html( $category['label'] ); ?></span>
+											<button type="button" data-category-clear aria-label="<?php esc_attr_e( 'Șterge categoria', 'schrack-woocommerce-sync' ); ?>">&times;</button>
+										</div>
+										<div class="schrack-category-picker__results" data-category-results role="tree" hidden></div>
+									</div>
 								</div>
-								<div class="schrack-category-picker__results" data-category-results role="tree" hidden></div>
-							</div>
+							</details>
+							<?php endif; ?>
+
+							<?php if ( $settings['show_price_filter'] ) : ?>
+							<details class="schrack-product-filter__section" open>
+								<summary class="schrack-product-filter__section-title"><?php esc_html_e( 'Preț', 'schrack-woocommerce-sync' ); ?></summary>
+								<div class="schrack-product-filter__section-body schrack-product-filter__price">
+									<div class="schrack-product-filter__price-row">
+										<label class="schrack-product-filter__field schrack-product-filter__field--price">
+											<span><?php esc_html_e( 'Preț minim', 'schrack-woocommerce-sync' ); ?></span>
+											<div class="schrack-product-filter__money-input">
+												<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" value="<?php echo esc_attr( $this->decimal_input_value( $filters['min_price'] ) ); ?>" placeholder="0">
+												<b><?php esc_html_e( 'lei', 'schrack-woocommerce-sync' ); ?></b>
+											</div>
+										</label>
+										<label class="schrack-product-filter__field schrack-product-filter__field--price">
+											<span><?php esc_html_e( 'Preț maxim', 'schrack-woocommerce-sync' ); ?></span>
+											<div class="schrack-product-filter__money-input">
+												<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal" value="<?php echo esc_attr( $this->decimal_input_value( $filters['max_price'] ) ); ?>">
+												<b><?php esc_html_e( 'lei', 'schrack-woocommerce-sync' ); ?></b>
+											</div>
+										</label>
+									</div>
+									<div class="schrack-product-filter__price-presets" aria-label="<?php esc_attr_e( 'Intervale de preț în lei', 'schrack-woocommerce-sync' ); ?>">
+										<?php foreach ( $this->price_ranges() as $range ) : ?>
+											<button
+												type="button"
+												class="schrack-product-filter__price-preset"
+												data-price-min="<?php echo esc_attr( (string) $range['min'] ); ?>"
+												data-price-max="<?php echo esc_attr( (string) $range['max'] ); ?>"
+											>
+												<?php echo esc_html( $range['label'] ); ?>
+											</button>
+										<?php endforeach; ?>
+									</div>
+								</div>
+							</details>
 							<?php endif; ?>
 
 							<?php if ( $settings['show_manufacturer_filter'] && ! empty( $manufacturers ) ) : ?>
-							<label class="schrack-product-filter__field">
-								<span><?php esc_html_e( 'Producator', 'schrack-woocommerce-sync' ); ?></span>
-								<select name="manufacturer">
-									<option value=""><?php esc_html_e( 'Toti producatorii', 'schrack-woocommerce-sync' ); ?></option>
-									<?php foreach ( $manufacturers as $manufacturer ) : ?>
-										<option value="<?php echo esc_attr( $manufacturer['name'] ); ?>" <?php selected( $filters['manufacturer'], $manufacturer['name'] ); ?>>
+							<details class="schrack-product-filter__section" <?php echo '' !== $filters['manufacturer'] ? 'open' : ''; ?>>
+								<summary class="schrack-product-filter__section-title"><?php esc_html_e( 'Producător', 'schrack-woocommerce-sync' ); ?></summary>
+								<div class="schrack-product-filter__section-body">
+									<label class="schrack-product-filter__field schrack-product-filter__field--section-input">
+										<span class="screen-reader-text"><?php esc_html_e( 'Producător', 'schrack-woocommerce-sync' ); ?></span>
+										<select name="manufacturer">
+											<option value=""><?php esc_html_e( 'Toți producătorii', 'schrack-woocommerce-sync' ); ?></option>
+											<?php foreach ( $manufacturers as $manufacturer ) : ?>
+												<option value="<?php echo esc_attr( $manufacturer['name'] ); ?>" <?php selected( $filters['manufacturer'], $manufacturer['name'] ); ?>>
 											<?php
 											echo esc_html(
 												sprintf(
@@ -137,19 +196,24 @@ class Schrack_Product_Filter_Renderer {
 												)
 											);
 											?>
-										</option>
-									<?php endforeach; ?>
-								</select>
-							</label>
+												</option>
+											<?php endforeach; ?>
+										</select>
+									</label>
+								</div>
+							</details>
 							<?php endif; ?>
 
 							<?php if ( $settings['show_product_line_filter'] && ! empty( $product_lines ) ) : ?>
-							<label class="schrack-product-filter__field">
-								<span><?php esc_html_e( 'Serie / gama produs', 'schrack-woocommerce-sync' ); ?></span>
-								<select name="product_line">
-									<option value=""><?php esc_html_e( 'Toate seriile', 'schrack-woocommerce-sync' ); ?></option>
-									<?php foreach ( $product_lines as $product_line ) : ?>
-										<option value="<?php echo esc_attr( $product_line['name'] ); ?>" <?php selected( $filters['product_line'], $product_line['name'] ); ?>>
+							<details class="schrack-product-filter__section" <?php echo '' !== $filters['product_line'] ? 'open' : ''; ?>>
+								<summary class="schrack-product-filter__section-title"><?php esc_html_e( 'Serie / gamă produs', 'schrack-woocommerce-sync' ); ?></summary>
+								<div class="schrack-product-filter__section-body">
+									<label class="schrack-product-filter__field schrack-product-filter__field--section-input">
+										<span class="screen-reader-text"><?php esc_html_e( 'Serie / gamă produs', 'schrack-woocommerce-sync' ); ?></span>
+										<select name="product_line">
+											<option value=""><?php esc_html_e( 'Toate seriile', 'schrack-woocommerce-sync' ); ?></option>
+											<?php foreach ( $product_lines as $product_line ) : ?>
+												<option value="<?php echo esc_attr( $product_line['name'] ); ?>" <?php selected( $filters['product_line'], $product_line['name'] ); ?>>
 											<?php
 											echo esc_html(
 												sprintf(
@@ -160,53 +224,57 @@ class Schrack_Product_Filter_Renderer {
 												)
 											);
 											?>
-										</option>
-									<?php endforeach; ?>
-								</select>
-							</label>
+												</option>
+											<?php endforeach; ?>
+										</select>
+									</label>
+								</div>
+							</details>
 							<?php endif; ?>
 
 							<?php if ( $settings['show_attribute_filters'] ) : ?>
 								<?php echo $this->attribute_filters_html( $filters ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 							<?php endif; ?>
 
-							<?php if ( $settings['show_price_filter'] ) : ?>
-							<div class="schrack-product-filter__price">
-								<div class="schrack-product-filter__price-row">
-									<label class="schrack-product-filter__field schrack-product-filter__field--price">
-										<span><?php esc_html_e( 'Pret minim', 'schrack-woocommerce-sync' ); ?></span>
-										<div class="schrack-product-filter__money-input">
-											<input type="number" name="min_price" min="0" step="0.01" inputmode="decimal" value="<?php echo esc_attr( $this->decimal_input_value( $filters['min_price'] ) ); ?>" placeholder="0">
-											<b><?php esc_html_e( 'lei', 'schrack-woocommerce-sync' ); ?></b>
-										</div>
+							<?php if ( $settings['show_stock_filter'] || $show_special_offer ) : ?>
+							<details class="schrack-product-filter__section" open>
+								<summary class="schrack-product-filter__section-title"><?php esc_html_e( 'Disponibilitate', 'schrack-woocommerce-sync' ); ?></summary>
+								<div class="schrack-product-filter__section-body schrack-product-filter__availability">
+									<?php if ( $settings['show_stock_filter'] ) : ?>
+									<label class="schrack-product-filter__check">
+										<input type="hidden" name="stock_filter_present" value="yes">
+										<input type="checkbox" name="in_stock_only" value="yes" <?php checked( ! $filters['include_out_of_stock'] ); ?>>
+										<span><?php esc_html_e( 'Doar produse în stoc', 'schrack-woocommerce-sync' ); ?></span>
 									</label>
-									<label class="schrack-product-filter__field schrack-product-filter__field--price">
-										<span><?php esc_html_e( 'Pret maxim', 'schrack-woocommerce-sync' ); ?></span>
-										<div class="schrack-product-filter__money-input">
-											<input type="number" name="max_price" min="0" step="0.01" inputmode="decimal" value="<?php echo esc_attr( $this->decimal_input_value( $filters['max_price'] ) ); ?>">
-											<b><?php esc_html_e( 'lei', 'schrack-woocommerce-sync' ); ?></b>
-										</div>
-									</label>
-								</div>
-								<div class="schrack-product-filter__price-presets" aria-label="<?php esc_attr_e( 'Intervale pret in lei', 'schrack-woocommerce-sync' ); ?>">
-									<?php foreach ( $this->price_ranges() as $range ) : ?>
-										<button
-											type="button"
-											class="schrack-product-filter__price-preset"
-											data-price-min="<?php echo esc_attr( (string) $range['min'] ); ?>"
-											data-price-max="<?php echo esc_attr( (string) $range['max'] ); ?>"
-										>
-											<?php echo esc_html( $range['label'] ); ?>
-										</button>
-									<?php endforeach; ?>
-								</div>
-							</div>
-							<?php endif; ?>
+									<?php endif; ?>
 
+									<?php if ( $show_special_offer ) : ?>
+									<label class="schrack-product-filter__check">
+										<input type="checkbox" name="special_offer_only" value="yes" <?php checked( $filters['special_offer_only'] ); ?>>
+										<span><?php esc_html_e( 'Doar oferte speciale', 'schrack-woocommerce-sync' ); ?></span>
+									</label>
+									<?php endif; ?>
+								</div>
+							</details>
+							<?php endif; ?>
+						</div>
+
+						<div class="schrack-product-filter__actions">
+							<button type="submit" class="schrack-product-filter__button">
+								<?php esc_html_e( 'Aplică filtrele', 'schrack-woocommerce-sync' ); ?>
+							</button>
+						</div>
+					</form>
+				</aside>
+
+				<section class="schrack-product-filter__content">
+					<div class="schrack-product-filter__toolbar schrack-shop-toolbar schrack-shop-filter-toolbar" data-shop-filter-toolbar>
+						<span class="schrack-shop-filter-toolbar__summary" data-filter-toolbar-summary><?php echo esc_html( $results['summary'] ); ?></span>
+						<div class="schrack-shop-toolbar__controls">
 							<?php if ( $settings['show_sort'] ) : ?>
-							<label class="schrack-product-filter__field">
-								<span><?php esc_html_e( 'Sorteaza dupa', 'schrack-woocommerce-sync' ); ?></span>
-								<select name="orderby">
+							<label class="schrack-product-filter__sort">
+								<span class="screen-reader-text"><?php esc_html_e( 'Sortează produsele', 'schrack-woocommerce-sync' ); ?></span>
+								<select name="orderby" form="<?php echo esc_attr( $form_id ); ?>">
 									<?php foreach ( $this->orderby_options() as $value => $label ) : ?>
 										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $filters['orderby'], $value ); ?>>
 											<?php echo esc_html( $label ); ?>
@@ -216,19 +284,7 @@ class Schrack_Product_Filter_Renderer {
 							</label>
 							<?php endif; ?>
 						</div>
-
-						<div class="schrack-product-filter__actions">
-							<button type="submit" class="schrack-product-filter__button">
-								<?php echo esc_html( $settings['button_text'] ); ?>
-							</button>
-							<button type="button" class="schrack-product-filter__reset" data-filter-reset>
-								<?php echo esc_html( $settings['reset_text'] ); ?>
-							</button>
-						</div>
-					</form>
-				</aside>
-
-				<section class="schrack-product-filter__content">
+					</div>
 					<div class="schrack-product-filter__results" aria-live="polite">
 						<?php echo $results['html']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					</div>
@@ -493,6 +549,10 @@ class Schrack_Product_Filter_Renderer {
 			if ( '' !== $value ) {
 				$filters[ $key ] = $value;
 			}
+		}
+
+		if ( '' !== $this->request_value( 'stock_filter_present' ) ) {
+			$filters['include_out_of_stock'] = '' !== $this->request_value( 'in_stock_only' ) ? 'no' : 'yes';
 		}
 
 		$filters['attributes'] = $this->request_attribute_values();
@@ -1427,13 +1487,13 @@ class Schrack_Product_Filter_Renderer {
 		if ( $this->search_is_too_short( $settings, $filters ) ) {
 			return sprintf(
 				/* translators: %d: minimum search length. */
-				__( 'Introdu cel putin %d caractere pentru cautarea produselor.', 'schrack-woocommerce-sync' ),
+				__( 'Introdu cel puțin %d caractere pentru căutarea produselor.', 'schrack-woocommerce-sync' ),
 				(int) $settings['min_search_chars']
 			);
 		}
 
 		if ( 0 === $visible_count ) {
-			return __( 'Nu exista produse potrivite.', 'schrack-woocommerce-sync' );
+			return __( 'Nu există produse potrivite.', 'schrack-woocommerce-sync' );
 		}
 
 		$total = (int) $query->found_posts;
@@ -1444,22 +1504,22 @@ class Schrack_Product_Filter_Renderer {
 			if ( ! $this->uses_fast_load_more( $settings ) ) {
 				return sprintf(
 					/* translators: 1: visible product count, 2: total product count. */
-					__( 'Se afiseaza 1-%1$d din %2$d produse.', 'schrack-woocommerce-sync' ),
-					$to,
-					$total
+					__( 'Se afișează 1–%1$s din %2$s produse', 'schrack-woocommerce-sync' ),
+					number_format_i18n( $to ),
+					number_format_i18n( $total )
 				);
 			}
 
 			return $has_more
 				? sprintf(
 					/* translators: %d: visible product count. */
-					__( 'Se afiseaza 1-%d produse. Sunt disponibile mai multe rezultate.', 'schrack-woocommerce-sync' ),
-					$to
+					__( 'Se afișează 1–%s produse. Sunt disponibile mai multe rezultate.', 'schrack-woocommerce-sync' ),
+					number_format_i18n( $to )
 				)
 				: sprintf(
 					/* translators: %d: visible product count. */
-					__( 'Se afiseaza %d produse.', 'schrack-woocommerce-sync' ),
-					$to
+					__( 'Se afișează %s produse.', 'schrack-woocommerce-sync' ),
+					number_format_i18n( $to )
 				);
 		}
 
@@ -1468,10 +1528,10 @@ class Schrack_Product_Filter_Renderer {
 
 		return sprintf(
 			/* translators: 1: first product index, 2: last product index, 3: total product count. */
-			__( 'Se afiseaza %1$d-%2$d din %3$d produse.', 'schrack-woocommerce-sync' ),
-			$from,
-			$to,
-			$total
+			__( 'Se afișează %1$s–%2$s din %3$s produse', 'schrack-woocommerce-sync' ),
+			number_format_i18n( $from ),
+			number_format_i18n( $to ),
+			number_format_i18n( $total )
 		);
 	}
 
@@ -1880,12 +1940,11 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function orderby_options(): array {
 		return array(
-			'menu_order' => __( 'Implicit', 'schrack-woocommerce-sync' ),
+			'menu_order' => __( 'Sortează: Implicit', 'schrack-woocommerce-sync' ),
 			'title'      => __( 'Nume A-Z', 'schrack-woocommerce-sync' ),
-			'price'      => __( 'Pret crescator', 'schrack-woocommerce-sync' ),
-			'price-desc' => __( 'Pret descrescator', 'schrack-woocommerce-sync' ),
+			'price'      => __( 'Preț crescător', 'schrack-woocommerce-sync' ),
+			'price-desc' => __( 'Preț descrescător', 'schrack-woocommerce-sync' ),
 			'date'       => __( 'Cele mai noi', 'schrack-woocommerce-sync' ),
-			'popularity' => __( 'Popularitate', 'schrack-woocommerce-sync' ),
 		);
 	}
 
@@ -2550,7 +2609,7 @@ class Schrack_Product_Filter_Renderer {
 			++$count;
 		}
 
-		if ( null !== ( $filters['min_price'] ?? null ) || null !== ( $filters['max_price'] ?? null ) ) {
+		if ( '' !== trim( (string) ( $filters['min_price'] ?? '' ) ) || '' !== trim( (string) ( $filters['max_price'] ?? '' ) ) ) {
 			++$count;
 		}
 

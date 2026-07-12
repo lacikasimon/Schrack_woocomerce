@@ -278,20 +278,56 @@
 			root.dataset.schrackShopToolbar = 'yes';
 			customFilters.push(root);
 
-			toolbar = document.createElement('div');
-			toolbar.className = 'schrack-shop-toolbar schrack-shop-filter-toolbar';
-			summaryCopy = document.createElement('span');
-			summaryCopy.className = 'schrack-shop-filter-toolbar__summary';
-			controls = document.createElement('div');
-			controls.className = 'schrack-shop-toolbar__controls';
-			controls.appendChild(createViewToggle());
-			toolbar.appendChild(summaryCopy);
-			toolbar.appendChild(controls);
-			content.insertBefore(toolbar, results);
+			toolbar = content.querySelector('[data-shop-filter-toolbar]');
+
+			if (!toolbar) {
+				toolbar = document.createElement('div');
+				toolbar.className = 'schrack-shop-toolbar schrack-shop-filter-toolbar';
+				toolbar.setAttribute('data-shop-filter-toolbar', '');
+				content.insertBefore(toolbar, results);
+			}
+
+			summaryCopy = toolbar.querySelector('[data-filter-toolbar-summary]');
+
+			if (!summaryCopy) {
+				summaryCopy = document.createElement('span');
+				summaryCopy.className = 'schrack-shop-filter-toolbar__summary';
+				summaryCopy.setAttribute('data-filter-toolbar-summary', '');
+				toolbar.prepend(summaryCopy);
+			}
+
+			controls = toolbar.querySelector('.schrack-shop-toolbar__controls');
+
+			if (!controls) {
+				controls = document.createElement('div');
+				controls.className = 'schrack-shop-toolbar__controls';
+				toolbar.appendChild(controls);
+			}
+
+			if (!controls.querySelector('.schrack-shop-view-toggle')) {
+				controls.appendChild(createViewToggle());
+			}
 
 			function syncSummary() {
+				var match;
+				var text;
+				var strong;
+
 				summary = results.querySelector('.schrack-product-filter__summary');
-				summaryCopy.textContent = summary ? normalize(summary.textContent) : '';
+				text = summary ? normalize(summary.textContent) : '';
+				match = text.match(/^Se afișează\s+(.+?)\s+din\s+(.+)$/i);
+				summaryCopy.textContent = '';
+
+				if (!match) {
+					summaryCopy.textContent = text;
+					return;
+				}
+
+				summaryCopy.appendChild(document.createTextNode('Se afișează '));
+				strong = document.createElement('strong');
+				strong.textContent = match[1];
+				summaryCopy.appendChild(strong);
+				summaryCopy.appendChild(document.createTextNode(' din ' + match[2]));
 			}
 
 			syncSummary();

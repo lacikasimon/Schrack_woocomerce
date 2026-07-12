@@ -543,7 +543,7 @@
 	function categoryPicker(root) {
 		return {
 			input: root.querySelector('[data-category-search]'),
-			hidden: root.querySelector('[data-category-id]'),
+			hidden: root.querySelector('input[type="hidden"][data-category-id]'),
 			results: root.querySelector('[data-category-results]'),
 			selected: root.querySelector('[data-category-selected]'),
 			selectedLabel: root.querySelector('[data-category-selected-label]'),
@@ -606,6 +606,7 @@
 
 	function setSelectedCategory(root, id, label) {
 		var picker = categoryPicker(root);
+		var selectedId = String(id || '');
 
 		if (picker.hidden) {
 			picker.hidden.value = id || '';
@@ -614,6 +615,17 @@
 		if (picker.input) {
 			picker.input.value = label || '';
 		}
+
+		Array.prototype.forEach.call(root.querySelectorAll('.schrack-product-filter__category-shortcut[data-category-option]'), function (button) {
+			var selected = button.getAttribute('data-category-id') === selectedId;
+			var check = button.querySelector('.schrack-product-filter__category-check');
+
+			button.classList.toggle('is-selected', selected);
+
+			if (check) {
+				check.textContent = selected ? '✓' : '';
+			}
+		});
 
 		syncSelectedCategory(root);
 		closeCategoryResults(root);
@@ -782,7 +794,7 @@
 			requestProducts(root, 1);
 		});
 
-		form.addEventListener('change', function (event) {
+		root.addEventListener('change', function (event) {
 			if (event.target && event.target.matches('select, input[type="checkbox"]')) {
 				delayedRequest.cancel();
 				updateActiveFilterCount(root);
@@ -874,11 +886,20 @@
 			}
 
 			if (categoryOption) {
+				var categoryId = categoryOption.getAttribute('data-category-id') || '';
+				var picker = categoryPicker(root);
+				var isShortcut = categoryOption.classList.contains('schrack-product-filter__category-shortcut');
+				var isSelectedShortcut = isShortcut && picker.hidden && picker.hidden.value === categoryId;
+
 				event.preventDefault();
 				delayedRequest.cancel();
 				delayedCategoryRequest.cancel();
 				clearAttributeSelections(root);
-				setSelectedCategory(root, categoryOption.getAttribute('data-category-id'), categoryOption.getAttribute('data-category-label'));
+				setSelectedCategory(
+					root,
+					isSelectedShortcut ? '' : categoryId,
+					isShortcut ? '' : categoryOption.getAttribute('data-category-label')
+				);
 				updateActiveFilterCount(root);
 				requestProducts(root, 1);
 				return;
@@ -909,10 +930,32 @@
 			}
 
 			if (resetButton) {
+				var orderby = root.querySelector('select[name="orderby"]');
+
 				event.preventDefault();
 				delayedRequest.cancel();
 				delayedCategoryRequest.cancel();
 				form.reset();
+				Array.prototype.forEach.call(form.querySelectorAll('input[type="search"], input[type="number"]'), function (input) {
+					input.value = '';
+				});
+				Array.prototype.forEach.call(form.querySelectorAll('input[type="checkbox"]'), function (input) {
+					input.checked = false;
+				});
+				var stockOnly = form.querySelector('input[name="in_stock_only"]');
+
+				if (stockOnly) {
+					stockOnly.checked = true;
+				}
+				Array.prototype.forEach.call(form.querySelectorAll('select[name="manufacturer"], select[name="product_line"]'), function (select) {
+					select.value = '';
+				});
+				clearAttributeSelections(root);
+
+				if (orderby) {
+					orderby.value = config.default_orderby || 'menu_order';
+				}
+
 				resetSelectedCategory(root);
 				syncPricePresetState(root);
 				updateActiveFilterCount(root);
