@@ -931,9 +931,11 @@ class Schrack_Telesystem_Importer {
 	private function apply_feed_commercial_data( WC_Product $product, array $item, bool $save = true ): array {
 		$product_id = $product->get_id();
 
-		$price_1 = isset( $item['telesystem_price_1'] ) ? (float) $item['telesystem_price_1'] : 0.0;
-		$price_2 = isset( $item['telesystem_price_2'] ) ? (float) $item['telesystem_price_2'] : 0.0;
-		$price   = $this->woocommerce_price( $product_id, $price_1, $price_2 );
+		$price_1         = isset( $item['telesystem_price_1'] ) ? (float) $item['telesystem_price_1'] : 0.0;
+		$price_2         = isset( $item['telesystem_price_2'] ) ? (float) $item['telesystem_price_2'] : 0.0;
+		$automatic_price = $this->woocommerce_price( $product_id, $price_1, $price_2 );
+		$resolution      = Schrack_Manual_Price::resolve_product( $product, $automatic_price );
+		$price           = $resolution['price'];
 
 		// Pret 1 is Telesystem's net/cost price (see "Pret 1 + default/category
 		// markup" in settings); Telesystem products never go through the
@@ -986,11 +988,14 @@ class Schrack_Telesystem_Importer {
 				'Imported Telesystem product data.',
 				$this->item_sku( $item ),
 				array(
-					'product_id'   => $product_id,
-					'price'        => $price,
-					'vat_rate'     => $this->markup->vat_rate(),
-					'stock_text'   => $stock_text,
-					'stock_status' => $stock_status,
+					'product_id'         => $product_id,
+					'price'              => $price,
+					'automatic_price'   => $automatic_price,
+					'manual_active'     => $resolution['manual_active'] ? 'yes' : 'no',
+					'manual_overridden' => $resolution['manual_overridden'] ? 'yes' : 'no',
+					'vat_rate'           => $this->markup->vat_rate(),
+					'stock_text'         => $stock_text,
+					'stock_status'       => $stock_status,
 				)
 			);
 		}

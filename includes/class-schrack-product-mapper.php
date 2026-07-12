@@ -771,11 +771,12 @@ class Schrack_Product_Mapper {
 			throw new RuntimeException( 'WooCommerce product was not found.' );
 		}
 
-		$price_unit     = $this->product_price_unit( $product_id, $product );
-		$purchase_price = $this->unit_purchase_price( $raw_purchase_price, $price_unit );
-		$sale_price     = $this->markup->calculate_sale_price( $purchase_price, $product_id );
-		$decimals       = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
-		$price          = function_exists( 'wc_format_decimal' ) ? wc_format_decimal( $sale_price, $decimals ) : number_format( $sale_price, $decimals, '.', '' );
+		$price_unit      = $this->product_price_unit( $product_id, $product );
+		$purchase_price  = $this->unit_purchase_price( $raw_purchase_price, $price_unit );
+		$automatic_price = $this->markup->calculate_sale_price( $purchase_price, $product_id );
+		$resolution      = Schrack_Manual_Price::resolve_product( $product, $automatic_price );
+		$sale_price      = $resolution['price'];
+		$price           = Schrack_Manual_Price::format_price( $sale_price );
 
 		$product->set_regular_price( $price );
 		$product->set_price( $price );
@@ -794,7 +795,10 @@ class Schrack_Product_Mapper {
 				'raw_purchase_price' => $raw_purchase_price,
 				'price_unit'         => $price_unit,
 				'purchase_price'     => $purchase_price,
-				'woocommerce_price' => $sale_price,
+				'automatic_price'    => $automatic_price,
+				'woocommerce_price'  => $sale_price,
+				'manual_active'      => $resolution['manual_active'] ? 'yes' : 'no',
+				'manual_overridden'  => $resolution['manual_overridden'] ? 'yes' : 'no',
 				'vat_rate'           => $this->markup->vat_rate(),
 			)
 		);
@@ -807,11 +811,12 @@ class Schrack_Product_Mapper {
 	 */
 	public function update_price_fast( int $product_id, float $purchase_price ): float {
 		$raw_purchase_price = max( 0.0, $purchase_price );
-		$price_unit     = $this->product_price_unit( $product_id );
-		$purchase_price = $this->unit_purchase_price( $raw_purchase_price, $price_unit );
-		$sale_price     = $this->markup->calculate_sale_price( $purchase_price, $product_id );
-		$decimals       = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
-		$price          = function_exists( 'wc_format_decimal' ) ? wc_format_decimal( $sale_price, $decimals ) : number_format( $sale_price, $decimals, '.', '' );
+		$price_unit         = $this->product_price_unit( $product_id );
+		$purchase_price     = $this->unit_purchase_price( $raw_purchase_price, $price_unit );
+		$automatic_price = $this->markup->calculate_sale_price( $purchase_price, $product_id );
+		$resolution      = Schrack_Manual_Price::resolve_product_id( $product_id, $automatic_price );
+		$sale_price      = $resolution['price'];
+		$price           = Schrack_Manual_Price::format_price( $sale_price );
 
 		update_post_meta( $product_id, '_regular_price', $price );
 		update_post_meta( $product_id, '_price', $price );
@@ -832,7 +837,10 @@ class Schrack_Product_Mapper {
 				'raw_purchase_price' => $raw_purchase_price,
 				'price_unit'         => $price_unit,
 				'purchase_price'     => $purchase_price,
-				'woocommerce_price'  => $sale_price,
+				'automatic_price'     => $automatic_price,
+				'woocommerce_price'   => $sale_price,
+				'manual_active'       => $resolution['manual_active'] ? 'yes' : 'no',
+				'manual_overridden'   => $resolution['manual_overridden'] ? 'yes' : 'no',
 				'vat_rate'           => $this->markup->vat_rate(),
 				'update_mode'        => 'fast_meta',
 			)

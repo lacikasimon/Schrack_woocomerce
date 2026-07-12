@@ -555,6 +555,12 @@ class Schrack_Account_Renderer {
 	 * Renders orders with an available or already submitted return request.
 	 */
 	private function returns_section( int $user_id ): string {
+		$order_id = $this->requested_order_id();
+
+		if ( $order_id > 0 ) {
+			return $this->return_form_section( $user_id, $order_id );
+		}
+
 		$return_manager = new Schrack_Return_Manager();
 		$return_orders  = array();
 
@@ -605,6 +611,48 @@ class Schrack_Account_Renderer {
 	}
 
 	/**
+	 * Renders the return form as its own page inside the customer account.
+	 */
+	private function return_form_section( int $user_id, int $order_id ): string {
+		$order = function_exists( 'wc_get_order' ) ? wc_get_order( $order_id ) : null;
+
+		if ( ! $order instanceof WC_Order || (int) $order->get_user_id() !== $user_id ) {
+			return $this->message_section(
+				__( 'Comanda nu a fost gasita.', 'schrack-woocommerce-sync' ),
+				__( 'Aceasta comanda nu exista sau nu apartine contului curent.', 'schrack-woocommerce-sync' ),
+				$this->section_url( 'returns' )
+			);
+		}
+
+		$return_manager = new Schrack_Return_Manager();
+		$order_date     = $order->get_date_created();
+		$return_url     = $this->return_order_url( $order_id );
+
+		ob_start();
+		?>
+		<div class="schrack-account__panel schrack-account__panel--wide schrack-account__section schrack-account__return-page" id="schrack-account-returns">
+			<div class="schrack-account__panel-head">
+				<div>
+					<h3><?php echo esc_html( sprintf( __( 'Retur pentru comanda #%s', 'schrack-woocommerce-sync' ), $order->get_order_number() ) ); ?></h3>
+					<p><?php esc_html_e( 'Selecteaza produsele si cantitatile pe care vrei sa le returnezi.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
+				<a href="<?php echo esc_url( $this->section_url( 'returns' ) ); ?>"><?php esc_html_e( 'Inapoi la retururi', 'schrack-woocommerce-sync' ); ?></a>
+			</div>
+
+			<div class="schrack-account__order-meta">
+				<?php echo $this->summary_card( __( 'Comanda', 'schrack-woocommerce-sync' ), '#' . $order->get_order_number(), __( 'Numar comanda', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->summary_card( __( 'Data', 'schrack-woocommerce-sync' ), $order_date ? wc_format_datetime( $order_date ) : '-', __( 'Plasata', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $this->summary_card( __( 'Total', 'schrack-woocommerce-sync' ), wp_strip_all_tags( $order->get_formatted_order_total() ), __( 'Valoare', 'schrack-woocommerce-sync' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			</div>
+
+			<?php echo $return_manager->render_order_return_panel( $order, $return_url ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+		</div>
+		<?php
+
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * Renders a single order detail section.
 	 */
 	private function order_detail_section( int $user_id ): string {
@@ -624,7 +672,6 @@ class Schrack_Account_Renderer {
 		$shipping_name = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
 		$billing_name = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
 		$customer_note = trim( (string) $order->get_customer_note() );
-		$return_manager = new Schrack_Return_Manager();
 
 		ob_start();
 		?>
@@ -703,7 +750,13 @@ class Schrack_Account_Renderer {
 				<?php endforeach; ?>
 			</div>
 
-			<?php echo $return_manager->render_order_return_panel( $order, $this->order_url( (int) $order->get_id() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<div class="schrack-account__order-return-cta">
+				<div>
+					<strong><?php esc_html_e( 'Vrei sa returnezi produse din aceasta comanda?', 'schrack-woocommerce-sync' ); ?></strong>
+					<p><?php esc_html_e( 'Formularul de retur se completeaza pe pagina dedicata din contul tau.', 'schrack-woocommerce-sync' ); ?></p>
+				</div>
+				<a class="schrack-account__button is-secondary" href="<?php echo esc_url( $this->return_order_url( (int) $order->get_id() ) ); ?>"><?php esc_html_e( 'Deschide formularul de retur', 'schrack-woocommerce-sync' ); ?></a>
+			</div>
 		</div>
 		<?php
 
@@ -1766,7 +1819,7 @@ class Schrack_Account_Renderer {
 	private function return_order_url( int $order_id ): string {
 		return add_query_arg(
 			array(
-				self::SECTION_QUERY_ARG => 'order',
+				self::SECTION_QUERY_ARG => 'returns',
 				self::ORDER_QUERY_ARG   => max( 0, $order_id ),
 			),
 			$this->account_page_url()

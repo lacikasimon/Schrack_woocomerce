@@ -857,6 +857,40 @@
 	white-space: nowrap;
 }
 
+.schrack-account__order-return-cta {
+	align-items: center;
+	background: var(--schrack-account-soft);
+	border: 1px solid var(--schrack-account-border);
+	border-radius: 8px;
+	display: flex;
+	gap: 18px;
+	justify-content: space-between;
+	padding: 16px;
+}
+
+.schrack-account__order-return-cta > div {
+	display: grid;
+	gap: 5px;
+}
+
+.schrack-account__order-return-cta strong {
+	color: var(--schrack-account-text);
+	font-size: 15px;
+	font-weight: 850;
+	line-height: 1.35;
+}
+
+.schrack-account__order-return-cta p {
+	color: var(--schrack-account-muted);
+	font-size: 13px;
+	line-height: 1.45;
+	margin: 0;
+}
+
+.schrack-account__order-return-cta .schrack-account__button {
+	flex: 0 0 auto;
+}
+
 .schrack-account__guest-return {
 	margin-top: 18px;
 }
@@ -1089,6 +1123,15 @@
 	.schrack-account__return-head {
 		align-items: stretch;
 		flex-direction: column;
+	}
+
+	.schrack-account__order-return-cta {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.schrack-account__order-return-cta .schrack-account__button {
+		width: 100%;
 	}
 
 	.schrack-account__return-deadline {

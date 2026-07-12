@@ -148,6 +148,7 @@ class Schrack_Plugin {
 			'class-schrack-settings.php',
 			'class-schrack-logger.php',
 			'class-schrack-category-markup.php',
+			'class-schrack-manual-price.php',
 			'class-schrack-category-csv-importer.php',
 			'class-schrack-attribute-extractor.php',
 			'class-schrack-soap-client.php',
