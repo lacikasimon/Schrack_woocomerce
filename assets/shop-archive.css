@@ -1303,7 +1303,7 @@ body.schrack-shop-archive-page .schrack-product-filter__sort select {
 	padding: 9px 12px;
 }
 
-body.schrack-shop-has-intro .schrack-category-explorer {
+body.schrack-shop-main-page.schrack-shop-has-intro .schrack-category-explorer {
 	display: none;
 }
 
