@@ -53,6 +53,20 @@ class Schrack_Plugin {
 	private ?Schrack_Cron $cron = null;
 
 	/**
+	 * Resumable product and supplier CSV exporter.
+	 *
+	 * @var Schrack_Product_Exporter|null
+	 */
+	private ?Schrack_Product_Exporter $product_exporter = null;
+
+	/**
+	 * Resumable WooCommerce product CSV importer.
+	 *
+	 * @var Schrack_Product_Importer|null
+	 */
+	private ?Schrack_Product_Importer $product_importer = null;
+
+	/**
 	 * Elementor integration.
 	 *
 	 * @var Schrack_Elementor|null
@@ -108,6 +122,10 @@ class Schrack_Plugin {
 		$this->logger   = new Schrack_Logger( $this->settings );
 		$this->cron     = new Schrack_Cron( $this->settings, $this->logger );
 		$this->cron->init();
+		$this->product_exporter = new Schrack_Product_Exporter( $this->settings, $this->logger );
+		$this->product_exporter->init();
+		$this->product_importer = new Schrack_Product_Importer( $this->settings, $this->logger );
+		$this->product_importer->init();
 		$this->frontend_image_loader = new Schrack_Frontend_Image_Loader( $this->settings, $this->logger );
 		$this->frontend_image_loader->init();
 		$this->b2b_pricing = new Schrack_B2B_Pricing();
@@ -126,7 +144,7 @@ class Schrack_Plugin {
 		add_action( 'wp_footer', array( $this, 'render_support_widget' ), 5 );
 
 		if ( is_admin() ) {
-			$this->admin = new Schrack_Admin( $this->settings, $this->logger, $this->cron );
+			$this->admin = new Schrack_Admin( $this->settings, $this->logger, $this->cron, $this->product_exporter, $this->product_importer );
 			$this->admin->init();
 
 			$this->product_admin_fields = new Schrack_Product_Admin_Fields();
@@ -150,6 +168,8 @@ class Schrack_Plugin {
 			'class-schrack-category-markup.php',
 			'class-schrack-manual-price.php',
 			'class-schrack-category-csv-importer.php',
+			'class-schrack-product-exporter.php',
+			'class-schrack-product-importer.php',
 			'class-schrack-attribute-extractor.php',
 			'class-schrack-soap-client.php',
 			'class-schrack-product-mapper.php',

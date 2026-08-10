@@ -229,6 +229,20 @@ wp schrack-sync full
 
 Use `wp schrack-sync images --drain` for a large initial media backlog when SSH/WP-CLI is available. It bypasses Action Scheduler follow-up latency and keeps processing image batches in the same CLI process until the backlog is clear or the optional batch/time limit is reached. `wp schrack-sync telesystem --drain` does the same for a large initial Telesystem feed import, running consecutive import cycles until the feed is fully imported or the optional run/time limit is reached.
 
+## Complete WooCommerce product export and import
+
+`WooCommerce > Product export/import` provides resumable CSV backup and restore jobs designed for large catalogs. Both jobs run in small Action Scheduler/WP-Cron batches and persist their file position, so closing the browser does not interrupt them.
+
+The export uses WooCommerce's official product CSV schema and includes every non-trashed product and variation, attributes, categories, tags, images, downloads, linked products, and all custom product metadata. This includes Schrack and Telesystem identity, item numbers, EANs, purchase prices, VAT, stock details, sync timestamps, technical attributes, documents, image references, commercial fields, and `_schrack_raw_feed_data`.
+
+This is a product-catalog backup, not a database backup; it does not include orders, customers, or product reviews.
+
+WooCommerce normally skips array/object metadata. The plugin encodes those values into a versioned, base64-wrapped JSON marker in `Meta:` columns and decodes them during its own import, preserving structured supplier records without unsafe PHP unserialization. Final CSV headers are assembled only after all dynamic attribute/download/meta columns are known, and the completed file is streamed to the administrator without loading it into PHP memory.
+
+The importer accepts this export or another recognizable WooCommerce product CSV and automatically maps official columns. A completed private export can be queued directly for import without downloading/re-uploading it, which bypasses the WordPress upload-size limit. "Update existing" restores rows by ID/SKU in the same store; "Create" is intended for an empty/new store and skips already existing IDs/SKUs. Uploaded copies and completed exports are kept in separate randomized, web-protected upload directories. Import copies are deleted at completion; export files are deleted on reset or age cleanup.
+
+If a server timeout or queue-runner interruption leaves a job stale, the page offers a retry action. Export retries truncate the work file back to its last durable byte checkpoint before continuing, while import retries resume at the last confirmed CSV position.
+
 ## Logging
 
 Logs are stored in a custom database table:

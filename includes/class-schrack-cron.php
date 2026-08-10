@@ -2274,7 +2274,7 @@ class Schrack_Cron {
 	 * Clears scheduled actions.
 	 */
 	public static function clear_scheduled_actions(): void {
-		$hooks = array( self::HOOK_CATALOG, self::HOOK_CATALOG_WORKER, self::HOOK_TELESYSTEM_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER, self::HOOK_CATEGORY_IMPORT );
+		$hooks = array( self::HOOK_CATALOG, self::HOOK_CATALOG_WORKER, self::HOOK_TELESYSTEM_CATALOG, self::HOOK_PRICES, self::HOOK_STOCK, self::HOOK_FULL, self::HOOK_IMAGES, self::HOOK_IMAGE_WORKER, self::HOOK_CATEGORY_IMPORT, 'schrack_wc_sync_product_export_batch', 'schrack_wc_sync_product_import_batch' );
 
 		if ( class_exists( 'Schrack_Frontend_Image_Loader' ) ) {
 			$hooks[] = Schrack_Frontend_Image_Loader::BACKGROUND_HOOK;

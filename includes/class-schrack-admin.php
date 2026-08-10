@@ -34,6 +34,20 @@ class Schrack_Admin {
 	private Schrack_Cron $cron;
 
 	/**
+	 * Product and supplier CSV exporter.
+	 *
+	 * @var Schrack_Product_Exporter
+	 */
+	private Schrack_Product_Exporter $product_exporter;
+
+	/**
+	 * WooCommerce product CSV importer.
+	 *
+	 * @var Schrack_Product_Importer
+	 */
+	private Schrack_Product_Importer $product_importer;
+
+	/**
 	 * Category markup service.
 	 *
 	 * @var Schrack_Category_Markup
@@ -50,11 +64,13 @@ class Schrack_Admin {
 	/**
 	 * Constructor.
 	 */
-	public function __construct( Schrack_Settings $settings, Schrack_Logger $logger, Schrack_Cron $cron ) {
-		$this->settings = $settings;
-		$this->logger   = $logger;
-		$this->cron     = $cron;
-		$this->markups  = new Schrack_Category_Markup( $settings );
+	public function __construct( Schrack_Settings $settings, Schrack_Logger $logger, Schrack_Cron $cron, Schrack_Product_Exporter $product_exporter, Schrack_Product_Importer $product_importer ) {
+		$this->settings         = $settings;
+		$this->logger           = $logger;
+		$this->cron             = $cron;
+		$this->product_exporter = $product_exporter;
+		$this->product_importer = $product_importer;
+		$this->markups          = new Schrack_Category_Markup( $settings );
 	}
 
 	/**
@@ -75,6 +91,14 @@ class Schrack_Admin {
 		add_action( 'admin_post_schrack_wc_sync_debug_fetch', array( $this, 'debug_fetch' ) );
 		add_action( 'admin_post_schrack_wc_sync_debug_download', array( $this, 'debug_download' ) );
 		add_action( 'admin_post_schrack_wc_sync_debug_reset', array( $this, 'debug_reset' ) );
+		add_action( 'admin_post_schrack_wc_sync_product_export_start', array( $this, 'start_product_export' ) );
+		add_action( 'admin_post_schrack_wc_sync_product_export_download', array( $this, 'download_product_export' ) );
+		add_action( 'admin_post_schrack_wc_sync_product_export_resume', array( $this, 'resume_product_export' ) );
+		add_action( 'admin_post_schrack_wc_sync_product_export_reset', array( $this, 'reset_product_export' ) );
+		add_action( 'admin_post_schrack_wc_sync_product_import_start', array( $this, 'start_product_import' ) );
+		add_action( 'admin_post_schrack_wc_sync_product_import_export_file', array( $this, 'import_completed_export' ) );
+		add_action( 'admin_post_schrack_wc_sync_product_import_resume', array( $this, 'resume_product_import' ) );
+		add_action( 'admin_post_schrack_wc_sync_product_import_reset', array( $this, 'reset_product_import' ) );
 		add_action( 'admin_post_schrack_wc_sync_manual_sync', array( $this, 'manual_sync' ) );
 		add_action( 'admin_post_schrack_wc_sync_stop_syncs', array( $this, 'stop_syncs' ) );
 		add_action( 'admin_post_schrack_wc_sync_sku_action', array( $this, 'sku_action' ) );
@@ -125,6 +149,15 @@ class Schrack_Admin {
 			self::CAPABILITY,
 			'schrack-sync-manual',
 			array( $this, 'render_manual_page' )
+		);
+
+		add_submenu_page(
+			'woocommerce',
+			__( 'Product and supplier export/import', 'schrack-woocommerce-sync' ),
+			__( 'Product export/import', 'schrack-woocommerce-sync' ),
+			self::CAPABILITY,
+			'schrack-sync-export',
+			array( $this, 'render_product_export_page' )
 		);
 
 		add_submenu_page(
@@ -1298,6 +1331,190 @@ class Schrack_Admin {
 	}
 
 	/**
+	 * Renders the resumable product and supplier export page.
+	 */
+	public function render_product_export_page(): void {
+		$this->assert_can_manage();
+
+		$notice         = $this->get_notice();
+		$product_export = $this->product_exporter->status();
+		$product_import = $this->product_importer->status();
+
+		include SCHRACK_WC_SYNC_PATH . 'templates/admin-product-export.php';
+	}
+
+	/**
+	 * Validates export choices and queues the first background batch.
+	 */
+	public function start_product_export(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_product_export_start' );
+
+		$result = $this->product_exporter->queue();
+
+		if ( 'error' === (string) ( $result['state'] ?? '' ) ) {
+			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'The product export could not be started.', 'schrack-woocommerce-sync' ) ) );
+		} elseif ( 'done' === (string) ( $result['state'] ?? '' ) ) {
+			$this->set_notice( 'success', __( 'The export finished immediately because no matching products were found.', 'schrack-woocommerce-sync' ) );
+		} else {
+			$this->set_notice( 'success', __( 'The product and supplier export was queued. This page refreshes while batches run.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$this->redirect( 'schrack-sync-export' );
+	}
+
+	/**
+	 * Validates an uploaded WooCommerce product CSV and queues background import.
+	 */
+	public function start_product_import(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_product_import_start' );
+
+		$file = isset( $_FILES['product_import_csv'] ) && is_array( $_FILES['product_import_csv'] )
+			? $_FILES['product_import_csv']
+			: array();
+		$error = absint( $file['error'] ?? UPLOAD_ERR_NO_FILE );
+
+		if ( UPLOAD_ERR_OK !== $error ) {
+			$this->set_notice( 'error', __( 'Select a readable WooCommerce product CSV file.', 'schrack-woocommerce-sync' ) );
+			$this->redirect( 'schrack-sync-export' );
+		}
+
+		$tmp_name        = isset( $file['tmp_name'] ) && is_string( $file['tmp_name'] ) ? $file['tmp_name'] : '';
+		$original_name   = isset( $file['name'] ) && is_string( $file['name'] ) ? sanitize_file_name( wp_unslash( $file['name'] ) ) : 'products.csv';
+		$mode            = isset( $_POST['product_import_mode'] ) ? sanitize_key( wp_unslash( (string) $_POST['product_import_mode'] ) ) : 'update';
+		$update_existing = 'create' !== $mode;
+
+		if ( '' === $tmp_name || ! is_uploaded_file( $tmp_name ) ) {
+			$this->set_notice( 'error', __( 'The product CSV upload could not be verified.', 'schrack-woocommerce-sync' ) );
+			$this->redirect( 'schrack-sync-export' );
+		}
+
+		$result = $this->product_importer->prepare_upload( $tmp_name, $original_name, $update_existing, get_current_user_id() );
+
+		if ( is_wp_error( $result ) ) {
+			$this->set_notice( 'error', $result->get_error_message() );
+		} elseif ( 'error' === (string) ( $result['state'] ?? '' ) ) {
+			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'The product import could not be started.', 'schrack-woocommerce-sync' ) ) );
+		} else {
+			$this->set_notice( 'success', __( 'The WooCommerce product CSV import was queued and will continue in the background.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$this->redirect( 'schrack-sync-export' );
+	}
+
+	/**
+	 * Queues the last completed private export directly, bypassing upload limits.
+	 */
+	public function import_completed_export(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_product_import_export_file' );
+
+		$export_id = isset( $_POST['export_id'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_id'] ) ) : '';
+		$mode      = isset( $_POST['product_import_mode'] ) ? sanitize_key( wp_unslash( (string) $_POST['product_import_mode'] ) ) : 'update';
+		$file      = $this->product_exporter->completed_file( $export_id );
+
+		if ( null === $file ) {
+			$this->set_notice( 'error', __( 'The completed private export file was not found.', 'schrack-woocommerce-sync' ) );
+			$this->redirect( 'schrack-sync-export' );
+		}
+
+		$result = $this->product_importer->prepare_upload(
+			$file['path'],
+			$file['name'],
+			'create' !== $mode,
+			get_current_user_id(),
+			false
+		);
+
+		if ( is_wp_error( $result ) ) {
+			$this->set_notice( 'error', $result->get_error_message() );
+		} elseif ( 'error' === (string) ( $result['state'] ?? '' ) ) {
+			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'The completed export could not be queued for import.', 'schrack-woocommerce-sync' ) ) );
+		} else {
+			$this->set_notice( 'success', __( 'The completed export was queued directly for background import.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$this->redirect( 'schrack-sync-export' );
+	}
+
+	/**
+	 * Streams a completed private CSV to an authorized administrator.
+	 */
+	public function download_product_export(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_product_export_download' );
+
+		$export_id = isset( $_GET['export_id'] ) ? sanitize_key( wp_unslash( (string) $_GET['export_id'] ) ) : '';
+
+		if ( '' === $export_id || ! $this->product_exporter->stream_download( $export_id ) ) {
+			wp_die( esc_html__( 'The completed product export file was not found.', 'schrack-woocommerce-sync' ) );
+		}
+
+		exit;
+	}
+
+	/**
+	 * Cancels/removes the current product export.
+	 */
+	public function reset_product_export(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_product_export_reset' );
+
+		$this->product_exporter->reset();
+		$this->set_notice( 'success', __( 'The product export status and its private CSV file were cleared.', 'schrack-woocommerce-sync' ) );
+		$this->redirect( 'schrack-sync-export' );
+	}
+
+	/**
+	 * Retries a stale or failed product export.
+	 */
+	public function resume_product_export(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_product_export_resume' );
+
+		$result = $this->product_exporter->resume();
+
+		if ( 'error' === (string) ( $result['state'] ?? '' ) ) {
+			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'The product export could not be resumed.', 'schrack-woocommerce-sync' ) ) );
+		} else {
+			$this->set_notice( 'success', __( 'The product export was resumed from its last saved checkpoint.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$this->redirect( 'schrack-sync-export' );
+	}
+
+	/**
+	 * Cancels/removes the current product import.
+	 */
+	public function reset_product_import(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_product_import_reset' );
+
+		$this->product_importer->reset();
+		$this->set_notice( 'success', __( 'The product import status and its private uploaded copy were cleared.', 'schrack-woocommerce-sync' ) );
+		$this->redirect( 'schrack-sync-export' );
+	}
+
+	/**
+	 * Retries a stale or failed product import.
+	 */
+	public function resume_product_import(): void {
+		$this->assert_can_manage();
+		check_admin_referer( 'schrack_wc_sync_product_import_resume' );
+
+		$result = $this->product_importer->resume();
+
+		if ( 'error' === (string) ( $result['state'] ?? '' ) ) {
+			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'The product import could not be resumed.', 'schrack-woocommerce-sync' ) ) );
+		} else {
+			$this->set_notice( 'success', __( 'The product import was resumed from its last saved position.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$this->redirect( 'schrack-sync-export' );
+	}
+
+	/**
 	 * Renders status page.
 	 */
 	public function render_status_page(): void {
@@ -1825,6 +2042,7 @@ class Schrack_Admin {
 			'markups'  => array( 'label' => __( 'Category Markups', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-markups' ),
 			'b2b'      => array( 'label' => __( 'Clienti B2B', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-b2b' ),
 			'manual'   => array( 'label' => __( 'Manual Sync', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-manual' ),
+			'export'   => array( 'label' => __( 'Product Export / Import', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-export' ),
 			'logs'     => array( 'label' => __( 'Logs', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-logs' ),
 			'status'   => array( 'label' => __( 'Status', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-status' ),
 			'debug'    => array( 'label' => __( 'Debug', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-debug' ),
