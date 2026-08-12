@@ -51,12 +51,13 @@ class Schrack_Product_Exporter {
 	public const HOOK       = 'schrack_wc_sync_product_export_batch';
 
 	private const GROUP            = 'schrack-wc-sync';
-	private const BATCH_SIZE       = 50;
+	private const BATCH_SIZE       = 1000;
+	private const BATCH_TIME_BUDGET = 25.0;
 	private const EXPORT_DIRECTORY = 'schrack-private-exports';
 	private const FILE_MAX_AGE     = 7 * DAY_IN_SECONDS;
-	private const FINALIZE_COPY_BUDGET = 64 * 1024 * 1024;
+	private const FINALIZE_COPY_BUDGET = 256 * 1024 * 1024;
 	private const FINALIZE_CHUNK_SIZE  = 256 * 1024;
-	private const FINALIZE_TIME_BUDGET = 8.0;
+	private const FINALIZE_TIME_BUDGET = 20.0;
 	private const STRUCTURED_META_PREFIX = 'schrack-wc-json:v1:';
 	private const ESCAPED_STRING_PREFIX  = 'schrack-wc-string:v1:';
 
@@ -478,11 +479,15 @@ class Schrack_Product_Exporter {
 			throw new RuntimeException( __( 'The product export work file is missing or is not writable.', 'schrack-woocommerce-sync' ) );
 		}
 
+		// Re-evaluate this inside the worker because cPanel web and cron PHP can
+		// load different php.ini files. It also upgrades an already-running job
+		// from an older, much smaller saved batch size after plugin deployment.
+		$batch_size                = max( 1, min( self::BATCH_SIZE, Schrack_Memory_Guard::export_batch_size() ) );
 		$status['state']            = 'running';
+		$status['batch_size']       = $batch_size;
 		$status['last_progress_at'] = time();
 		$this->save_status( $status );
 
-		$batch_size = max( 1, min( self::BATCH_SIZE, absint( $status['batch_size'] ?? Schrack_Memory_Guard::export_batch_size() ) ) );
 		$ids        = $this->product_ids(
 			absint( $status['last_id'] ?? 0 ),
 			absint( $status['max_id'] ?? 0 ),
@@ -539,14 +544,30 @@ class Schrack_Product_Exporter {
 		$attempted       = 0;
 		$last_product_id = absint( $status['last_id'] ?? 0 );
 		$memory_yielded  = false;
+		$time_yielded    = false;
+		$started_at      = microtime( true );
+		$cache_chunk     = Schrack_Memory_Guard::export_cache_chunk_size();
 		add_filter( 'woocommerce_product_export_meta_value', array( $this, 'encode_structured_meta' ), 10, 1 );
 		add_filter( 'woocommerce_product_export_skip_meta_keys', array( $this, 'skip_transient_meta_keys' ), 20, 1 );
 
 		try {
-			foreach ( $ids as $product_id ) {
+			foreach ( $ids as $index => $product_id ) {
 				if ( $attempted > 0 && Schrack_Memory_Guard::is_pressure_high() ) {
 					$memory_yielded = true;
 					break;
+				}
+
+				if ( $attempted > 0 && microtime( true ) - $started_at >= self::BATCH_TIME_BUDGET ) {
+					$time_yielded = true;
+					break;
+				}
+
+				if ( 0 === $attempted % $cache_chunk ) {
+					if ( $attempted > 0 ) {
+						Schrack_Memory_Guard::release_runtime_memory();
+					}
+
+					$this->prime_product_caches( array_slice( $ids, (int) $index, $cache_chunk ) );
 				}
 
 				++$attempted;
@@ -619,10 +640,11 @@ class Schrack_Product_Exporter {
 		$status['rows']             = absint( $status['rows'] ?? 0 ) + $written;
 		$status['errors']           = absint( $status['errors'] ?? 0 ) + $errors;
 		$status['memory_yields']    = absint( $status['memory_yields'] ?? 0 ) + ( $memory_yielded ? 1 : 0 );
+		$status['time_yields']      = absint( $status['time_yields'] ?? 0 ) + ( $time_yielded ? 1 : 0 );
 		clearstatcache( true, $rows_path );
 		$status['work_bytes']       = (int) filesize( $rows_path );
 		$status['last_progress_at'] = time();
-		$is_complete                = absint( $status['last_id'] ) >= absint( $status['max_id'] ?? 0 ) || ( ! $memory_yielded && $attempted === count( $ids ) && count( $ids ) < $batch_size );
+		$is_complete                = absint( $status['last_id'] ) >= absint( $status['max_id'] ?? 0 ) || ( ! $memory_yielded && ! $time_yielded && $attempted === count( $ids ) && count( $ids ) < $batch_size );
 
 		if ( $is_complete ) {
 			$status['state']                = 'finalizing';
@@ -894,6 +916,27 @@ class Schrack_Product_Exporter {
 	}
 
 	/**
+	 * Primes posts, metadata and terms in a small bounded group to avoid the
+	 * per-product query pattern without retaining the entire export batch.
+	 *
+	 * @param array<int,int> $product_ids Product IDs to prime.
+	 */
+	private function prime_product_caches( array $product_ids ): void {
+		$product_ids = array_values( array_filter( array_map( 'absint', $product_ids ) ) );
+
+		if ( empty( $product_ids ) ) {
+			return;
+		}
+
+		if ( function_exists( '_prime_post_caches' ) ) {
+			_prime_post_caches( $product_ids, true, true );
+			return;
+		}
+
+		update_meta_cache( 'post', $product_ids );
+	}
+
+	/**
 	 * Writes one RFC-4180-compatible CSV row.
 	 *
 	 * @param resource         $handle File handle.
@@ -930,7 +973,13 @@ class Schrack_Product_Exporter {
 	 */
 	private function enqueue_batch( string $export_id ): bool {
 		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			return absint( as_enqueue_async_action( self::HOOK, array( $export_id ), self::GROUP ) ) > 0;
+			$queued = absint( as_enqueue_async_action( self::HOOK, array( $export_id ), self::GROUP ) ) > 0;
+
+			if ( $queued && class_exists( 'Schrack_Cron' ) ) {
+				Schrack_Cron::dispatch_queue_runner_ping();
+			}
+
+			return $queued;
 		}
 
 		return false !== wp_schedule_single_event( time() + 5, self::HOOK, array( $export_id ) );

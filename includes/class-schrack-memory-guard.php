@@ -68,14 +68,35 @@ final class Schrack_Memory_Guard {
 		$limit = self::limit_bytes();
 
 		$size = match ( true ) {
-			$limit > 0 && $limit <= 128 * MB_IN_BYTES  => 5,
-			$limit > 0 && $limit <= 256 * MB_IN_BYTES  => 10,
-			$limit > 0 && $limit <= 512 * MB_IN_BYTES  => 20,
-			$limit > 0 && $limit <= 1024 * MB_IN_BYTES => 35,
-			default                                     => 50,
+			0 === $limit                                => 300,
+			$limit <= 128 * MB_IN_BYTES                 => 100,
+			$limit <= 256 * MB_IN_BYTES                 => 200,
+			$limit <= 512 * MB_IN_BYTES                 => 350,
+			$limit <= 1024 * MB_IN_BYTES                => 600,
+			$limit <= self::SHARED_HOST_LIMIT           => 800,
+			default                                     => 1000,
 		};
 
-		return max( 1, min( 50, (int) apply_filters( 'schrack_wc_product_export_batch_size', $size, $limit ) ) );
+		return max( 1, min( 1000, (int) apply_filters( 'schrack_wc_product_export_batch_size', $size, $limit ) ) );
+	}
+
+	/**
+	 * Number of product caches primed at once inside a time-bounded export action.
+	 */
+	public static function export_cache_chunk_size(): int {
+		$limit = self::limit_bytes();
+
+		$size = match ( true ) {
+			0 === $limit                                => 10,
+			$limit <= 128 * MB_IN_BYTES                 => 5,
+			$limit <= 256 * MB_IN_BYTES                 => 10,
+			$limit <= 512 * MB_IN_BYTES                 => 15,
+			$limit <= 1024 * MB_IN_BYTES                => 25,
+			$limit <= self::SHARED_HOST_LIMIT           => 30,
+			default                                     => 40,
+		};
+
+		return max( 1, min( 50, (int) apply_filters( 'schrack_wc_product_export_cache_chunk_size', $size, $limit ) ) );
 	}
 
 	/**
@@ -85,11 +106,13 @@ final class Schrack_Memory_Guard {
 		$limit = self::limit_bytes();
 
 		$size = match ( true ) {
-			$limit > 0 && $limit <= 128 * MB_IN_BYTES  => 1,
-			$limit > 0 && $limit <= 256 * MB_IN_BYTES  => 2,
-			$limit > 0 && $limit <= 512 * MB_IN_BYTES  => 3,
-			$limit > 0 && $limit <= 1024 * MB_IN_BYTES => 5,
-			default                                     => 8,
+			0 === $limit                                => 5,
+			$limit <= 128 * MB_IN_BYTES                 => 1,
+			$limit <= 256 * MB_IN_BYTES                 => 2,
+			$limit <= 512 * MB_IN_BYTES                 => 5,
+			$limit <= 1024 * MB_IN_BYTES                => 10,
+			$limit <= self::SHARED_HOST_LIMIT           => 15,
+			default                                     => 20,
 		};
 
 		return max( 1, min( 20, (int) apply_filters( 'schrack_wc_product_import_batch_size', $size, $limit ) ) );
@@ -158,6 +181,12 @@ final class Schrack_Memory_Guard {
 	 */
 	public static function forget_product( int $product_id ): void {
 		if ( $product_id <= 0 ) {
+			return;
+		}
+
+		// Runtime cache flushing below is local-only. Per-key deletion is not:
+		// Redis/Memcached drop-ins would delete the storefront's persistent cache.
+		if ( function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 			return;
 		}
 

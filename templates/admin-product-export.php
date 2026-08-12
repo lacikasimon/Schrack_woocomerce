@@ -67,7 +67,7 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 			<?php esc_html_e( 'A Schrack és Telesystem furnizor mezők, a műszaki adatok, dokumentumok és a teljes nyers feed is Meta oszlopokként kerülnek a mentésbe. A tömbös adatok visszaállítható, jelölt formátumot kapnak.', 'schrack-woocommerce-sync' ); ?>
 		</p>
 		<p class="description"><?php esc_html_e( 'Ez termékkatalógus-mentés: rendeléseket, vásárlókat és termékértékeléseket nem exportál.', 'schrack-woocommerce-sync' ); ?></p>
-		<p class="description"><?php esc_html_e( 'A feldolgozás automatikusan memóriakímélő batch-méretet választ, termékenként üríti a WooCommerce cache-t, és 70% PHP memóriahasználatnál biztonságosan átadja a folytatást a következő háttérfolyamatnak.', 'schrack-woocommerce-sync' ); ?></p>
+		<p class="description"><?php esc_html_e( 'A feldolgozás automatikusan memóriakímélő, időkorlátos batch-méretet választ, kis csoportokban előkészíti és üríti a futásidejű cache-t, és 70% PHP memóriahasználatnál biztonságosan átadja a folytatást a következő háttérfolyamatnak.', 'schrack-woocommerce-sync' ); ?></p>
 		<p class="description"><strong><?php esc_html_e( 'Lemezhely: a véglegesítés alatt a munkafájl és a kész CSV egyszerre létezik, ezért legyen legalább a várható CSV méretének kétszerese szabadon.', 'schrack-woocommerce-sync' ); ?></strong></p>
 
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">

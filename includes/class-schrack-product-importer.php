@@ -397,7 +397,9 @@ class Schrack_Product_Importer {
 		wp_set_current_user( $user_id );
 		$this->ensure_woocommerce_importer();
 
-		$batch_size                 = max( 1, min( self::BATCH_SIZE, absint( $status['batch_size'] ?? Schrack_Memory_Guard::import_batch_size() ) ) );
+		// Re-evaluate in the worker because cPanel cron may use a different
+		// memory_limit than the administrator request which queued the import.
+		$batch_size                 = max( 1, min( self::BATCH_SIZE, Schrack_Memory_Guard::import_batch_size() ) );
 		$status['state']            = 'running';
 		$status['batch_size']       = $batch_size;
 		$status['last_progress_at'] = time();
@@ -780,7 +782,13 @@ class Schrack_Product_Importer {
 	 */
 	private function enqueue_batch( string $import_id ): bool {
 		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			return absint( as_enqueue_async_action( self::HOOK, array( $import_id ), self::GROUP ) ) > 0;
+			$queued = absint( as_enqueue_async_action( self::HOOK, array( $import_id ), self::GROUP ) ) > 0;
+
+			if ( $queued && class_exists( 'Schrack_Cron' ) ) {
+				Schrack_Cron::dispatch_queue_runner_ping();
+			}
+
+			return $queued;
 		}
 
 		return false !== wp_schedule_single_event( time() + 5, self::HOOK, array( $import_id ) );

@@ -50,7 +50,6 @@ class Schrack_Cron {
 	public function init(): void {
 		add_filter( 'cron_schedules', array( $this, 'add_wp_cron_schedules' ) );
 		add_filter( 'action_scheduler_queue_runner_concurrent_batches', array( $this, 'raise_action_scheduler_concurrency' ) );
-		add_filter( 'action_scheduler_queue_runner_batch_size', array( $this, 'lower_action_scheduler_batch_size' ) );
 		add_action( 'init', array( $this, 'maybe_handle_queue_runner_ping' ), 0 );
 		add_action( 'init', array( $this, 'maybe_schedule_recurring_actions' ) );
 		add_action( self::HOOK_CATALOG, array( $this, 'run_catalog_import' ) );
@@ -1254,7 +1253,7 @@ class Schrack_Cron {
 					// requeue would trigger Action Scheduler's throttled
 					// self-dispatch, and the rest would sit due but idle for up
 					// to another 60 seconds.
-					$this->dispatch_queue_runner_ping();
+					self::dispatch_queue_runner_ping();
 
 					$this->logger->info(
 						'catalog',
@@ -1405,24 +1404,6 @@ class Schrack_Cron {
 	}
 
 	/**
-	 * A single claim grabs up to this many due actions at once (Action
-	 * Scheduler's default: 25), then processes them all sequentially in one
-	 * PHP process regardless of how many *other* runner processes are also
-	 * allowed to run concurrently. With e.g. 5 worker actions queued together,
-	 * one claim would happily scoop up all 5 and quietly defeat the
-	 * concurrency raise above. Capping this near 1 forces each
-	 * concurrently-dispatched runner to claim at most a couple of actions, so
-	 * they actually split the work instead of one runner doing it all anyway.
-	 *
-	 * @param mixed $current Action Scheduler's current filtered value.
-	 */
-	public function lower_action_scheduler_batch_size( mixed $current ): int {
-		$limit = $this->is_low_memory_host() ? 1 : 2;
-
-		return max( 1, min( (int) $current, $limit ) );
-	}
-
-	/**
 	 * Fires $count near-simultaneous Action Scheduler async-runner loopback
 	 * requests instead of relying on its natural self-dispatch, which
 	 * throttles itself to at most one new runner every 60 seconds
@@ -1434,7 +1415,7 @@ class Schrack_Cron {
 	 */
 	private function dispatch_concurrent_queue_runners( int $count ): void {
 		for ( $i = 0; $i < $count; $i++ ) {
-			$this->dispatch_queue_runner_ping();
+			self::dispatch_queue_runner_ping();
 		}
 	}
 
@@ -1442,14 +1423,11 @@ class Schrack_Cron {
 	 * Fires one Action Scheduler async-runner loopback request immediately,
 	 * bypassing its natural once-per-60-seconds self-dispatch throttle.
 	 * Replicates ActionScheduler_AsyncRequest_QueueRunner's own dispatch call
-	 * exactly (same admin-ajax action/nonce). Used both to burst-start a fresh
-	 * wave of parallel workers and, from run_catalog_worker() itself, so a
-	 * worker that pauses and requeues its own continuation wakes a runner
-	 * right away instead of waiting on the same throttle -- since all workers
-	 * in a wave tend to pause around the same moment, each firing its own ping
-	 * reproduces the same concurrent burst that started them.
+	 * exactly (same admin-ajax action/nonce). Used to burst-start parallel
+	 * workers and to wake export/import or catalog continuations immediately
+	 * instead of waiting on the normal queue-runner throttle.
 	 */
-	private function dispatch_queue_runner_ping(): void {
+	public static function dispatch_queue_runner_ping(): void {
 		if ( ! function_exists( 'wp_create_nonce' ) ) {
 			return;
 		}
