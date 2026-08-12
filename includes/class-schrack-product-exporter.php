@@ -54,6 +54,9 @@ class Schrack_Product_Exporter {
 	private const BATCH_SIZE       = 50;
 	private const EXPORT_DIRECTORY = 'schrack-private-exports';
 	private const FILE_MAX_AGE     = 7 * DAY_IN_SECONDS;
+	private const FINALIZE_COPY_BUDGET = 64 * 1024 * 1024;
+	private const FINALIZE_CHUNK_SIZE  = 256 * 1024;
+	private const FINALIZE_TIME_BUDGET = 8.0;
 	private const STRUCTURED_META_PREFIX = 'schrack-wc-json:v1:';
 	private const ESCAPED_STRING_PREFIX  = 'schrack-wc-string:v1:';
 
@@ -166,27 +169,30 @@ class Schrack_Product_Exporter {
 		}
 
 		$now    = time();
-		$status = array(
-			'state'            => 'queued',
-			'export_id'        => $export_id,
-			'file'             => $path,
-			'rows_file'        => $rows_path,
-			'file_name'        => basename( $path ),
-			'bytes'            => 0,
-			'work_bytes'       => 0,
-			'total'            => $snapshot['total'],
-			'max_id'           => $snapshot['max_id'],
-			'last_id'          => 0,
-			'processed'        => 0,
-			'rows'             => 0,
-			'errors'           => 0,
-			'batch_size'       => self::BATCH_SIZE,
-			'column_names'     => $adapter->get_column_names(),
-			'format'           => 'woocommerce-product-csv',
-			'includes_meta'    => 'yes',
-			'includes_variations' => 'yes',
-			'started_at'       => $now,
-			'last_progress_at' => $now,
+		$status = array_merge(
+			array(
+				'state'               => 'queued',
+				'export_id'           => $export_id,
+				'file'                => $path,
+				'rows_file'           => $rows_path,
+				'file_name'           => basename( $path ),
+				'bytes'               => 0,
+				'work_bytes'          => 0,
+				'total'               => $snapshot['total'],
+				'max_id'              => $snapshot['max_id'],
+				'last_id'             => 0,
+				'processed'           => 0,
+				'rows'                => 0,
+				'errors'              => 0,
+				'batch_size'          => Schrack_Memory_Guard::export_batch_size(),
+				'column_names'        => $adapter->get_column_names(),
+				'format'              => 'woocommerce-product-csv',
+				'includes_meta'       => 'yes',
+				'includes_variations' => 'yes',
+				'started_at'          => $now,
+				'last_progress_at'    => $now,
+			),
+			Schrack_Memory_Guard::diagnostics()
 		);
 
 		$this->save_status( $status );
@@ -241,6 +247,7 @@ class Schrack_Product_Exporter {
 				$status['state']            = 'error';
 				$status['message']          = $exception->getMessage();
 				$status['last_progress_at'] = time();
+				$status                     = array_merge( $status, Schrack_Memory_Guard::diagnostics() );
 				$this->save_status( $status );
 			}
 
@@ -475,7 +482,7 @@ class Schrack_Product_Exporter {
 		$status['last_progress_at'] = time();
 		$this->save_status( $status );
 
-		$batch_size = max( 1, min( self::BATCH_SIZE, absint( $status['batch_size'] ?? self::BATCH_SIZE ) ) );
+		$batch_size = max( 1, min( self::BATCH_SIZE, absint( $status['batch_size'] ?? Schrack_Memory_Guard::export_batch_size() ) ) );
 		$ids        = $this->product_ids(
 			absint( $status['last_id'] ?? 0 ),
 			absint( $status['max_id'] ?? 0 ),
@@ -485,12 +492,6 @@ class Schrack_Product_Exporter {
 		if ( empty( $ids ) ) {
 			$this->finish_export( $status );
 			return;
-		}
-
-		if ( function_exists( '_prime_post_caches' ) ) {
-			_prime_post_caches( $ids, true, true );
-		} else {
-			update_meta_cache( 'post', $ids );
 		}
 
 		$adapter = $this->new_adapter();
@@ -533,42 +534,61 @@ class Schrack_Product_Exporter {
 			throw new RuntimeException( __( 'The product export work file checkpoint could not be restored.', 'schrack-woocommerce-sync' ) );
 		}
 
-		$written = 0;
-		$errors  = 0;
+		$written         = 0;
+		$errors          = 0;
+		$attempted       = 0;
+		$last_product_id = absint( $status['last_id'] ?? 0 );
+		$memory_yielded  = false;
 		add_filter( 'woocommerce_product_export_meta_value', array( $this, 'encode_structured_meta' ), 10, 1 );
 		add_filter( 'woocommerce_product_export_skip_meta_keys', array( $this, 'skip_transient_meta_keys' ), 20, 1 );
 
 		try {
 			foreach ( $ids as $product_id ) {
+				if ( $attempted > 0 && Schrack_Memory_Guard::is_pressure_high() ) {
+					$memory_yielded = true;
+					break;
+				}
+
+				++$attempted;
+				$last_product_id = $product_id;
+
 				try {
-					$product = wc_get_product( $product_id );
+					try {
+						$product = wc_get_product( $product_id );
 
-					if ( ! $product instanceof WC_Product ) {
-						throw new RuntimeException( __( 'WooCommerce could not load the product.', 'schrack-woocommerce-sync' ) );
+						if ( ! $product instanceof WC_Product ) {
+							throw new RuntimeException( __( 'WooCommerce could not load the product.', 'schrack-woocommerce-sync' ) );
+						}
+
+						$row     = $adapter->schrack_product_row( $product );
+						$columns = $adapter->get_column_names();
+						$values  = array();
+
+						foreach ( $columns as $column_id => $column_name ) {
+							$values[] = $adapter->format_data( $row[ $column_id ] ?? '' );
+						}
+					} catch ( Throwable $exception ) {
+						++$errors;
+						$this->logger->warning(
+							'export',
+							'Skipped a product during complete WooCommerce CSV export.',
+							null,
+							array(
+								'export_id' => $export_id,
+								'product_id' => $product_id,
+								'error'      => $exception->getMessage(),
+							)
+						);
+
+						continue;
 					}
 
-					$row     = $adapter->schrack_product_row( $product );
-					$columns = $adapter->get_column_names();
-					$values  = array();
-
-					foreach ( $columns as $column_id => $column_name ) {
-						$values[] = $adapter->format_data( $row[ $column_id ] ?? '' );
-					}
-
+					// File write failures must stop the job; skipping them would create an incomplete backup.
 					$this->write_csv_row( $handle, $values );
 					++$written;
-				} catch ( Throwable $exception ) {
-					++$errors;
-					$this->logger->warning(
-						'export',
-						'Skipped a product during complete WooCommerce CSV export.',
-						null,
-						array(
-							'export_id' => $export_id,
-							'product_id' => $product_id,
-							'error'      => $exception->getMessage(),
-						)
-					);
+				} finally {
+					unset( $product, $row, $values );
+					Schrack_Memory_Guard::forget_product( $product_id );
 				}
 			}
 		} finally {
@@ -584,6 +604,7 @@ class Schrack_Product_Exporter {
 
 		flock( $handle, LOCK_UN );
 		fclose( $handle );
+		Schrack_Memory_Guard::release_runtime_memory();
 
 		$latest = $this->status();
 
@@ -591,20 +612,24 @@ class Schrack_Product_Exporter {
 			return;
 		}
 
-		$status                     = array_merge( $status, $latest );
+		$status                     = array_merge( $status, $latest, Schrack_Memory_Guard::diagnostics() );
 		$status['column_names']     = $adapter->get_column_names();
-		$status['last_id']          = max( $ids );
-		$status['processed']        = absint( $status['processed'] ?? 0 ) + count( $ids );
+		$status['last_id']          = $last_product_id;
+		$status['processed']        = absint( $status['processed'] ?? 0 ) + $attempted;
 		$status['rows']             = absint( $status['rows'] ?? 0 ) + $written;
 		$status['errors']           = absint( $status['errors'] ?? 0 ) + $errors;
+		$status['memory_yields']    = absint( $status['memory_yields'] ?? 0 ) + ( $memory_yielded ? 1 : 0 );
 		clearstatcache( true, $rows_path );
 		$status['work_bytes']       = (int) filesize( $rows_path );
 		$status['last_progress_at'] = time();
-		$is_complete                = count( $ids ) < $batch_size || absint( $status['last_id'] ) >= absint( $status['max_id'] ?? 0 );
+		$is_complete                = absint( $status['last_id'] ) >= absint( $status['max_id'] ?? 0 ) || ( ! $memory_yielded && $attempted === count( $ids ) && count( $ids ) < $batch_size );
 
 		if ( $is_complete ) {
-			$status['state']            = 'finalizing';
-			$status['last_progress_at'] = time();
+			$status['state']                = 'finalizing';
+			$status['finalize_position']    = 0;
+			$status['finalize_bytes']       = 0;
+			$status['finalize_total_bytes'] = absint( $status['work_bytes'] ?? 0 );
+			$status['last_progress_at']     = time();
 			$this->save_status( $status );
 			$this->release_lock( $export_id );
 
@@ -627,24 +652,47 @@ class Schrack_Product_Exporter {
 	}
 
 	/**
-	 * Adds the final dynamic header and atomically completes the CSV.
+	 * Adds the final dynamic header and resumes a bounded CSV assembly chunk.
 	 *
 	 * @param array<string,mixed> $status Export status.
 	 */
 	private function finish_export( array $status ): void {
-		$path      = isset( $status['file'] ) ? (string) $status['file'] : '';
-		$rows_path = isset( $status['rows_file'] ) ? (string) $status['rows_file'] : '';
-		$columns   = isset( $status['column_names'] ) && is_array( $status['column_names'] ) ? $status['column_names'] : array();
+		$export_id         = sanitize_key( (string) ( $status['export_id'] ?? '' ) );
+		$path              = isset( $status['file'] ) ? (string) $status['file'] : '';
+		$rows_path         = isset( $status['rows_file'] ) ? (string) $status['rows_file'] : '';
+		$columns           = isset( $status['column_names'] ) && is_array( $status['column_names'] ) ? $status['column_names'] : array();
+		$source_position   = absint( $status['finalize_position'] ?? 0 );
+		$target_checkpoint = absint( $status['finalize_bytes'] ?? 0 );
 
-		if ( ! $this->is_valid_private_file( $rows_path, array( 'rows' ) ) || empty( $columns ) || ! $this->is_valid_target_path( $path, 'csv' ) ) {
+		if (
+			'' === $export_id ||
+			! $this->is_valid_private_file( $rows_path, array( 'rows' ) ) ||
+			empty( $columns ) ||
+			! $this->is_valid_target_path( $path, 'csv' ) ||
+			( file_exists( $path ) && ! $this->is_valid_private_file( $path, array( 'csv' ) ) )
+		) {
 			throw new RuntimeException( __( 'The complete product CSV could not be finalized.', 'schrack-woocommerce-sync' ) );
 		}
 
-		if ( file_exists( $path ) ) {
-			wp_delete_file( $path );
+		clearstatcache( true, $rows_path );
+		$source_size = filesize( $rows_path );
+
+		if ( false === $source_size ) {
+			throw new RuntimeException( __( 'The product CSV rows file size could not be read.', 'schrack-woocommerce-sync' ) );
 		}
 
-		$output = fopen( $path, 'xb' );
+		if ( $source_position > $source_size || ( $source_position > 0 && 0 === $target_checkpoint ) ) {
+			throw new RuntimeException( __( 'The product CSV finalization checkpoint is invalid.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$free_space      = function_exists( 'disk_free_space' ) ? disk_free_space( dirname( $path ) ) : false;
+		$remaining_bytes = max( 0, $source_size - $source_position );
+
+		if ( false !== $free_space && $free_space < $remaining_bytes + 16 * MB_IN_BYTES ) {
+			throw new RuntimeException( __( 'There is not enough free disk space to assemble the final product CSV. Free space and resume the export.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$output = fopen( $path, 'c+b' );
 		$input  = fopen( $rows_path, 'rb' );
 
 		if ( false === $output || false === $input ) {
@@ -654,55 +702,122 @@ class Schrack_Product_Exporter {
 			if ( is_resource( $input ) ) {
 				fclose( $input );
 			}
-			wp_delete_file( $path );
 			throw new RuntimeException( __( 'The complete product CSV could not be opened for finalization.', 'schrack-woocommerce-sync' ) );
 		}
 
+		if ( ! flock( $output, LOCK_EX ) ) {
+			fclose( $input );
+			fclose( $output );
+			throw new RuntimeException( __( 'The product CSV final file could not be locked.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$next_source_position = $source_position;
+		$next_target_position = $target_checkpoint;
+
 		try {
-			if ( false === fwrite( $output, "\xEF\xBB\xBF" ) ) {
-				throw new RuntimeException( __( 'The CSV UTF-8 marker could not be written.', 'schrack-woocommerce-sync' ) );
+			$target_stat = fstat( $output );
+
+			if ( ! is_array( $target_stat ) || ! isset( $target_stat['size'] ) ) {
+				throw new RuntimeException( __( 'The final product CSV size could not be read.', 'schrack-woocommerce-sync' ) );
 			}
 
-			$this->write_csv_row( $output, array_values( $columns ) );
+			$target_size = absint( $target_stat['size'] );
 
-			while ( ! feof( $input ) ) {
-				$chunk = fread( $input, 1024 * 1024 );
+			if ( $target_size < $target_checkpoint ) {
+				throw new RuntimeException( __( 'The final product CSV is shorter than its saved checkpoint.', 'schrack-woocommerce-sync' ) );
+			}
 
-				if ( false === $chunk || ( '' !== $chunk && false === fwrite( $output, $chunk ) ) ) {
+			if ( $target_size > $target_checkpoint && ! ftruncate( $output, $target_checkpoint ) ) {
+				throw new RuntimeException( __( 'An incomplete final product CSV could not be rolled back.', 'schrack-woocommerce-sync' ) );
+			}
+
+			if ( 0 !== fseek( $output, $target_checkpoint, SEEK_SET ) ) {
+				throw new RuntimeException( __( 'The final product CSV checkpoint could not be restored.', 'schrack-woocommerce-sync' ) );
+			}
+
+			if ( 0 === $source_position && 0 === $target_checkpoint ) {
+				if ( ! ftruncate( $output, 0 ) || 0 !== fseek( $output, 0, SEEK_SET ) ) {
+					throw new RuntimeException( __( 'The final product CSV could not be initialized.', 'schrack-woocommerce-sync' ) );
+				}
+
+				$this->write_all( $output, "\xEF\xBB\xBF" );
+				$this->write_csv_row( $output, array_values( $columns ) );
+			}
+
+			if ( 0 !== fseek( $input, $source_position, SEEK_SET ) ) {
+				throw new RuntimeException( __( 'The product CSV rows checkpoint could not be restored.', 'schrack-woocommerce-sync' ) );
+			}
+
+			$copied     = 0;
+			$started_at = microtime( true );
+
+			while (
+				ftell( $input ) < $source_size &&
+				$copied < self::FINALIZE_COPY_BUDGET &&
+				microtime( true ) - $started_at < self::FINALIZE_TIME_BUDGET
+			) {
+				$remaining = min( self::FINALIZE_CHUNK_SIZE, self::FINALIZE_COPY_BUDGET - $copied, $source_size - (int) ftell( $input ) );
+				$chunk     = fread( $input, $remaining );
+
+				if ( false === $chunk || '' === $chunk ) {
 					throw new RuntimeException( __( 'The product CSV rows could not be copied into the final file.', 'schrack-woocommerce-sync' ) );
 				}
+
+				$this->write_all( $output, $chunk );
+				$copied += strlen( $chunk );
 			}
 
 			if ( ! fflush( $output ) ) {
 				throw new RuntimeException( __( 'The completed product CSV could not be flushed to disk.', 'schrack-woocommerce-sync' ) );
 			}
-		} catch ( Throwable $exception ) {
+
+			$next_source_position = (int) ftell( $input );
+			$next_target_position = (int) ftell( $output );
+		} finally {
+			flock( $output, LOCK_UN );
 			fclose( $input );
 			fclose( $output );
-			wp_delete_file( $path );
-			throw $exception;
 		}
 
-		fclose( $input );
-		fclose( $output );
 		@chmod( $path, 0660 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		Schrack_Memory_Guard::release_runtime_memory();
 
 		$latest = $this->status();
 
 		if (
-			(string) ( $status['export_id'] ?? '' ) !== (string) ( $latest['export_id'] ?? '' ) ||
+			$export_id !== (string) ( $latest['export_id'] ?? '' ) ||
 			! in_array( (string) ( $latest['state'] ?? '' ), array( 'queued', 'running', 'finalizing' ), true )
 		) {
 			wp_delete_file( $path );
 			return;
 		}
 
-		$status                     = array_merge( $status, $latest );
+		$status                         = array_merge( $status, $latest, Schrack_Memory_Guard::diagnostics() );
+		$status['state']                = 'finalizing';
+		$status['finalize_position']    = $next_source_position;
+		$status['finalize_bytes']       = $next_target_position;
+		$status['finalize_total_bytes'] = $source_size;
+		$status['bytes']                = $next_target_position;
+		$status['last_progress_at']     = time();
+
+		if ( $next_source_position < $source_size ) {
+			$this->save_status( $status );
+			$this->release_lock( $export_id );
+
+			if ( ! $this->enqueue_batch( $export_id ) ) {
+				$status['state']   = 'error';
+				$status['message'] = __( 'The next final product CSV assembly batch could not be queued.', 'schrack-woocommerce-sync' );
+				$this->save_status( $status );
+			}
+			return;
+		}
+
 		$status['state']            = 'done';
 		$status['finished_at']      = time();
 		$status['last_progress_at'] = time();
+		clearstatcache( true, $path );
 		$status['bytes']            = (int) filesize( $path );
-		unset( $status['rows_file'], $status['work_bytes'] );
+		unset( $status['rows_file'], $status['work_bytes'], $status['finalize_position'], $status['finalize_bytes'], $status['finalize_total_bytes'] );
 		$this->save_status( $status );
 		wp_delete_file( $rows_path );
 
@@ -787,6 +902,26 @@ class Schrack_Product_Exporter {
 	private function write_csv_row( $handle, array $row ): void {
 		if ( false === fputcsv( $handle, $row, ',', '"', "\0" ) ) {
 			throw new RuntimeException( __( 'A row could not be written to the product export file.', 'schrack-woocommerce-sync' ) );
+		}
+	}
+
+	/**
+	 * Writes a complete binary chunk, including when fwrite() performs a partial write.
+	 *
+	 * @param resource $handle File handle.
+	 */
+	private function write_all( $handle, string $data ): void {
+		$length = strlen( $data );
+		$offset = 0;
+
+		while ( $offset < $length ) {
+			$written = fwrite( $handle, substr( $data, $offset ) );
+
+			if ( false === $written || 0 === $written ) {
+				throw new RuntimeException( __( 'A binary chunk could not be written to the product export file.', 'schrack-woocommerce-sync' ) );
+			}
+
+			$offset += $written;
 		}
 	}
 

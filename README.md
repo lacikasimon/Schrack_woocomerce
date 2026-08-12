@@ -233,15 +233,21 @@ Use `wp schrack-sync images --drain` for a large initial media backlog when SSH/
 
 `WooCommerce > Product export/import` provides resumable CSV backup and restore jobs designed for large catalogs. Both jobs run in small Action Scheduler/WP-Cron batches and persist their file position, so closing the browser does not interrupt them.
 
+The transfer worker is tuned for cPanel/shared-hosting accounts with up to 2 GB available memory. It reads PHP's effective `memory_limit`, chooses an adaptive batch size, stops an export batch at 70% usage, and releases WordPress plus WooCommerce product caches between items/batches. WooCommerce import batches are intentionally smaller because core parses a complete CSV batch before saving it. On shared-hosting limits, this plugin also caps its Action Scheduler concurrency to one worker, instead of allowing several memory-heavy PHP processes to overlap.
+
 The export uses WooCommerce's official product CSV schema and includes every non-trashed product and variation, attributes, categories, tags, images, downloads, linked products, and all custom product metadata. This includes Schrack and Telesystem identity, item numbers, EANs, purchase prices, VAT, stock details, sync timestamps, technical attributes, documents, image references, commercial fields, and `_schrack_raw_feed_data`.
+
+Keep at least about twice the expected CSV size free during export because the row work file and final CSV coexist during resumable assembly. The finalizer checks available filesystem space before each copy chunk and reports an actionable error instead of repeatedly timing out when space is exhausted (hosting-account quotas may not always be visible to PHP).
 
 This is a product-catalog backup, not a database backup; it does not include orders, customers, or product reviews.
 
-WooCommerce normally skips array/object metadata. The plugin encodes those values into a versioned, base64-wrapped JSON marker in `Meta:` columns and decodes them during its own import, preserving structured supplier records without unsafe PHP unserialization. Final CSV headers are assembled only after all dynamic attribute/download/meta columns are known, and the completed file is streamed to the administrator without loading it into PHP memory.
+WooCommerce normally skips array/object metadata. The plugin encodes those values into a versioned, base64-wrapped JSON marker in `Meta:` columns and decodes them during its own import, preserving structured supplier records without unsafe PHP unserialization. Final CSV headers are assembled only after all dynamic attribute/download/meta columns are known. Final assembly copies at most 64 MB per background action, persists source/output byte checkpoints, and rolls an interrupted partial write back to its last durable checkpoint. The completed file is streamed to the administrator without loading it into PHP memory.
 
 The importer accepts this export or another recognizable WooCommerce product CSV and automatically maps official columns. A completed private export can be queued directly for import without downloading/re-uploading it, which bypasses the WordPress upload-size limit. "Update existing" restores rows by ID/SKU in the same store; "Create" is intended for an empty/new store and skips already existing IDs/SKUs. Uploaded copies and completed exports are kept in separate randomized, web-protected upload directories. Import copies are deleted at completion; export files are deleted on reset or age cleanup.
 
 If a server timeout or queue-runner interruption leaves a job stale, the page offers a retry action. Export retries truncate the work file back to its last durable byte checkpoint before continuing, while import retries resume at the last confirmed CSV position.
+
+For a 2 GB cPanel account, use PHP 8.1+ and set the PHP `memory_limit` to 512 MB (256 MB minimum) so the PHP process cannot consume the complete account allowance. Configure a real cron job to invoke WordPress cron every minute if loopback WP-Cron is unreliable. Disable WordPress's page-triggered cron only after the cPanel cron is confirmed working. The exact PHP binary and WordPress path are hosting-specific; cPanel's cron screen usually shows the correct command path. The export/import status table displays the detected PHP limit and effective batch size.
 
 ## Logging
 

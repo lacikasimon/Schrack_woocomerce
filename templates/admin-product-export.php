@@ -20,12 +20,19 @@ $export_displayed = 'done' === $export_state ? $export_total : $export_processed
 $export_percent   = 'done' === $export_state ? 100 : ( $export_total > 0 ? min( 99, (int) floor( ( $export_processed / $export_total ) * 100 ) ) : 0 );
 $export_stale     = $export_active && absint( $product_export['last_progress_at'] ?? 0 ) > 0 && absint( $product_export['last_progress_at'] ) < time() - 10 * MINUTE_IN_SECONDS;
 $export_id        = sanitize_key( (string) ( $product_export['export_id'] ?? '' ) );
+$export_batch     = absint( $product_export['batch_size'] ?? 0 );
+$export_memory_mb = isset( $product_export['memory_limit_mb'] ) ? (float) $product_export['memory_limit_mb'] : 0.0;
+$finalize_position = absint( $product_export['finalize_position'] ?? 0 );
+$finalize_total    = absint( $product_export['finalize_total_bytes'] ?? 0 );
+$finalize_percent  = $finalize_total > 0 ? min( 100, (int) floor( ( $finalize_position / $finalize_total ) * 100 ) ) : 0;
 
 $import_state   = sanitize_key( (string) ( $product_import['state'] ?? 'idle' ) );
 $import_active  = in_array( $import_state, array( 'queued', 'running', 'finalizing' ), true );
 $import_percent = min( 100, absint( $product_import['percentage'] ?? ( 'done' === $import_state ? 100 : 0 ) ) );
 $import_stale   = $import_active && absint( $product_import['last_progress_at'] ?? 0 ) > 0 && absint( $product_import['last_progress_at'] ) < time() - 30 * MINUTE_IN_SECONDS;
 $warnings       = isset( $product_import['warnings'] ) && is_array( $product_import['warnings'] ) ? $product_import['warnings'] : array();
+$import_batch   = absint( $product_import['batch_size'] ?? 0 );
+$import_memory_mb = isset( $product_import['memory_limit_mb'] ) ? (float) $product_import['memory_limit_mb'] : 0.0;
 $transfer_active = $export_active || $import_active;
 
 $state_labels = array(
@@ -60,6 +67,8 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 			<?php esc_html_e( 'A Schrack és Telesystem furnizor mezők, a műszaki adatok, dokumentumok és a teljes nyers feed is Meta oszlopokként kerülnek a mentésbe. A tömbös adatok visszaállítható, jelölt formátumot kapnak.', 'schrack-woocommerce-sync' ); ?>
 		</p>
 		<p class="description"><?php esc_html_e( 'Ez termékkatalógus-mentés: rendeléseket, vásárlókat és termékértékeléseket nem exportál.', 'schrack-woocommerce-sync' ); ?></p>
+		<p class="description"><?php esc_html_e( 'A feldolgozás automatikusan memóriakímélő batch-méretet választ, termékenként üríti a WooCommerce cache-t, és 70% PHP memóriahasználatnál biztonságosan átadja a folytatást a következő háttérfolyamatnak.', 'schrack-woocommerce-sync' ); ?></p>
+		<p class="description"><strong><?php esc_html_e( 'Lemezhely: a véglegesítés alatt a munkafájl és a kész CSV egyszerre létezik, ezért legyen legalább a várható CSV méretének kétszerese szabadon.', 'schrack-woocommerce-sync' ); ?></strong></p>
 
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="schrack_wc_sync_product_export_start">
@@ -117,6 +126,27 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 						<th><?php esc_html_e( 'CSV sorok / hibák', 'schrack-woocommerce-sync' ); ?></th>
 						<td><?php echo esc_html( number_format_i18n( absint( $product_export['rows'] ?? 0 ) ) . ' / ' . number_format_i18n( absint( $product_export['errors'] ?? 0 ) ) ); ?></td>
 					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Memóriavédelem', 'schrack-woocommerce-sync' ); ?></th>
+						<td>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: 1: PHP memory limit, 2: products per batch. */
+									__( 'Aktív — PHP limit: %1$s, batch: %2$s termék', 'schrack-woocommerce-sync' ),
+									$export_memory_mb > 0 ? number_format_i18n( $export_memory_mb ) . ' MB' : __( 'ismeretlen/korlátlan', 'schrack-woocommerce-sync' ),
+									number_format_i18n( $export_batch )
+								)
+							);
+							?>
+						</td>
+					</tr>
+					<?php if ( 'finalizing' === $export_state ) : ?>
+						<tr>
+							<th><?php esc_html_e( 'CSV összeállítása', 'schrack-woocommerce-sync' ); ?></th>
+							<td><?php echo esc_html( size_format( $finalize_position ) . ' / ' . size_format( $finalize_total ) . ' (' . number_format_i18n( $finalize_percent ) . '%)' ); ?></td>
+						</tr>
+					<?php endif; ?>
 				<?php endif; ?>
 				<?php if ( ! empty( $product_export['message'] ) ) : ?>
 					<tr><th><?php esc_html_e( 'Üzenet', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( (string) $product_export['message'] ); ?></td></tr>
@@ -240,6 +270,21 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 						<td><?php echo esc_html( number_format_i18n( absint( $product_import['failed'] ?? 0 ) ) . ' / ' . number_format_i18n( absint( $product_import['skipped'] ?? 0 ) ) ); ?></td>
 					</tr>
 					<tr><th><?php esc_html_e( 'Import mód', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( 'yes' === (string) ( $product_import['update_existing'] ?? 'no' ) ? __( 'Meglévő termékek frissítése', 'schrack-woocommerce-sync' ) : __( 'Új termékek létrehozása', 'schrack-woocommerce-sync' ) ); ?></td></tr>
+					<tr>
+						<th><?php esc_html_e( 'Memóriavédelem', 'schrack-woocommerce-sync' ); ?></th>
+						<td>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: 1: PHP memory limit, 2: CSV rows per batch. */
+									__( 'Aktív — PHP limit: %1$s, batch: %2$s CSV sor', 'schrack-woocommerce-sync' ),
+									$import_memory_mb > 0 ? number_format_i18n( $import_memory_mb ) . ' MB' : __( 'ismeretlen/korlátlan', 'schrack-woocommerce-sync' ),
+									number_format_i18n( $import_batch )
+								)
+							);
+							?>
+						</td>
+					</tr>
 				<?php endif; ?>
 				<?php if ( ! empty( $product_import['message'] ) ) : ?><tr><th><?php esc_html_e( 'Üzenet', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( (string) $product_import['message'] ); ?></td></tr><?php endif; ?>
 			</tbody>

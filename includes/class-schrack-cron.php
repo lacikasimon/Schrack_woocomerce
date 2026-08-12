@@ -1382,7 +1382,7 @@ class Schrack_Cron {
 	private function catalog_parallel_workers(): int {
 		$workers = max( 1, min( 8, (int) $this->settings->get( 'catalog_parallel_workers', 1 ) ) );
 
-		return $this->is_low_memory_host() ? min( $workers, 5 ) : $workers;
+		return min( $workers, Schrack_Memory_Guard::parallel_worker_limit() );
 	}
 
 	/**
@@ -1399,7 +1399,9 @@ class Schrack_Cron {
 	 * @param mixed $current Action Scheduler's current filtered value.
 	 */
 	public function raise_action_scheduler_concurrency( mixed $current ): int {
-		return max( (int) $current, $this->catalog_parallel_workers(), $this->image_parallel_workers() );
+		$concurrency = max( 1, (int) $current, $this->catalog_parallel_workers(), $this->image_parallel_workers() );
+
+		return $this->is_low_memory_host() ? min( $concurrency, Schrack_Memory_Guard::parallel_worker_limit() ) : $concurrency;
 	}
 
 	/**
@@ -1415,7 +1417,9 @@ class Schrack_Cron {
 	 * @param mixed $current Action Scheduler's current filtered value.
 	 */
 	public function lower_action_scheduler_batch_size( mixed $current ): int {
-		return min( (int) $current, 2 );
+		$limit = $this->is_low_memory_host() ? 1 : 2;
+
+		return max( 1, min( (int) $current, $limit ) );
 	}
 
 	/**
@@ -2767,7 +2771,7 @@ class Schrack_Cron {
 	private function sync_batch_limit(): int {
 		$limit = max( 1, min( 500, (int) $this->settings->get( 'sync_batch_size', 100 ) ) );
 
-		return $this->is_low_memory_host() ? 100 : $limit;
+		return $this->is_low_memory_host() ? min( $limit, 100 ) : $limit;
 	}
 
 	/**
@@ -2785,11 +2789,7 @@ class Schrack_Cron {
 	private function catalog_batches_per_run(): int {
 		$max_batches = max( 1, min( 20, (int) $this->settings->get( 'catalog_batches_per_run', 1 ) ) );
 
-		// Catalog import is now streamed and cache-backed, so 2 GB hosts can safely chain
-		// several batches -- should_pause_batch_run() already bails on real memory/time
-		// pressure per batch, so this ceiling only needs to stop runaway configuration,
-		// not second-guess hosts that measure well under their memory limit.
-		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 15 ) : $max_batches;
+		return $this->is_low_memory_host() ? min( $max_batches, 3 ) : $max_batches;
 	}
 
 	/**
@@ -2798,8 +2798,7 @@ class Schrack_Cron {
 	private function telesystem_batches_per_run(): int {
 		$max_batches = max( 1, min( 20, (int) $this->settings->get( 'telesystem_batches_per_run', 3 ) ) );
 
-		// See catalog_batches_per_run() for why this ceiling was raised.
-		return $this->is_low_memory_host() ? min( max( $max_batches, 3 ), 15 ) : $max_batches;
+		return $this->is_low_memory_host() ? min( $max_batches, 3 ) : $max_batches;
 	}
 
 	/**
@@ -2815,22 +2814,14 @@ class Schrack_Cron {
 	 * Detects small shared-hosting style memory limits.
 	 */
 	private function is_low_memory_host(): bool {
-		$limit = $this->memory_limit_bytes();
-
-		return $limit > 0 && $limit <= 2 * 1024 * 1024 * 1024;
+		return Schrack_Memory_Guard::is_shared_host_limit();
 	}
 
 	/**
 	 * Returns whether the current request should hand off to the next Action Scheduler run.
 	 */
 	private function is_memory_pressure_high(): bool {
-		$limit = $this->memory_limit_bytes();
-
-		if ( $limit <= 0 ) {
-			return false;
-		}
-
-		return memory_get_usage( true ) >= (int) floor( $limit * 0.70 );
+		return Schrack_Memory_Guard::is_pressure_high();
 	}
 
 	/**
@@ -2839,84 +2830,14 @@ class Schrack_Cron {
 	 * @return array<string,mixed>
 	 */
 	private function memory_status_context(): array {
-		$limit = $this->memory_limit_bytes();
-		$usage = memory_get_usage( true );
-		$peak  = memory_get_peak_usage( true );
-		$context = array(
-			'memory_usage_mb' => round( $usage / 1048576, 2 ),
-			'memory_peak_mb'  => round( $peak / 1048576, 2 ),
-			'memory_safe_mode' => $this->is_low_memory_host() ? 'yes' : 'no',
-		);
-
-		if ( $limit > 0 ) {
-			$context['memory_limit_mb'] = round( $limit / 1048576, 2 );
-			$context['memory_usage_pct'] = round( ( $usage / $limit ) * 100, 2 );
-			$context['memory_peak_pct'] = round( ( $peak / $limit ) * 100, 2 );
-		}
-
-		return $context;
-	}
-
-	/**
-	 * Parses PHP shorthand memory_limit values.
-	 */
-	private function memory_limit_bytes(): int {
-		$raw = trim( (string) ini_get( 'memory_limit' ) );
-
-		if ( '' === $raw || str_starts_with( $raw, '-' ) ) {
-			return 0;
-		}
-
-		if ( function_exists( 'wp_convert_hr_to_bytes' ) ) {
-			$bytes = (int) wp_convert_hr_to_bytes( $raw );
-
-			if ( $bytes > 0 ) {
-				return $bytes;
-			}
-		}
-
-		if ( is_numeric( $raw ) ) {
-			return max( 0, (int) $raw );
-		}
-
-		$unit   = strtolower( substr( $raw, -1 ) );
-		$number = (float) substr( $raw, 0, -1 );
-
-		if ( $number <= 0 ) {
-			return 0;
-		}
-
-		return (int) match ( $unit ) {
-			'g'     => $number * 1024 * 1024 * 1024,
-			'm'     => $number * 1024 * 1024,
-			'k'     => $number * 1024,
-			default => (float) $raw,
-		};
+		return Schrack_Memory_Guard::diagnostics();
 	}
 
 	/**
 	 * Releases runtime-only caches between batches on small-memory hosting.
 	 */
 	private function release_batch_memory(): void {
-		if (
-			function_exists( 'wp_cache_flush_runtime' ) &&
-			( $this->is_low_memory_host() || $this->is_memory_pressure_high() )
-		) {
-			wp_cache_flush_runtime();
-		}
-
-		if (
-			defined( 'SAVEQUERIES' ) &&
-			SAVEQUERIES &&
-			isset( $GLOBALS['wpdb']->queries ) &&
-			is_array( $GLOBALS['wpdb']->queries )
-		) {
-			$GLOBALS['wpdb']->queries = array();
-		}
-
-		if ( function_exists( 'gc_collect_cycles' ) ) {
-			gc_collect_cycles();
-		}
+		Schrack_Memory_Guard::release_runtime_memory();
 	}
 
 	/**
@@ -3262,7 +3183,7 @@ class Schrack_Cron {
 	private function image_parallel_workers(): int {
 		$workers = max( 1, min( 8, (int) $this->settings->get( 'image_parallel_workers', 2 ) ) );
 
-		return $this->is_low_memory_host() ? min( $workers, 4 ) : $workers;
+		return min( $workers, Schrack_Memory_Guard::parallel_worker_limit() );
 	}
 
 	/**

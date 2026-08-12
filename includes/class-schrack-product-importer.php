@@ -138,28 +138,33 @@ class Schrack_Product_Importer {
 		@chmod( $target, 0660 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
 		$now    = time();
-		$status = array(
-			'state'               => 'queued',
-			'import_id'           => $import_id,
-			'file'                => $target,
-			'file_name'           => $file_name,
-			'original_name'       => sanitize_file_name( $original_name ),
-			'total_bytes'         => (int) filesize( $target ),
-			'position'            => 0,
-			'percentage'          => 0,
-			'mapping'             => $file_data['mapping'],
-			'columns'             => count( $file_data['headers'] ),
-			'update_existing'     => $update_existing ? 'yes' : 'no',
-			'user_id'             => $user_id,
-			'imported'            => 0,
-			'imported_variations' => 0,
-			'updated'             => 0,
-			'failed'              => 0,
-			'skipped'             => 0,
-			'processed'           => 0,
-			'warnings'            => array(),
-			'started_at'          => $now,
-			'last_progress_at'    => $now,
+		$status = array_merge(
+			array(
+				'state'               => 'queued',
+				'import_id'           => $import_id,
+				'file'                => $target,
+				'file_name'           => $file_name,
+				'original_name'       => sanitize_file_name( $original_name ),
+				'total_bytes'         => (int) filesize( $target ),
+				'position'            => 0,
+				'percentage'          => 0,
+				'mapping'             => $file_data['mapping'],
+				'columns'             => count( $file_data['headers'] ),
+				'update_existing'     => $update_existing ? 'yes' : 'no',
+				'user_id'             => $user_id,
+				'imported'            => 0,
+				'imported_variations' => 0,
+				'updated'             => 0,
+				'failed'              => 0,
+				'skipped'             => 0,
+				'processed'           => 0,
+				'warnings'            => array(),
+				'batch_size'          => Schrack_Memory_Guard::import_batch_size(),
+				'cleanup_batch_size'  => Schrack_Memory_Guard::cleanup_batch_size(),
+				'started_at'          => $now,
+				'last_progress_at'    => $now,
+			),
+			Schrack_Memory_Guard::diagnostics()
 		);
 
 		$this->save_status( $status );
@@ -206,6 +211,7 @@ class Schrack_Product_Importer {
 				$status['state']            = 'error';
 				$status['message']          = $exception->getMessage();
 				$status['last_progress_at'] = time();
+				$status                     = array_merge( $status, Schrack_Memory_Guard::diagnostics() );
 				$this->save_status( $status );
 			}
 
@@ -391,14 +397,15 @@ class Schrack_Product_Importer {
 		wp_set_current_user( $user_id );
 		$this->ensure_woocommerce_importer();
 
+		$batch_size                 = max( 1, min( self::BATCH_SIZE, absint( $status['batch_size'] ?? Schrack_Memory_Guard::import_batch_size() ) ) );
 		$status['state']            = 'running';
+		$status['batch_size']       = $batch_size;
 		$status['last_progress_at'] = time();
 		$this->save_status( $status );
 
-		$position   = absint( $status['position'] ?? 0 );
-		$mapping    = isset( $status['mapping'] ) && is_array( $status['mapping'] ) ? $status['mapping'] : array();
-		$batch_size = max( 1, min( 100, (int) apply_filters( 'schrack_wc_product_import_batch_size', self::BATCH_SIZE ) ) );
-		$params      = array(
+		$position = absint( $status['position'] ?? 0 );
+		$mapping  = isset( $status['mapping'] ) && is_array( $status['mapping'] ) ? $status['mapping'] : array();
+		$params   = array(
 			'start_pos'          => $position,
 			'lines'              => $batch_size,
 			'mapping'            => $mapping,
@@ -434,9 +441,20 @@ class Schrack_Product_Importer {
 			'failed'              => $this->result_count( $results, 'failed' ),
 			'skipped'             => $this->result_count( $results, 'skipped' ),
 		);
+		$memory_product_ids = array();
+
+		foreach ( array( 'imported', 'imported_variations', 'updated' ) as $result_key ) {
+			if ( isset( $results[ $result_key ] ) && is_array( $results[ $result_key ] ) ) {
+				$memory_product_ids = array_merge( $memory_product_ids, array_map( 'absint', $results[ $result_key ] ) );
+			}
+		}
+
+		$memory_product_ids = array_values( array_filter( array_unique( $memory_product_ids ) ) );
 		$latest = $this->status();
 
 		if ( $import_id !== (string) ( $latest['import_id'] ?? '' ) ) {
+			unset( $importer, $results );
+			Schrack_Memory_Guard::release_runtime_memory( $memory_product_ids );
 			$this->cleanup_placeholders( $import_id );
 			return;
 		}
@@ -455,6 +473,10 @@ class Schrack_Product_Importer {
 		$status['warnings']         = $warnings;
 		$status['errors']           = absint( $status['failed'] );
 		$status['last_progress_at'] = time();
+		$status                     = array_merge( $status, Schrack_Memory_Guard::diagnostics() );
+
+		unset( $importer, $results );
+		Schrack_Memory_Guard::release_runtime_memory( $memory_product_ids );
 
 		if ( $percentage < 100 && $next_position <= $position ) {
 			throw new RuntimeException( __( 'The product importer could not advance in the CSV file.', 'schrack-woocommerce-sync' ) );
@@ -490,8 +512,9 @@ class Schrack_Product_Importer {
 	 * @param array<string,mixed> $status Import status.
 	 */
 	private function finish_import( array $status ): void {
-		$import_id = sanitize_key( (string) ( $status['import_id'] ?? '' ) );
-		$cleanup   = $this->cleanup_placeholders( $import_id, true, absint( $status['cleanup_last_id'] ?? 0 ), true );
+		$import_id          = sanitize_key( (string) ( $status['import_id'] ?? '' ) );
+		$cleanup_batch_size = max( 1, min( 500, absint( $status['cleanup_batch_size'] ?? Schrack_Memory_Guard::cleanup_batch_size() ) ) );
+		$cleanup            = $this->cleanup_placeholders( $import_id, true, absint( $status['cleanup_last_id'] ?? 0 ), true, $cleanup_batch_size );
 
 		if ( $cleanup['has_more'] ) {
 			$latest = $this->status();
@@ -500,9 +523,11 @@ class Schrack_Product_Importer {
 				return;
 			}
 
-			$status                     = array_merge( $status, $latest );
-			$status['cleanup_last_id']  = $cleanup['last_id'];
-			$status['last_progress_at'] = time();
+			$status                       = array_merge( $status, $latest );
+			$status['cleanup_last_id']    = $cleanup['last_id'];
+			$status['cleanup_batch_size'] = $cleanup_batch_size;
+			$status['last_progress_at']   = time();
+			$status                       = array_merge( $status, Schrack_Memory_Guard::diagnostics() );
 			$this->save_status( $status );
 			$this->release_lock( $import_id );
 
@@ -521,7 +546,7 @@ class Schrack_Product_Importer {
 			return;
 		}
 
-		$status                     = array_merge( $status, $latest );
+		$status                     = array_merge( $status, $latest, Schrack_Memory_Guard::diagnostics() );
 		$status['state']            = 'done';
 		$status['percentage']       = 100;
 		$status['finished_at']      = time();
@@ -550,16 +575,18 @@ class Schrack_Product_Importer {
 	 * @param string $import_id        Import job identifier.
 	 * @param bool   $remove_converted Whether completed rows should lose retry markers.
 	 * @param int    $start_id         First product ID checkpoint.
-	 * @param bool   $single_batch     Whether to stop after 500 marked products.
+	 * @param bool   $single_batch     Whether to stop after one bounded group.
+	 * @param int    $batch_size       Maximum marked products read at once.
 	 * @return array{last_id:int,has_more:bool}
 	 */
-	private function cleanup_placeholders( string $import_id, bool $remove_converted = true, int $start_id = 0, bool $single_batch = false ): array {
+	private function cleanup_placeholders( string $import_id, bool $remove_converted = true, int $start_id = 0, bool $single_batch = false, int $batch_size = 500 ): array {
 		global $wpdb;
 
 		if ( '' === $import_id ) {
 			return array( 'last_id' => $start_id, 'has_more' => false );
 		}
 
+		$batch_size = max( 1, min( 500, $batch_size ) );
 		$last_id  = max( 0, $start_id );
 		$has_more = false;
 
@@ -576,10 +603,11 @@ class Schrack_Product_Importer {
 					AND pm.meta_value = %s
 					{$status_clause}
 					ORDER BY p.ID ASC
-					LIMIT 500",
+					LIMIT %d",
 					$last_id,
 					self::PLACEHOLDER_JOB_META,
-					$import_id
+					$import_id,
+					$batch_size
 				),
 				ARRAY_A
 			);
@@ -589,7 +617,7 @@ class Schrack_Product_Importer {
 				break;
 			}
 
-			$has_more = count( $rows ) >= 500;
+			$has_more = count( $rows ) >= $batch_size;
 
 			$converted_ids = array();
 
@@ -626,6 +654,8 @@ class Schrack_Product_Importer {
 					wp_cache_delete( $product_id, 'post_meta' );
 				}
 			}
+
+			Schrack_Memory_Guard::release_runtime_memory( array_map( 'absint', array_column( $rows, 'ID' ) ) );
 
 			if ( $single_batch ) {
 				break;

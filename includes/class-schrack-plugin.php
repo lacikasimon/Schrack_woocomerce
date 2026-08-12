@@ -165,6 +165,7 @@ class Schrack_Plugin {
 		$files = array(
 			'class-schrack-settings.php',
 			'class-schrack-logger.php',
+			'class-schrack-memory-guard.php',
 			'class-schrack-category-markup.php',
 			'class-schrack-manual-price.php',
 			'class-schrack-category-csv-importer.php',
