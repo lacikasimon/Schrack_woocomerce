@@ -54,7 +54,7 @@ class Schrack_WP_CLI {
 	 */
 	public function catalog(): void {
 		$this->cron->run_catalog_import();
-		WP_CLI::success( 'Schrack catalog import batch finished.' );
+		WP_CLI::success( 'Lotul de import al catalogului Schrack s-a încheiat.' );
 	}
 
 	/**
@@ -63,15 +63,15 @@ class Schrack_WP_CLI {
 	 * ## OPTIONS
 	 *
 	 * [--drain]
-	 * : Keep running Telesystem import cycles in this WP-CLI process until the feed is
-	 * fully imported, bypassing Action Scheduler follow-up latency. Each cycle already
-	 * processes up to the configured "Telesystem batches per run" setting.
+	 * : Continuă ciclurile de import Telesystem în acest proces WP-CLI până la importarea
+	 * completă a fluxului, fără întârzierea dintre acțiunile Action Scheduler. Fiecare
+	 * ciclu procesează până la valoarea configurată pentru loturile Telesystem per rulare.
 	 *
 	 * [--max-batches=<count>]
-	 * : Stop drain mode after this many import cycles. Omit or pass 0 for no limit.
+	 * : Oprește modul continuu după acest număr de cicluri. Omite sau folosește 0 pentru nelimitat.
 	 *
 	 * [--time-limit=<seconds>]
-	 * : Stop drain mode after this many seconds. Omit or pass 0 for no time limit.
+	 * : Oprește modul continuu după acest număr de secunde. Omite sau folosește 0 pentru nelimitat.
 	 */
 	public function telesystem( array $args = array(), array $assoc_args = array() ): void {
 		if ( isset( $assoc_args['drain'] ) ) {
@@ -109,7 +109,7 @@ class Schrack_WP_CLI {
 
 			WP_CLI::success(
 				sprintf(
-					'Telesystem drain finished. Runs: %d, processed: %d, errors: %d, prices synced: %d, stock synced: %d, complete: %s.',
+					'Procesarea continuă Telesystem s-a încheiat. Rulări: %d, procesate: %d, erori: %d, prețuri sincronizate: %d, stocuri sincronizate: %d, finalizat: %s.',
 					$runs,
 					$totals['processed'],
 					$totals['errors'],
@@ -122,7 +122,7 @@ class Schrack_WP_CLI {
 		}
 
 		$this->cron->run_telesystem_catalog_import();
-		WP_CLI::success( 'Telesystem catalog import batch finished.' );
+		WP_CLI::success( 'Lotul de import al catalogului Telesystem s-a încheiat.' );
 	}
 
 	/**
@@ -130,7 +130,7 @@ class Schrack_WP_CLI {
 	 */
 	public function prices(): void {
 		$this->cron->run_price_sync();
-		WP_CLI::success( 'Schrack price sync batch finished.' );
+		WP_CLI::success( 'Lotul de sincronizare a prețurilor Schrack s-a încheiat.' );
 	}
 
 	/**
@@ -138,7 +138,7 @@ class Schrack_WP_CLI {
 	 */
 	public function stock(): void {
 		$this->cron->run_stock_sync();
-		WP_CLI::success( 'Schrack stock sync batch finished.' );
+		WP_CLI::success( 'Lotul de sincronizare a stocurilor Schrack s-a încheiat.' );
 	}
 
 	/**
@@ -147,16 +147,16 @@ class Schrack_WP_CLI {
 	 * ## OPTIONS
 	 *
 	 * [--drain]
-	 * : Keep processing image batches in this WP-CLI process until there is no pending work.
+	 * : Continuă procesarea loturilor de imagini în acest proces WP-CLI până când nu mai există sarcini în așteptare.
 	 *
 	 * [--batch-size=<count>]
-	 * : Products to claim per batch in drain mode. Defaults to the image batch size setting.
+	 * : Produse preluate per lot în modul continuu. Implicit folosește dimensiunea configurată a lotului de imagini.
 	 *
 	 * [--max-batches=<count>]
-	 * : Stop drain mode after this many batches. Omit or pass 0 for no batch limit.
+	 * : Oprește modul continuu după acest număr de loturi. Omite sau folosește 0 pentru nelimitat.
 	 *
 	 * [--time-limit=<seconds>]
-	 * : Stop drain mode after this many seconds. Omit or pass 0 for no time limit.
+	 * : Oprește modul continuu după acest număr de secunde. Omite sau folosește 0 pentru nelimitat.
 	 */
 	public function images( array $args = array(), array $assoc_args = array() ): void {
 		if ( isset( $assoc_args['drain'] ) ) {
@@ -169,13 +169,13 @@ class Schrack_WP_CLI {
 			$result      = $sync->sync_until_idle( $batch_size, $max_batches, $time_limit );
 
 			if ( 'yes' === (string) ( $result['disabled'] ?? 'no' ) ) {
-				WP_CLI::success( 'Schrack image sync is disabled. External image URLs remain stored on products.' );
+				WP_CLI::success( 'Sincronizarea imaginilor Schrack este dezactivată. URL-urile externe rămân salvate pe produse.' );
 				return;
 			}
 
 			WP_CLI::success(
 				sprintf(
-					'Schrack image drain finished. Batches: %d, processed: %d, imported: %d, reused: %d, errors: %d, complete: %s.',
+					'Procesarea continuă a imaginilor Schrack s-a încheiat. Loturi: %d, procesate: %d, importate: %d, reutilizate: %d, erori: %d, finalizat: %s.',
 					absint( $result['batches_processed'] ?? 0 ),
 					absint( $result['processed'] ?? 0 ),
 					absint( $result['imported'] ?? 0 ),
@@ -189,13 +189,13 @@ class Schrack_WP_CLI {
 
 		$result = $this->cron->run_image_sync();
 		if ( 'yes' === (string) ( $result['disabled'] ?? 'no' ) ) {
-			WP_CLI::success( 'Schrack image sync is disabled. External image URLs remain stored on products.' );
+			WP_CLI::success( 'Sincronizarea imaginilor Schrack este dezactivată. URL-urile externe rămân salvate pe produse.' );
 			return;
 		}
 
 		WP_CLI::success(
 			sprintf(
-				'Schrack image sync batch finished. Queued products: %d, processed: %d, imported: %d, errors: %d.',
+				'Lotul de sincronizare a imaginilor Schrack s-a încheiat. Produse în coadă: %d, procesate: %d, importate: %d, erori: %d.',
 				absint( $result['queued_products'] ?? ( $result['batch_count'] ?? 0 ) ),
 				absint( $result['processed'] ?? 0 ),
 				absint( $result['imported'] ?? 0 ),
@@ -209,7 +209,7 @@ class Schrack_WP_CLI {
 	 */
 	public function full(): void {
 		$this->cron->run_full_sync();
-		WP_CLI::success( 'Schrack full sync batch finished.' );
+		WP_CLI::success( 'Lotul de sincronizare completă Schrack s-a încheiat.' );
 	}
 
 	/**
@@ -219,7 +219,7 @@ class Schrack_WP_CLI {
 		$result = $this->cron->stop_actions();
 		WP_CLI::success(
 			sprintf(
-				'Schrack sync stop requested. Cancelled %d queued action(s); %d running action(s) will stop at the next checkpoint.',
+				'Oprirea sincronizării Schrack a fost solicitată. Au fost anulate %d acțiuni din coadă; %d acțiuni în curs se vor opri la următorul punct de control.',
 				absint( $result['pending_cancelled'] ?? 0 ),
 				absint( $result['running'] ?? 0 )
 			)

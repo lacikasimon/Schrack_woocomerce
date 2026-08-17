@@ -496,7 +496,7 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 					<?php endif; ?>
 				<?php endif; ?>
 				<?php if ( ! empty( $product_export['message'] ) ) : ?>
-					<tr><th><?php esc_html_e( 'Üzenet', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( (string) $product_export['message'] ); ?></td></tr>
+					<tr><th><?php esc_html_e( 'Üzenet', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( schrack_wc_sync_romanian_text( (string) $product_export['message'] ) ); ?></td></tr>
 				<?php endif; ?>
 				<?php if ( 'done' === $export_state ) : ?>
 					<tr>
@@ -633,14 +633,14 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 						</td>
 					</tr>
 				<?php endif; ?>
-				<?php if ( ! empty( $product_import['message'] ) ) : ?><tr><th><?php esc_html_e( 'Üzenet', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( (string) $product_import['message'] ); ?></td></tr><?php endif; ?>
+				<?php if ( ! empty( $product_import['message'] ) ) : ?><tr><th><?php esc_html_e( 'Üzenet', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( schrack_wc_sync_romanian_text( (string) $product_import['message'] ) ); ?></td></tr><?php endif; ?>
 			</tbody>
 		</table>
 
 		<?php if ( ! empty( $warnings ) ) : ?>
 			<h3><?php esc_html_e( 'Első hibák és kihagyások', 'schrack-woocommerce-sync' ); ?></h3>
 			<ul class="ul-disc">
-				<?php foreach ( $warnings as $warning ) : ?><li><?php echo esc_html( (string) $warning ); ?></li><?php endforeach; ?>
+				<?php foreach ( $warnings as $warning ) : ?><li><?php echo esc_html( schrack_wc_sync_romanian_text( (string) $warning ) ); ?></li><?php endforeach; ?>
 			</ul>
 		<?php endif; ?>
 
@@ -721,13 +721,13 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 					<tr><th><?php esc_html_e( 'Létrehozott / frissített / kihagyott', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( number_format_i18n( absint( $category_import['created'] ?? 0 ) ) . ' / ' . number_format_i18n( absint( $category_import['updated'] ?? 0 ) ) . ' / ' . number_format_i18n( absint( $category_import['skipped'] ?? 0 ) ) ); ?></td></tr>
 					<tr><th><?php esc_html_e( 'Import mód', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( 'no' === (string) ( $category_import['update_existing'] ?? 'yes' ) ? __( 'Új áruház: útvonal/slug', 'schrack-woocommerce-sync' ) : __( 'Ugyanez az áruház: ID-frissítés', 'schrack-woocommerce-sync' ) ); ?></td></tr>
 				<?php endif; ?>
-				<?php if ( ! empty( $category_import['message'] ) ) : ?><tr><th><?php esc_html_e( 'Üzenet', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( (string) $category_import['message'] ); ?></td></tr><?php endif; ?>
+				<?php if ( ! empty( $category_import['message'] ) ) : ?><tr><th><?php esc_html_e( 'Üzenet', 'schrack-woocommerce-sync' ); ?></th><td><?php echo esc_html( schrack_wc_sync_romanian_text( (string) $category_import['message'] ) ); ?></td></tr><?php endif; ?>
 			</tbody>
 		</table>
 
 		<?php if ( ! empty( $category_warnings ) ) : ?>
 			<h4><?php esc_html_e( 'Első kategóriaimport-figyelmeztetések', 'schrack-woocommerce-sync' ); ?></h4>
-			<ul class="ul-disc"><?php foreach ( array_slice( $category_warnings, 0, 10 ) as $warning ) : ?><li><?php echo esc_html( (string) $warning ); ?></li><?php endforeach; ?></ul>
+			<ul class="ul-disc"><?php foreach ( array_slice( $category_warnings, 0, 10 ) as $warning ) : ?><li><?php echo esc_html( schrack_wc_sync_romanian_text( (string) $warning ) ); ?></li><?php endforeach; ?></ul>
 		<?php endif; ?>
 
 		<?php if ( 'idle' !== $category_state ) : ?>

@@ -102,12 +102,12 @@
 		}
 
 		if (0 === selected.length) {
-			setBulkResult(root, 'Select at least one category.', true);
+			setBulkResult(root, 'Selectează cel puțin o categorie.', true);
 			return;
 		}
 
 		if ('' === markupValue && '' === roundingValue) {
-			setBulkResult(root, 'Set a bulk markup or rounding value first.', true);
+			setBulkResult(root, 'Introdu mai întâi o valoare pentru adaos sau rotunjire.', true);
 			return;
 		}
 
@@ -139,11 +139,11 @@
 		});
 
 		if (updated > 0) {
-			setBulkResult(root, updated + ' categories updated in the table.' + (skipped > 0 ? ' ' + skipped + ' already configured categories skipped.' : ''), false);
+			setBulkResult(root, updated + ' categorii actualizate în tabel.' + (skipped > 0 ? ' ' + skipped + ' categorii deja configurate au fost omise.' : ''), false);
 			return;
 		}
 
-		setBulkResult(root, 'No rows were updated.' + (skipped > 0 ? ' Selected categories were already configured.' : ''), true);
+		setBulkResult(root, 'Niciun rând nu a fost actualizat.' + (skipped > 0 ? ' Categoriile selectate erau deja configurate.' : ''), true);
 	}
 
 	function refreshBulkTreeFilter(root) {
@@ -438,9 +438,9 @@
 
 			actions = document.createElement('span');
 			actions.className = 'schrack-export-columns__item-actions';
-			actions.appendChild(createAction('up', '↑', root.getAttribute('data-label-up') || 'Up'));
-			actions.appendChild(createAction('down', '↓', root.getAttribute('data-label-down') || 'Down'));
-			actions.appendChild(createAction('remove', '×', root.getAttribute('data-label-remove') || 'Remove'));
+			actions.appendChild(createAction('up', '↑', root.getAttribute('data-label-up') || 'Mai sus'));
+			actions.appendChild(createAction('down', '↓', root.getAttribute('data-label-down') || 'Mai jos'));
+			actions.appendChild(createAction('remove', '×', root.getAttribute('data-label-remove') || 'Elimină'));
 			item.appendChild(actions);
 
 			input = document.createElement('input');
@@ -542,7 +542,7 @@
 
 			if (customMode && customMode.checked && 0 === selectedItems().length && (!extraMeta || '' === extraMeta.value.trim())) {
 				event.preventDefault();
-				window.alert(root.getAttribute('data-empty-message') || 'Choose at least one column.');
+				window.alert(root.getAttribute('data-empty-message') || 'Selectează cel puțin o coloană.');
 			}
 		});
 
@@ -575,7 +575,7 @@
 			return;
 		}
 
-		if (!window.confirm('Clear all Product furnizor importer logs?')) {
+		if (!window.confirm('Ștergi toate jurnalele modulului Importator produse furnizori?')) {
 			event.preventDefault();
 		}
 	});

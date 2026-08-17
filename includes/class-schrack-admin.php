@@ -547,12 +547,12 @@ class Schrack_Admin {
 							?>
 						</p>
 						<?php if ( ! empty( $category_import['message'] ) ) : ?>
-							<p><?php echo esc_html( (string) $category_import['message'] ); ?></p>
+							<p><?php echo esc_html( schrack_wc_sync_romanian_text( (string) $category_import['message'] ) ); ?></p>
 						<?php endif; ?>
 						<?php if ( ! empty( $warnings ) ) : ?>
 							<ul>
 								<?php foreach ( array_slice( $warnings, 0, 10 ) as $warning ) : ?>
-									<li><?php echo esc_html( (string) $warning ); ?></li>
+									<li><?php echo esc_html( schrack_wc_sync_romanian_text( (string) $warning ) ); ?></li>
 								<?php endforeach; ?>
 							</ul>
 						<?php endif; ?>

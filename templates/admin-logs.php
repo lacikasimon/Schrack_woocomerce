@@ -8,6 +8,27 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+
+$log_level_labels = array(
+	'debug'   => __( 'Debug', 'schrack-woocommerce-sync' ),
+	'info'    => __( 'Info', 'schrack-woocommerce-sync' ),
+	'warning' => __( 'Warning', 'schrack-woocommerce-sync' ),
+	'error'   => __( 'Error', 'schrack-woocommerce-sync' ),
+);
+$log_operation_labels = array(
+	'catalog'            => __( 'Catalog', 'schrack-woocommerce-sync' ),
+	'telesystem'         => __( 'Telesystem', 'schrack-woocommerce-sync' ),
+	'telesystem_catalog' => __( 'Telesystem catalog queue', 'schrack-woocommerce-sync' ),
+	'price'              => __( 'Price', 'schrack-woocommerce-sync' ),
+	'stock'              => __( 'Stock', 'schrack-woocommerce-sync' ),
+	'images'             => __( 'Images', 'schrack-woocommerce-sync' ),
+	'export'             => __( 'Product export', 'schrack-woocommerce-sync' ),
+	'import'             => __( 'Product import', 'schrack-woocommerce-sync' ),
+	'category_import'    => __( 'Category CSV import', 'schrack-woocommerce-sync' ),
+	'soap'               => __( 'SOAP', 'schrack-woocommerce-sync' ),
+	'debug'              => __( 'Debug', 'schrack-woocommerce-sync' ),
+	'admin'              => __( 'Admin', 'schrack-woocommerce-sync' ),
+);
 ?>
 <div class="wrap schrack-sync-admin">
 	<h1><?php esc_html_e( 'Product furnizor importer Logs', 'schrack-woocommerce-sync' ); ?></h1>
@@ -66,10 +87,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<?php foreach ( $logs as $log ) : ?>
 					<tr>
 						<td><?php echo esc_html( $log->created_at ); ?></td>
-						<td><span class="schrack-log-level schrack-log-level-<?php echo esc_attr( $log->level ); ?>"><?php echo esc_html( strtoupper( $log->level ) ); ?></span></td>
-						<td><?php echo esc_html( $log->operation ); ?></td>
+						<td><span class="schrack-log-level schrack-log-level-<?php echo esc_attr( $log->level ); ?>"><?php echo esc_html( $log_level_labels[ $log->level ] ?? $log->level ); ?></span></td>
+						<td><?php echo esc_html( $log_operation_labels[ $log->operation ] ?? $log->operation ); ?></td>
 						<td><?php echo esc_html( (string) $log->sku ); ?></td>
-						<td><?php echo esc_html( $log->message ); ?></td>
+						<td><?php echo esc_html( schrack_wc_sync_romanian_text( (string) $log->message ) ); ?></td>
 						<td><code><?php echo esc_html( (string) $log->context ); ?></code></td>
 					</tr>
 				<?php endforeach; ?>
