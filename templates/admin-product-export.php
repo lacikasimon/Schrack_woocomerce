@@ -346,7 +346,7 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 								<p class="description"><?php esc_html_e( 'A külön oszlopos mód az export indításakor végigolvassa a tényleges attribútumneveket. Minden termék ugyanazokat az oszlopokat kapja; a hiányzó értékek helyén üres cella marad.', 'schrack-woocommerce-sync' ); ?></p>
 							</div>
 
-							<div class="schrack-export-columns__builder" data-export-column-builder <?php hidden( 'custom' !== $export_column_mode ); ?>>
+							<div class="schrack-export-columns__builder" data-export-column-builder<?php if ( 'custom' !== $export_column_mode ) : ?> hidden<?php endif; ?>>
 								<p class="description"><?php esc_html_e( 'A fejlécnevek a hivatalos WooCommerce formátumban maradnak, így az elkészült CSV automatikusan visszaimportálható.', 'schrack-woocommerce-sync' ); ?></p>
 								<p class="description"><strong><?php esc_html_e( 'Biztonságos frissítő visszaimporthoz az ID vagy SKU oszlopot hagyd a fejlécben; variációkhoz a Típus és Szülő oszlop is ajánlott.', 'schrack-woocommerce-sync' ); ?></strong></p>
 								<div class="schrack-export-columns__grid">
