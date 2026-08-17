@@ -1435,7 +1435,21 @@ class Schrack_Admin {
 		$category_import = isset( $all_status[ Schrack_Category_CSV_Importer::STATUS_KEY ] ) && is_array( $all_status[ Schrack_Category_CSV_Importer::STATUS_KEY ] )
 			? $all_status[ Schrack_Category_CSV_Importer::STATUS_KEY ]
 			: array();
-		$export_column_catalog = $this->product_exporter->column_catalog();
+		try {
+			$export_column_catalog = $this->product_exporter->column_catalog();
+		} catch ( Throwable $exception ) {
+			$export_column_catalog = $this->product_exporter->default_column_catalog();
+			$this->logger->error(
+				'export',
+				'Could not load dynamic export columns; rendered the safe default column catalog.',
+				null,
+				array(
+					'error' => $exception->getMessage(),
+					'file'  => basename( $exception->getFile() ),
+					'line'  => $exception->getLine(),
+				)
+			);
+		}
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-product-export.php';
 	}

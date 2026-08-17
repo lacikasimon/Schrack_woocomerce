@@ -440,20 +440,9 @@ class Schrack_Product_Exporter {
 	public function column_catalog(): array {
 		global $wpdb;
 
-		$adapter             = new Schrack_WC_Product_CSV_Exporter();
-		$standard            = array();
-		$supplier            = array();
-		$supplier_column_ids = array_fill_keys( array_keys( Schrack_WC_Product_CSV_Exporter::schrack_supplier_column_meta_map() ), true );
-
-		foreach ( $adapter->get_default_column_names() as $column_id => $column_name ) {
-			if ( is_string( $column_id ) && is_scalar( $column_name ) ) {
-				if ( isset( $supplier_column_ids[ $column_id ] ) ) {
-					$supplier[ $column_id ] = (string) $column_name;
-				} else {
-					$standard[ $column_id ] = (string) $column_name;
-				}
-			}
-		}
+		$catalog  = $this->default_column_catalog();
+		$standard = $catalog['standard'];
+		$supplier = $catalog['supplier'];
 
 		$meta_keys = get_transient( self::COLUMN_META_CACHE_KEY );
 
@@ -487,6 +476,65 @@ class Schrack_Product_Exporter {
 			'standard'      => $standard,
 			'supplier'      => $supplier,
 			'supplier_meta' => $supplier_meta,
+		);
+	}
+
+	/**
+	 * Returns the safe, database-independent header-builder catalog.
+	 *
+	 * The admin page must not instantiate WooCommerce's complete CSV exporter
+	 * merely to render a form. Its constructor is extension-sensitive and can
+	 * fail before the export button is displayed on some WooCommerce versions.
+	 * Actual exports still use WooCommerce's official exporter and labels.
+	 *
+	 * @return array{standard:array<string,string>,supplier:array<string,string>,supplier_meta:array<string,string>}
+	 */
+	public function default_column_catalog(): array {
+		return array(
+			'standard' => array(
+				'id'                 => __( 'ID', 'woocommerce' ),
+				'type'               => __( 'Type', 'woocommerce' ),
+				'sku'                => __( 'SKU', 'woocommerce' ),
+				'global_unique_id'   => __( 'GTIN, UPC, EAN, or ISBN', 'woocommerce' ),
+				'name'               => __( 'Name', 'woocommerce' ),
+				'published'          => __( 'Published', 'woocommerce' ),
+				'featured'           => __( 'Is featured?', 'woocommerce' ),
+				'catalog_visibility' => __( 'Visibility in catalog', 'woocommerce' ),
+				'short_description'  => __( 'Short description', 'woocommerce' ),
+				'description'        => __( 'Description', 'woocommerce' ),
+				'date_on_sale_from'  => __( 'Date sale price starts', 'woocommerce' ),
+				'date_on_sale_to'    => __( 'Date sale price ends', 'woocommerce' ),
+				'tax_status'         => __( 'Tax status', 'woocommerce' ),
+				'tax_class'          => __( 'Tax class', 'woocommerce' ),
+				'stock_status'       => __( 'In stock?', 'woocommerce' ),
+				'stock'              => __( 'Stock', 'woocommerce' ),
+				'low_stock_amount'   => __( 'Low stock amount', 'woocommerce' ),
+				'backorders'         => __( 'Backorders allowed?', 'woocommerce' ),
+				'sold_individually'  => __( 'Sold individually?', 'woocommerce' ),
+				'weight'             => __( 'Weight', 'woocommerce' ),
+				'length'             => __( 'Length', 'woocommerce' ),
+				'width'              => __( 'Width', 'woocommerce' ),
+				'height'             => __( 'Height', 'woocommerce' ),
+				'reviews_allowed'    => __( 'Allow customer reviews?', 'woocommerce' ),
+				'purchase_note'      => __( 'Purchase note', 'woocommerce' ),
+				'sale_price'         => __( 'Sale price', 'woocommerce' ),
+				'regular_price'      => __( 'Regular price', 'woocommerce' ),
+				'category_ids'       => __( 'Categories', 'woocommerce' ),
+				'tag_ids'            => __( 'Tags', 'woocommerce' ),
+				'shipping_class_id'  => __( 'Shipping class', 'woocommerce' ),
+				'images'             => __( 'Images', 'woocommerce' ),
+				'download_limit'     => __( 'Download limit', 'woocommerce' ),
+				'download_expiry'    => __( 'Download expiry days', 'woocommerce' ),
+				'parent_id'          => __( 'Parent', 'woocommerce' ),
+				'grouped_products'   => __( 'Grouped products', 'woocommerce' ),
+				'upsell_ids'         => __( 'Upsells', 'woocommerce' ),
+				'cross_sell_ids'     => __( 'Cross-sells', 'woocommerce' ),
+				'product_url'        => __( 'External URL', 'woocommerce' ),
+				'button_text'        => __( 'Button text', 'woocommerce' ),
+				'menu_order'         => __( 'Position', 'woocommerce' ),
+			),
+			'supplier'      => Schrack_WC_Product_CSV_Exporter::schrack_supplier_column_names(),
+			'supplier_meta' => array(),
 		);
 	}
 
