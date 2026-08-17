@@ -15,6 +15,7 @@ class Schrack_Category_CSV_Importer {
 	public const DEFAULT_MAX_SECONDS = 20;
 	private const WARNING_LIMIT   = 10;
 	private const ACTIVE_TTL      = 30 * MINUTE_IN_SECONDS;
+	private const STRUCTURED_META_PREFIX = 'schrack-category-meta:v1:';
 
 	/**
 	 * Settings.
@@ -43,13 +44,20 @@ class Schrack_Category_CSV_Importer {
 	 *
 	 * @return array<string,mixed>|WP_Error
 	 */
-	public function prepare_upload( string $tmp_name, string $original_name ): array|WP_Error {
+	public function prepare_upload( string $tmp_name, string $original_name, bool $update_existing = true ): array|WP_Error {
 		$active = $this->active_import();
 
 		if ( null !== $active ) {
 			return new WP_Error(
 				'category_import_active',
 				__( 'A category CSV import is already queued or running. Wait for it to finish before starting a new one.', 'schrack-woocommerce-sync' )
+			);
+		}
+
+		if ( $this->product_transfer_active() ) {
+			return new WP_Error(
+				'category_import_product_transfer_active',
+				__( 'A product export or import is running. Wait for it to finish before importing categories.', 'schrack-woocommerce-sync' )
 			);
 		}
 
@@ -81,6 +89,8 @@ class Schrack_Category_CSV_Importer {
 			return new WP_Error( 'category_import_copy', __( 'Could not save the uploaded CSV for background import.', 'schrack-woocommerce-sync' ) );
 		}
 
+		$this->delete_status_file( $this->status() );
+
 		$total_rows = $this->count_csv_rows( $target, (string) $validation['delimiter'] );
 		$status     = array(
 			'state'            => 'queued',
@@ -90,6 +100,7 @@ class Schrack_Category_CSV_Importer {
 			'delimiter'        => (string) $validation['delimiter'],
 			'total_rows'       => $total_rows,
 			'line_number'      => 1,
+			'position'         => absint( $validation['header_bytes'] ?? 0 ),
 			'processed'        => 0,
 			'created'          => 0,
 			'updated'          => 0,
@@ -98,6 +109,7 @@ class Schrack_Category_CSV_Importer {
 			'warnings'         => array(),
 			'batch_count'      => 0,
 			'batch_limit'      => self::DEFAULT_BATCH_SIZE,
+			'update_existing'  => $update_existing ? 'yes' : 'no',
 			'completed_cycle'  => 'no',
 			'started_at'       => time(),
 			'updated_at'       => time(),
@@ -108,6 +120,18 @@ class Schrack_Category_CSV_Importer {
 		$this->logger->info( 'category_import', 'Queued category CSV import file.', null, $status );
 
 		return $status;
+	}
+
+	/**
+	 * Encodes all values belonging to one term-meta key without losing arrays,
+	 * numbers, booleans, or repeated metadata rows.
+	 *
+	 * @param array<int,mixed> $values Term metadata values.
+	 */
+	public static function encode_meta_values( array $values ): string {
+		$json = wp_json_encode( array_values( $values ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION );
+
+		return is_string( $json ) ? self::STRUCTURED_META_PREFIX . base64_encode( $json ) : '';
 	}
 
 	/**
@@ -142,6 +166,13 @@ class Schrack_Category_CSV_Importer {
 			return $status;
 		}
 
+		if ( $this->product_transfer_active() ) {
+			return $this->error_result(
+				$import_id,
+				__( 'The category import was paused because a product export or import is running. Resume it after the product transfer finishes.', 'schrack-woocommerce-sync' )
+			);
+		}
+
 		$file = (string) ( $status['file'] ?? '' );
 
 		if ( '' === $file || ! is_readable( $file ) ) {
@@ -160,18 +191,12 @@ class Schrack_Category_CSV_Importer {
 			return $this->error_result( $import_id, __( 'Category import CSV file could not be opened.', 'schrack-woocommerce-sync' ) );
 		}
 
-		$first_line = fgets( $handle );
-
-		if ( false === $first_line ) {
-			fclose( $handle );
-			return $this->error_result( $import_id, __( 'Category import CSV file is empty.', 'schrack-woocommerce-sync' ) );
-		}
-
 		$delimiter  = (string) $validation['delimiter'];
 		$header_map = (array) $validation['header_map'];
-		$lookup     = $this->product_category_lookup();
-		$line_number = 1;
+		$lookup      = $this->product_category_lookup();
 		$last_line   = max( 1, absint( $status['line_number'] ?? 1 ) );
+		$position    = absint( $status['position'] ?? 0 );
+		$line_number = $position > 0 ? $last_line : 1;
 		$started_at  = time();
 		$batch_size  = max( 1, $batch_size );
 		$max_seconds = max( 5, $max_seconds );
@@ -180,6 +205,7 @@ class Schrack_Category_CSV_Importer {
 		$updated     = absint( $status['updated'] ?? 0 );
 		$skipped     = absint( $status['skipped'] ?? 0 );
 		$processed   = absint( $status['processed'] ?? 0 );
+		$update_existing = 'no' !== (string) ( $status['update_existing'] ?? 'yes' );
 		$warnings    = isset( $status['warnings'] ) && is_array( $status['warnings'] ) ? $status['warnings'] : array();
 
 		$this->settings->update_status(
@@ -193,10 +219,26 @@ class Schrack_Category_CSV_Importer {
 			)
 		);
 
-		while ( false !== ( $row = fgetcsv( $handle, 0, $delimiter, '"', '\\' ) ) ) {
+		if ( $position > 0 ) {
+			if ( 0 !== fseek( $handle, $position, SEEK_SET ) ) {
+				fclose( $handle );
+				return $this->error_result( $import_id, __( 'The category CSV checkpoint could not be restored.', 'schrack-woocommerce-sync' ) );
+			}
+		} else {
+			$first_line = fgets( $handle );
+
+			if ( false === $first_line ) {
+				fclose( $handle );
+				return $this->error_result( $import_id, __( 'Category import CSV file is empty.', 'schrack-woocommerce-sync' ) );
+			}
+		}
+
+		while ( false !== ( $row = fgetcsv( $handle, 0, $delimiter, '"', "\0" ) ) ) {
 			++$line_number;
 
-			if ( $line_number <= $last_line ) {
+			// Backward compatibility for jobs queued before byte checkpoints were
+			// introduced. New jobs seek directly and never rescan prior batches.
+			if ( 0 === $position && $line_number <= $last_line ) {
 				continue;
 			}
 
@@ -204,7 +246,7 @@ class Schrack_Category_CSV_Importer {
 				continue;
 			}
 
-			$result = $this->import_row( $row, $header_map, $lookup );
+			$result = $this->import_row( $row, $header_map, $lookup, $update_existing );
 			++$batch_count;
 			++$processed;
 
@@ -234,7 +276,9 @@ class Schrack_Category_CSV_Importer {
 			}
 		}
 
-		$completed = feof( $handle );
+		$total_rows = absint( $status['total_rows'] ?? 0 );
+		$completed  = feof( $handle ) || ( $total_rows > 0 && $processed >= $total_rows );
+		$position   = max( 0, (int) ftell( $handle ) );
 		fclose( $handle );
 
 		$result_status = array_merge(
@@ -243,6 +287,7 @@ class Schrack_Category_CSV_Importer {
 				'state'           => $completed ? 'done' : 'running',
 				'import_id'       => $import_id,
 				'line_number'     => $line_number,
+				'position'        => $position,
 				'processed'       => $processed,
 				'created'         => $created,
 				'updated'         => $updated,
@@ -260,6 +305,9 @@ class Schrack_Category_CSV_Importer {
 		if ( $completed ) {
 			$result_status['finished_at']       = time();
 			$result_status['finished_at_label'] = current_time( 'mysql' );
+			$this->delete_status_file( $result_status );
+			$result_status['file_deleted'] = 'yes';
+			unset( $result_status['file'] );
 		}
 
 		$this->settings->update_status( self::STATUS_KEY, $result_status );
@@ -316,6 +364,66 @@ class Schrack_Category_CSV_Importer {
 	}
 
 	/**
+	 * Restores a stalled or failed category import to a queueable state.
+	 *
+	 * @return array<string,mixed>|WP_Error
+	 */
+	public function resume(): array|WP_Error {
+		$status    = $this->status();
+		$state     = (string) ( $status['state'] ?? '' );
+		$import_id = sanitize_key( (string) ( $status['import_id'] ?? '' ) );
+		$file      = isset( $status['file'] ) ? (string) $status['file'] : '';
+
+		if ( '' === $import_id || ! in_array( $state, array( 'queued', 'running', 'error' ), true ) ) {
+			return new WP_Error( 'category_import_resume_missing', __( 'There is no resumable category import.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( ! $this->is_valid_import_file( $file ) || ! is_readable( $file ) ) {
+			return new WP_Error( 'category_import_resume_file', __( 'The private category CSV is no longer available.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( $this->product_transfer_active() ) {
+			return new WP_Error( 'category_import_product_transfer_active', __( 'A product export or import is running. Wait for it to finish before resuming categories.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$hook = class_exists( 'Schrack_Cron' ) ? Schrack_Cron::HOOK_CATEGORY_IMPORT : 'schrack_wc_sync_category_csv_import';
+
+		if ( function_exists( 'as_unschedule_all_actions' ) ) {
+			as_unschedule_all_actions( $hook, array( $import_id ), 'schrack-wc-sync' );
+		}
+
+		wp_clear_scheduled_hook( $hook, array( $import_id ) );
+
+		$status['state']           = 'queued';
+		$status['completed_cycle'] = 'no';
+		$status['updated_at']      = time();
+		unset( $status['message'], $status['queue_failed'] );
+		$this->settings->update_status( self::STATUS_KEY, $status );
+
+		return $status;
+	}
+
+	/**
+	 * Cancels category-import actions and removes only this job's private copy.
+	 */
+	public function reset(): void {
+		$status    = $this->status();
+		$import_id = sanitize_key( (string) ( $status['import_id'] ?? '' ) );
+		$hook      = class_exists( 'Schrack_Cron' ) ? Schrack_Cron::HOOK_CATEGORY_IMPORT : 'schrack_wc_sync_category_csv_import';
+
+		if ( '' !== $import_id ) {
+			if ( function_exists( 'as_unschedule_all_actions' ) ) {
+				as_unschedule_all_actions( $hook, array( $import_id ), 'schrack-wc-sync' );
+			}
+
+			wp_clear_scheduled_hook( $hook, array( $import_id ) );
+		}
+
+		$this->delete_status_file( $status );
+		$this->settings->delete_status( self::STATUS_KEY );
+	}
+
+	/**
 	 * Returns current status row.
 	 *
 	 * @return array<string,mixed>
@@ -358,7 +466,7 @@ class Schrack_Category_CSV_Importer {
 	/**
 	 * Validates CSV header and returns parse metadata.
 	 *
-	 * @return array{delimiter:string,headers:array<int,string>,header_map:array<string,int>}|WP_Error
+	 * @return array{delimiter:string,headers:array<int,string>,header_map:array<string,int>,header_bytes:int}|WP_Error
 	 */
 	private function validate_csv_file( string $path ): array|WP_Error {
 		$handle = fopen( $path, 'r' );
@@ -375,7 +483,7 @@ class Schrack_Category_CSV_Importer {
 		}
 
 		$delimiter  = $this->detect_csv_delimiter( $first_line );
-		$headers    = str_getcsv( $this->strip_utf8_bom( $first_line ), $delimiter, '"', '\\' );
+		$headers    = str_getcsv( $this->strip_utf8_bom( $first_line ), $delimiter, '"', "\0" );
 		$header_map = $this->category_csv_header_map( $headers );
 
 		if ( empty( array_intersect( array_keys( $header_map ), array( 'term_id', 'slug', 'path', 'name' ) ) ) ) {
@@ -386,6 +494,7 @@ class Schrack_Category_CSV_Importer {
 			'delimiter'  => $delimiter,
 			'headers'    => $headers,
 			'header_map' => $header_map,
+			'header_bytes'=> strlen( $first_line ),
 		);
 	}
 
@@ -402,7 +511,7 @@ class Schrack_Category_CSV_Importer {
 		fgets( $handle );
 		$count = 0;
 
-		while ( false !== ( $row = fgetcsv( $handle, 0, $delimiter, '"', '\\' ) ) ) {
+		while ( false !== ( $row = fgetcsv( $handle, 0, $delimiter, '"', "\0" ) ) ) {
 			if ( ! $this->is_empty_csv_row( $row ) ) {
 				++$count;
 			}
@@ -421,7 +530,7 @@ class Schrack_Category_CSV_Importer {
 	 * @param array{ids:array<int,bool>,slugs:array<string,int>,paths:array<string,int>} $lookup Category lookup.
 	 * @return array{status:string,term_id?:int,warning?:string}
 	 */
-	private function import_row( array $row, array $header_map, array $lookup ): array {
+	private function import_row( array $row, array $header_map, array $lookup, bool $update_existing ): array {
 		$path       = $this->csv_cell( $row, $header_map, 'path' );
 		$path_parts = $this->product_category_path_parts( $path );
 		$name       = $this->csv_cell( $row, $header_map, 'name' );
@@ -435,7 +544,7 @@ class Schrack_Category_CSV_Importer {
 			$name = ucwords( str_replace( '-', ' ', $slug ) );
 		}
 
-		$term_id = $this->resolve_category_csv_term_id( $row, $header_map, $lookup, $path_parts );
+		$term_id = $this->resolve_category_csv_term_id( $row, $header_map, $lookup, $path_parts, $update_existing );
 
 		if ( '' === $name && $term_id > 0 ) {
 			$existing_term = get_term( $term_id, 'product_cat' );
@@ -610,9 +719,16 @@ class Schrack_Category_CSV_Importer {
 
 		$paths   = array();
 		$ordered = array();
-		$append  = static function ( int $parent_id, string $parent_path ) use ( &$append, &$ordered, &$paths, $terms_by_parent ): void {
+		$visited = array();
+		$append  = static function ( int $parent_id, string $parent_path ) use ( &$append, &$ordered, &$paths, &$visited, $terms_by_parent ): void {
 			foreach ( $terms_by_parent[ $parent_id ] ?? array() as $term ) {
-				$term_id           = (int) $term->term_id;
+				$term_id = (int) $term->term_id;
+
+				if ( isset( $visited[ $term_id ] ) ) {
+					continue;
+				}
+
+				$visited[ $term_id ] = true;
 				$path              = '' === $parent_path ? $term->name : $parent_path . ' > ' . $term->name;
 				$paths[ $term_id ] = $path;
 				$ordered[]         = $term;
@@ -628,8 +744,9 @@ class Schrack_Category_CSV_Importer {
 				continue;
 			}
 
-			$paths[ $term_id ] = $term->name;
-			$ordered[]         = $term;
+			$paths[ $term_id ]   = $term->name;
+			$ordered[]           = $term;
+			$visited[ $term_id ] = true;
 			$append( $term_id, $term->name );
 		}
 
@@ -660,7 +777,19 @@ class Schrack_Category_CSV_Importer {
 		$map     = array();
 
 		foreach ( $headers as $index => $header ) {
-			$key = $this->csv_key( (string) $header );
+			$header = trim( (string) $header );
+
+			if ( 1 === preg_match( '/^Meta:\s*(.+)$/iu', $header, $matches ) ) {
+				$meta_key = trim( sanitize_text_field( (string) $matches[1] ) );
+
+				if ( $this->is_valid_term_meta_key( $meta_key ) ) {
+					$map[ 'meta:' . $meta_key ] = (int) $index;
+				}
+
+				continue;
+			}
+
+			$key = $this->csv_key( $header );
 
 			if ( '' === $key ) {
 				continue;
@@ -687,8 +816,8 @@ class Schrack_Category_CSV_Importer {
 	 * @param array{ids:array<int,bool>,slugs:array<string,int>,paths:array<string,int>} $lookup Category lookup.
 	 * @param array<int,string>      $path_parts Category path parts.
 	 */
-	private function resolve_category_csv_term_id( array $row, array $header_map, array $lookup, array $path_parts ): int {
-		$term_id = absint( $this->csv_cell( $row, $header_map, 'term_id' ) );
+	private function resolve_category_csv_term_id( array $row, array $header_map, array $lookup, array $path_parts, bool $update_existing ): int {
+		$term_id = $update_existing ? absint( $this->csv_cell( $row, $header_map, 'term_id' ) ) : 0;
 
 		if ( $term_id > 0 && isset( $lookup['ids'][ $term_id ] ) ) {
 			return $term_id;
@@ -893,11 +1022,7 @@ class Schrack_Category_CSV_Importer {
 		if ( isset( $header_map['image_id'] ) || isset( $header_map['image_url'] ) ) {
 			$image_id_value  = $this->csv_cell( $row, $header_map, 'image_id' );
 			$image_url_value = $this->csv_cell( $row, $header_map, 'image_url' );
-			$image_id        = absint( $image_id_value );
-
-			if ( $image_id <= 0 ) {
-				$image_id = '' !== $image_url_value && function_exists( 'attachment_url_to_postid' ) ? absint( attachment_url_to_postid( $image_url_value ) ) : 0;
-			}
+			$image_id        = $this->resolve_category_image_id( $term_id, $image_id_value, $image_url_value );
 
 			if ( $image_id > 0 ) {
 				update_term_meta( $term_id, 'thumbnail_id', $image_id );
@@ -915,6 +1040,130 @@ class Schrack_Category_CSV_Importer {
 				update_term_meta( $term_id, 'order', max( 0, (int) $order ) );
 			}
 		}
+
+		foreach ( $header_map as $field => $index ) {
+			if ( ! str_starts_with( (string) $field, 'meta:' ) ) {
+				continue;
+			}
+
+			$meta_key = substr( (string) $field, 5 );
+
+			if ( ! $this->is_valid_term_meta_key( $meta_key ) ) {
+				continue;
+			}
+
+			$raw_value = $this->csv_cell_by_index( $row, (int) $index );
+			$values    = self::decode_meta_values( $raw_value );
+
+			delete_term_meta( $term_id, $meta_key );
+
+			foreach ( $values as $value ) {
+				add_term_meta( $term_id, $meta_key, $value, false );
+			}
+		}
+	}
+
+	/**
+	 * Resolves an exported category image locally and downloads a remote source
+	 * when importing into a new shop. The URL takes precedence because numeric
+	 * attachment IDs are not portable between WordPress installations.
+	 */
+	private function resolve_category_image_id( int $term_id, string $image_id_value, string $image_url_value ): int {
+		$image_url = esc_url_raw( $image_url_value );
+
+		if ( '' !== $image_url ) {
+			$image_id = function_exists( 'attachment_url_to_postid' ) ? absint( attachment_url_to_postid( $image_url ) ) : 0;
+
+			if ( $image_id <= 0 ) {
+				$existing = get_posts(
+					array(
+						'post_type'      => 'attachment',
+						'post_status'    => 'inherit',
+						'fields'         => 'ids',
+						'posts_per_page' => 1,
+						'no_found_rows'  => true,
+						'meta_key'       => '_wc_attachment_source',
+						'meta_value'     => $image_url,
+					)
+				);
+				$image_id = ! empty( $existing ) ? absint( $existing[0] ) : 0;
+			}
+
+			if ( $image_id <= 0 && function_exists( 'wc_rest_upload_image_from_url' ) && function_exists( 'wc_rest_set_uploaded_image_as_attachment' ) ) {
+				$upload = wc_rest_upload_image_from_url( $image_url );
+
+				if ( ! is_wp_error( $upload ) ) {
+					$created = wc_rest_set_uploaded_image_as_attachment( $upload, 0 );
+					$image_id = is_wp_error( $created ) ? 0 : absint( $created );
+
+					if ( $image_id > 0 ) {
+						update_post_meta( $image_id, '_wc_attachment_source', $image_url );
+					} elseif ( is_wp_error( $created ) ) {
+						$this->logger->warning(
+							'category_import',
+							'Could not create a media attachment for a downloaded category image.',
+							null,
+							array(
+								'term_id' => $term_id,
+								'url'     => $image_url,
+								'error'   => $created->get_error_message(),
+							)
+						);
+					}
+				} else {
+					$this->logger->warning(
+						'category_import',
+						'Could not download a category image during CSV import.',
+						null,
+						array(
+							'term_id' => $term_id,
+							'url'     => $image_url,
+							'error'   => is_wp_error( $upload ) ? $upload->get_error_message() : '',
+						)
+					);
+				}
+			}
+
+			return $image_id;
+		}
+
+		$image_id = absint( $image_id_value );
+
+		return $image_id > 0 && 'attachment' === get_post_type( $image_id ) && wp_attachment_is_image( $image_id ) ? $image_id : 0;
+	}
+
+	/**
+	 * Decodes a reversible Meta cell, while also accepting a manually entered
+	 * plain scalar value. An empty cell intentionally clears the metadata key.
+	 *
+	 * @return array<int,mixed>
+	 */
+	private static function decode_meta_values( string $raw_value ): array {
+		if ( '' === $raw_value ) {
+			return array();
+		}
+
+		if ( ! str_starts_with( $raw_value, self::STRUCTURED_META_PREFIX ) ) {
+			return array( $raw_value );
+		}
+
+		$json = base64_decode( substr( $raw_value, strlen( self::STRUCTURED_META_PREFIX ) ), true );
+
+		if ( false === $json ) {
+			return array( $raw_value );
+		}
+
+		$values = json_decode( $json, true );
+
+		return JSON_ERROR_NONE === json_last_error() && is_array( $values ) ? array_values( $values ) : array( $raw_value );
+	}
+
+	/**
+	 * Allows bounded, portable category metadata headers only.
+	 */
+	private function is_valid_term_meta_key( string $meta_key ): bool {
+		return ! in_array( $meta_key, array( 'thumbnail_id', 'display_type', 'order' ), true )
+			&& 1 === preg_match( '/^[A-Za-z0-9_.:-]{1,191}$/D', $meta_key );
 	}
 
 	/**
@@ -937,7 +1186,15 @@ class Schrack_Category_CSV_Importer {
 			return '';
 		}
 
-		$index = (int) $header_map[ $field ];
+		return $this->csv_cell_by_index( $row, (int) $header_map[ $field ] );
+	}
+
+	/**
+	 * Returns a cleaned CSV cell by numeric position.
+	 *
+	 * @param array<int,string|null> $row CSV row.
+	 */
+	private function csv_cell_by_index( array $row, int $index ): string {
 		$value = $row[ $index ] ?? '';
 
 		return trim( wp_check_invalid_utf8( is_scalar( $value ) ? (string) $value : '' ) );
@@ -966,7 +1223,7 @@ class Schrack_Category_CSV_Importer {
 		$best_columns   = 0;
 
 		foreach ( array( ',', ';', "\t" ) as $delimiter ) {
-			$columns = count( str_getcsv( $line, $delimiter, '"', '\\' ) );
+			$columns = count( str_getcsv( $line, $delimiter, '"', "\0" ) );
 
 			if ( $columns > $best_columns ) {
 				$best_columns   = $columns;
@@ -1028,13 +1285,68 @@ class Schrack_Category_CSV_Importer {
 			return '';
 		}
 
-		$index = trailingslashit( $dir ) . 'index.php';
+		$protection_files = array(
+			'index.php'  => "<?php\n// Silence is golden.\n",
+			'.htaccess'  => "Require all denied\nDeny from all\n",
+			'web.config' => "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<configuration><system.webServer><authorization><remove users=\"*\" roles=\"\" verbs=\"\"/><add accessType=\"Deny\" users=\"*\"/></authorization></system.webServer></configuration>\n",
+		);
 
-		if ( ! file_exists( $index ) ) {
-			file_put_contents( $index, "<?php\n// Silence is golden.\n" );
+		foreach ( $protection_files as $name => $contents ) {
+			$path = trailingslashit( $dir ) . $name;
+
+			if ( ! file_exists( $path ) ) {
+				@file_put_contents( $path, $contents, LOCK_EX ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+			}
 		}
 
 		return $dir;
+	}
+
+	/**
+	 * Checks that an import copy is the expected CSV inside the protected folder.
+	 */
+	private function is_valid_import_file( string $path ): bool {
+		$dir = $this->import_dir();
+
+		if ( '' === $dir || '' === $path || 'csv' !== strtolower( pathinfo( $path, PATHINFO_EXTENSION ) ) ) {
+			return false;
+		}
+
+		$real_dir  = realpath( $dir );
+		$real_path = realpath( $path );
+
+		return is_string( $real_dir )
+			&& is_string( $real_path )
+			&& str_starts_with( $real_path, trailingslashit( $real_dir ) )
+			&& is_file( $real_path );
+	}
+
+	/**
+	 * Deletes only the validated private file referenced by one status row.
+	 *
+	 * @param array<string,mixed> $status Import status.
+	 */
+	private function delete_status_file( array $status ): void {
+		$path = isset( $status['file'] ) ? (string) $status['file'] : '';
+
+		if ( $this->is_valid_import_file( $path ) ) {
+			wp_delete_file( $path );
+		}
+	}
+
+	/**
+	 * Prevents category hierarchy changes while a product transfer is reading or
+	 * restoring those relationships.
+	 */
+	private function product_transfer_active(): bool {
+		$states        = array( 'queued', 'running', 'finalizing' );
+		$export_option = class_exists( 'Schrack_Product_Exporter' ) ? Schrack_Product_Exporter::STATUS_OPTION : 'schrack_wc_product_export_status';
+		$import_option = class_exists( 'Schrack_Product_Importer' ) ? Schrack_Product_Importer::STATUS_OPTION : 'schrack_wc_product_import_status';
+		$export        = get_option( $export_option, array() );
+		$import        = get_option( $import_option, array() );
+
+		return ( is_array( $export ) && in_array( (string) ( $export['state'] ?? '' ), $states, true ) )
+			|| ( is_array( $import ) && in_array( (string) ( $import['state'] ?? '' ), $states, true ) );
 	}
 
 	/**

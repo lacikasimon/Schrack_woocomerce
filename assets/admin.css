@@ -868,6 +868,149 @@
 	color: #3c434a;
 }
 
+.schrack-export-columns {
+	display: grid;
+	gap: 10px;
+}
+
+.schrack-export-columns__mode {
+	align-items: flex-start;
+	display: grid;
+	gap: 2px 8px;
+	grid-template-columns: auto 1fr;
+}
+
+.schrack-export-columns__mode input {
+	grid-row: 1 / span 2;
+	margin-top: 3px;
+}
+
+.schrack-export-columns__mode span {
+	color: var(--schrack-text-muted);
+	font-size: 12px;
+}
+
+.schrack-export-columns__builder {
+	background: #f6f7f7;
+	border: 1px solid var(--schrack-border);
+	border-radius: 8px;
+	margin-top: 6px;
+	padding: 16px;
+}
+
+.schrack-export-columns__builder[hidden] {
+	display: none;
+}
+
+.schrack-export-columns__builder > .description {
+	margin: 0 0 14px;
+}
+
+.schrack-export-columns__grid {
+	display: grid;
+	gap: 18px;
+	grid-template-columns: minmax(260px, 0.85fr) minmax(360px, 1.15fr);
+}
+
+.schrack-export-columns__grid h4 {
+	font-size: 13px;
+	margin: 0 0 8px;
+}
+
+.schrack-export-columns__available input[type="search"],
+.schrack-export-columns__available select {
+	box-sizing: border-box;
+	max-width: none;
+	width: 100%;
+}
+
+.schrack-export-columns__available input[type="search"] {
+	margin-bottom: 8px;
+}
+
+.schrack-export-columns__available select {
+	height: 360px;
+}
+
+.schrack-export-columns__available p {
+	margin: 8px 0 0;
+	text-align: right;
+}
+
+.schrack-export-columns__selected-header {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: space-between;
+}
+
+.schrack-export-columns__presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 8px;
+}
+
+.schrack-export-columns__list {
+	background: #fff;
+	border: 1px solid var(--schrack-border);
+	border-radius: 6px;
+	box-sizing: border-box;
+	height: 402px;
+	list-style-position: inside;
+	margin: 0;
+	overflow: auto;
+	padding: 6px;
+}
+
+.schrack-export-columns__list li {
+	align-items: center;
+	border-bottom: 1px solid #f0f0f1;
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+	margin: 0;
+	padding: 7px 5px;
+}
+
+.schrack-export-columns__list li:last-child {
+	border-bottom: 0;
+}
+
+.schrack-export-columns__item-label {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.schrack-export-columns__item-label strong,
+.schrack-export-columns__item-label code {
+	overflow-wrap: anywhere;
+}
+
+.schrack-export-columns__item-label code {
+	color: var(--schrack-text-muted);
+	font-size: 11px;
+}
+
+.schrack-export-columns__item-actions {
+	display: inline-flex;
+	flex: 0 0 auto;
+	gap: 3px;
+}
+
+.schrack-export-columns__extras {
+	border-top: 1px solid var(--schrack-border);
+	display: grid;
+	gap: 8px;
+	margin-top: 16px;
+	padding-top: 14px;
+}
+
+.schrack-export-columns__extras textarea {
+	max-width: 720px;
+}
+
 .schrack-progress-cell {
 	display: flex;
 	flex-direction: column;
@@ -1275,6 +1418,15 @@
 		display: block;
 		padding-right: 0;
 		width: auto;
+	}
+
+	.schrack-export-columns__grid {
+		grid-template-columns: 1fr;
+	}
+
+	.schrack-export-columns__selected-header {
+		align-items: stretch;
+		flex-direction: column;
 	}
 
 	.schrack-toolbar {

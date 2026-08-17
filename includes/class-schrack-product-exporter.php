@@ -21,27 +21,353 @@ if ( ! class_exists( 'WC_Product_CSV_Exporter', false ) ) {
  * Exposes WooCommerce's protected row builder while preserving raw prices.
  */
 class Schrack_WC_Product_CSV_Exporter extends WC_Product_CSV_Exporter {
+	private const SCHRACK_ATTRIBUTE_COLUMN_PREFIX = 'schrack_attribute:';
+
+	/** @var array<string,bool>|null Null exports every scalar meta key. */
+	private ?array $schrack_meta_keys_to_export = null;
+	/** @var array<string,array{name:string,label:string,taxonomy:bool}> */
+	private array $schrack_separate_attributes = array();
+
+	/**
+	 * Creates a stable internal column ID containing everything re-import needs.
+	 */
+	public static function schrack_attribute_column_id( string $name, string $label, bool $taxonomy ): string {
+		$payload = wp_json_encode(
+			array(
+				'name'     => $name,
+				'label'    => $label,
+				'taxonomy' => $taxonomy,
+			),
+			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+		);
+
+		return self::SCHRACK_ATTRIBUTE_COLUMN_PREFIX . rtrim( strtr( base64_encode( (string) $payload ), '+/', '-_' ), '=' );
+	}
+
+	/**
+	 * Decodes a separate attribute column ID.
+	 *
+	 * @return array{name:string,label:string,taxonomy:bool}|null
+	 */
+	public static function schrack_decode_attribute_column_id( string $column_id ): ?array {
+		if ( ! str_starts_with( $column_id, self::SCHRACK_ATTRIBUTE_COLUMN_PREFIX ) ) {
+			return null;
+		}
+
+		$encoded = substr( $column_id, strlen( self::SCHRACK_ATTRIBUTE_COLUMN_PREFIX ) );
+		$padding = strlen( $encoded ) % 4;
+
+		if ( $padding > 0 ) {
+			$encoded .= str_repeat( '=', 4 - $padding );
+		}
+
+		$json = base64_decode( strtr( $encoded, '-_', '+/' ), true );
+
+		if ( false === $json ) {
+			return null;
+		}
+
+		$data = json_decode( $json, true );
+		$name = is_array( $data ) && isset( $data['name'] ) ? trim( (string) $data['name'] ) : '';
+		$label = is_array( $data ) && isset( $data['label'] ) ? trim( (string) $data['label'] ) : '';
+
+		if (
+			'' === $name ||
+			'' === $label ||
+			strlen( $name ) > 191 ||
+			strlen( $label ) > 255 ||
+			preg_match( '/[\x00-\x1F\x7F]/', $name ) ||
+			preg_match( '/[\x00-\x1F\x7F]/', $label )
+		) {
+			return null;
+		}
+
+		return array(
+			'name'     => $name,
+			'label'    => $label,
+			'taxonomy' => ! empty( $data['taxonomy'] ),
+		);
+	}
+
+	/**
+	 * Supplier values promoted from opaque Meta columns to readable CSV fields.
+	 *
+	 * @return array<string,string> Column ID => product meta key.
+	 */
+	public static function schrack_supplier_column_meta_map(): array {
+		return array(
+			'supplier_source'             => '_schrack_catalog_source',
+			'supplier_purchase_price'     => '_schrack_purchase_price',
+			'supplier_purchase_price_raw' => '_schrack_purchase_price_raw',
+			'telesystem_price_1'           => '_telesystem_price_1',
+			'telesystem_price_2'           => '_telesystem_price_2',
+		);
+	}
+
+	/**
+	 * Human-readable labels shared by complete exports and the header builder.
+	 *
+	 * @return array<string,string>
+	 */
+	public static function schrack_supplier_column_names(): array {
+		return array(
+			'supplier_source'             => __( 'Furnizor', 'schrack-woocommerce-sync' ),
+			'supplier_purchase_price'     => __( 'Preț achiziție furnizor', 'schrack-woocommerce-sync' ),
+			'supplier_purchase_price_raw' => __( 'Preț furnizor original (sursă)', 'schrack-woocommerce-sync' ),
+			'telesystem_price_1'           => __( 'Preț furnizor Telesystem 1', 'schrack-woocommerce-sync' ),
+			'telesystem_price_2'           => __( 'Preț furnizor Telesystem 2', 'schrack-woocommerce-sync' ),
+		);
+	}
+
+	/**
+	 * Adds the readable supplier fields to WooCommerce's standard CSV header.
+	 *
+	 * @return array<string,string>
+	 */
+	public function get_default_column_names() {
+		$columns  = parent::get_default_column_names();
+		$result   = array();
+		$supplier = self::schrack_supplier_column_names();
+		$inserted = false;
+
+		foreach ( $columns as $column_id => $column_name ) {
+			$result[ $column_id ] = $column_name;
+
+			if ( 'regular_price' === $column_id ) {
+				$result   = array_merge( $result, $supplier );
+				$inserted = true;
+			}
+		}
+
+		return $inserted ? $result : array_merge( $result, $supplier );
+	}
+
 	/**
 	 * Builds one associative WooCommerce CSV row.
 	 *
 	 * @return array<string,mixed>
 	 */
 	public function schrack_product_row( WC_Product $product ): array {
-		return $this->generate_row_data( $product );
+		$row = $this->generate_row_data( $product );
+
+		foreach ( $this->schrack_separate_attributes as $column_id => $definition ) {
+			$row[ $column_id ] = $this->schrack_separate_attribute_value( $product, $definition['name'], $definition['taxonomy'] );
+		}
+
+		return $row;
+	}
+
+	/**
+	 * Limits custom metadata to the keys selected in the header builder.
+	 *
+	 * @param array<int,string>|null $meta_keys Null keeps the complete backup behavior.
+	 */
+	public function schrack_set_meta_keys( ?array $meta_keys ): void {
+		$this->schrack_meta_keys_to_export = null === $meta_keys
+			? null
+			: array_fill_keys( array_values( array_unique( array_map( 'strval', $meta_keys ) ) ), true );
+	}
+
+	/**
+	 * Appends one stable CSV column for every discovered attribute name.
+	 *
+	 * @param array<string,array{name:string,label:string,taxonomy:bool}> $attributes Column definitions.
+	 */
+	public function schrack_set_separate_attributes( array $attributes ): void {
+		$this->schrack_separate_attributes = array();
+
+		foreach ( $attributes as $column_id => $definition ) {
+			$decoded = self::schrack_decode_attribute_column_id( (string) $column_id );
+
+			if ( null === $decoded || ! is_array( $definition ) ) {
+				continue;
+			}
+
+			$this->schrack_separate_attributes[ $column_id ] = $decoded;
+			$this->column_names[ $column_id ] = sprintf(
+				/* translators: 1: readable attribute label, 2: stable WooCommerce attribute name. */
+				__( 'Atribut: %1$s [%2$s]', 'schrack-woocommerce-sync' ),
+				$decoded['label'],
+				$decoded['name']
+			);
+		}
+	}
+
+	/**
+	 * Reads one parent/simple/variation attribute and returns its visible values.
+	 */
+	private function schrack_separate_attribute_value( WC_Product $product, string $name, bool $taxonomy ): string {
+		$attributes = $product->get_attributes();
+		$attribute  = $attributes[ $name ] ?? $attributes[ sanitize_title( $name ) ] ?? null;
+
+		if ( null === $attribute ) {
+			foreach ( $attributes as $candidate_name => $candidate ) {
+				$candidate_object_name = $candidate instanceof WC_Product_Attribute ? $candidate->get_name() : (string) $candidate_name;
+
+				if ( $candidate_object_name === $name || sanitize_title( $candidate_object_name ) === sanitize_title( $name ) ) {
+					$attribute = $candidate;
+					break;
+				}
+			}
+		}
+
+		if ( $attribute instanceof WC_Product_Attribute ) {
+			$values = array();
+
+			if ( $attribute->is_taxonomy() ) {
+				foreach ( $attribute->get_terms() as $term ) {
+					if ( $term instanceof WP_Term ) {
+						$values[] = html_entity_decode( (string) $term->name, ENT_QUOTES );
+					}
+				}
+			} else {
+				$values = array_map( 'strval', $attribute->get_options() );
+			}
+
+			return $this->schrack_implode_attribute_values( $values );
+		}
+
+		if ( ! is_scalar( $attribute ) || '' === (string) $attribute ) {
+			return '';
+		}
+
+		$value = (string) $attribute;
+
+		if ( $taxonomy ) {
+			$term = get_term_by( 'slug', $value, $name );
+
+			if ( $term instanceof WP_Term ) {
+				$value = (string) $term->name;
+			}
+		}
+
+		return $this->schrack_implode_attribute_values( array( $value ) );
+	}
+
+	/**
+	 * Escapes literal backslashes as well as commas so a value ending in a
+	 * backslash cannot consume the separator before the following value.
+	 *
+	 * @param array<int,mixed> $values Attribute values.
+	 */
+	private function schrack_implode_attribute_values( array $values ): string {
+		$escaped = array();
+
+		foreach ( $values as $value ) {
+			$value     = is_scalar( $value ) ? html_entity_decode( (string) $value, ENT_QUOTES ) : '';
+			$escaped[] = str_replace( array( '\\', ',' ), array( '\\\\', '\\,' ), $value );
+		}
+
+		return implode( ', ', $escaped );
 	}
 
 	/**
 	 * Avoids customer/B2B price filters during an administrative backup.
 	 */
 	protected function get_column_value_sale_price( $product ) {
-		return wc_format_localized_price( $product->get_sale_price( 'edit' ) );
+		return $this->schrack_fixed_localized_price( $product->get_sale_price( 'edit' ) );
 	}
 
 	/**
 	 * Avoids customer/B2B price filters during an administrative backup.
 	 */
 	protected function get_column_value_regular_price( $product ) {
-		return wc_format_localized_price( $product->get_regular_price( 'edit' ) );
+		return $this->schrack_fixed_localized_price( $product->get_regular_price( 'edit' ) );
+	}
+
+	/**
+	 * Exports a readable supplier name without exposing its internal meta key.
+	 */
+	protected function get_column_value_supplier_source( $product ): string {
+		$source = sanitize_key( (string) $product->get_meta( '_schrack_catalog_source', true, 'edit' ) );
+
+		return match ( $source ) {
+			'schrack'    => 'Schrack',
+			'telesystem' => 'Telesystem',
+			default      => $source,
+		};
+	}
+
+	/**
+	 * Exports the normalized supplier purchase price as a localized number.
+	 */
+	protected function get_column_value_supplier_purchase_price( $product ): string {
+		return $this->schrack_fixed_localized_price( $product->get_meta( '_schrack_purchase_price', true, 'edit' ) );
+	}
+
+	/**
+	 * Exports the supplier's original feed price before unit conversion.
+	 */
+	protected function get_column_value_supplier_purchase_price_raw( $product ): string {
+		return $this->schrack_fixed_localized_price( $product->get_meta( '_schrack_purchase_price_raw', true, 'edit' ) );
+	}
+
+	/**
+	 * Exports Telesystem's first supplier price as a localized number.
+	 */
+	protected function get_column_value_telesystem_price_1( $product ): string {
+		return $this->schrack_fixed_localized_price( $product->get_meta( '_telesystem_price_1', true, 'edit' ) );
+	}
+
+	/**
+	 * Exports Telesystem's second supplier price as a localized number.
+	 */
+	protected function get_column_value_telesystem_price_2( $product ): string {
+		return $this->schrack_fixed_localized_price( $product->get_meta( '_telesystem_price_2', true, 'edit' ) );
+	}
+
+	/**
+	 * Keeps the shop decimal separator and always exports WooCommerce's configured
+	 * number of decimals, including zero-decimal source values such as 786.00.
+	 */
+	private function schrack_fixed_localized_price( mixed $price ): string {
+		if ( '' === $price || null === $price ) {
+			return '';
+		}
+
+		$decimals = max( 0, wc_get_price_decimals() );
+		$decimal  = wc_format_decimal( $price, $decimals, false );
+
+		return '' === $decimal ? '' : wc_format_localized_price( $decimal );
+	}
+
+	/**
+	 * Exports either every scalar meta field or only the explicitly selected
+	 * supplier/custom keys while retaining WooCommerce's importable header form.
+	 *
+	 * @param WC_Product         $product Product object.
+	 * @param array<string,mixed> $row Row data passed by reference.
+	 */
+	protected function prepare_meta_for_export( $product, &$row ) {
+		if ( null === $this->schrack_meta_keys_to_export ) {
+			parent::prepare_meta_for_export( $product, $row );
+			return;
+		}
+
+		if ( ! $this->enable_meta_export || empty( $this->schrack_meta_keys_to_export ) ) {
+			return;
+		}
+
+		$meta_keys_to_skip = apply_filters( 'woocommerce_product_export_skip_meta_keys', array(), $product );
+
+		foreach ( $product->get_meta_data() as $meta ) {
+			if (
+				! isset( $this->schrack_meta_keys_to_export[ $meta->key ] ) ||
+				in_array( $meta->key, $meta_keys_to_skip, true )
+			) {
+				continue;
+			}
+
+			$meta_value = apply_filters( 'woocommerce_product_export_meta_value', $meta->value, $meta, $product, $row );
+
+			if ( ! is_scalar( $meta_value ) ) {
+				continue;
+			}
+
+			$column_key                         = 'meta:' . esc_attr( $meta->key );
+			$this->column_names[ $column_key ] = sprintf( __( 'Meta: %s', 'woocommerce' ), $meta->key );
+			$row[ $column_key ]                = $meta_value;
+		}
 	}
 }
 
@@ -60,6 +386,10 @@ class Schrack_Product_Exporter {
 	private const FINALIZE_TIME_BUDGET = 20.0;
 	private const STRUCTURED_META_PREFIX = 'schrack-wc-json:v1:';
 	private const ESCAPED_STRING_PREFIX  = 'schrack-wc-string:v1:';
+	private const COLUMN_META_CACHE_KEY  = 'schrack_wc_export_supplier_meta_keys_v1';
+	private const ATTRIBUTE_SCAN_BATCH_SIZE = 1000;
+	private const MAX_SEPARATE_ATTRIBUTE_COLUMNS = 1000;
+	private const MAX_CUSTOM_COLUMNS = 1000;
 
 	private Schrack_Settings $settings;
 	private Schrack_Logger $logger;
@@ -102,13 +432,76 @@ class Schrack_Product_Exporter {
 	}
 
 	/**
-	 * Creates a complete WooCommerce product backup and queues its first batch.
+	 * Returns selectable WooCommerce and supplier columns for the admin builder.
+	 * Supplier keys are cached because the export page refreshes while jobs run.
+	 *
+	 * @return array{standard:array<string,string>,supplier:array<string,string>,supplier_meta:array<string,string>}
+	 */
+	public function column_catalog(): array {
+		global $wpdb;
+
+		$adapter             = new Schrack_WC_Product_CSV_Exporter();
+		$standard            = array();
+		$supplier            = array();
+		$supplier_column_ids = array_fill_keys( array_keys( Schrack_WC_Product_CSV_Exporter::schrack_supplier_column_meta_map() ), true );
+
+		foreach ( $adapter->get_default_column_names() as $column_id => $column_name ) {
+			if ( is_string( $column_id ) && is_scalar( $column_name ) ) {
+				if ( isset( $supplier_column_ids[ $column_id ] ) ) {
+					$supplier[ $column_id ] = (string) $column_name;
+				} else {
+					$standard[ $column_id ] = (string) $column_name;
+				}
+			}
+		}
+
+		$meta_keys = get_transient( self::COLUMN_META_CACHE_KEY );
+
+		if ( ! is_array( $meta_keys ) ) {
+			$sql       = $wpdb->prepare(
+				"SELECT DISTINCT meta_key FROM {$wpdb->postmeta}
+				WHERE meta_key LIKE %s OR meta_key LIKE %s
+				ORDER BY meta_key ASC LIMIT 500",
+				$wpdb->esc_like( '_schrack_' ) . '%',
+				$wpdb->esc_like( '_telesystem_' ) . '%'
+			);
+			$meta_keys = $wpdb->get_col( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$meta_keys = is_array( $meta_keys ) ? $meta_keys : array();
+			set_transient( self::COLUMN_META_CACHE_KEY, $meta_keys, HOUR_IN_SECONDS );
+		}
+
+		$meta_keys = array_merge( $this->known_supplier_meta_keys(), $meta_keys );
+		$meta_keys = array_values( array_unique( array_filter( array_map( 'strval', $meta_keys ) ) ) );
+		$meta_keys = array_values( array_diff( $meta_keys, $this->transient_meta_keys(), $this->readable_supplier_meta_keys() ) );
+		sort( $meta_keys, SORT_NATURAL | SORT_FLAG_CASE );
+
+		$supplier_meta = array();
+
+		foreach ( $meta_keys as $meta_key ) {
+			if ( $this->is_valid_meta_key( $meta_key ) ) {
+				$supplier_meta[ 'meta:' . $meta_key ] = sprintf( __( 'Meta: %s', 'woocommerce' ), $meta_key );
+			}
+		}
+
+		return array(
+			'standard'      => $standard,
+			'supplier'      => $supplier,
+			'supplier_meta' => $supplier_meta,
+		);
+	}
+
+	/**
+	 * Creates a WooCommerce product backup and queues its first batch.
+	 *
+	 * @param array<string,mixed> $filters Optional export filters.
+	 * @param array<string,mixed> $column_config Header builder configuration.
 	 *
 	 * @return array<string,mixed>
 	 */
-	public function queue(): array {
+	public function queue( array $filters = array(), array $column_config = array() ): array {
 		$current = $this->status();
 		$import  = get_option( Schrack_Product_Importer::STATUS_OPTION, null );
+		$category_import = ( new Schrack_Category_CSV_Importer( $this->settings, $this->logger ) )->active_import();
 
 		if ( ! is_array( $import ) ) {
 			$all_status = $this->settings->get_status();
@@ -129,6 +522,13 @@ class Schrack_Product_Exporter {
 			);
 		}
 
+		if ( null !== $category_import ) {
+			return array(
+				'state'   => 'error',
+				'message' => __( 'A category import is running. Wait for it to finish before exporting products.', 'schrack-woocommerce-sync' ),
+			);
+		}
+
 		$dir       = $this->export_directory( true );
 		$export_id = sanitize_key( wp_generate_uuid4() );
 
@@ -142,7 +542,7 @@ class Schrack_Product_Exporter {
 		$this->cleanup_old_files( $dir );
 		$this->delete_status_files( $current );
 
-		$basename  = sprintf( 'schrack-products-full-%1$s-%2$s', gmdate( 'Y-m-d-His' ), str_replace( '-', '', $export_id ) );
+		$basename  = sprintf( 'schrack-products-export-%1$s-%2$s', gmdate( 'Y-m-d-His' ), str_replace( '-', '', $export_id ) );
 		$path      = trailingslashit( $dir ) . $basename . '.csv';
 		$rows_path = trailingslashit( $dir ) . $basename . '.rows';
 		$handle    = fopen( $rows_path, 'xb' );
@@ -158,8 +558,10 @@ class Schrack_Product_Exporter {
 		@chmod( $rows_path, 0660 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
 		try {
-			$snapshot = $this->snapshot();
-			$adapter  = $this->new_adapter();
+			$filters       = $this->normalize_filters( $filters );
+			$snapshot      = $this->snapshot( $filters );
+			$column_config = $this->normalize_column_config( $column_config, $snapshot['total'] > 0 );
+			$adapter       = $this->new_adapter( $column_config );
 		} catch ( Throwable $exception ) {
 			wp_delete_file( $rows_path );
 
@@ -188,8 +590,10 @@ class Schrack_Product_Exporter {
 				'batch_size'          => Schrack_Memory_Guard::export_batch_size(),
 				'column_names'        => $adapter->get_column_names(),
 				'format'              => 'woocommerce-product-csv',
-				'includes_meta'       => 'yes',
-				'includes_variations' => 'yes',
+				'includes_meta'       => 'full' === $column_config['mode'] || ! empty( $column_config['meta_keys'] ) ? 'yes' : 'no',
+				'includes_variations' => in_array( $filters['product_type'], array( 'all', 'variation' ), true ) ? 'yes' : 'no',
+				'filters'              => $filters,
+				'column_config'        => $column_config,
 				'started_at'          => $now,
 				'last_progress_at'    => $now,
 			),
@@ -218,11 +622,13 @@ class Schrack_Product_Exporter {
 
 		$this->logger->info(
 			'export',
-			'Queued complete WooCommerce product CSV export.',
+			'Queued WooCommerce product CSV export.',
 			null,
 			array(
 				'export_id' => $export_id,
 				'total'     => $snapshot['total'],
+				'filters'   => $filters,
+				'columns'   => $column_config,
 			)
 		);
 
@@ -254,7 +660,7 @@ class Schrack_Product_Exporter {
 
 			$this->logger->error(
 				'export',
-				'Complete WooCommerce product CSV export failed.',
+				'WooCommerce product CSV export failed.',
 				null,
 				array(
 					'export_id' => $export_id,
@@ -434,25 +840,14 @@ class Schrack_Product_Exporter {
 	}
 
 	/**
-	 * Excludes short-lived locks and importer bookkeeping from a restore file.
+	 * Excludes short-lived bookkeeping and metadata already represented by
+	 * readable supplier columns from a restore file.
 	 *
 	 * @param array<int,string> $keys Existing skipped meta keys.
 	 * @return array<int,string>
 	 */
 	public function skip_transient_meta_keys( array $keys ): array {
-		return array_values(
-			array_unique(
-				array_merge(
-					$keys,
-					array(
-						'_original_id',
-						'_schrack_product_import_job',
-						'_schrack_image_sync_claim',
-						'_schrack_image_sync_claimed_at',
-					)
-				)
-			)
-		);
+		return array_values( array_unique( array_merge( $keys, $this->transient_meta_keys(), $this->readable_supplier_meta_keys() ) ) );
 	}
 
 	/**
@@ -491,7 +886,8 @@ class Schrack_Product_Exporter {
 		$ids        = $this->product_ids(
 			absint( $status['last_id'] ?? 0 ),
 			absint( $status['max_id'] ?? 0 ),
-			$batch_size
+			$batch_size,
+			isset( $status['filters'] ) && is_array( $status['filters'] ) ? $status['filters'] : array()
 		);
 
 		if ( empty( $ids ) ) {
@@ -499,7 +895,10 @@ class Schrack_Product_Exporter {
 			return;
 		}
 
-		$adapter = $this->new_adapter();
+		$column_config = isset( $status['column_config'] ) && is_array( $status['column_config'] )
+			? $status['column_config']
+			: array( 'mode' => 'full' );
+		$adapter       = $this->new_adapter( $column_config );
 		$columns = isset( $status['column_names'] ) && is_array( $status['column_names'] ) ? $status['column_names'] : array();
 
 		if ( ! empty( $columns ) ) {
@@ -858,25 +1257,629 @@ class Schrack_Product_Exporter {
 	}
 
 	/**
-	 * Returns a configured adapter that exports every Woo field and custom meta.
+	 * Returns short-lived metadata that must never enter a restore file.
+	 *
+	 * @return array<int,string>
 	 */
-	private function new_adapter(): Schrack_WC_Product_CSV_Exporter {
-		$adapter = new Schrack_WC_Product_CSV_Exporter();
-		$adapter->enable_meta_export( true );
+	private function transient_meta_keys(): array {
+		return array(
+			'_original_id',
+			'_schrack_product_import_job',
+			'_schrack_image_sync_claim',
+			'_schrack_image_sync_claimed_at',
+		);
+	}
+
+	/**
+	 * Returns meta keys exported through named supplier columns instead.
+	 *
+	 * @return array<int,string>
+	 */
+	private function readable_supplier_meta_keys(): array {
+		return array_values( Schrack_WC_Product_CSV_Exporter::schrack_supplier_column_meta_map() );
+	}
+
+	/**
+	 * Supplies useful builder choices even before the first supplier sync.
+	 * Database discovery adds every other currently used supplier key.
+	 *
+	 * @return array<int,string>
+	 */
+	private function known_supplier_meta_keys(): array {
+		return array(
+			'_schrack_catalog_source',
+			'_schrack_catalog_status',
+			'_schrack_item_number',
+			'_schrack_ean',
+			'_schrack_manufacturer',
+			'_schrack_supplier',
+			'_schrack_product_line',
+			'_schrack_purchase_price',
+			'_schrack_purchase_price_raw',
+			'_schrack_vat_rate',
+			'_schrack_stock_breakdown',
+			'_schrack_last_price_sync',
+			'_schrack_last_stock_sync',
+			'_schrack_package_quantity',
+			'_schrack_price_unit',
+			'_schrack_unit',
+			'_schrack_technical_attributes',
+			'_schrack_documents',
+			'_schrack_image_url',
+			'_schrack_raw_feed_data',
+			'_telesystem_catalog_status',
+			'_telesystem_item_number',
+			'_telesystem_ean',
+			'_telesystem_supplier',
+			'_telesystem_price_1',
+			'_telesystem_price_2',
+			'_telesystem_price_source',
+			'_telesystem_vat_rate',
+			'_telesystem_stock_text',
+			'_telesystem_special_offer',
+			'_telesystem_weight_grams',
+			'_telesystem_warranty_months',
+			'_telesystem_image_urls',
+			'_telesystem_last_catalog_sync',
+			'_telesystem_last_price_sync',
+			'_telesystem_last_stock_sync',
+		);
+	}
+
+	/**
+	 * Scans the attributes actually assigned to products without loading product
+	 * objects. Serialized rows are read with keyset pagination to stay safe on
+	 * large, 2 GB cPanel catalogs.
+	 *
+	 * @return array<string,array{name:string,label:string,taxonomy:bool}>
+	 */
+	private function discover_separate_attribute_columns(): array {
+		global $wpdb;
+
+		$registered_labels = array();
+
+		if ( function_exists( 'wc_get_attribute_taxonomies' ) ) {
+			foreach ( wc_get_attribute_taxonomies() as $taxonomy ) {
+				$name  = isset( $taxonomy->attribute_name ) ? wc_attribute_taxonomy_name( (string) $taxonomy->attribute_name ) : '';
+				$label = isset( $taxonomy->attribute_label ) ? sanitize_text_field( (string) $taxonomy->attribute_label ) : '';
+
+				if ( '' !== $name ) {
+					$registered_labels[ $name ] = '' !== $label ? $label : $name;
+				}
+			}
+		}
+
+		$found        = array();
+		$last_meta_id = 0;
+
+		do {
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT meta_id, meta_value FROM {$wpdb->postmeta}
+					WHERE meta_key = %s AND meta_id > %d
+					ORDER BY meta_id ASC LIMIT %d",
+					'_product_attributes',
+					$last_meta_id,
+					self::ATTRIBUTE_SCAN_BATCH_SIZE
+				),
+				ARRAY_A
+			); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+			if ( ! is_array( $rows ) || '' !== (string) $wpdb->last_error ) {
+				throw new RuntimeException( __( 'A product attribute names could not be scanned for the separate-column export.', 'schrack-woocommerce-sync' ) );
+			}
+
+			foreach ( $rows as $row ) {
+				$last_meta_id = max( $last_meta_id, absint( $row['meta_id'] ?? 0 ) );
+				$attributes   = maybe_unserialize( $row['meta_value'] ?? '' );
+
+				if ( ! is_array( $attributes ) ) {
+					continue;
+				}
+
+				foreach ( $attributes as $attribute_key => $attribute ) {
+					$attribute = is_array( $attribute ) ? $attribute : array();
+					$name      = trim( (string) ( $attribute['name'] ?? $attribute_key ) );
+					$taxonomy  = ! empty( $attribute['is_taxonomy'] ) || str_starts_with( $name, 'pa_' );
+					$label     = $registered_labels[ $name ] ?? ( $taxonomy ? wc_attribute_label( $name ) : $name );
+					$this->add_discovered_attribute( $found, $name, $label, $taxonomy );
+				}
+			}
+
+			if ( count( $found ) > self::MAX_SEPARATE_ATTRIBUTE_COLUMNS ) {
+				throw new RuntimeException( __( 'More than 1,000 product attribute names were found. Narrow the catalog before using separate attribute columns.', 'schrack-woocommerce-sync' ) );
+			}
+
+			$has_more = count( $rows ) === self::ATTRIBUTE_SCAN_BATCH_SIZE;
+			unset( $rows );
+		} while ( $has_more );
+
+		$variation_meta_keys = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT meta_key FROM {$wpdb->postmeta}
+				WHERE meta_key LIKE %s ORDER BY meta_key ASC LIMIT %d",
+				$wpdb->esc_like( 'attribute_' ) . '%',
+				self::MAX_SEPARATE_ATTRIBUTE_COLUMNS + 1
+			)
+		); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+		if ( ! is_array( $variation_meta_keys ) || '' !== (string) $wpdb->last_error ) {
+			throw new RuntimeException( __( 'The variation attribute names could not be scanned for the separate-column export.', 'schrack-woocommerce-sync' ) );
+		}
+
+		foreach ( $variation_meta_keys as $meta_key ) {
+			$name     = substr( (string) $meta_key, strlen( 'attribute_' ) );
+			$taxonomy = str_starts_with( $name, 'pa_' );
+			$label    = $registered_labels[ $name ] ?? ( $taxonomy ? wc_attribute_label( $name ) : $name );
+			$this->add_discovered_attribute( $found, $name, $label, $taxonomy );
+		}
+
+		if ( count( $found ) > self::MAX_SEPARATE_ATTRIBUTE_COLUMNS ) {
+			throw new RuntimeException( __( 'More than 1,000 product attribute names were found. Narrow the catalog before using separate attribute columns.', 'schrack-woocommerce-sync' ) );
+		}
+
+		uasort(
+			$found,
+			static fn ( array $left, array $right ): int => strnatcasecmp( $left['label'], $right['label'] ) ?: strnatcasecmp( $left['name'], $right['name'] )
+		);
+
+		$columns = array();
+
+		foreach ( $found as $definition ) {
+			$column_id             = Schrack_WC_Product_CSV_Exporter::schrack_attribute_column_id( $definition['name'], $definition['label'], $definition['taxonomy'] );
+			$columns[ $column_id ] = $definition;
+		}
+
+		return $columns;
+	}
+
+	/**
+	 * Adds one valid attribute definition while merging duplicate case/slugs.
+	 *
+	 * @param array<string,array{name:string,label:string,taxonomy:bool}> $found Definitions by normalized key (by reference).
+	 */
+	private function add_discovered_attribute( array &$found, string $name, string $label, bool $taxonomy ): void {
+		$name  = trim( sanitize_text_field( $name ) );
+		$label = trim( sanitize_text_field( wp_strip_all_tags( $label ) ) );
+
+		if ( '' === $name || '' === $label || strlen( $name ) > 191 || preg_match( '/[\x00-\x1F\x7F]/', $name ) ) {
+			return;
+		}
+
+		$key = ( $taxonomy ? 'taxonomy:' : 'custom:' ) . strtolower( sanitize_title( $name ) );
+
+		if ( ! isset( $found[ $key ] ) ) {
+			$found[ $key ] = array(
+				'name'     => $name,
+				'label'    => html_entity_decode( $label, ENT_QUOTES ),
+				'taxonomy' => $taxonomy,
+			);
+		}
+	}
+
+	/**
+	 * Validates a WordPress metadata key accepted by the custom header builder.
+	 */
+	private function is_valid_meta_key( string $meta_key ): bool {
+		return 1 === preg_match( '/^[A-Za-z0-9_.:-]{1,191}$/D', $meta_key );
+	}
+
+	/**
+	 * Sanitizes selected header columns and builds their stable ordered labels.
+	 *
+	 * @param array<string,mixed> $config Raw header configuration.
+	 * @return array<string,mixed>
+	 */
+	private function normalize_column_config( array $config, bool $discover_attributes = true ): array {
+		$mode           = sanitize_key( (string) ( $config['mode'] ?? 'full' ) );
+		$attribute_mode = sanitize_key( (string) ( $config['attribute_mode'] ?? '' ) );
+
+		if ( ! in_array( $attribute_mode, array( 'grouped', 'separate', 'none' ), true ) ) {
+			$attribute_mode = array_key_exists( 'include_attributes', $config ) && empty( $config['include_attributes'] ) ? 'none' : 'grouped';
+		}
+
+		$attribute_columns = 'separate' === $attribute_mode && $discover_attributes ? $this->discover_separate_attribute_columns() : array();
+
+		if ( 'custom' !== $mode ) {
+			return array(
+				'mode'               => 'full',
+				'columns'            => array(),
+				'column_names'       => array(),
+				'meta_keys'          => array(),
+				'attribute_mode'     => $attribute_mode,
+				'attribute_columns'  => $attribute_columns,
+				'include_attributes' => 'none' !== $attribute_mode,
+				'include_downloads'  => true,
+			);
+		}
+
+		$catalog          = $this->column_catalog();
+		$standard_columns = array_merge( $catalog['standard'], $catalog['supplier'] );
+		$candidates       = isset( $config['columns'] ) && is_array( $config['columns'] ) ? $config['columns'] : array();
+		$extra_meta_keys  = isset( $config['extra_meta_keys'] ) && is_array( $config['extra_meta_keys'] ) ? $config['extra_meta_keys'] : array();
+		$legacy_meta_map  = array_flip( Schrack_WC_Product_CSV_Exporter::schrack_supplier_column_meta_map() );
+
+		foreach ( $extra_meta_keys as $meta_key ) {
+			$meta_key = trim( sanitize_text_field( (string) $meta_key ) );
+
+			if ( 0 === stripos( $meta_key, 'meta:' ) ) {
+				$meta_key = trim( substr( $meta_key, 5 ) );
+			}
+
+			if ( '' !== $meta_key ) {
+				$candidates[] = 'meta:' . $meta_key;
+			}
+		}
+
+		$column_names = array();
+		$meta_keys    = array();
+
+		foreach ( $candidates as $candidate ) {
+			$column_id = trim( sanitize_text_field( (string) $candidate ) );
+
+			if ( str_starts_with( $column_id, 'meta:' ) ) {
+				$legacy_meta_key = substr( $column_id, 5 );
+
+				if ( isset( $legacy_meta_map[ $legacy_meta_key ] ) ) {
+					$column_id = $legacy_meta_map[ $legacy_meta_key ];
+				}
+			}
+
+			if ( '' === $column_id || isset( $column_names[ $column_id ] ) ) {
+				continue;
+			}
+
+			if ( isset( $standard_columns[ $column_id ] ) ) {
+				$column_names[ $column_id ] = $standard_columns[ $column_id ];
+			} elseif ( str_starts_with( $column_id, 'meta:' ) ) {
+				$meta_key = substr( $column_id, 5 );
+
+				if ( ! $this->is_valid_meta_key( $meta_key ) || in_array( $meta_key, $this->transient_meta_keys(), true ) ) {
+					continue;
+				}
+
+				$column_names[ $column_id ] = sprintf( __( 'Meta: %s', 'woocommerce' ), $meta_key );
+				$meta_keys[]                = $meta_key;
+			}
+
+			if ( count( $column_names ) > self::MAX_CUSTOM_COLUMNS ) {
+				throw new RuntimeException( __( 'The custom CSV header cannot contain more than 1,000 fixed columns.', 'schrack-woocommerce-sync' ) );
+			}
+		}
+
+		if ( empty( $column_names ) ) {
+			throw new RuntimeException( __( 'Choose at least one column for the custom CSV header.', 'schrack-woocommerce-sync' ) );
+		}
+
+		return array(
+			'mode'               => 'custom',
+			'columns'            => array_keys( $column_names ),
+			'column_names'       => $column_names,
+			'meta_keys'          => array_values( array_unique( $meta_keys ) ),
+			'attribute_mode'     => $attribute_mode,
+			'attribute_columns'  => $attribute_columns,
+			'include_attributes' => 'none' !== $attribute_mode,
+			'include_downloads'  => ! empty( $config['include_downloads'] ),
+		);
+	}
+
+	/**
+	 * Returns an adapter configured for a complete or ordered custom header.
+	 *
+	 * @param array<string,mixed> $column_config Normalized header configuration.
+	 */
+	private function new_adapter( array $column_config = array() ): Schrack_WC_Product_CSV_Exporter {
+		$adapter           = new Schrack_WC_Product_CSV_Exporter();
+		$attribute_mode    = sanitize_key( (string) ( $column_config['attribute_mode'] ?? ( ! empty( $column_config['include_attributes'] ) ? 'grouped' : 'none' ) ) );
+		$attribute_columns = isset( $column_config['attribute_columns'] ) && is_array( $column_config['attribute_columns'] )
+			? $column_config['attribute_columns']
+			: array();
+
+		if ( 'custom' !== (string) ( $column_config['mode'] ?? 'full' ) ) {
+			if ( 'grouped' !== $attribute_mode ) {
+				$columns   = array_keys( $adapter->get_default_column_names() );
+				$columns[] = 'meta';
+				$columns[] = 'downloads';
+				$adapter->set_columns_to_export( array_values( array_unique( $columns ) ) );
+			}
+
+			$adapter->enable_meta_export( true );
+			$adapter->schrack_set_meta_keys( null );
+			$adapter->schrack_set_separate_attributes( 'separate' === $attribute_mode ? $attribute_columns : array() );
+			return $adapter;
+		}
+
+		$column_names = isset( $column_config['column_names'] ) && is_array( $column_config['column_names'] )
+			? $column_config['column_names']
+			: array();
+		$meta_keys    = isset( $column_config['meta_keys'] ) && is_array( $column_config['meta_keys'] )
+			? $column_config['meta_keys']
+			: array();
+		$columns      = array( 'meta' );
+
+		foreach ( array_keys( $column_names ) as $column_id ) {
+			if ( ! str_starts_with( (string) $column_id, 'meta:' ) ) {
+				$columns[] = (string) $column_id;
+			}
+		}
+
+		if ( 'grouped' === $attribute_mode ) {
+			$columns[] = 'attributes';
+		}
+
+		if ( ! empty( $column_config['include_downloads'] ) ) {
+			$columns[] = 'downloads';
+		}
+
+		$adapter->set_column_names( $column_names );
+		$adapter->set_columns_to_export( array_values( array_unique( $columns ) ) );
+		$adapter->enable_meta_export( ! empty( $meta_keys ) );
+		$adapter->schrack_set_meta_keys( $meta_keys );
+		$adapter->schrack_set_separate_attributes( 'separate' === $attribute_mode ? $attribute_columns : array() );
+
 		return $adapter;
+	}
+
+	/**
+	 * Sanitizes filters and expands a category once for all background batches.
+	 *
+	 * @param array<string,mixed> $filters Raw filters.
+	 * @return array<string,mixed>
+	 */
+	private function normalize_filters( array $filters ): array {
+		$status       = sanitize_key( (string) ( $filters['status'] ?? 'all' ) );
+		$product_type = sanitize_key( (string) ( $filters['product_type'] ?? 'all' ) );
+		$source       = sanitize_key( (string) ( $filters['source'] ?? 'all' ) );
+		$stock_status = sanitize_key( (string) ( $filters['stock_status'] ?? 'all' ) );
+		$category_id  = absint( $filters['category_id'] ?? 0 );
+		$search       = sanitize_text_field( (string) ( $filters['search'] ?? '' ) );
+
+		if ( ! in_array( $status, array( 'all', 'publish', 'draft', 'pending', 'private', 'future' ), true ) ) {
+			$status = 'all';
+		}
+
+		if ( ! in_array( $product_type, array( 'all', 'product', 'simple', 'variable', 'grouped', 'external', 'variation' ), true ) ) {
+			$product_type = 'all';
+		}
+
+		if ( ! in_array( $source, array( 'all', 'schrack', 'telesystem', 'other' ), true ) ) {
+			$source = 'all';
+		}
+
+		if ( ! in_array( $stock_status, array( 'all', 'instock', 'outofstock', 'onbackorder' ), true ) ) {
+			$stock_status = 'all';
+		}
+
+		$search = function_exists( 'mb_substr' ) ? mb_substr( $search, 0, 100 ) : substr( $search, 0, 100 );
+
+		$category_ids = isset( $filters['category_ids'] ) && is_array( $filters['category_ids'] )
+			? array_values( array_unique( array_filter( array_map( 'absint', $filters['category_ids'] ) ) ) )
+			: array();
+
+		if ( $category_id > 0 && empty( $category_ids ) ) {
+			$term = get_term( $category_id, 'product_cat' );
+
+			if ( $term instanceof WP_Term ) {
+				$category_ids = array( $category_id );
+				$children     = get_term_children( $category_id, 'product_cat' );
+
+				if ( ! is_wp_error( $children ) ) {
+					$category_ids = array_values( array_unique( array_merge( $category_ids, array_map( 'absint', $children ) ) ) );
+				}
+			} else {
+				$category_id = 0;
+			}
+		}
+
+		if ( 0 === $category_id ) {
+			$category_ids = array();
+		}
+
+		return array(
+			'status'       => $status,
+			'product_type' => $product_type,
+			'category_id'  => $category_id,
+			'category_ids' => $category_ids,
+			'source'       => $source,
+			'stock_status' => $stock_status,
+			'search'       => $search,
+		);
+	}
+
+	/**
+	 * Builds the shared snapshot/batch WHERE clause without broad SQL joins.
+	 * EXISTS predicates prevent duplicate rows when metadata repeats.
+	 *
+	 * @param array<string,mixed> $raw_filters Export filters.
+	 * @return array{where:string,args:array<int,mixed>}
+	 */
+	private function product_filter_sql( array $raw_filters ): array {
+		global $wpdb;
+
+		$filters = $this->normalize_filters( $raw_filters );
+		$clauses = array( "p.post_status NOT IN ('trash', 'auto-draft', 'importing')" );
+		$args    = array();
+
+		if ( 'variation' === $filters['product_type'] ) {
+			$clauses[] = "p.post_type = 'product_variation'";
+		} elseif ( 'product' === $filters['product_type'] ) {
+			$clauses[] = "p.post_type = 'product'";
+		} elseif ( 'all' === $filters['product_type'] ) {
+			$clauses[] = "p.post_type IN ('product', 'product_variation')";
+		} else {
+			$clauses[] = "p.post_type = 'product'";
+
+			if ( 'simple' === $filters['product_type'] ) {
+				$clauses[] = "(
+					EXISTS (
+						SELECT 1 FROM {$wpdb->term_relationships} type_tr
+						INNER JOIN {$wpdb->term_taxonomy} type_tt ON type_tt.term_taxonomy_id = type_tr.term_taxonomy_id
+						INNER JOIN {$wpdb->terms} type_t ON type_t.term_id = type_tt.term_id
+						WHERE type_tr.object_id = p.ID AND type_tt.taxonomy = 'product_type' AND type_t.slug = %s
+					)
+					OR NOT EXISTS (
+						SELECT 1 FROM {$wpdb->term_relationships} type_any_tr
+						INNER JOIN {$wpdb->term_taxonomy} type_any_tt ON type_any_tt.term_taxonomy_id = type_any_tr.term_taxonomy_id
+						WHERE type_any_tr.object_id = p.ID AND type_any_tt.taxonomy = 'product_type'
+					)
+				)";
+			} else {
+				$clauses[] = "EXISTS (
+					SELECT 1 FROM {$wpdb->term_relationships} type_tr
+					INNER JOIN {$wpdb->term_taxonomy} type_tt ON type_tt.term_taxonomy_id = type_tr.term_taxonomy_id
+					INNER JOIN {$wpdb->terms} type_t ON type_t.term_id = type_tt.term_id
+					WHERE type_tr.object_id = p.ID AND type_tt.taxonomy = 'product_type' AND type_t.slug = %s
+				)";
+			}
+
+			$args[] = $filters['product_type'];
+		}
+
+		if ( 'all' !== $filters['status'] ) {
+			$clauses[] = 'p.post_status = %s';
+			$args[]    = $filters['status'];
+		}
+
+		if ( ! empty( $filters['category_ids'] ) ) {
+			$category_placeholders = implode( ', ', array_fill( 0, count( $filters['category_ids'] ), '%d' ) );
+			$clauses[]             = "EXISTS (
+				SELECT 1 FROM {$wpdb->term_relationships} category_tr
+				INNER JOIN {$wpdb->term_taxonomy} category_tt ON category_tt.term_taxonomy_id = category_tr.term_taxonomy_id
+				WHERE category_tr.object_id IN (p.ID, p.post_parent)
+				AND category_tt.taxonomy = 'product_cat'
+				AND category_tt.term_id IN ({$category_placeholders})
+			)";
+			$args                  = array_merge( $args, $filters['category_ids'] );
+		}
+
+		if ( in_array( $filters['source'], array( 'schrack', 'telesystem' ), true ) ) {
+			$clauses[] = "(
+				EXISTS (
+					SELECT 1 FROM {$wpdb->postmeta} source_pm
+					WHERE source_pm.post_id = p.ID AND source_pm.meta_key = '_schrack_catalog_source' AND source_pm.meta_value = %s
+				)
+				OR (
+					p.post_type = 'product_variation'
+					AND NOT EXISTS (
+						SELECT 1 FROM {$wpdb->postmeta} source_own_pm
+						WHERE source_own_pm.post_id = p.ID AND source_own_pm.meta_key = '_schrack_catalog_source'
+					)
+					AND EXISTS (
+						SELECT 1 FROM {$wpdb->postmeta} source_parent_pm
+						WHERE source_parent_pm.post_id = p.post_parent AND source_parent_pm.meta_key = '_schrack_catalog_source' AND source_parent_pm.meta_value = %s
+					)
+				)
+			)";
+			$args[]    = $filters['source'];
+			$args[]    = $filters['source'];
+		} elseif ( 'other' === $filters['source'] ) {
+			$clauses[] = "(
+				NOT EXISTS (
+					SELECT 1 FROM {$wpdb->postmeta} source_own_known_pm
+					WHERE source_own_known_pm.post_id = p.ID
+					AND source_own_known_pm.meta_key = '_schrack_catalog_source'
+					AND source_own_known_pm.meta_value IN ('schrack', 'telesystem')
+				)
+				AND (
+					p.post_type <> 'product_variation'
+					OR EXISTS (
+						SELECT 1 FROM {$wpdb->postmeta} source_own_any_pm
+						WHERE source_own_any_pm.post_id = p.ID
+						AND source_own_any_pm.meta_key = '_schrack_catalog_source'
+					)
+					OR NOT EXISTS (
+						SELECT 1 FROM {$wpdb->postmeta} source_parent_known_pm
+						WHERE source_parent_known_pm.post_id = p.post_parent
+						AND source_parent_known_pm.meta_key = '_schrack_catalog_source'
+						AND source_parent_known_pm.meta_value IN ('schrack', 'telesystem')
+					)
+				)
+			)";
+		}
+
+		if ( 'all' !== $filters['stock_status'] ) {
+			$clauses[] = "(
+				EXISTS (
+					SELECT 1 FROM {$wpdb->postmeta} stock_pm
+					WHERE stock_pm.post_id = p.ID AND stock_pm.meta_key = '_stock_status' AND stock_pm.meta_value = %s
+				)
+				OR (
+					p.post_type = 'product_variation'
+					AND NOT EXISTS (
+						SELECT 1 FROM {$wpdb->postmeta} stock_own_pm
+						WHERE stock_own_pm.post_id = p.ID AND stock_own_pm.meta_key = '_stock_status'
+					)
+					AND EXISTS (
+						SELECT 1 FROM {$wpdb->postmeta} stock_parent_pm
+						WHERE stock_parent_pm.post_id = p.post_parent AND stock_parent_pm.meta_key = '_stock_status' AND stock_parent_pm.meta_value = %s
+					)
+				)
+			)";
+			$args[]    = $filters['stock_status'];
+			$args[]    = $filters['stock_status'];
+		}
+
+		if ( '' !== $filters['search'] ) {
+			$like              = '%' . $wpdb->esc_like( $filters['search'] ) . '%';
+			$search_conditions = array(
+				'p.post_title LIKE %s',
+				"EXISTS (
+					SELECT 1 FROM {$wpdb->postmeta} sku_pm
+					WHERE sku_pm.post_id = p.ID AND sku_pm.meta_key = '_sku' AND sku_pm.meta_value LIKE %s
+				)",
+				"(
+					p.post_type = 'product_variation'
+					AND EXISTS (
+						SELECT 1 FROM {$wpdb->posts} parent_p
+						WHERE parent_p.ID = p.post_parent
+						AND (
+							parent_p.post_title LIKE %s
+							OR EXISTS (
+								SELECT 1 FROM {$wpdb->postmeta} parent_sku_pm
+								WHERE parent_sku_pm.post_id = parent_p.ID AND parent_sku_pm.meta_key = '_sku' AND parent_sku_pm.meta_value LIKE %s
+							)
+						)
+					)
+				)",
+			);
+			$args[]            = $like;
+			$args[]            = $like;
+			$args[]            = $like;
+			$args[]            = $like;
+
+			if ( ctype_digit( $filters['search'] ) ) {
+				$search_conditions[] = 'p.ID = %d';
+				$search_conditions[] = 'p.post_parent = %d';
+				$args[]              = absint( $filters['search'] );
+				$args[]              = absint( $filters['search'] );
+			}
+
+			$clauses[] = '(' . implode( ' OR ', $search_conditions ) . ')';
+		}
+
+		return array(
+			'where' => implode( ' AND ', $clauses ),
+			'args'  => $args,
+		);
 	}
 
 	/**
 	 * Returns a stable count and highest eligible product ID.
 	 *
+	 * @param array<string,mixed> $filters Export filters.
 	 * @return array{total:int,max_id:int}
 	 */
-	private function snapshot(): array {
+	private function snapshot( array $filters ): array {
 		global $wpdb;
 
-		$where = "p.post_type IN ('product', 'product_variation') AND p.post_status NOT IN ('trash', 'auto-draft', 'importing')";
-		$sql   = "SELECT COUNT(*) AS total, COALESCE(MAX(p.ID), 0) AS max_id FROM {$wpdb->posts} p WHERE {$where}";
-		$row   = $wpdb->get_row( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$filter_sql = $this->product_filter_sql( $filters );
+		$sql        = "SELECT COUNT(*) AS total, COALESCE(MAX(p.ID), 0) AS max_id FROM {$wpdb->posts} p WHERE {$filter_sql['where']}";
+
+		if ( ! empty( $filter_sql['args'] ) ) {
+			$sql = $wpdb->prepare( $sql, $filter_sql['args'] );
+		}
+
+		$row = $wpdb->get_row( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( '' !== (string) $wpdb->last_error || ! is_array( $row ) ) {
 			throw new RuntimeException( __( 'The product export snapshot could not be read from the database.', 'schrack-woocommerce-sync' ) );
@@ -893,18 +1896,20 @@ class Schrack_Product_Exporter {
 	 *
 	 * @return array<int,int>
 	 */
-	private function product_ids( int $last_id, int $max_id, int $limit ): array {
+	private function product_ids( int $last_id, int $max_id, int $limit, array $filters ): array {
 		global $wpdb;
 
-		$sql = $wpdb->prepare(
+		$filter_sql = $this->product_filter_sql( $filters );
+		$args       = array_merge(
+			$filter_sql['args'],
+			array( max( 0, $last_id ), max( 0, $max_id ), max( 1, $limit ) )
+		);
+		$sql        = $wpdb->prepare(
 			"SELECT p.ID FROM {$wpdb->posts} p
-			WHERE p.post_type IN ('product', 'product_variation')
-			AND p.post_status NOT IN ('trash', 'auto-draft', 'importing')
+			WHERE {$filter_sql['where']}
 			AND p.ID > %d AND p.ID <= %d
 			ORDER BY p.ID ASC LIMIT %d",
-			max( 0, $last_id ),
-			max( 0, $max_id ),
-			max( 1, $limit )
+			$args
 		);
 		$ids = $wpdb->get_col( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 

@@ -72,6 +72,7 @@ class Schrack_Product_Importer {
 	public function prepare_upload( string $tmp_name, string $original_name, bool $update_existing, int $user_id, bool $enforce_upload_limit = true ): array|WP_Error {
 		$current = $this->status();
 		$export  = get_option( Schrack_Product_Exporter::STATUS_OPTION, null );
+		$category_import = ( new Schrack_Category_CSV_Importer( $this->settings, $this->logger ) )->active_import();
 
 		if ( ! is_array( $export ) ) {
 			$all_status = $this->settings->get_status();
@@ -84,6 +85,10 @@ class Schrack_Product_Importer {
 
 		if ( in_array( (string) ( $export['state'] ?? '' ), array( 'queued', 'running', 'finalizing' ), true ) ) {
 			return new WP_Error( 'product_export_active', __( 'A product export is running. Wait for it to finish before importing.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( null !== $category_import ) {
+			return new WP_Error( 'category_import_active', __( 'A category import is running. Wait for it to finish before importing products.', 'schrack-woocommerce-sync' ) );
 		}
 
 		if ( $user_id <= 0 || ! user_can( $user_id, 'manage_woocommerce' ) ) {
@@ -108,7 +113,7 @@ class Schrack_Product_Importer {
 
 		try {
 			$this->ensure_woocommerce_importer();
-			$file_data = $this->inspect_csv( $tmp_name );
+			$file_data = $this->inspect_csv( $tmp_name, $update_existing );
 		} catch ( Throwable $exception ) {
 			return new WP_Error( 'product_import_invalid', $exception->getMessage() );
 		}
@@ -307,12 +312,66 @@ class Schrack_Product_Importer {
 	 * @return array<string,mixed>
 	 */
 	public function decode_structured_meta( array $data ): array {
+		$separate_attributes     = array();
+		$has_separate_attributes = false;
+
+		foreach ( array_keys( $data ) as $column_id ) {
+			$definition = Schrack_WC_Product_CSV_Exporter::schrack_decode_attribute_column_id( (string) $column_id );
+
+			if ( null === $definition ) {
+				continue;
+			}
+
+			$has_separate_attributes = true;
+
+			$value = $data[ $column_id ];
+			unset( $data[ $column_id ] );
+
+			if ( ! is_scalar( $value ) ) {
+				continue;
+			}
+
+			$values = $this->split_separate_attribute_values( (string) $value );
+
+			if ( empty( $values ) ) {
+				continue;
+			}
+
+			$separate_attributes[] = array(
+				'name'     => $definition['name'],
+				'value'    => $values,
+				'taxonomy' => $definition['taxonomy'],
+				'visible'  => true,
+			);
+		}
+
+		if ( $has_separate_attributes ) {
+			$existing_raw          = isset( $data['raw_attributes'] ) && is_array( $data['raw_attributes'] ) ? $data['raw_attributes'] : array();
+			$data['raw_attributes'] = array_merge( $existing_raw, $separate_attributes );
+		}
+
 		if ( empty( $data['meta_data'] ) || ! is_array( $data['meta_data'] ) ) {
 			return $data;
 		}
 
 		foreach ( $data['meta_data'] as $index => $meta ) {
-			$value = is_array( $meta ) && isset( $meta['value'] ) && is_string( $meta['value'] ) ? $meta['value'] : '';
+			$key              = is_array( $meta ) && isset( $meta['key'] ) ? (string) $meta['key'] : '';
+			$value            = is_array( $meta ) && isset( $meta['value'] ) && is_string( $meta['value'] ) ? $meta['value'] : '';
+			$has_scalar_value = is_array( $meta ) && array_key_exists( 'value', $meta ) && is_scalar( $meta['value'] );
+
+			if ( '_schrack_catalog_source' === $key && $has_scalar_value ) {
+				$data['meta_data'][ $index ]['value'] = sanitize_key( (string) $meta['value'] );
+				$value                                = (string) $data['meta_data'][ $index ]['value'];
+			}
+
+			if ( in_array( $key, $this->supplier_price_meta_keys(), true ) && $has_scalar_value ) {
+				$normalized = wc_format_decimal( (string) $meta['value'] );
+
+				if ( '' !== $normalized || '' === trim( (string) $meta['value'] ) ) {
+					$data['meta_data'][ $index ]['value'] = $normalized;
+					$value                                = $normalized;
+				}
+			}
 
 			if ( str_starts_with( $value, self::ESCAPED_STRING_PREFIX ) ) {
 				$literal = base64_decode( substr( $value, strlen( self::ESCAPED_STRING_PREFIX ) ), true );
@@ -701,7 +760,7 @@ class Schrack_Product_Importer {
 	 *
 	 * @return array{headers:array<int,string>,mapping:array{from:array<int,string>,to:array<int,string>}}
 	 */
-	private function inspect_csv( string $path ): array {
+	private function inspect_csv( string $path, bool $update_existing ): array {
 		$handle = fopen( $path, 'rb' );
 
 		if ( false === $handle ) {
@@ -729,9 +788,40 @@ class Schrack_Product_Importer {
 			}
 		};
 		$mapped = $controller->schrack_map_headers( $headers );
+		$readable_supplier_headers = $this->readable_supplier_header_meta_map();
 
-		if ( count( $mapped ) !== count( $headers ) || ! in_array( 'name', $mapped, true ) || ! in_array( 'type', $mapped, true ) ) {
+		foreach ( $headers as $index => $header ) {
+			$normalized_header = $this->normalize_supplier_header( $header );
+			$attribute         = $this->readable_attribute_definition_from_header( $header );
+
+			if ( isset( $readable_supplier_headers[ $normalized_header ] ) ) {
+				$mapped[ $index ] = 'meta:' . $readable_supplier_headers[ $normalized_header ];
+			} elseif ( null !== $attribute ) {
+				$mapped[ $index ] = Schrack_WC_Product_CSV_Exporter::schrack_attribute_column_id(
+					$attribute['name'],
+					$attribute['label'],
+					$attribute['taxonomy']
+				);
+			}
+		}
+
+		$recognized = array_values(
+			array_filter(
+				$mapped,
+				static fn ( mixed $column ): bool => is_string( $column ) && '' !== trim( $column )
+			)
+		);
+
+		if ( count( $mapped ) !== count( $headers ) || empty( $recognized ) ) {
 			throw new RuntimeException( __( 'This is not a recognizable WooCommerce product CSV export.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( $update_existing && ! in_array( 'id', $recognized, true ) && ! in_array( 'sku', $recognized, true ) ) {
+			throw new RuntimeException( __( 'A product update CSV must contain an ID or SKU column.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( ! $update_existing && ! in_array( 'name', $recognized, true ) ) {
+			throw new RuntimeException( __( 'A CSV used to create products must contain a Name column.', 'schrack-woocommerce-sync' ) );
 		}
 
 		return array(
@@ -740,6 +830,143 @@ class Schrack_Product_Importer {
 				'from' => $headers,
 				'to'   => array_values( $mapped ),
 			),
+		);
+	}
+
+	/**
+	 * Maps the named supplier export headers back to their product metadata.
+	 *
+	 * @return array<string,string> Normalized header => product meta key.
+	 */
+	private function readable_supplier_header_meta_map(): array {
+		$column_names = Schrack_WC_Product_CSV_Exporter::schrack_supplier_column_names();
+		$column_meta  = Schrack_WC_Product_CSV_Exporter::schrack_supplier_column_meta_map();
+		$headers      = array();
+
+		foreach ( $column_meta as $column_id => $meta_key ) {
+			if ( isset( $column_names[ $column_id ] ) ) {
+				$headers[ $this->normalize_supplier_header( $column_names[ $column_id ] ) ] = $meta_key;
+			}
+
+			// Also accept the stable internal ID when a CSV header was edited by hand.
+			$headers[ $this->normalize_supplier_header( $column_id ) ] = $meta_key;
+		}
+
+		return $headers;
+	}
+
+	/**
+	 * Produces a case/accent-insensitive header key for reliable re-import.
+	 */
+	private function normalize_supplier_header( string $header ): string {
+		$header = remove_accents( trim( $header ) );
+		$header = function_exists( 'mb_strtolower' ) ? mb_strtolower( $header, 'UTF-8' ) : strtolower( $header );
+
+		return (string) preg_replace( '/\s+/u', ' ', $header );
+	}
+
+	/**
+	 * Recognizes the readable wide-attribute header emitted by the exporter.
+	 * The label remains human-friendly while the bracketed Woo name makes the
+	 * mapping deterministic on another shop.
+	 *
+	 * @return array{name:string,label:string,taxonomy:bool}|null
+	 */
+	private function readable_attribute_definition_from_header( string $header ): ?array {
+		if ( 1 !== preg_match( '/^(?:Atribut|Attribútum|Attribute)\s*:\s*(.+)\s+\[([^\r\n]+)\]\s*$/iu', trim( $header ), $matches ) ) {
+			return null;
+		}
+
+		$label = trim( sanitize_text_field( html_entity_decode( (string) $matches[1], ENT_QUOTES ) ) );
+		$name  = trim( sanitize_text_field( html_entity_decode( (string) $matches[2], ENT_QUOTES ) ) );
+
+		if (
+			'' === $label ||
+			'' === $name ||
+			strlen( $label ) > 255 ||
+			strlen( $name ) > 191 ||
+			preg_match( '/[\x00-\x1F\x7F]/', $name ) ||
+			preg_match( '/[\x00-\x1F\x7F]/', $label )
+		) {
+			return null;
+		}
+
+		return array(
+			'name'     => $name,
+			'label'    => $label,
+			'taxonomy' => str_starts_with( $name, 'pa_' ),
+		);
+	}
+
+	/**
+	 * Splits WooCommerce's comma-separated attribute list while retaining an
+	 * escaped literal comma ("\,") inside an individual value.
+	 *
+	 * @return array<int,string>
+	 */
+	private function split_separate_attribute_values( string $raw_value ): array {
+		$raw_value = trim( $raw_value );
+		$escape_triggers = array( '=', '+', '-', '@', "\t", "\r" );
+
+		if ( strlen( $raw_value ) > 1 && "'" === $raw_value[0] && in_array( $raw_value[1], $escape_triggers, true ) ) {
+			$raw_value = substr( $raw_value, 1 );
+		}
+
+		if ( '' === $raw_value ) {
+			return array();
+		}
+
+		$values  = array();
+		$current = '';
+		$length  = strlen( $raw_value );
+
+		for ( $offset = 0; $offset < $length; $offset++ ) {
+			$character = $raw_value[ $offset ];
+
+			if ( '\\' === $character && $offset + 1 < $length ) {
+				$escaped_character = $raw_value[ $offset + 1 ];
+
+				if ( '\\' === $escaped_character || ',' === $escaped_character ) {
+					$current .= $escaped_character;
+					$offset++;
+					continue;
+				}
+			}
+
+			if ( ',' === $character ) {
+				$value = trim( $current );
+
+				if ( '' !== $value ) {
+					$values[] = wc_clean( $value );
+				}
+
+				$current = '';
+				continue;
+			}
+
+			$current .= $character;
+		}
+
+		$current = trim( $current );
+
+		if ( '' !== $current ) {
+			$values[] = wc_clean( $current );
+		}
+
+		return array_values( $values );
+	}
+
+	/**
+	 * Supplier price fields that must return to storage in machine decimals.
+	 *
+	 * @return array<int,string>
+	 */
+	private function supplier_price_meta_keys(): array {
+		return array(
+			'_schrack_purchase_price',
+			'_schrack_purchase_price_raw',
+			'_telesystem_price_1',
+			'_telesystem_price_2',
 		);
 	}
 

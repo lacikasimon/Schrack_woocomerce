@@ -86,6 +86,8 @@ class Schrack_Admin {
 		add_action( 'admin_post_schrack_wc_sync_import_markups', array( $this, 'import_markups' ) );
 		add_action( 'admin_post_schrack_wc_sync_export_categories', array( $this, 'export_categories' ) );
 		add_action( 'admin_post_schrack_wc_sync_import_categories', array( $this, 'import_categories' ) );
+		add_action( 'admin_post_schrack_wc_sync_category_import_resume', array( $this, 'resume_category_import' ) );
+		add_action( 'admin_post_schrack_wc_sync_category_import_reset', array( $this, 'reset_category_import' ) );
 		add_action( 'admin_post_schrack_wc_sync_save_b2b_customers', array( $this, 'save_b2b_customers' ) );
 		add_action( 'admin_post_schrack_wc_sync_soap_debug', array( $this, 'soap_debug' ) );
 		add_action( 'admin_post_schrack_wc_sync_debug_fetch', array( $this, 'debug_fetch' ) );
@@ -153,8 +155,8 @@ class Schrack_Admin {
 
 		add_submenu_page(
 			'woocommerce',
-			__( 'Product and supplier export/import', 'schrack-woocommerce-sync' ),
-			__( 'Product export/import', 'schrack-woocommerce-sync' ),
+			__( 'Product, category and supplier export/import', 'schrack-woocommerce-sync' ),
+			__( 'Product/category export', 'schrack-woocommerce-sync' ),
 			self::CAPABILITY,
 			'schrack-sync-export',
 			array( $this, 'render_product_export_page' )
@@ -478,7 +480,7 @@ class Schrack_Admin {
 				<div class="schrack-panel-header">
 					<div class="schrack-markups-csv__intro">
 						<h2><?php esc_html_e( 'Category CSV import / export', 'schrack-woocommerce-sync' ); ?></h2>
-						<p><?php esc_html_e( 'Export WooCommerce product categories, edit the CSV, then import it back. New hierarchy can be created from the path column.', 'schrack-woocommerce-sync' ); ?></p>
+						<p><?php esc_html_e( 'Export WooCommerce product categories, edit the CSV, then import it back. The hierarchy, category images, and all portable category Meta columns are included.', 'schrack-woocommerce-sync' ); ?></p>
 					</div>
 
 					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -492,7 +494,9 @@ class Schrack_Admin {
 					<input type="hidden" name="action" value="schrack_wc_sync_import_categories">
 					<?php wp_nonce_field( 'schrack_wc_sync_categories_csv' ); ?>
 					<label for="schrack_categories_csv"><?php esc_html_e( 'CSV file', 'schrack-woocommerce-sync' ); ?></label>
-					<input id="schrack_categories_csv" type="file" name="schrack_categories_csv" accept=".csv,text/csv">
+					<input id="schrack_categories_csv" type="file" name="schrack_categories_csv" accept=".csv,.txt,text/csv,text/plain" required>
+					<label><input type="radio" name="category_import_mode" value="update" checked> <?php esc_html_e( 'Update this shop by ID', 'schrack-woocommerce-sync' ); ?></label>
+					<label><input type="radio" name="category_import_mode" value="create"> <?php esc_html_e( 'Restore into a new shop by path/slug', 'schrack-woocommerce-sync' ); ?></label>
 					<button type="submit" class="button"><?php esc_html_e( 'Import categories CSV', 'schrack-woocommerce-sync' ); ?></button>
 				</form>
 
@@ -558,6 +562,7 @@ class Schrack_Admin {
 				<p class="description">
 					<?php esc_html_e( 'Supported columns:', 'schrack-woocommerce-sync' ); ?>
 					<code>term_id</code>, <code>parent_id</code>, <code>parent_slug</code>, <code>parent_path</code>, <code>path</code>, <code>name</code>, <code>slug</code>, <code>description</code>, <code>display_type</code>, <code>image_id</code>, <code>image_url</code>, <code>menu_order</code>.
+					<?php esc_html_e( 'Every additional category value is exported in a reversible Meta: key column.', 'schrack-woocommerce-sync' ); ?>
 				</p>
 			</section>
 		</div>
@@ -571,8 +576,9 @@ class Schrack_Admin {
 		$this->assert_can_manage_product_categories();
 		check_admin_referer( 'schrack_wc_sync_categories_csv' );
 
-		$tree     = $this->product_category_tree();
-		$filename = 'schrack-product-categories-' . gmdate( 'Y-m-d' ) . '.csv';
+		$tree      = $this->product_category_tree();
+		$meta_keys = $this->category_export_meta_keys();
+		$filename  = 'schrack-product-categories-' . gmdate( 'Y-m-d' ) . '.csv';
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );
@@ -585,13 +591,13 @@ class Schrack_Admin {
 		}
 
 		fwrite( $output, "\xEF\xBB\xBF" );
-		fputcsv(
-			$output,
-			array( 'term_id', 'parent_id', 'parent_slug', 'parent_path', 'path', 'name', 'slug', 'description', 'display_type', 'image_id', 'image_url', 'menu_order', 'count' ),
-			',',
-			'"',
-			'\\'
-		);
+		$headers = array( 'term_id', 'parent_id', 'parent_slug', 'parent_path', 'path', 'name', 'slug', 'description', 'display_type', 'image_id', 'image_url', 'menu_order', 'count' );
+
+		foreach ( $meta_keys as $meta_key ) {
+			$headers[] = 'Meta: ' . $meta_key;
+		}
+
+		fputcsv( $output, $headers, ',', '"', "\0" );
 
 		foreach ( $tree['terms'] as $term ) {
 			if ( ! $term instanceof WP_Term ) {
@@ -605,9 +611,7 @@ class Schrack_Admin {
 			$image_url    = $image_id > 0 ? wp_get_attachment_url( $image_id ) : '';
 			$display_type = (string) get_term_meta( $term_id, 'display_type', true );
 
-			fputcsv(
-				$output,
-				array(
+			$row = array(
 					$term_id,
 					$parent_id > 0 ? $parent_id : '',
 					$parent_term instanceof WP_Term ? $parent_term->slug : '',
@@ -621,15 +625,63 @@ class Schrack_Admin {
 					is_string( $image_url ) ? $image_url : '',
 					(string) get_term_meta( $term_id, 'order', true ),
 					(int) $term->count,
-				),
-				',',
-				'"',
-				'\\'
-			);
+				);
+			$all_meta = get_term_meta( $term_id );
+
+			foreach ( $meta_keys as $meta_key ) {
+				$values = isset( $all_meta[ $meta_key ] ) && is_array( $all_meta[ $meta_key ] ) ? $all_meta[ $meta_key ] : array();
+				$row[]  = empty( $values ) ? '' : Schrack_Category_CSV_Importer::encode_meta_values( $values );
+			}
+
+			fputcsv( $output, $row, ',', '"', "\0" );
 		}
 
 		fclose( $output );
 		exit;
+	}
+
+	/**
+	 * Discovers portable custom metadata used by WooCommerce product categories.
+	 * Named core fields are excluded because they already have readable columns.
+	 *
+	 * @return array<int,string>
+	 */
+	private function category_export_meta_keys(): array {
+		global $wpdb;
+
+		$keys = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT tm.meta_key
+				FROM {$wpdb->termmeta} tm
+				INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_id = tm.term_id
+				WHERE tt.taxonomy = %s
+					AND tm.meta_key NOT IN ( %s, %s, %s )
+				ORDER BY tm.meta_key ASC
+				LIMIT %d",
+				'product_cat',
+				'thumbnail_id',
+				'display_type',
+				'order',
+				1001
+			)
+		); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+		if ( ! is_array( $keys ) || '' !== (string) $wpdb->last_error ) {
+			wp_die( esc_html__( 'Category metadata columns could not be read for export.', 'schrack-woocommerce-sync' ) );
+		}
+
+		if ( count( $keys ) > 1000 ) {
+			wp_die( esc_html__( 'More than 1,000 category metadata keys were found. The category export was stopped to protect server memory.', 'schrack-woocommerce-sync' ) );
+		}
+
+		$keys = array_values(
+			array_filter(
+				array_unique( array_map( 'strval', $keys ) ),
+				static fn ( string $key ): bool => 1 === preg_match( '/^[A-Za-z0-9_.:-]{1,191}$/D', $key )
+			)
+		);
+
+		return $keys;
 	}
 
 	/**
@@ -638,6 +690,7 @@ class Schrack_Admin {
 	public function import_categories(): void {
 		$this->assert_can_manage_product_categories();
 		check_admin_referer( 'schrack_wc_sync_categories_csv' );
+		$return_to_export = isset( $_POST['category_csv_return'] ) && 'schrack-sync-export' === sanitize_key( wp_unslash( (string) $_POST['category_csv_return'] ) );
 
 		$file = isset( $_FILES['schrack_categories_csv'] ) && is_array( $_FILES['schrack_categories_csv'] )
 			? $_FILES['schrack_categories_csv']
@@ -647,22 +700,23 @@ class Schrack_Admin {
 
 		if ( UPLOAD_ERR_OK !== $error ) {
 			$this->set_notice( 'error', $this->markup_csv_upload_error_message( $error ) );
-			$this->redirect_categories_page();
+			$this->redirect_category_csv_origin( $return_to_export );
 		}
 
 		$tmp_name = isset( $file['tmp_name'] ) ? (string) $file['tmp_name'] : '';
 
 		if ( '' === $tmp_name || ! is_uploaded_file( $tmp_name ) || ! is_readable( $tmp_name ) ) {
 			$this->set_notice( 'error', __( 'CSV upload could not be read.', 'schrack-woocommerce-sync' ) );
-			$this->redirect_categories_page();
+			$this->redirect_category_csv_origin( $return_to_export );
 		}
 
-		$importer = new Schrack_Category_CSV_Importer( $this->settings, $this->logger );
-		$prepared = $importer->prepare_upload( $tmp_name, isset( $file['name'] ) ? (string) $file['name'] : '' );
+		$mode      = isset( $_POST['category_import_mode'] ) ? sanitize_key( wp_unslash( (string) $_POST['category_import_mode'] ) ) : 'update';
+		$importer  = new Schrack_Category_CSV_Importer( $this->settings, $this->logger );
+		$prepared  = $importer->prepare_upload( $tmp_name, isset( $file['name'] ) ? (string) $file['name'] : '', 'create' !== $mode );
 
 		if ( is_wp_error( $prepared ) ) {
 			$this->set_notice( 'error', $prepared->get_error_message() );
-			$this->redirect_categories_page();
+			$this->redirect_category_csv_origin( $return_to_export );
 		}
 
 		$queued = $this->cron->queue_category_csv_import( (string) ( $prepared['import_id'] ?? '' ) );
@@ -672,7 +726,7 @@ class Schrack_Admin {
 				'error',
 				(string) ( $queued['message'] ?? __( 'Could not queue the category CSV import. Please check Action Scheduler/WP-Cron.', 'schrack-woocommerce-sync' ) )
 			);
-			$this->redirect_categories_page();
+			$this->redirect_category_csv_origin( $return_to_export );
 		}
 
 		$message = sprintf(
@@ -682,7 +736,45 @@ class Schrack_Admin {
 		);
 
 		$this->set_notice( 'success', $message );
-		$this->redirect_categories_page();
+		$this->redirect_category_csv_origin( $return_to_export );
+	}
+
+	/**
+	 * Requeues the current category import from its byte checkpoint.
+	 */
+	public function resume_category_import(): void {
+		$this->assert_can_manage_product_categories();
+		check_admin_referer( 'schrack_wc_sync_category_import_resume' );
+
+		$importer = new Schrack_Category_CSV_Importer( $this->settings, $this->logger );
+		$result   = $importer->resume();
+
+		if ( is_wp_error( $result ) ) {
+			$this->set_notice( 'error', $result->get_error_message() );
+		} else {
+			$queued = $this->cron->queue_category_csv_import( (string) ( $result['import_id'] ?? '' ) );
+			$this->set_notice(
+				empty( $queued['queued'] ) ? 'error' : 'success',
+				empty( $queued['queued'] )
+					? (string) ( $queued['message'] ?? __( 'The category import could not be resumed.', 'schrack-woocommerce-sync' ) )
+					: __( 'The category import was resumed from its last saved byte position.', 'schrack-woocommerce-sync' )
+			);
+		}
+
+		$this->redirect( 'schrack-sync-export' );
+	}
+
+	/**
+	 * Cancels and removes the current category import state.
+	 */
+	public function reset_category_import(): void {
+		$this->assert_can_manage_product_categories();
+		check_admin_referer( 'schrack_wc_sync_category_import_reset' );
+
+		$importer = new Schrack_Category_CSV_Importer( $this->settings, $this->logger );
+		$importer->reset();
+		$this->set_notice( 'success', __( 'The category import status and private CSV copy were cleared.', 'schrack-woocommerce-sync' ) );
+		$this->redirect( 'schrack-sync-export' );
 	}
 
 	/**
@@ -1339,6 +1431,11 @@ class Schrack_Admin {
 		$notice         = $this->get_notice();
 		$product_export = $this->product_exporter->status();
 		$product_import = $this->product_importer->status();
+		$all_status      = $this->settings->get_status();
+		$category_import = isset( $all_status[ Schrack_Category_CSV_Importer::STATUS_KEY ] ) && is_array( $all_status[ Schrack_Category_CSV_Importer::STATUS_KEY ] )
+			? $all_status[ Schrack_Category_CSV_Importer::STATUS_KEY ]
+			: array();
+		$export_column_catalog = $this->product_exporter->column_catalog();
 
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-product-export.php';
 	}
@@ -1350,7 +1447,32 @@ class Schrack_Admin {
 		$this->assert_can_manage();
 		check_admin_referer( 'schrack_wc_sync_product_export_start' );
 
-		$result = $this->product_exporter->queue();
+		$filters = array(
+			'status'       => isset( $_POST['export_status'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_status'] ) ) : 'all',
+			'product_type' => isset( $_POST['export_product_type'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_product_type'] ) ) : 'all',
+			'category_id'  => isset( $_POST['export_category_id'] ) ? absint( wp_unslash( (string) $_POST['export_category_id'] ) ) : 0,
+			'source'       => isset( $_POST['export_source'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_source'] ) ) : 'all',
+			'stock_status' => isset( $_POST['export_stock_status'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_stock_status'] ) ) : 'all',
+			'search'       => isset( $_POST['export_search'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['export_search'] ) ) : '',
+		);
+		$posted_columns = isset( $_POST['export_columns'] ) && is_array( $_POST['export_columns'] )
+			? array_map(
+				static fn( mixed $column ): string => sanitize_text_field( wp_unslash( (string) $column ) ),
+				$_POST['export_columns']
+			)
+			: array();
+		$extra_meta_text = isset( $_POST['export_extra_meta_keys'] ) ? sanitize_textarea_field( wp_unslash( (string) $_POST['export_extra_meta_keys'] ) ) : '';
+		$extra_meta_keys = preg_split( '/[\r\n,]+/', $extra_meta_text );
+		$attribute_mode  = isset( $_POST['export_attribute_mode'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_attribute_mode'] ) ) : 'grouped';
+		$column_config   = array(
+			'mode'               => isset( $_POST['export_column_mode'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_column_mode'] ) ) : 'full',
+			'columns'            => $posted_columns,
+			'extra_meta_keys'    => is_array( $extra_meta_keys ) ? array_values( array_filter( array_map( 'trim', $extra_meta_keys ) ) ) : array(),
+			'attribute_mode'     => $attribute_mode,
+			'include_attributes' => 'none' !== $attribute_mode,
+			'include_downloads'  => isset( $_POST['export_include_downloads'] ),
+		);
+		$result          = $this->product_exporter->queue( $filters, $column_config );
 
 		if ( 'error' === (string) ( $result['state'] ?? '' ) ) {
 			$this->set_notice( 'error', (string) ( $result['message'] ?? __( 'The product export could not be started.', 'schrack-woocommerce-sync' ) ) );
@@ -2042,7 +2164,7 @@ class Schrack_Admin {
 			'markups'  => array( 'label' => __( 'Category Markups', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-markups' ),
 			'b2b'      => array( 'label' => __( 'Clienti B2B', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-b2b' ),
 			'manual'   => array( 'label' => __( 'Manual Sync', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-manual' ),
-			'export'   => array( 'label' => __( 'Product Export / Import', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-export' ),
+			'export'   => array( 'label' => __( 'Product / Category Export / Import', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-export' ),
 			'logs'     => array( 'label' => __( 'Logs', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-logs' ),
 			'status'   => array( 'label' => __( 'Status', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-status' ),
 			'debug'    => array( 'label' => __( 'Debug', 'schrack-woocommerce-sync' ), 'slug' => 'schrack-sync-debug' ),
@@ -2131,9 +2253,16 @@ class Schrack_Admin {
 
 		$paths   = array();
 		$ordered = array();
-		$append  = static function ( int $parent_id, string $parent_path ) use ( &$append, &$ordered, &$paths, $terms_by_parent ): void {
+		$visited = array();
+		$append  = static function ( int $parent_id, string $parent_path ) use ( &$append, &$ordered, &$paths, &$visited, $terms_by_parent ): void {
 			foreach ( $terms_by_parent[ $parent_id ] ?? array() as $term ) {
-				$term_id           = (int) $term->term_id;
+				$term_id = (int) $term->term_id;
+
+				if ( isset( $visited[ $term_id ] ) ) {
+					continue;
+				}
+
+				$visited[ $term_id ] = true;
 				$path              = '' === $parent_path ? $term->name : $parent_path . ' > ' . $term->name;
 				$paths[ $term_id ] = $path;
 				$ordered[]         = $term;
@@ -2149,8 +2278,9 @@ class Schrack_Admin {
 				continue;
 			}
 
-			$paths[ $term_id ] = $term->name;
-			$ordered[]         = $term;
+			$paths[ $term_id ]   = $term->name;
+			$ordered[]           = $term;
+			$visited[ $term_id ] = true;
 			$append( $term_id, $term->name );
 		}
 
@@ -2919,6 +3049,17 @@ class Schrack_Admin {
 			)
 		);
 		exit;
+	}
+
+	/**
+	 * Returns category CSV uploads to the page where their form was submitted.
+	 */
+	private function redirect_category_csv_origin( bool $return_to_export ): void {
+		if ( $return_to_export ) {
+			$this->redirect( 'schrack-sync-export' );
+		}
+
+		$this->redirect_categories_page();
 	}
 
 	/**

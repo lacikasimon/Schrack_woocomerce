@@ -341,6 +341,215 @@
 		refresh();
 	}
 
+	function initExportColumnBuilder(root) {
+		var form = root.closest('form');
+		var builder = root.querySelector('[data-export-column-builder]');
+		var available = root.querySelector('[data-export-column-available]');
+		var selected = root.querySelector('[data-export-column-selected]');
+		var search = root.querySelector('[data-export-column-search]');
+		var addButton = root.querySelector('[data-export-column-add]');
+		var count = root.querySelector('[data-export-column-count]');
+		var extraMeta = root.querySelector('[name="export_extra_meta_keys"]');
+
+		if (!form || !builder || !available || !selected) {
+			return;
+		}
+
+		function selectedItems() {
+			return toArray(selected.querySelectorAll('[data-export-column-item]'));
+		}
+
+		function selectedIds() {
+			return selectedItems().map(function (item) {
+				return item.getAttribute('data-column-id') || '';
+			});
+		}
+
+		function findOption(columnId) {
+			return toArray(available.querySelectorAll('option')).filter(function (option) {
+				return option.value === columnId;
+			})[0] || null;
+		}
+
+		function updateState() {
+			var ids = selectedIds();
+			var items = selectedItems();
+
+			toArray(available.querySelectorAll('option')).forEach(function (option) {
+				option.disabled = ids.indexOf(option.value) !== -1;
+			});
+
+			items.forEach(function (item, index) {
+				var up = item.querySelector('[data-export-column-action="up"]');
+				var down = item.querySelector('[data-export-column-action="down"]');
+
+				if (up) {
+					up.disabled = 0 === index;
+				}
+
+				if (down) {
+					down.disabled = index === items.length - 1;
+				}
+			});
+
+			if (count) {
+				count.textContent = String(items.length);
+			}
+		}
+
+		function createAction(action, text, label) {
+			var button = document.createElement('button');
+
+			button.type = 'button';
+			button.className = 'button button-small';
+			button.setAttribute('data-export-column-action', action);
+			button.setAttribute('aria-label', label);
+			button.textContent = text;
+
+			return button;
+		}
+
+		function addColumn(columnId) {
+			var option;
+			var item;
+			var labelWrap;
+			var label;
+			var code;
+			var actions;
+			var input;
+
+			if (!columnId || selectedIds().indexOf(columnId) !== -1) {
+				return;
+			}
+
+			option = findOption(columnId);
+			label = option ? (option.getAttribute('data-label') || option.textContent || columnId) : columnId;
+			item = document.createElement('li');
+			item.setAttribute('data-export-column-item', '');
+			item.setAttribute('data-column-id', columnId);
+
+			labelWrap = document.createElement('span');
+			labelWrap.className = 'schrack-export-columns__item-label';
+			labelWrap.appendChild(document.createElement('strong')).textContent = label;
+			code = document.createElement('code');
+			code.textContent = columnId;
+			labelWrap.appendChild(code);
+			item.appendChild(labelWrap);
+
+			actions = document.createElement('span');
+			actions.className = 'schrack-export-columns__item-actions';
+			actions.appendChild(createAction('up', '↑', root.getAttribute('data-label-up') || 'Up'));
+			actions.appendChild(createAction('down', '↓', root.getAttribute('data-label-down') || 'Down'));
+			actions.appendChild(createAction('remove', '×', root.getAttribute('data-label-remove') || 'Remove'));
+			item.appendChild(actions);
+
+			input = document.createElement('input');
+			input.type = 'hidden';
+			input.name = 'export_columns[]';
+			input.value = columnId;
+			item.appendChild(input);
+			selected.appendChild(item);
+		}
+
+		function usePreset(columns) {
+			selected.innerHTML = '';
+			columns.forEach(addColumn);
+			updateState();
+		}
+
+		function refreshMode() {
+			var customMode = root.querySelector('[name="export_column_mode"][value="custom"]');
+
+			builder.hidden = !customMode || !customMode.checked;
+		}
+
+		if (addButton) {
+			addButton.addEventListener('click', function () {
+				toArray(available.selectedOptions).forEach(function (option) {
+					if (!option.disabled) {
+						addColumn(option.value);
+					}
+				});
+				available.selectedIndex = -1;
+				updateState();
+			});
+		}
+
+		available.addEventListener('dblclick', function () {
+			toArray(available.selectedOptions).forEach(function (option) {
+				if (!option.disabled) {
+					addColumn(option.value);
+				}
+			});
+			available.selectedIndex = -1;
+			updateState();
+		});
+
+		selected.addEventListener('click', function (event) {
+			var button = event.target.closest('[data-export-column-action]');
+			var item = button ? button.closest('[data-export-column-item]') : null;
+			var action = button ? button.getAttribute('data-export-column-action') : '';
+
+			if (!item) {
+				return;
+			}
+
+			if ('remove' === action) {
+				item.remove();
+			} else if ('up' === action && item.previousElementSibling) {
+				selected.insertBefore(item, item.previousElementSibling);
+			} else if ('down' === action && item.nextElementSibling) {
+				selected.insertBefore(item.nextElementSibling, item);
+			}
+
+			updateState();
+		});
+
+		toArray(root.querySelectorAll('[data-export-column-preset]')).forEach(function (button) {
+			button.addEventListener('click', function () {
+				var columns = [];
+
+				try {
+					columns = JSON.parse(button.getAttribute('data-export-column-preset') || '[]');
+				} catch (error) {
+					columns = [];
+				}
+
+				if (Array.isArray(columns)) {
+					usePreset(columns);
+				}
+			});
+		});
+
+		if (search) {
+			search.addEventListener('input', function () {
+				var query = search.value.trim().toLowerCase();
+
+				toArray(available.querySelectorAll('option')).forEach(function (option) {
+					option.hidden = '' !== query && (option.textContent || '').toLowerCase().indexOf(query) === -1;
+				});
+			});
+		}
+
+		root.addEventListener('change', function (event) {
+			if (event.target.matches('[name="export_column_mode"]')) {
+				refreshMode();
+			}
+		});
+
+		form.addEventListener('submit', function (event) {
+			var customMode = root.querySelector('[name="export_column_mode"][value="custom"]');
+
+			if (customMode && customMode.checked && 0 === selectedItems().length && (!extraMeta || '' === extraMeta.value.trim())) {
+				event.preventDefault();
+				window.alert(root.getAttribute('data-empty-message') || 'Choose at least one column.');
+			}
+		});
+
+		refreshMode();
+		updateState();
+	}
+
 	function initMarkupBulkControls() {
 		toArray(document.querySelectorAll('[data-markups-bulk]')).forEach(initMarkupBulk);
 	}
@@ -349,9 +558,14 @@
 		toArray(document.querySelectorAll('[data-b2b-filters]')).forEach(initB2BFilters);
 	}
 
+	function initExportColumnControls() {
+		toArray(document.querySelectorAll('[data-export-columns]')).forEach(initExportColumnBuilder);
+	}
+
 	function initAdminControls() {
 		initMarkupBulkControls();
 		initB2BFilterControls();
+		initExportColumnControls();
 	}
 
 	document.addEventListener('submit', function (event) {
