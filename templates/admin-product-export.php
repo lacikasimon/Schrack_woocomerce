@@ -48,6 +48,7 @@ $product_transfer_active = $export_active || $import_active;
 $transfer_active = $product_transfer_active || $category_live;
 
 $export_filter_defaults = array(
+	'scope'        => 'all_products',
 	'status'       => 'all',
 	'product_type' => 'all',
 	'category_id'  => 0,
@@ -55,8 +56,11 @@ $export_filter_defaults = array(
 	'stock_status' => 'all',
 	'search'       => '',
 );
-$export_filters = isset( $product_export['filters'] ) && is_array( $product_export['filters'] )
-	? array_merge( $export_filter_defaults, $product_export['filters'] )
+$export_saved_filters = isset( $product_export['filters'] ) && is_array( $product_export['filters'] )
+	? $product_export['filters']
+	: array();
+$export_filters = ! empty( $export_saved_filters )
+	? array_merge( $export_filter_defaults, $export_saved_filters )
 	: $export_filter_defaults;
 $export_filters['status']       = sanitize_key( (string) $export_filters['status'] );
 $export_filters['product_type'] = sanitize_key( (string) $export_filters['product_type'] );
@@ -64,6 +68,25 @@ $export_filters['category_id']  = absint( $export_filters['category_id'] );
 $export_filters['source']       = sanitize_key( (string) $export_filters['source'] );
 $export_filters['stock_status'] = sanitize_key( (string) $export_filters['stock_status'] );
 $export_filters['search']       = sanitize_text_field( (string) $export_filters['search'] );
+$legacy_filter_active =
+	'all' !== $export_filters['status'] ||
+	'all' !== $export_filters['product_type'] ||
+	$export_filters['category_id'] > 0 ||
+	'all' !== $export_filters['source'] ||
+	'all' !== $export_filters['stock_status'] ||
+	'' !== $export_filters['search'];
+$export_filters['scope'] = isset( $export_saved_filters['scope'] )
+	? sanitize_key( (string) $export_saved_filters['scope'] )
+	: ( $legacy_filter_active ? 'filtered' : 'all_products' );
+
+if ( ! in_array( $export_filters['scope'], array( 'all_products', 'filtered' ), true ) ) {
+	$export_filters['scope'] = 'all_products';
+}
+
+$export_scope_options = array(
+	'all_products' => __( 'Összes WooCommerce-termék (importált és kézzel hozzáadott)', 'schrack-woocommerce-sync' ),
+	'filtered'     => __( 'Szűrt termékek', 'schrack-woocommerce-sync' ),
+);
 
 $export_status_options = array(
 	'all'     => __( 'Minden állapot', 'schrack-woocommerce-sync' ),
@@ -246,6 +269,17 @@ $should_refresh = ( $export_active && ! $export_stale ) || ( $import_active && !
 			<input type="hidden" name="action" value="schrack_wc_sync_product_export_start">
 			<?php wp_nonce_field( 'schrack_wc_sync_product_export_start' ); ?>
 			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="export-scope"><?php esc_html_e( 'Exportált termékek', 'schrack-woocommerce-sync' ); ?></label></th>
+					<td>
+						<select id="export-scope" name="export_scope" <?php disabled( $transfer_active ); ?>>
+							<?php foreach ( $export_scope_options as $value => $label ) : ?>
+								<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $export_filters['scope'], $value ); ?>><?php echo esc_html( $label ); ?></option>
+							<?php endforeach; ?>
+						</select>
+						<p class="description"><?php esc_html_e( 'Az összes termék opció a lenti szűrőket figyelmen kívül hagyja, és az importált termékek mellett a kézzel vagy más bővítménnyel létrehozott termékeket is exportálja.', 'schrack-woocommerce-sync' ); ?></p>
+					</td>
+				</tr>
 				<tr>
 					<th scope="row"><label for="export-status"><?php esc_html_e( 'Termékállapot', 'schrack-woocommerce-sync' ); ?></label></th>
 					<td>

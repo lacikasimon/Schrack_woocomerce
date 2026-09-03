@@ -1462,6 +1462,7 @@ class Schrack_Admin {
 		check_admin_referer( 'schrack_wc_sync_product_export_start' );
 
 		$filters = array(
+			'scope'        => isset( $_POST['export_scope'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_scope'] ) ) : 'all_products',
 			'status'       => isset( $_POST['export_status'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_status'] ) ) : 'all',
 			'product_type' => isset( $_POST['export_product_type'] ) ? sanitize_key( wp_unslash( (string) $_POST['export_product_type'] ) ) : 'all',
 			'category_id'  => isset( $_POST['export_category_id'] ) ? absint( wp_unslash( (string) $_POST['export_category_id'] ) ) : 0,

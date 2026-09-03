@@ -317,18 +317,22 @@ class Schrack_WC_Product_CSV_Exporter extends WC_Product_CSV_Exporter {
 	}
 
 	/**
-	 * Keeps the shop decimal separator and always exports WooCommerce's configured
-	 * number of decimals, including zero-decimal source values such as 786.00.
+	 * Exports prices in the Romanian spreadsheet format used by this transfer:
+	 * at least two decimal places, a decimal comma and no thousands separator.
+	 *
+	 * WooCommerce may be configured to display zero decimals or a decimal point.
+	 * Those presentation settings must not remove the fractional separator from
+	 * the product and supplier price columns in the generated CSV.
 	 */
 	private function schrack_fixed_localized_price( mixed $price ): string {
 		if ( '' === $price || null === $price ) {
 			return '';
 		}
 
-		$decimals = max( 0, wc_get_price_decimals() );
+		$decimals = max( 2, wc_get_price_decimals() );
 		$decimal  = wc_format_decimal( $price, $decimals, false );
 
-		return '' === $decimal ? '' : wc_format_localized_price( $decimal );
+		return '' === $decimal ? '' : str_replace( '.', ',', $decimal );
 	}
 
 	/**
@@ -1675,6 +1679,7 @@ class Schrack_Product_Exporter {
 	 * @return array<string,mixed>
 	 */
 	private function normalize_filters( array $filters ): array {
+		$scope        = sanitize_key( (string) ( $filters['scope'] ?? '' ) );
 		$status       = sanitize_key( (string) ( $filters['status'] ?? 'all' ) );
 		$product_type = sanitize_key( (string) ( $filters['product_type'] ?? 'all' ) );
 		$source       = sanitize_key( (string) ( $filters['source'] ?? 'all' ) );
@@ -1699,6 +1704,27 @@ class Schrack_Product_Exporter {
 		}
 
 		$search = function_exists( 'mb_substr' ) ? mb_substr( $search, 0, 100 ) : substr( $search, 0, 100 );
+		$has_active_filter =
+			'all' !== $status ||
+			'all' !== $product_type ||
+			$category_id > 0 ||
+			'all' !== $source ||
+			'all' !== $stock_status ||
+			'' !== $search;
+
+		if ( ! in_array( $scope, array( 'all_products', 'filtered' ), true ) ) {
+			// Preserve filtered behavior for old saved jobs and programmatic callers.
+			$scope = $has_active_filter ? 'filtered' : 'all_products';
+		}
+
+		if ( 'all_products' === $scope ) {
+			$status       = 'all';
+			$product_type = 'all';
+			$category_id  = 0;
+			$source       = 'all';
+			$stock_status = 'all';
+			$search       = '';
+		}
 
 		$category_ids = isset( $filters['category_ids'] ) && is_array( $filters['category_ids'] )
 			? array_values( array_unique( array_filter( array_map( 'absint', $filters['category_ids'] ) ) ) )
@@ -1724,6 +1750,7 @@ class Schrack_Product_Exporter {
 		}
 
 		return array(
+			'scope'        => $scope,
 			'status'       => $status,
 			'product_type' => $product_type,
 			'category_id'  => $category_id,
