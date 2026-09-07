@@ -259,21 +259,38 @@ final class Schrack_EDoc_Bridge {
 			$started = microtime( true );
 			delete_option( 'schrack_edoc_worker_error' );
 			$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . self::table( 'nonces' ) . ' WHERE expires_at < %d LIMIT 5000', time() ) );
-			$this->retry_captures();
-			$this->scan_orders();
-			$table = self::table( 'orders' );
-			$ids = $wpdb->get_col( $wpdb->prepare( "SELECT order_id FROM $table WHERE capture_required=0 AND version > delivered_version AND attempts < 10 AND next_attempt <= %d ORDER BY next_attempt,order_id LIMIT 10", time() ) );
-			foreach ( $ids as $id ) { if ( microtime( true ) - $started > 20 ) { break; } $this->deliver( (int) $id ); }
-			if ( microtime( true ) - $started < 20 && time() >= (int) get_option( 'schrack_edoc_catalog_next', 0 ) ) {
-				try {
-					$result = ( new Schrack_EDoc_Importer( $this->settings ) )->run_batch();
-					update_option( 'schrack_edoc_catalog_next', time() + ( ! empty( $result['has_more'] ) ? 1 : 300 ), false );
-				} catch ( Throwable $e ) {
-					$this->settings->update_status( 'edoc_catalog', array( 'errors' => 1, 'last_error' => Schrack_EDoc_Client::safe_error( $e ) ) );
-					update_option( 'schrack_edoc_catalog_next', time() + 300, false );
-				}
+			$catalog_due = time() >= (int) get_option( 'schrack_edoc_catalog_next', 0 );
+			$catalog_first = $catalog_due && 'catalog' === get_option( 'schrack_edoc_priority', 'catalog' );
+			if ( $catalog_due ) {
+				// Persist the next turn before expensive work, including a possible process timeout.
+				update_option( 'schrack_edoc_priority', $catalog_first ? 'orders' : 'catalog', false );
+			}
+			$phases = $catalog_first ? array( 'catalog', 'orders' ) : array( 'orders', 'catalog' );
+			foreach ( $phases as $phase ) {
+				if ( microtime( true ) - $started >= 20 ) { break; }
+				if ( 'orders' === $phase ) { $this->work_orders( $started ); }
+				elseif ( $catalog_due ) { $this->work_catalog(); }
 			}
 		} ); } catch ( Throwable $e ) { update_option( 'schrack_edoc_worker_error', 'Sincronizarea eDoc va fi reluată la următoarea execuție.', false ); }
+	}
+
+	private function work_orders( float $started ): void {
+		global $wpdb;
+		$this->retry_captures();
+		$this->scan_orders();
+		$table = self::table( 'orders' );
+		$ids = $wpdb->get_col( $wpdb->prepare( "SELECT order_id FROM $table WHERE capture_required=0 AND version > delivered_version AND attempts < 10 AND next_attempt <= %d ORDER BY next_attempt,order_id LIMIT 10", time() ) );
+		foreach ( $ids as $id ) { if ( microtime( true ) - $started >= 20 ) { break; } $this->deliver( (int) $id ); }
+	}
+
+	private function work_catalog(): void {
+		try {
+			$result = ( new Schrack_EDoc_Importer( $this->settings ) )->run_batch();
+			update_option( 'schrack_edoc_catalog_next', time() + ( ! empty( $result['has_more'] ) ? 1 : 300 ), false );
+		} catch ( Throwable $e ) {
+			$this->settings->update_status( 'edoc_catalog', array( 'errors' => 1, 'last_error' => Schrack_EDoc_Client::safe_error( $e ) ) );
+			update_option( 'schrack_edoc_catalog_next', time() + 300, false );
+		}
 	}
 
 	/** Network delivery does not hold the order lock or delay a native checkout save. */

@@ -322,7 +322,10 @@ catalog. `wp schrack-sync edoc` processes one bounded bridge run. eDoc has its o
 explicit enable switch and queue, independent of the Schrack/Telesystem schedule.
 
 Action Scheduler runs the bridge every minute (WP-Cron fallback). Catalog cycles run
-every five minutes and resume after each successful page. All shop orders, including
+every five minutes and resume after each successful page. When both phases are due,
+the worker alternates their first turn across runs and saves that choice before
+starting work, so slow orders cannot indefinitely delay the catalog and slow catalog
+pages cannot indefinitely delay orders. Both share the existing per-run time budget. All shop orders, including
 mixed suppliers and the full history, are mirrored through the WooCommerce CRUD API
 with either HPOS or legacy storage. Reconciliation runs every fifteen minutes using
 fixed modified-time windows, a stable ID cursor and an overlap. Individual capture
@@ -354,6 +357,7 @@ names. Keep separate test credentials and never enable a cloned site against the
 live ERP. This flag does not disable TLS certificate verification.
 
 Run `php tests/edoc-contract.php` for the independent HMAC fixtures and catalog rules.
+Run `php tests/edoc-worker.php` for virtual-time scheduling and backoff regressions.
 The paired eDoc repository supplies the live WordPress/WooCommerce Docker harness and
 Playwright flow for HPOS and legacy order storage. Installation upgrades create three
 bridge tables (`schrack_edoc_orders`, `schrack_edoc_commands`, `schrack_edoc_nonces`)
