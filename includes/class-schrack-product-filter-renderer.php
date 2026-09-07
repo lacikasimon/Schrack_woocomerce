@@ -723,7 +723,9 @@ class Schrack_Product_Filter_Renderer {
 			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_item_meta ON ({$wpdb->posts}.ID = schrack_filter_item_meta.post_id AND schrack_filter_item_meta.meta_key = '_schrack_item_number')";
 			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_ean_meta ON ({$wpdb->posts}.ID = schrack_filter_ean_meta.post_id AND schrack_filter_ean_meta.meta_key = '_schrack_ean')";
 			$join .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_filter_item_meta ON ({$wpdb->posts}.ID = telesystem_filter_item_meta.post_id AND telesystem_filter_item_meta.meta_key = '_telesystem_item_number')";
+			$join .= " LEFT JOIN {$wpdb->postmeta} AS edoc_filter_item_meta ON ({$wpdb->posts}.ID = edoc_filter_item_meta.post_id AND edoc_filter_item_meta.meta_key = '_edoc_item_number')";
 			$join .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_filter_ean_meta ON ({$wpdb->posts}.ID = telesystem_filter_ean_meta.post_id AND telesystem_filter_ean_meta.meta_key = '_telesystem_ean')";
+			$join .= " LEFT JOIN {$wpdb->postmeta} AS edoc_filter_ean_meta ON ({$wpdb->posts}.ID = edoc_filter_ean_meta.post_id AND edoc_filter_ean_meta.meta_key = '_edoc_ean')";
 		}
 
 		return $join;
@@ -741,7 +743,9 @@ class Schrack_Product_Filter_Renderer {
 			$like = '%' . $wpdb->esc_like( $search ) . '%';
 
 			$where .= $wpdb->prepare(
-				" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_filter_lookup.sku LIKE %s OR schrack_filter_item_meta.meta_value LIKE %s OR schrack_filter_ean_meta.meta_value LIKE %s OR telesystem_filter_item_meta.meta_value LIKE %s OR telesystem_filter_ean_meta.meta_value LIKE %s)",
+				" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_filter_lookup.sku LIKE %s OR schrack_filter_item_meta.meta_value LIKE %s OR schrack_filter_ean_meta.meta_value LIKE %s OR telesystem_filter_item_meta.meta_value LIKE %s OR telesystem_filter_ean_meta.meta_value LIKE %s OR edoc_filter_item_meta.meta_value LIKE %s OR edoc_filter_ean_meta.meta_value LIKE %s)",
+				$like,
+				$like,
 				$like,
 				$like,
 				$like,

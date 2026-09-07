@@ -67,6 +67,10 @@ class Schrack_Product_Admin_Fields {
 			return;
 		}
 
+		if ( 'edoc' === $source && get_post_meta( $product_id, '_edoc_validation_error', true ) ) {
+			$fields[] = array( 'label' => 'Validare ERP', 'value' => get_post_meta( $product_id, '_edoc_validation_error', true ) );
+		}
+
 		$item_number_key  = 'schrack' === $source ? '_schrack_item_number' : '_' . $source . '_item_number';
 		$ean_key          = 'schrack' === $source ? '_schrack_ean' : '_' . $source . '_ean';
 		$manufacturer_key = 'schrack' === $source ? '_schrack_manufacturer' : '_' . $source . '_manufacturer';
@@ -370,6 +374,7 @@ class Schrack_Product_Admin_Fields {
 	private function source_label( string $source ): string {
 		return match ( sanitize_key( $source ) ) {
 			'telesystem' => 'Telesystem',
+			'edoc' => 'eDoc ERP',
 			'schrack'    => 'Schrack',
 			default      => ucwords( str_replace( array( '-', '_' ), ' ', sanitize_key( $source ) ) ),
 		};

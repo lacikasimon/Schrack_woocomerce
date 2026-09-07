@@ -2,10 +2,11 @@
 /**
  * Plugin Name: Importator produse furnizori
  * Description: Importă datele cataloagelor furnizorilor și sincronizează prețurile de achiziție și stocurile produselor WooCommerce.
- * Version: 0.1.72
+ * Version: 0.1.73
  * Author: Syshub
  * Requires PHP: 8.1
  * Requires Plugins: woocommerce
+ * WC requires at least: 8.2
  * Text Domain: schrack-woocommerce-sync
  *
  * @package SchrackWooCommerceSync
@@ -15,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SCHRACK_WC_SYNC_VERSION', '0.1.72' );
+define( 'SCHRACK_WC_SYNC_VERSION', '0.1.73' );
 define( 'SCHRACK_WC_SYNC_FILE', __FILE__ );
 define( 'SCHRACK_WC_SYNC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SCHRACK_WC_SYNC_URL', plugin_dir_url( __FILE__ ) );
@@ -69,6 +70,13 @@ require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-plugin.php';
 
 register_activation_hook( __FILE__, array( 'Schrack_Plugin', 'activate' ) );
 register_deactivation_hook( __FILE__, array( 'Schrack_Plugin', 'deactivate' ) );
+
+// Order access uses WooCommerce CRUD in both supported storage modes.
+add_action( 'before_woocommerce_init', static function (): void {
+	if ( class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) {
+		\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
+	}
+} );
 
 add_action(
 	'plugins_loaded',

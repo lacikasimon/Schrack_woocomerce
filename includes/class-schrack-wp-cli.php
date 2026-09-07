@@ -49,6 +49,14 @@ class Schrack_WP_CLI {
 		}
 	}
 
+	/** Importă un lot eDoc și procesează coada de comenzi. */
+	public function edoc(): void {
+		if ( ! Schrack_EDoc_Client::enabled() ) { WP_CLI::error( 'Integrarea eDoc este dezactivată.' ); }
+		update_option( 'schrack_edoc_catalog_next', 0, false );
+		( new Schrack_EDoc_Bridge( $this->settings ) )->work();
+		WP_CLI::success( 'Lotul eDoc s-a încheiat. Verificați pagina eDoc ERP pentru eventuale erori de livrare.' );
+	}
+
 	/**
 	 * Imports a catalog batch.
 	 */

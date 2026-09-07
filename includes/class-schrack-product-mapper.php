@@ -1632,6 +1632,7 @@ class Schrack_Product_Mapper {
 	private function catalog_source_label( string $source ): string {
 		return match ( sanitize_key( $source ) ) {
 			'telesystem' => 'Telesystem',
+			'edoc' => 'eDoc ERP',
 			'schrack'    => 'Schrack',
 			default      => ucwords( str_replace( array( '-', '_' ), ' ', sanitize_key( $source ) ) ),
 		};

@@ -1766,6 +1766,7 @@ class Schrack_Admin {
 				'_schrack_last_price_sync',
 				'_schrack_last_stock_sync'
 			),
+			'edoc' => $this->sync_dashboard_source_stats( 'edoc', 'eDoc ERP', '_edoc_item_number', '_edoc_last_price_sync', '_edoc_last_stock_sync' ),
 			'telesystem' => $this->sync_dashboard_source_stats(
 				'telesystem',
 				__( 'Telesystem', 'schrack-woocommerce-sync' ),

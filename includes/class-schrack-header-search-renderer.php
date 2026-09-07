@@ -274,7 +274,9 @@ class Schrack_Header_Search_Renderer {
 		$join        .= " LEFT JOIN {$wpdb->postmeta} AS schrack_header_item_meta ON ({$wpdb->posts}.ID = schrack_header_item_meta.post_id AND schrack_header_item_meta.meta_key = '_schrack_item_number')";
 		$join        .= " LEFT JOIN {$wpdb->postmeta} AS schrack_header_ean_meta ON ({$wpdb->posts}.ID = schrack_header_ean_meta.post_id AND schrack_header_ean_meta.meta_key = '_schrack_ean')";
 		$join        .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_header_item_meta ON ({$wpdb->posts}.ID = telesystem_header_item_meta.post_id AND telesystem_header_item_meta.meta_key = '_telesystem_item_number')";
+		$join        .= " LEFT JOIN {$wpdb->postmeta} AS edoc_header_item_meta ON ({$wpdb->posts}.ID = edoc_header_item_meta.post_id AND edoc_header_item_meta.meta_key = '_edoc_item_number')";
 		$join        .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_header_ean_meta ON ({$wpdb->posts}.ID = telesystem_header_ean_meta.post_id AND telesystem_header_ean_meta.meta_key = '_telesystem_ean')";
+		$join        .= " LEFT JOIN {$wpdb->postmeta} AS edoc_header_ean_meta ON ({$wpdb->posts}.ID = edoc_header_ean_meta.post_id AND edoc_header_ean_meta.meta_key = '_edoc_ean')";
 
 		return $join;
 	}
@@ -298,7 +300,9 @@ class Schrack_Header_Search_Renderer {
 		$like = '%' . $wpdb->esc_like( $search ) . '%';
 
 		$where .= $wpdb->prepare(
-			" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_header_lookup.sku LIKE %s OR schrack_header_item_meta.meta_value LIKE %s OR schrack_header_ean_meta.meta_value LIKE %s OR telesystem_header_item_meta.meta_value LIKE %s OR telesystem_header_ean_meta.meta_value LIKE %s)",
+			" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_header_lookup.sku LIKE %s OR schrack_header_item_meta.meta_value LIKE %s OR schrack_header_ean_meta.meta_value LIKE %s OR telesystem_header_item_meta.meta_value LIKE %s OR telesystem_header_ean_meta.meta_value LIKE %s OR edoc_header_item_meta.meta_value LIKE %s OR edoc_header_ean_meta.meta_value LIKE %s)",
+			$like,
+			$like,
 			$like,
 			$like,
 			$like,
@@ -504,9 +508,9 @@ class Schrack_Header_Search_Renderer {
 
 		foreach ( $prefixes as $prefix ) {
 			$like = '%' . $wpdb->esc_like( $prefix ) . '%';
-			$where_parts[] = "({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_fuzzy_lookup.sku LIKE %s OR schrack_fuzzy_item_meta.meta_value LIKE %s OR schrack_fuzzy_ean_meta.meta_value LIKE %s OR telesystem_fuzzy_item_meta.meta_value LIKE %s OR telesystem_fuzzy_ean_meta.meta_value LIKE %s)";
+			$where_parts[] = "({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_fuzzy_lookup.sku LIKE %s OR schrack_fuzzy_item_meta.meta_value LIKE %s OR schrack_fuzzy_ean_meta.meta_value LIKE %s OR telesystem_fuzzy_item_meta.meta_value LIKE %s OR telesystem_fuzzy_ean_meta.meta_value LIKE %s OR edoc_fuzzy_item_meta.meta_value LIKE %s OR edoc_fuzzy_ean_meta.meta_value LIKE %s)";
 
-			for ( $i = 0; $i < 8; ++$i ) {
+			for ( $i = 0; $i < 10; ++$i ) {
 				$params[] = $like;
 			}
 		}
@@ -519,7 +523,9 @@ class Schrack_Header_Search_Renderer {
 			LEFT JOIN {$wpdb->postmeta} AS schrack_fuzzy_item_meta ON ({$wpdb->posts}.ID = schrack_fuzzy_item_meta.post_id AND schrack_fuzzy_item_meta.meta_key = '_schrack_item_number')
 			LEFT JOIN {$wpdb->postmeta} AS schrack_fuzzy_ean_meta ON ({$wpdb->posts}.ID = schrack_fuzzy_ean_meta.post_id AND schrack_fuzzy_ean_meta.meta_key = '_schrack_ean')
 			LEFT JOIN {$wpdb->postmeta} AS telesystem_fuzzy_item_meta ON ({$wpdb->posts}.ID = telesystem_fuzzy_item_meta.post_id AND telesystem_fuzzy_item_meta.meta_key = '_telesystem_item_number')
+			LEFT JOIN {$wpdb->postmeta} AS edoc_fuzzy_item_meta ON ({$wpdb->posts}.ID = edoc_fuzzy_item_meta.post_id AND edoc_fuzzy_item_meta.meta_key = '_edoc_item_number')
 			LEFT JOIN {$wpdb->postmeta} AS telesystem_fuzzy_ean_meta ON ({$wpdb->posts}.ID = telesystem_fuzzy_ean_meta.post_id AND telesystem_fuzzy_ean_meta.meta_key = '_telesystem_ean')
+			LEFT JOIN {$wpdb->postmeta} AS edoc_fuzzy_ean_meta ON ({$wpdb->posts}.ID = edoc_fuzzy_ean_meta.post_id AND edoc_fuzzy_ean_meta.meta_key = '_edoc_ean')
 			WHERE {$wpdb->posts}.post_type = 'product'
 				AND {$wpdb->posts}.post_status = 'publish'
 				AND (" . implode( ' OR ', $where_parts ) . ")
@@ -658,6 +664,8 @@ class Schrack_Header_Search_Renderer {
 				$this->meta_text( $product, '_schrack_ean' ),
 				$this->meta_text( $product, '_telesystem_item_number' ),
 				$this->meta_text( $product, '_telesystem_ean' ),
+				$this->meta_text( $product, '_edoc_item_number' ),
+				$this->meta_text( $product, '_edoc_ean' ),
 			),
 			static fn( string $value ): bool => '' !== $value
 		);

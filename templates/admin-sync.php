@@ -17,6 +17,7 @@ $schrack_enabled      = 'yes' === (string) ( $settings['schrack_enabled'] ?? 'ye
 $telesystem_enabled   = 'yes' === (string) ( $settings['telesystem_enabled'] ?? 'yes' );
 ?>
 <div class="wrap schrack-sync-admin">
+	<p><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=schrack-edoc' ) ); ?>">eDoc ERP — al treilea furnizor: configurare și sincronizare</a></p>
 	<h1><?php esc_html_e( 'Product furnizor importer Manual Sync', 'schrack-woocommerce-sync' ); ?></h1>
 	<?php $this->render_tabs( 'manual' ); ?>
 	<?php $this->render_notice( $notice ); ?>
@@ -78,9 +79,15 @@ $telesystem_enabled   = 'yes' === (string) ( $settings['telesystem_enabled'] ?? 
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schrack-sync-supplier-group">
 				<input type="hidden" name="action" value="schrack_wc_sync_manual_sync">
 				<?php wp_nonce_field( 'schrack_wc_sync_manual_sync' ); ?>
-				<button type="submit" class="button button-primary schrack-sync-supplier-group__full" name="sync_task" value="full" <?php disabled( ! $schrack_enabled && ! $telesystem_enabled ); ?>>
+				<button type="submit" class="button button-primary schrack-sync-supplier-group__full" name="sync_task" value="full" <?php disabled( ! $schrack_enabled && ! $telesystem_enabled && ! Schrack_EDoc_Client::enabled() ); ?>>
 					<?php esc_html_e( 'Full sync (toti furnizorii)', 'schrack-woocommerce-sync' ); ?>
 				</button>
+
+				<div class="schrack-sync-supplier">
+					<h3>Furnizor: eDoc ERP</h3>
+					<p>Preț net, adaosul magazinului și disponibilitate din Gestiune.</p>
+					<button type="submit" class="button button-secondary" name="sync_task" value="edoc_catalog" <?php disabled( ! Schrack_EDoc_Client::enabled() ); ?>>Import eDoc ERP</button>
+				</div>
 
 				<div class="schrack-sync-supplier">
 					<h3>

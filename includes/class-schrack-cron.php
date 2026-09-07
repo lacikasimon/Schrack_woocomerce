@@ -206,6 +206,13 @@ class Schrack_Cron {
 	 * @return array<string,mixed>
 	 */
 	public function queue_action( string $task ): array {
+		if ( 'edoc_catalog' === $task ) {
+			if ( ! Schrack_EDoc_Client::enabled() ) { return array( 'queued' => false, 'code' => 'edoc_disabled', 'message' => 'Integrarea eDoc este dezactivată.', 'task' => $task ); }
+			update_option( 'schrack_edoc_catalog_next', 0, false );
+			( new Schrack_EDoc_Bridge( $this->settings ) )->queue();
+			return array( 'queued' => true, 'message' => 'Catalogul eDoc a fost pus în coadă.', 'task' => $task );
+		}
+
 		$definitions = $this->task_definitions();
 		$hook        = (string) ( $definitions[ $task ]['hook'] ?? '' );
 
@@ -227,7 +234,7 @@ class Schrack_Cron {
 			);
 		}
 
-		if ( 'full' === $task && ! $this->is_schrack_enabled() && ! $this->is_telesystem_enabled() ) {
+		if ( 'full' === $task && ! $this->is_schrack_enabled() && ! $this->is_telesystem_enabled() && ! Schrack_EDoc_Client::enabled() ) {
 			return array(
 				'queued'  => false,
 				'code'    => 'schrack_disabled',
@@ -2090,7 +2097,9 @@ class Schrack_Cron {
 	 * Runs catalog, price, and stock tasks.
 	 */
 	public function run_full_sync( string $stage = 'catalog' ): void {
-		if ( ! $this->is_schrack_enabled() && ! $this->is_telesystem_enabled() ) {
+		if ( 'catalog' === $stage && Schrack_EDoc_Client::enabled() ) { $this->queue_action( 'edoc_catalog' ); }
+
+		if ( ! $this->is_schrack_enabled() && ! $this->is_telesystem_enabled() && ! Schrack_EDoc_Client::enabled() ) {
 			$this->disabled_schrack_result( 'full', 'Full sync is disabled: both Schrack and Telesystem are disabled.' );
 			return;
 		}

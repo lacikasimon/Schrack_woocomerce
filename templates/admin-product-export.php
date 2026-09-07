@@ -109,6 +109,7 @@ $export_source_options = array(
 	'all'        => __( 'Minden forrás', 'schrack-woocommerce-sync' ),
 	'schrack'    => __( 'Schrack', 'schrack-woocommerce-sync' ),
 	'telesystem' => __( 'Telesystem', 'schrack-woocommerce-sync' ),
+	'edoc' => 'eDoc ERP',
 	'other'      => __( 'Egyéb vagy nincs forrás', 'schrack-woocommerce-sync' ),
 );
 $export_stock_options = array(
