@@ -56,6 +56,7 @@ final class Schrack_EDoc_Bridge {
 	public function init(): void {
 		if ( '2' !== get_option( 'schrack_edoc_schema' ) ) { self::install(); }
 		add_action( 'rest_api_init', array( $this, 'routes' ) );
+		add_filter( 'rest_post_dispatch', array( $this, 'private_response_headers' ), 10, 3 );
 		add_action( 'init', array( $this, 'schedule' ), 20 );
 		add_action( self::HOOK, array( $this, 'work' ) );
 		add_filter( 'cron_schedules', static function ( $s ) { $s['schrack_edoc_minute'] = array( 'interval' => 60, 'display' => 'eDoc: fiecare minut' ); return $s; } );
@@ -84,6 +85,15 @@ final class Schrack_EDoc_Bridge {
 		foreach ( array( '/health' => 'GET', '/orders/(?P<id>\d+)' => 'GET', '/orders/(?P<id>\d+)/status' => 'POST' ) as $route => $method ) {
 			register_rest_route( 'schrack-sync/v1', '/erp' . $route, array( 'methods' => $method, 'permission_callback' => array( $this, 'authenticate' ), 'callback' => 'POST' === $method ? array( $this, 'status_endpoint' ) : ( '/health' === $route ? array( $this, 'health_endpoint' ) : array( $this, 'order_endpoint' ) ) ) );
 		}
+	}
+
+	/** Signed routes do not use a WordPress login session; never cache their private responses. */
+	public function private_response_headers( $response, WP_REST_Server $server, WP_REST_Request $request ) {
+		if ( str_starts_with( $request->get_route(), '/schrack-sync/v1/erp/' ) && $response instanceof WP_HTTP_Response ) {
+			$response->header( 'Cache-Control', 'no-store' );
+			$response->header( 'X-Content-Type-Options', 'nosniff' );
+		}
+		return $response;
 	}
 
 	public function authenticate( WP_REST_Request $request ) {
