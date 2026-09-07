@@ -361,6 +361,7 @@ class Schrack_Product_Importer {
 
 			if ( '_schrack_catalog_source' === $key && $has_scalar_value ) {
 				$data['meta_data'][ $index ]['value'] = sanitize_key( (string) $meta['value'] );
+				if ( 'edocerp' === $data['meta_data'][ $index ]['value'] ) { $data['meta_data'][ $index ]['value'] = 'edoc'; }
 				$value                                = (string) $data['meta_data'][ $index ]['value'];
 			}
 

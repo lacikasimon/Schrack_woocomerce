@@ -8,18 +8,20 @@ This plugin handles only:
 
 - Catalog import from Schrack SOAP `GetCatalogAs`, including streamed detailed XML properties, facets, and technical documents.
 - Separate Telesystem CSV feed import from the configured B2B feed URL.
+- Selected eDoc ERP articles as a third supplier, with availability and net supplier prices.
+- An authenticated eDoc order mirror and status bridge, isolated from the supplier SOAP client.
 - Purchase price lookup through `GetItemPrice`.
 - Stock lookup through `GetStockItemQuantities`.
 - WooCommerce simple product create/update by SKU.
 - Category based markup and rounding.
 
-It must not be used for order submission. Order related SOAP methods, including `InsertUpdateOrder`, are intentionally not implemented and are blocked by the SOAP client wrapper.
+It must not be used for supplier order submission. Order related SOAP methods, including `InsertUpdateOrder`, are intentionally not implemented and are blocked by the SOAP client wrapper.
 
 ## Requirements
 
 - PHP 8.1+
 - WordPress
-- WooCommerce
+- WooCommerce 8.2+
 - PHP SOAP extension
 - WooCommerce Action Scheduler for preferred background jobs; WP-Cron fallback is included.
 
@@ -235,7 +237,7 @@ Use `wp schrack-sync images --drain` for a large initial media backlog when SSH/
 
 The transfer worker is tuned for cPanel/shared-hosting accounts with up to 2 GB available memory. It reads PHP's effective `memory_limit`, chooses an adaptive batch size, stops an export action after 25 seconds or at 70% usage, and primes/releases WordPress product caches in small groups. Persistent Redis/Memcached entries are not invalidated by the read-only export. WooCommerce import batches are intentionally smaller because core parses a complete CSV batch before saving it. The worker recalculates its size in the cron process, so differing web/cron php.ini limits remain safe. Export/import continuations explicitly wake the async queue runner instead of waiting for its normal loopback interval. On shared-hosting limits, this plugin also caps its Action Scheduler concurrency to one worker, instead of allowing several memory-heavy PHP processes to overlap.
 
-The export uses WooCommerce's official product CSV schema and includes every non-trashed product and variation, attributes, categories, tags, images, downloads, linked products, and all custom product metadata. Its explicit all-products scope ignores the optional filters and includes supplier-imported, manually created, and products created by other plugins. The filtered scope can instead select post status, WooCommerce product type, product category (including descendants and child variations), supplier source (Schrack/Telesystem/other), stock status, or a partial product-name/SKU/ID match. A header builder can switch between the complete backup schema and an ordered custom selection of official WooCommerce fields plus discovered Schrack/Telesystem or manually entered Meta keys. Presets populate basic, recommended supplier, all WooCommerce, or all supplier columns; arrow controls change their CSV order, while dynamic downloads can be appended safely at the end. Attribute output can retain WooCommerce's numbered name/value groups, be omitted, or scan the assigned catalog attributes in memory-safe database batches and create one stable readable column per name (for example `Atribut: VPE [pa_vpe]`); products without that attribute receive an empty cell. The bundled importer maps these wide attribute columns back to WooCommerce attributes, including escaped commas in individual values. Supplier identity and prices use readable columns (`Furnizor`, `Preț achiziție furnizor`, `Preț furnizor original (sursă)`, and the two Telesystem price fields) instead of opaque `Meta:` headers. The bundled importer automatically maps those columns back to their original product metadata and converts localized comma decimals to machine decimals. The saved job retains the normalized filter and header configuration across every background batch and resume. Regular, sale, and readable supplier prices always contain at least two decimal places and use a decimal comma (for example `786,00`), even when the stored source value is a whole number or the shop display is configured for zero decimals/a decimal point. Selected rows still include the chosen Schrack and Telesystem identity, item numbers, EANs, purchase prices, VAT, stock details, sync timestamps, technical attributes, documents, image references, commercial fields, and `_schrack_raw_feed_data`.
+The export uses WooCommerce's official product CSV schema and includes every non-trashed product and variation, attributes, categories, tags, images, downloads, linked products, and all custom product metadata. Its explicit all-products scope ignores the optional filters and includes supplier-imported, manually created, and products created by other plugins. The filtered scope can instead select post status, WooCommerce product type, product category (including descendants and child variations), supplier source (Schrack/Telesystem/eDoc/other), stock status, or a partial product-name/SKU/ID match. A header builder can switch between the complete backup schema and an ordered custom selection of official WooCommerce fields plus discovered Schrack/Telesystem or manually entered Meta keys. Presets populate basic, recommended supplier, all WooCommerce, or all supplier columns; arrow controls change their CSV order, while dynamic downloads can be appended safely at the end. Attribute output can retain WooCommerce's numbered name/value groups, be omitted, or scan the assigned catalog attributes in memory-safe database batches and create one stable readable column per name (for example `Atribut: VPE [pa_vpe]`); products without that attribute receive an empty cell. The bundled importer maps these wide attribute columns back to WooCommerce attributes, including escaped commas in individual values. Supplier identity and prices use readable columns (`Furnizor`, `Preț achiziție furnizor`, `Preț furnizor original (sursă)`, and the two Telesystem price fields) instead of opaque `Meta:` headers. The bundled importer automatically maps those columns back to their original product metadata and converts localized comma decimals to machine decimals. The saved job retains the normalized filter and header configuration across every background batch and resume. Regular, sale, and readable supplier prices always contain at least two decimal places and use a decimal comma (for example `786,00`), even when the stored source value is a whole number or the shop display is configured for zero decimals/a decimal point. Selected rows still include the chosen Schrack and Telesystem identity, item numbers, EANs, purchase prices, VAT, stock details, sync timestamps, technical attributes, documents, image references, commercial fields, and `_schrack_raw_feed_data`.
 
 Keep at least about twice the expected CSV size free during export because the row work file and final CSV coexist during resumable assembly. The finalizer checks available filesystem space before each copy chunk and reports an actionable error instead of repeatedly timing out when space is exhausted (hosting-account quotas may not always be visible to PHP).
 
@@ -283,3 +285,77 @@ The SOAP client is aligned to the received Schrack templates:
 - `GetStockItemQuantitiesV40`
 
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
+
+
+## eDoc ERP integration (v0.1.73)
+
+Open **WooCommerce → eDoc ERP**. The integration is disabled by default. Configure a
+separate connection in **eDoc → Gestiune → Webshop → Configurare**, select quantitative
+warehouses and copy its key ID and one-time secret into WooCommerce. Enter the HTTPS
+ERP origin (without `/api/webshop/v1`), save, and test the connection. Configure the
+WooCommerce origin in ERP and test the other direction before enabling both ends.
+Secrets remain masked in admin HTML; leaving the secret field empty preserves it.
+
+Both systems must use RON for v1. Configure WooCommerce tax rates first, then map each
+ERP VAT percentage to its WooCommerce tax-class slug, one line per rate. For example,
+`21=` maps 21% to Standard (the empty slug), while `11=reduced-rate` maps to that class.
+The rate configured for the store base address must match. No default VAT rate is
+silently substituted. Missing mappings, invalid/nonpositive prices and withdrawn
+articles remain draft and unavailable; the product's supplier box explains why.
+
+Select articles under the ERP Catalog tab. eDoc `pret_vanzare` is a **net supplier
+price**. The importer applies existing category/default markups, minimum margins,
+rounding and protected manual-price rules. Tax is included once only when the shop
+stores prices inclusive of tax. Products use source `edoc` and stable SKU
+`ERP-<entity_id>-<article_id>`; their original code and barcodes remain searchable.
+A collision with another supplier is reported without overwriting the product.
+New products are draft. Names, descriptions, images and categories become shop-owned.
+Only price, tax, unit, identity metadata and availability change on later syncs.
+WooCommerce stock management is disabled for eDoc products: stock quantities remain
+null, backorders are off, and unavailable products cannot be purchased. Withdrawing
+an article makes the existing product draft/outofstock without deleting its history.
+
+The eDoc admin screen shows queue counts, the current import page, last successful
+delivery, catalog validation counts and failures. Use its manual catalog, complete
+history and retry actions as needed. **Full sync** also queues the enabled eDoc
+catalog. `wp schrack-sync edoc` processes one bounded bridge run. eDoc has its own
+explicit enable switch and queue, independent of the Schrack/Telesystem schedule.
+
+Action Scheduler runs the bridge every minute (WP-Cron fallback). Catalog cycles run
+every five minutes and resume after each successful page. All shop orders, including
+mixed suppliers and the full history, are mirrored through the WooCommerce CRUD API
+with either HPOS or legacy storage. Reconciliation runs every fifteen minutes using
+fixed modified-time windows, a stable ID cursor and an overlap. Individual capture
+failures (such as an order exceeding 500 lines) remain visible in durable storage
+and can be retried without blocking later orders or the catalog. Native saves only capture to local durable
+storage; ERP HTTP delivery happens in the background. Failed deliveries back off and
+remain visible after ten attempts until retried. A successful old delivery never
+acknowledges a newer pending snapshot.
+
+ERP changes standard order statuses immediately through signed versioned commands.
+A persistent journal deduplicates retries and detects reuse of a command ID with
+different parameters. Concurrent writes serialize per order. After an interrupted
+command, the plugin verifies the current state and reports a conflict if the effect
+cannot be confirmed; it never repeats an uncertain WooCommerce side effect. Refunds,
+custom statuses, payments and supplier order placement stay in WooCommerce.
+
+The public routes are `/wp-json/schrack-sync/v1/erp/health`,
+`/wp-json/schrack-sync/v1/erp/orders/<id>` and
+`/wp-json/schrack-sync/v1/erp/orders/<id>/status`. Both directions use HMAC-SHA256 over
+the method, logical route (without `/wp-json`), sorted RFC3986 query, key ID, timestamp,
+nonce and exact body SHA256, joined with LF. Timestamp tolerance is five minutes;
+nonces are stored atomically. Requests/responses are bounded to 2 MiB and 500 product
+lines. HTTPS is required, redirects are not followed, and snapshots/secrets are not
+logged. Synchronize server clocks. The ERP protocol document is canonical.
+
+For an **isolated local harness only**, `EDOC_ALLOW_INSECURE_LOCAL=true` also requires
+`WP_ENVIRONMENT_TYPE=local` or `development`; HTTP is then allowed only to local host
+names. Keep separate test credentials and never enable a cloned site against the
+live ERP. This flag does not disable TLS certificate verification.
+
+Run `php tests/edoc-contract.php` for the independent HMAC fixtures and catalog rules.
+The paired eDoc repository supplies the live WordPress/WooCommerce Docker harness and
+Playwright flow for HPOS and legacy order storage. Installation upgrades create three
+bridge tables (`schrack_edoc_orders`, `schrack_edoc_commands`, `schrack_edoc_nonces`)
+without rewriting WooCommerce orders. Deactivation stops bridge scheduling and retains
+the journal and snapshots so reenabling can safely resume.

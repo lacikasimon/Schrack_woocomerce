@@ -122,6 +122,7 @@ class Schrack_Plugin {
 		$this->logger   = new Schrack_Logger( $this->settings );
 		$this->cron     = new Schrack_Cron( $this->settings, $this->logger );
 		$this->cron->init();
+		( new Schrack_EDoc_Bridge( $this->settings ) )->init();
 		$this->product_exporter = new Schrack_Product_Exporter( $this->settings, $this->logger );
 		$this->product_exporter->init();
 		$this->product_importer = new Schrack_Product_Importer( $this->settings, $this->logger );
@@ -180,6 +181,10 @@ class Schrack_Plugin {
 			'class-schrack-newsletter.php',
 			'class-schrack-catalog-importer.php',
 			'class-schrack-telesystem-importer.php',
+			'class-schrack-edoc-client.php',
+			'class-schrack-edoc-orders.php',
+			'class-schrack-edoc-importer.php',
+			'class-schrack-edoc-bridge.php',
 			'class-schrack-image-sync.php',
 			'class-schrack-price-sync.php',
 			'class-schrack-stock-sync.php',
@@ -235,6 +240,8 @@ class Schrack_Plugin {
 		Schrack_Settings::install_defaults();
 		Schrack_Logger::create_table();
 		Schrack_Newsletter::install_table();
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-edoc-bridge.php';
+		Schrack_EDoc_Bridge::install();
 	}
 
 	/**
@@ -245,6 +252,8 @@ class Schrack_Plugin {
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-cron.php';
 
 		Schrack_Cron::clear_scheduled_actions();
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-edoc-bridge.php';
+		Schrack_EDoc_Bridge::clear_schedule();
 	}
 
 	/**

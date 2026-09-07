@@ -284,6 +284,7 @@ class Schrack_WC_Product_CSV_Exporter extends WC_Product_CSV_Exporter {
 		return match ( $source ) {
 			'schrack'    => 'Schrack',
 			'telesystem' => 'Telesystem',
+			'edoc' => 'eDoc ERP',
 			default      => $source,
 		};
 	}
@@ -453,10 +454,11 @@ class Schrack_Product_Exporter {
 		if ( ! is_array( $meta_keys ) ) {
 			$sql       = $wpdb->prepare(
 				"SELECT DISTINCT meta_key FROM {$wpdb->postmeta}
-				WHERE meta_key LIKE %s OR meta_key LIKE %s
+				WHERE meta_key LIKE %s OR meta_key LIKE %s OR meta_key LIKE %s
 				ORDER BY meta_key ASC LIMIT 500",
 				$wpdb->esc_like( '_schrack_' ) . '%',
-				$wpdb->esc_like( '_telesystem_' ) . '%'
+				$wpdb->esc_like( '_telesystem_' ) . '%',
+				$wpdb->esc_like( '_edoc_' ) . '%'
 			);
 			$meta_keys = $wpdb->get_col( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 			$meta_keys = is_array( $meta_keys ) ? $meta_keys : array();
@@ -1359,6 +1361,18 @@ class Schrack_Product_Exporter {
 			'_schrack_documents',
 			'_schrack_image_url',
 			'_schrack_raw_feed_data',
+			'_edoc_entity_id',
+			'_edoc_article_id',
+			'_edoc_item_number',
+			'_edoc_ean',
+			'_edoc_barcodes',
+			'_edoc_vat_rate',
+			'_edoc_enabled',
+			'_edoc_available',
+			'_edoc_validation_error',
+			'_edoc_last_catalog_sync',
+			'_edoc_last_price_sync',
+			'_edoc_last_stock_sync',
 			'_telesystem_catalog_status',
 			'_telesystem_item_number',
 			'_telesystem_ean',
@@ -1695,7 +1709,7 @@ class Schrack_Product_Exporter {
 			$product_type = 'all';
 		}
 
-		if ( ! in_array( $source, array( 'all', 'schrack', 'telesystem', 'other' ), true ) ) {
+		if ( ! in_array( $source, array( 'all', 'schrack', 'telesystem', 'edoc', 'other' ), true ) ) {
 			$source = 'all';
 		}
 
@@ -1827,7 +1841,7 @@ class Schrack_Product_Exporter {
 			$args                  = array_merge( $args, $filters['category_ids'] );
 		}
 
-		if ( in_array( $filters['source'], array( 'schrack', 'telesystem' ), true ) ) {
+		if ( in_array( $filters['source'], array( 'schrack', 'telesystem', 'edoc' ), true ) ) {
 			$clauses[] = "(
 				EXISTS (
 					SELECT 1 FROM {$wpdb->postmeta} source_pm
@@ -1853,7 +1867,7 @@ class Schrack_Product_Exporter {
 					SELECT 1 FROM {$wpdb->postmeta} source_own_known_pm
 					WHERE source_own_known_pm.post_id = p.ID
 					AND source_own_known_pm.meta_key = '_schrack_catalog_source'
-					AND source_own_known_pm.meta_value IN ('schrack', 'telesystem')
+					AND source_own_known_pm.meta_value IN ('schrack', 'telesystem', 'edoc')
 				)
 				AND (
 					p.post_type <> 'product_variation'
@@ -1866,7 +1880,7 @@ class Schrack_Product_Exporter {
 						SELECT 1 FROM {$wpdb->postmeta} source_parent_known_pm
 						WHERE source_parent_known_pm.post_id = p.post_parent
 						AND source_parent_known_pm.meta_key = '_schrack_catalog_source'
-						AND source_parent_known_pm.meta_value IN ('schrack', 'telesystem')
+						AND source_parent_known_pm.meta_value IN ('schrack', 'telesystem', 'edoc')
 					)
 				)
 			)";

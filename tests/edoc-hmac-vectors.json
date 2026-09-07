@@ -1,0 +1,44 @@
+[
+  {
+    "secret": "synthetic-hmac-520-secret-Á",
+    "method": "GET",
+    "route": "/api/webshop/v1/catalog",
+    "query": {
+      "limit": "100",
+      "after": "0"
+    },
+    "key_id": "test-key-520",
+    "timestamp": "1788771600",
+    "nonce": "13298783-6c14-45fa-8d1e-2771e94eecbc",
+    "body": "",
+    "canonical": "GET\n/api/webshop/v1/catalog\nafter=0&limit=100\ntest-key-520\n1788771600\n13298783-6c14-45fa-8d1e-2771e94eecbc\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "signature": "cb889bd2bbf6efda6b6af65b1a57571d382d34b0c0301ef0d142f72efc8cbc77"
+  },
+  {
+    "secret": "synthetic-hmac-520-secret-Á",
+    "method": "POST",
+    "route": "/schrack-sync/v1/erp/orders/520/status",
+    "query": {},
+    "key_id": "test-key-520",
+    "timestamp": "1788771600",
+    "nonce": "13298783-6c14-45fa-8d1e-2771e94eecbc",
+    "body": "{\"command_id\":\"a39de6ec-5154-4bbe-a236-683a53ca4b37\",\"expected_version\":7,\"status\":\"completed\"}",
+    "canonical": "POST\n/schrack-sync/v1/erp/orders/520/status\n\ntest-key-520\n1788771600\n13298783-6c14-45fa-8d1e-2771e94eecbc\nc3362a5f5221c201440b64fc2aaaab15364f9fb422aaa0742440bb1b6b3adbb0",
+    "signature": "4c9dc0d8a55b9686462abfb5ef2f6aa45791b2438b047ad350c34d619a56b8bb"
+  },
+  {
+    "secret": "synthetic-hmac-520-secret-Á",
+    "method": "GET",
+    "route": "/schrack-sync/v1/erp/health",
+    "query": {
+      "label": "șurub & cablu/+",
+      "a": "1"
+    },
+    "key_id": "test-key-520",
+    "timestamp": "1788771600",
+    "nonce": "13298783-6c14-45fa-8d1e-2771e94eecbc",
+    "body": "",
+    "canonical": "GET\n/schrack-sync/v1/erp/health\na=1&label=%C8%99urub%20%26%20cablu%2F%2B\ntest-key-520\n1788771600\n13298783-6c14-45fa-8d1e-2771e94eecbc\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "signature": "a77020149f38823b6c44a405602f4291d2c95235d496d1a072cab9adbff11626"
+  }
+]

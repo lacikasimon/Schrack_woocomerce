@@ -102,6 +102,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 							</span>
 						</td>
 					</tr>
+					<tr><th>eDoc ERP</th><td><a href="<?php echo esc_url( admin_url( 'admin.php?page=schrack-edoc' ) ); ?>"><?php echo Schrack_EDoc_Client::enabled() ? 'Activ — configurare și coadă' : 'Dezactivat — configurare'; ?></a></td></tr>
 					<tr>
 						<th><?php esc_html_e( 'Mode', 'schrack-woocommerce-sync' ); ?></th>
 						<td><?php echo esc_html( strtoupper( (string) ( $settings['environment'] ?? '' ) ) ); ?></td>
