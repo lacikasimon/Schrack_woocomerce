@@ -94,6 +94,13 @@ class Schrack_Elementor {
 		);
 
 		wp_register_style(
+			'schrack-wc-product-services',
+			SCHRACK_WC_SYNC_URL . 'assets/product-services.css',
+			array(),
+			$this->asset_version( 'assets/product-services.css' )
+		);
+
+		wp_register_style(
 			'schrack-wc-header-search',
 			SCHRACK_WC_SYNC_URL . 'assets/elementor-header-search.css',
 			array(),

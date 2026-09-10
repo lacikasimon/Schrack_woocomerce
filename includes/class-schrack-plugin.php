@@ -137,6 +137,7 @@ class Schrack_Plugin {
 		$this->return_manager->init();
 		$this->elementor = new Schrack_Elementor();
 		$this->elementor->init();
+		( new Schrack_Product_Services() )->init();
 
 		add_action( 'wp_head', array( $this, 'render_favicons' ), 100 );
 		add_action( 'admin_head', array( $this, 'render_favicons' ), 100 );
@@ -193,6 +194,7 @@ class Schrack_Plugin {
 			'class-schrack-header-renderer.php',
 			'class-schrack-header-search-renderer.php',
 			'class-schrack-product-page-renderer.php',
+			'class-schrack-product-services.php',
 			'class-schrack-registration-renderer.php',
 			'class-schrack-return-manager.php',
 			'class-schrack-account-renderer.php',

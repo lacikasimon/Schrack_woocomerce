@@ -46,7 +46,7 @@ class Schrack_Elementor_Product_Page_Widget extends \Elementor\Widget_Base {
 	 * @return array<int,string>
 	 */
 	public function get_style_depends(): array {
-		return array( 'schrack-wc-product-page' );
+		return array( 'schrack-wc-product-page', 'schrack-wc-product-services' );
 	}
 
 	/**
@@ -207,6 +207,7 @@ class Schrack_Elementor_Product_Page_Widget extends \Elementor\Widget_Base {
 			'show_short_description'    => __( 'Descriere scurta', 'schrack-woocommerce-sync' ),
 			'show_stock'                => __( 'Stoc', 'schrack-woocommerce-sync' ),
 			'show_cart'                 => __( 'Cos cumparaturi', 'schrack-woocommerce-sync' ),
+			'show_recommended_services' => __( 'Servicii recomandate', 'schrack-woocommerce-sync' ),
 			'show_specs'                => __( 'Detalii produs', 'schrack-woocommerce-sync' ),
 			'show_technical_attributes' => __( 'Atribute tehnice Schrack', 'schrack-woocommerce-sync' ),
 		);

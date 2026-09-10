@@ -1,0 +1,116 @@
+.schrack-product-services {
+	border-top: 1px solid var(--schrack-page-border, #d9dde3);
+	color: var(--schrack-page-text, #17202a);
+	margin-top: 30px;
+	padding-top: 22px;
+}
+
+.schrack-product-services h2 {
+	font-size: 22px;
+	line-height: 1.3;
+	margin: 0 0 8px;
+}
+
+.schrack-product-services__intro,
+.schrack-product-services__description {
+	color: var(--schrack-page-muted, #65707c);
+	font-size: 14px;
+	line-height: 1.6;
+	margin: 0 0 16px;
+}
+
+.schrack-product-services__grid {
+	display: grid;
+	gap: 14px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.schrack-product-services__card {
+	align-items: start;
+	background: var(--schrack-page-panel, #f6f8fa);
+	border: 1px solid var(--schrack-page-border, #d9dde3);
+	border-radius: var(--schrack-page-radius, 8px);
+	display: grid;
+	gap: 16px;
+	grid-template-columns: 80px minmax(0, 1fr);
+	min-width: 0;
+	padding: 18px;
+}
+
+.schrack-product-services__image img {
+	aspect-ratio: 1;
+	background: #fff;
+	border-radius: 6px;
+	display: block;
+	height: auto;
+	margin: 0;
+	object-fit: contain;
+	width: 100%;
+}
+
+.schrack-product-services__content {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.schrack-product-services h3 {
+	font-size: 17px;
+	line-height: 1.4;
+	margin: 0 0 8px;
+}
+
+.schrack-product-services h3 a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.schrack-product-services__description {
+	margin-bottom: 10px;
+}
+
+.schrack-product-services__price {
+	font-size: 17px;
+	font-weight: 750;
+	line-height: 1.5;
+	margin-bottom: 12px;
+}
+
+.schrack-product-services__price:empty {
+	display: none;
+}
+
+.schrack-product-services__link {
+	align-items: center;
+	border: 1px solid currentColor;
+	border-radius: 6px;
+	color: var(--schrack-page-accent, #135e96);
+	display: inline-flex;
+	font-size: 14px;
+	font-weight: 700;
+	gap: 12px;
+	line-height: 1.4;
+	min-height: 44px;
+	padding: 10px 14px;
+	text-decoration: none;
+}
+
+.schrack-product-services a:hover {
+	text-decoration: underline;
+}
+
+.schrack-product-services a:focus-visible {
+	outline: 2px solid var(--schrack-page-accent, #135e96);
+	outline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+	.schrack-product-services__grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.schrack-product-services__card {
+		gap: 12px;
+		grid-template-columns: 56px minmax(0, 1fr);
+		padding: 14px;
+	}
+}

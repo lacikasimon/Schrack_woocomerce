@@ -102,6 +102,10 @@ class Schrack_Product_Page_Renderer {
 				</div>
 			</div>
 
+			<?php if ( $settings['show_recommended_services'] ) : ?>
+				<?php echo Schrack_Product_Services::render( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<?php endif; ?>
+
 			<?php if ( $settings['show_specs'] ) : ?>
 				<?php echo $this->specifications( $product, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php echo $this->documents( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -975,6 +979,7 @@ class Schrack_Product_Page_Renderer {
 			'show_short_description'   => $this->truthy( $settings['show_short_description'] ?? 'yes' ),
 			'show_stock'               => $this->truthy( $settings['show_stock'] ?? 'yes' ),
 			'show_cart'                => $this->truthy( $settings['show_cart'] ?? 'yes' ),
+			'show_recommended_services' => $this->truthy( $settings['show_recommended_services'] ?? 'yes' ),
 			'show_specs'               => $this->truthy( $settings['show_specs'] ?? 'yes' ),
 			'show_technical_attributes' => $this->truthy( $settings['show_technical_attributes'] ?? 'yes' ),
 			'technical_limit'          => max( 0, min( 250, absint( $settings['technical_limit'] ?? 0 ) ) ),
