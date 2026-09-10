@@ -11,6 +11,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Admin {
 	private const CAPABILITY = 'manage_woocommerce';
+	private ?array $async_notice = null;
+	private bool $transfer_ajax = false;
+
+	/** Existing handlers retain their capability checks, nonces, and background queues. */
+	private const TRANSFER_ACTIONS = array(
+		'product_export_start'       => 'start_product_export',
+		'product_export_resume'      => 'resume_product_export',
+		'product_export_reset'       => 'reset_product_export',
+		'product_import_start'       => 'start_product_import',
+		'product_import_export_file' => 'import_completed_export',
+		'product_import_resume'      => 'resume_product_import',
+		'product_import_reset'       => 'reset_product_import',
+		'import_categories'          => 'import_categories',
+		'category_import_resume'     => 'resume_category_import',
+		'category_import_reset'      => 'reset_category_import',
+	);
 
 	/**
 	 * Settings service.
@@ -79,6 +95,10 @@ class Schrack_Admin {
 	public function init(): void {
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+		add_action( 'wp_ajax_schrack_wc_sync_transfer_status', array( $this, 'ajax_transfer_status' ) );
+		foreach ( self::TRANSFER_ACTIONS as $action => $handler ) {
+			add_action( 'wp_ajax_schrack_wc_sync_' . $action, array( $this, 'ajax_transfer_action' ) );
+		}
 
 		add_action( 'admin_post_schrack_wc_sync_save_settings', array( $this, 'save_settings' ) );
 		add_action( 'admin_post_schrack_wc_sync_save_markups', array( $this, 'save_markups' ) );
@@ -201,8 +221,11 @@ class Schrack_Admin {
 			return;
 		}
 
-		wp_enqueue_style( 'schrack-wc-sync-admin', SCHRACK_WC_SYNC_URL . 'assets/admin.css', array(), SCHRACK_WC_SYNC_VERSION );
+		wp_enqueue_style( 'schrack-wc-sync-admin', SCHRACK_WC_SYNC_URL . 'assets/admin.css', array(), (string) filemtime( SCHRACK_WC_SYNC_PATH . 'assets/admin.css' ) );
 		wp_enqueue_script( 'schrack-wc-sync-admin', SCHRACK_WC_SYNC_URL . 'assets/admin.js', array(), SCHRACK_WC_SYNC_VERSION, true );
+		if ( str_contains( $hook_suffix, 'schrack-sync-export' ) ) {
+			wp_enqueue_script( 'schrack-wc-product-transfer', SCHRACK_WC_SYNC_URL . 'assets/product-transfer.js', array( 'schrack-wc-sync-admin' ), (string) filemtime( SCHRACK_WC_SYNC_PATH . 'assets/product-transfer.js' ), true );
+		}
 	}
 
 	/**
@@ -1454,6 +1477,66 @@ class Schrack_Admin {
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-product-export.php';
 	}
 
+	/** Refreshes only transfer status fragments, without scanning the column catalog. */
+	public function ajax_transfer_status(): void {
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => __( 'Nu ai permisiunea de a vedea aceste operațiuni.', 'schrack-woocommerce-sync' ) ), 403 );
+		}
+		check_ajax_referer( 'schrack_wc_sync_transfer_status', 'nonce' );
+		wp_send_json_success( $this->transfer_status_payload() );
+	}
+
+	/** Dispatches a single explicit mutation; polling never invokes this endpoint. */
+	public function ajax_transfer_action(): void {
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_send_json_error( array( 'message' => __( 'Nu ai permisiunea de a modifica aceste operațiuni.', 'schrack-woocommerce-sync' ) ), 403 );
+		}
+		$action = isset( $_POST['action'] ) && is_string( $_POST['action'] ) ? sanitize_key( wp_unslash( $_POST['action'] ) ) : '';
+		$key    = str_replace( 'schrack_wc_sync_', '', $action );
+		if ( ! isset( self::TRANSFER_ACTIONS[ $key ] ) || 'schrack_wc_sync_' . $key !== $action ) {
+			wp_send_json_error( array( 'message' => __( 'Operațiune necunoscută.', 'schrack-woocommerce-sync' ) ), 400 );
+		}
+		$this->transfer_ajax = true;
+		$this->{self::TRANSFER_ACTIONS[ $key ]}();
+	}
+
+	/**
+	 * Shares the initial page's formatting and exposes no private paths or raw job data.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private function transfer_status_payload(): array {
+		$product_export  = $this->product_exporter->status();
+		$product_import  = $this->product_importer->status();
+		$all_status      = $this->settings->get_status();
+		$category_import = $all_status[ Schrack_Category_CSV_Importer::STATUS_KEY ] ?? array();
+		include SCHRACK_WC_SYNC_PATH . 'templates/admin-product-export-context.php';
+
+		$fragments = array();
+		foreach ( array( 'export', 'import', 'category' ) as $fragment ) {
+			ob_start();
+			include SCHRACK_WC_SYNC_PATH . 'templates/admin-product-transfer-' . $fragment . '.php';
+			$fragments[ $fragment ] = (string) ob_get_clean();
+		}
+		$nonces = array();
+		foreach ( self::TRANSFER_ACTIONS as $action => $handler ) {
+			$nonce_action = 'import_categories' === $action ? 'schrack_wc_sync_categories_csv' : 'schrack_wc_sync_' . $action;
+			$nonces[ 'schrack_wc_sync_' . $action ] = wp_create_nonce( $nonce_action );
+		}
+		$nonces['schrack_wc_sync_export_categories'] = wp_create_nonce( 'schrack_wc_sync_categories_csv' );
+
+		return array(
+			'fragments'           => $fragments,
+			'active'              => $should_refresh,
+			'locked'              => $transfer_active,
+			'product_locked'      => $product_transfer_active,
+			'export_active'       => $export_active,
+			'completed_export_id' => 'done' === $export_state ? $export_id : '',
+			'nonce'               => wp_create_nonce( 'schrack_wc_sync_transfer_status' ),
+			'action_nonces'       => $nonces,
+		);
+	}
+
 	/**
 	 * Validates export choices and queues the first background batch.
 	 */
@@ -1494,7 +1577,7 @@ class Schrack_Admin {
 		} elseif ( 'done' === (string) ( $result['state'] ?? '' ) ) {
 			$this->set_notice( 'success', __( 'The export finished immediately because no matching products were found.', 'schrack-woocommerce-sync' ) );
 		} else {
-			$this->set_notice( 'success', __( 'The product and supplier export was queued. This page refreshes while batches run.', 'schrack-woocommerce-sync' ) );
+			$this->set_notice( 'success', __( 'Exportul a fost pus în coadă. Starea se actualizează automat, fără reîncărcarea paginii.', 'schrack-woocommerce-sync' ) );
 		}
 
 		$this->redirect( 'schrack-sync-export' );
@@ -3010,6 +3093,10 @@ class Schrack_Admin {
 	 * @param array<string,mixed>|mixed $data Optional data.
 	 */
 	private function set_notice( string $type, string $message, mixed $data = array() ): void {
+		if ( $this->transfer_ajax ) {
+			$this->async_notice = array( 'type' => $type, 'message' => schrack_wc_sync_romanian_text( $message ) );
+			return;
+		}
 		set_transient(
 			$this->notice_key(),
 			array(
@@ -3045,6 +3132,14 @@ class Schrack_Admin {
 	 * Redirects back to an admin page.
 	 */
 	private function redirect( string $page ): void {
+		if ( $this->transfer_ajax ) {
+			$payload = $this->transfer_status_payload();
+			$payload['notice'] = $this->async_notice;
+			if ( 'error' === ( $this->async_notice['type'] ?? '' ) ) {
+				wp_send_json_error( $payload );
+			}
+			wp_send_json_success( $payload );
+		}
 		wp_safe_redirect( admin_url( 'admin.php?page=' . $page ) );
 		exit;
 	}
@@ -3071,7 +3166,7 @@ class Schrack_Admin {
 	 * Returns category CSV uploads to the page where their form was submitted.
 	 */
 	private function redirect_category_csv_origin( bool $return_to_export ): void {
-		if ( $return_to_export ) {
+		if ( $return_to_export || $this->transfer_ajax ) {
 			$this->redirect( 'schrack-sync-export' );
 		}
 

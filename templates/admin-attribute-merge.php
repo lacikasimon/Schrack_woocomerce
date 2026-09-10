@@ -4,7 +4,7 @@ defined( 'ABSPATH' ) || exit;
 $active = 'running' === $view['state'];
 $form = static function ( string $operation, string $label, bool $primary = false ) use ( $view ): void {
 	?>
-	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin:0 8px 8px 0">
+	<form data-merge-operation="<?php echo esc_attr( $operation ); ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin:0 8px 8px 0">
 		<input type="hidden" name="action" value="schrack_attribute_merge">
 		<input type="hidden" name="operation" value="<?php echo esc_attr( $operation ); ?>">
 		<input type="hidden" name="job" value="<?php echo esc_attr( $view['id'] ); ?>">
@@ -17,9 +17,10 @@ $download_link = static function ( string $id ): string {
 	return wp_nonce_url( add_query_arg( array( 'action' => 'schrack_attribute_merge_download', 'job' => $id ), admin_url( 'admin-post.php' ) ), 'schrack_attribute_merge_download_' . $id );
 };
 ?>
-<div class="wrap" style="max-width:1100px">
+<div class="wrap" id="schrack-attribute-merge" style="max-width:1100px">
 	<h1>Unificare atribute</h1>
 	<p>Reunește atributele globale cu același nume. Pentru fiecare produs se păstrează prima valoare completată, în ordinea coloanelor din export. Valorile goale sunt ignorate; „0” rămâne o valoare validă.</p>
+	<div data-merge-region="notices" role="status" aria-live="polite">
 	<?php if ( $notice ) : ?><div class="notice notice-error"><p><?php echo esc_html( $notice ); ?></p></div><?php endif; ?>
 	<?php if ( 'error' === $view['state'] ) : ?>
 		<div class="notice notice-error"><p><strong>Procesul s-a oprit.</strong> <?php echo esc_html( $view['message'] ); ?></p><p>Progresul este salvat. După rezolvarea cauzei, folosește „Reia procesarea”.</p></div>
@@ -32,17 +33,20 @@ $download_link = static function ( string $id ): string {
 	<?php elseif ( 'ready' === $view['state'] ) : ?>
 		<div class="notice notice-info"><p><?php echo $view['groups'] ? 'Previzualizarea este gata. Verifică grupurile și diferențele de valori înainte de pornire.' : 'Nu s-au găsit atribute globale cu nume duplicate.'; ?></p></div>
 	<?php endif; ?>
+	</div>
 	<div class="card" style="max-width:none;padding:20px;margin:20px 0">
-		<h2 style="margin-top:0"><?php echo $active ? 'Procesare în curs' : 'Analiză și unificare'; ?></h2>
-		<p id="schrack-merge-phase" role="status" aria-live="polite"><?php echo esc_html( $view['phase'] ); ?></p>
+		<h2 id="schrack-merge-title" style="margin-top:0"><?php echo $active ? 'Procesare în curs' : 'Analiză și unificare'; ?></h2>
+		<p id="schrack-merge-phase" tabindex="-1" role="status" aria-live="polite"><?php echo esc_html( $view['phase'] ); ?></p>
 		<dl style="display:flex;gap:40px;flex-wrap:wrap">
 			<div><dt>Grupuri duplicate</dt><dd id="schrack-merge-groups" style="margin:8px 0;font-size:24px"><?php echo (int) $view['groups']; ?></dd></div>
-			<div><dt><?php echo 'complete' === $view['state'] ? 'Produse actualizate' : 'Produse de actualizat'; ?></dt><dd id="schrack-merge-products" style="margin:8px 0;font-size:24px"><?php echo (int) $view['products']; ?></dd></div>
+			<div><dt id="schrack-merge-products-label"><?php echo 'complete' === $view['state'] ? 'Produse actualizate' : 'Produse de actualizat'; ?></dt><dd id="schrack-merge-products" style="margin:8px 0;font-size:24px"><?php echo (int) $view['products']; ?></dd></div>
 			<div><dt>Valori diferite</dt><dd id="schrack-merge-conflicts" style="margin:8px 0;font-size:24px"><?php echo (int) $view['conflicts']; ?></dd></div>
 		</dl>
+		<p id="schrack-merge-progress" role="status" aria-live="polite"><?php echo esc_html( $view['progress'] ); ?></p>
+		<p id="schrack-merge-connection" aria-live="polite"></p>
+		<div data-merge-region="controls">
 		<?php if ( $active ) : ?>
 			<p>Procesarea continuă în fundal. Această pagină afișează automat progresul și ajută procesarea dacă programatorul găzduirii întârzie.</p>
-			<p id="schrack-merge-connection" aria-live="polite"></p>
 			<?php $form( 'pause', 'Oprește temporar' ); $form( 'resume', 'Reia procesarea' ); ?>
 		<?php elseif ( in_array( $view['state'], array( 'error', 'paused' ), true ) ) : ?>
 			<?php $form( 'resume', 'Reia procesarea', true ); ?>
@@ -52,9 +56,11 @@ $download_link = static function ( string $id ): string {
 		<?php if ( $view['backup_complete'] ) : ?>
 			<a class="button" href="<?php echo esc_url( $download_link( $view['id'] ) ); ?>">Descarcă copia de siguranță</a>
 		<?php endif; ?>
+		</div>
 	</div>
 	<p><strong>La pornire:</strong> importurile furnizorilor sunt suspendate pe durata unificării. Așteaptă finalizarea transferurilor CSV și evită editarea produselor, atributelor și categoriilor până la finalizare. Înainte de orice modificare se creează automat o copie SQL a atributelor și a datelor de taxonomie asociate, inclusiv categoriile și etichetele. Comenzile, prețurile și stocurile nu fac parte din această copie.</p>
 	<p>Fiecare produs este actualizat într-o tranzacție. Produsele cu atribute de variație afectate sunt semnalate înainte de modificări. O listă cu mai multe valori din prima coloană este păstrată integral.</p>
+	<div data-merge-region="details">
 	<?php if ( ! empty( $state['groups'] ) ) : ?>
 		<h2><?php echo 'complete' === $view['state'] ? 'Atribute unificate' : 'Atribute care vor fi unificate'; ?></h2>
 		<table class="widefat striped"><thead><tr><th>Nume</th><th>Se păstrează</th><th>Se reunesc</th></tr></thead><tbody>
@@ -78,4 +84,5 @@ $download_link = static function ( string $id ): string {
 		<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>
+	</div>
 </div>

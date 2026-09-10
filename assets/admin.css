@@ -868,6 +868,17 @@
 	color: #3c434a;
 }
 
+[data-product-transfer] [data-transfer-lock] {
+	border: 0;
+	margin: 0;
+	min-width: 0;
+	padding: 0;
+}
+
+[data-product-transfer] [hidden] {
+	display: none !important;
+}
+
 .schrack-export-columns {
 	display: grid;
 	gap: 10px;

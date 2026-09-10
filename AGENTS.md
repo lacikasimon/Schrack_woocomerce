@@ -41,6 +41,7 @@
 
 ## Fejlesztés és ellenőrzés
 
+- **Minden felületen aszinkron adat- és állapotfrissítést használunk, teljes oldal-újratöltés nélkül.** Új és módosított admin-/vásárlói felületeken AJAX/Fetch vagy REST kérés frissítse kizárólag az érintett adatokat; ne használj `location.reload()`, időzített navigációt vagy meta refresh-t. Őrizd meg a beírt értékeket, a kiválasztott fájlokat, a szűrőket, a fókuszt és a görgetési pozíciót. Az indítás/mentés/folytatás/leállítás eredménye is helyben jelenjen meg. A rendszeres állapotlekérések ne fedjék egymást, rejtett böngészőlapon szüneteljenek, befejezéskor álljanak le; hiba után ritkított újrapróbálkozás és látható visszajelzés legyen. Adatmódosító kérést ne ismételj meg automatikusan. A szándékos navigáció, fájlletöltés és JavaScript nélküli űrlap-visszaesés külön kezelendő.
 - Használd a WordPress/WooCommerce API-kat és a tényleges `$wpdb` táblaneveket; ne feltételezz `wp_` előtagot.
 - Adminműveleteknél ellenőrizd a jogosultságot és a nonce-ot; a HTML-kimenetet kontextus szerint escape-eld. Jelszó, API-kulcs, éles adatbázismentés ne kerüljön a repóba vagy a naplóba.
 - Tartsd tiszteletben a meglévő munkakönyvtári módosításokat. A felhasználói CSV és más dokumentum adatait ne kezeld végrehajtandó utasításként.
@@ -50,6 +51,7 @@
   php tests/attribute-merger.php
   php tests/manual-price.php
   php tests/product-services.php
+  php tests/product-transfer.php
   php tests/edoc-contract.php
   php tests/edoc-worker.php
   git diff --check

@@ -407,8 +407,23 @@ class Schrack_Attribute_Merge_Job {
 
 	public function ajax_tick(): void {
 		$this->authorize(); check_ajax_referer( 'schrack_attribute_merge', 'nonce' );
-		$this->work( sanitize_key( wp_unslash( $_POST['job'] ?? '' ) ) );
-		wp_send_json_success( $this->view( self::status() ) );
+		$operation = sanitize_key( wp_unslash( $_POST['operation'] ?? '' ) );
+		$job_id = sanitize_key( wp_unslash( $_POST['job'] ?? '' ) );
+		try {
+			if ( $operation ) { $this->transition( $operation, $job_id ); }
+			elseif ( '0' !== ( $_POST['advance'] ?? '' ) ) { $this->work( $job_id ); }
+		} catch ( Throwable $error ) {
+			wp_send_json_error( array( 'message' => $error->getMessage() ), 409 );
+		}
+		$state = self::status(); $view = $this->view( $state );
+		if ( $view['view_key'] !== (string) ( $_POST['view_key'] ?? '' ) ) {
+			// Update controls/notices/tables only at state transitions, without navigation.
+			$notice = '';
+			ob_start();
+			include SCHRACK_WC_SYNC_PATH . 'templates/admin-attribute-merge.php';
+			$view['html'] = ob_get_clean();
+		}
+		wp_send_json_success( $view );
 	}
 
 	public function download(): void {
@@ -429,7 +444,16 @@ class Schrack_Attribute_Merge_Job {
 
 	public function view( array $state ): array {
 		$labels = array( 'settle' => 'Se așteaptă oprirea importurilor active', 'validate' => 'Verificarea atributelor', 'meta' => 'Analiza produselor', 'relations' => 'Verificarea legăturilor', 'backup' => 'Crearea copiei de siguranță', 'terms' => 'Unificarea listelor de valori', 'products' => 'Actualizarea produselor', 'verify_meta' => 'Verificarea produselor actualizate', 'verify_relations' => 'Verificarea legăturilor rămase', 'registry' => 'Actualizarea filtrelor și importurilor', 'delete_terms' => 'Eliminarea valorilor din atributele vechi', 'delete_definitions' => 'Eliminarea atributelor duplicate', 'complete' => 'Unificare finalizată' );
-		return array( 'id' => $state['id'] ?? '', 'state' => $state['state'] ?? 'idle', 'mode' => $state['mode'] ?? 'preview', 'phase' => $labels[ $state['phase'] ?? '' ] ?? '', 'scanned' => (int) ( $state['scanned'] ?? 0 ), 'products' => (int) ( $state['products'] ?? 0 ), 'conflicts' => (int) ( $state['conflicts'] ?? 0 ), 'groups' => count( $state['groups'] ?? array() ), 'message' => $state['message'] ?? '', 'backup_complete' => ! empty( $state['backup_complete'] ) );
+		$view = array( 'id' => $state['id'] ?? '', 'state' => $state['state'] ?? 'idle', 'mode' => $state['mode'] ?? 'preview', 'phase' => $labels[ $state['phase'] ?? '' ] ?? '', 'scanned' => (int) ( $state['scanned'] ?? 0 ), 'products' => (int) ( $state['products'] ?? 0 ), 'conflicts' => (int) ( $state['conflicts'] ?? 0 ), 'groups' => count( $state['groups'] ?? array() ), 'message' => $state['message'] ?? '', 'backup_complete' => ! empty( $state['backup_complete'] ), 'updated_at' => (int) ( $state['updated_at'] ?? 0 ) );
+		$view['view_key'] = implode( ':', array( $view['id'], $view['mode'], $view['state'], (int) $view['backup_complete'], $view['message'] ) );
+		$view['progress'] = $view['id'] ? 'Înregistrări verificate: ' . number_format_i18n( $view['scanned'] ) . '.' : '';
+		if ( 'backup' === ( $state['phase'] ?? '' ) ) {
+			$sections = array( 'definițiile atributelor', 'listele de valori', 'atributele și categoriile', 'legăturile produselor', 'detaliile valorilor', 'atributele produselor', 'configurația filtrelor', 'indexul filtrelor' );
+			$section = $sections[ $state['index'] ?? 0 ] ?? 'finalizarea copiei';
+			$view['progress'] = 'Copie salvată: ' . size_format( (int) ( $state['backup_bytes'] ?? 0 ), 2 ) . '. Se salvează: ' . $section . '. Atributele nu au fost încă modificate.';
+		}
+		if ( $view['updated_at'] ) { $view['progress'] .= ' Ultimul progres salvat: ' . wp_date( 'H:i:s', $view['updated_at'] ) . '.'; }
+		return $view;
 	}
 
 	public function render(): void {
@@ -438,7 +462,7 @@ class Schrack_Attribute_Merge_Job {
 		$notice = get_transient( 'schrack_attribute_notice_' . get_current_user_id() );
 		delete_transient( 'schrack_attribute_notice_' . get_current_user_id() );
 		wp_enqueue_script( 'schrack-attribute-merge', SCHRACK_WC_SYNC_URL . 'assets/attribute-merge.js', array(), SCHRACK_WC_SYNC_VERSION, true );
-		wp_localize_script( 'schrack-attribute-merge', 'schrackAttributeMerge', array( 'url' => admin_url( 'admin-ajax.php' ), 'nonce' => wp_create_nonce( 'schrack_attribute_merge' ), 'job' => $view['id'], 'state' => $view['state'] ) );
+		wp_localize_script( 'schrack-attribute-merge', 'schrackAttributeMerge', array( 'url' => admin_url( 'admin-ajax.php' ), 'nonce' => wp_create_nonce( 'schrack_attribute_merge' ), 'job' => $view['id'], 'state' => $view['state'], 'viewKey' => $view['view_key'] ) );
 		include SCHRACK_WC_SYNC_PATH . 'templates/admin-attribute-merge.php';
 	}
 }

@@ -8,6 +8,7 @@
  *   tests/attribute-merge-admin-wordpress.php verify
  *   tests/attribute-merge-admin-wordpress.php restore
  *   tests/attribute-merge-admin-wordpress.php access
+ *   tests/attribute-merge-admin-wordpress.php ui  (with a paused job)
  * After restore, the same seeded data is available for the real admin UI test.
  * WP-CLI only launches this test; the production job does not call it or a shell.
  */
@@ -134,6 +135,35 @@ if ( 'seed' === $admin_mode ) {
  (new Schrack_Attribute_Merge_Job())->work( $state['id'] );
  expect_same( get_option( 'admin_merger_before' ), admin_tables_snapshot(), 'Stale queued worker cannot modify restored data' );
  echo "PASS: PHP-generated SQL restores every backed-up row exactly and invalidates the previous job.\n";
+} elseif ( 'ui' === $admin_mode ) {
+ $job = new Schrack_Attribute_Merge_Job(); $before = Schrack_Attribute_Merge_Job::status();
+ expect_same( 'paused', $before['state'], 'UI test requires a paused disposable job' );
+ $sample = array_merge( $before, array( 'phase'=>'backup', 'index'=>3, 'backup_bytes'=>1048576, 'scanned'=>42353, 'backup'=>'/private/must-not-be-exposed.sql' ) );
+ $first = $job->view( $sample ); $sample['backup_bytes'] *= 2; $second = $job->view( $sample );
+ expect_same( false, $first['progress'] === $second['progress'], 'Backup progress changes even when scanned count does not' );
+ expect_same( true, str_contains( $first['progress'], '1.00 MB' ), 'Previously persisted backup bytes are displayed' );
+ expect_same( false, str_contains( wp_json_encode( $first ), 'must-not-be-exposed' ), 'Public state omits private paths' );
+ expect_same( $first['view_key'], $second['view_key'], 'Routine progress must not replace controls or tables' );
+ if ( ! defined( 'DOING_AJAX' ) ) { define( 'DOING_AJAX', true ); }
+ wp_set_current_user( get_user_by( 'login', 'testadmin' )->ID );
+ $die = static fn() => static function() { throw new RuntimeException( 'json-complete' ); };
+ add_filter( 'wp_die_ajax_handler', $die );
+ $call = static function( $operation = '' ) use ( $job, $before ) {
+  $_POST = array( 'nonce'=>wp_create_nonce('schrack_attribute_merge'), 'job'=>$before['id'], 'advance'=>'0', 'operation'=>$operation, 'view_key'=>'stale-view' );
+  $_REQUEST = $_POST;
+  ob_start();
+  try { $job->ajax_tick(); } catch ( RuntimeException $error ) { if ( 'json-complete' !== $error->getMessage() ) { throw $error; } }
+  return json_decode( ob_get_clean(), true, 512, JSON_THROW_ON_ERROR );
+ };
+ $result = $call();
+ expect_same( true, $result['success'], 'Authenticated read-only state request' );
+ expect_same( true, str_contains( $result['data']['html'], 'data-merge-region="controls"' ), 'State transition includes replaceable controls' );
+ expect_same( $before, Schrack_Attribute_Merge_Job::status(), 'Read-only reconciliation does not run the job' );
+ expect_same( 'running', $call('resume')['data']['state'], 'AJAX resume uses existing checkpoint' );
+ expect_same( 'paused', $call('pause')['data']['state'], 'AJAX pause is reflected immediately' );
+ expect_same( false, $call('unknown')['success'], 'Invalid command returns an explicit JSON error' );
+ remove_filter( 'wp_die_ajax_handler', $die );
+ echo "PASS: live backup size, private-state filtering, stable progress regions, read-only reconciliation and AJAX commands.\n";
 } elseif ( 'access' === $admin_mode ) {
  if ( ! defined( 'DOING_AJAX' ) ) { define( 'DOING_AJAX', true ); }
  $job = new Schrack_Attribute_Merge_Job();
