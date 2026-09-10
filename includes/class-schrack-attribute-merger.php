@@ -22,6 +22,17 @@ class Schrack_Attribute_Merger {
 		return mb_strtolower( $label, 'UTF-8' );
 	}
 
+	/** Term spelling may differ only in case; accents, spacing and punctuation remain meaningful. */
+	private static function value_key( string $value ): string {
+		return mb_strtolower( $value, 'UTF-8' );
+	}
+
+	private static function comparable_values( array $values ): array {
+		$values = array_values( array_unique( array_map( array( self::class, 'value_key' ), $values ) ) );
+		sort( $values, SORT_STRING );
+		return $values;
+	}
+
 	/** Definitions come from the DB directly: WooCommerce's cache hides duplicate slugs. */
 	public function __construct( array $definitions = array(), int $batch_size = 200 ) {
 		$this->batch_size = max( 1, min( 1000, $batch_size ) );
@@ -211,11 +222,7 @@ class Schrack_Attribute_Merger {
 			$assign[ $target ] = $winner['values'];
 			$conflict = false;
 			foreach ( $filled as $entry ) {
-				$a = $entry['values'];
-				$b = $winner['values'];
-				sort( $a );
-				sort( $b );
-				$conflict = $conflict || $a !== $b;
+				$conflict = $conflict || self::comparable_values( $entry['values'] ) !== self::comparable_values( $winner['values'] );
 			}
 			$decisions[] = array(
 				'label' => $this->groups[ $group_key ][0]['attribute_label'], 'target' => $target,
@@ -545,11 +552,17 @@ class Schrack_Attribute_Merger {
 
 	private function ensure_term( string $taxonomy, string $name, $source = null ): int {
 		$is_new = false;
-		$terms = get_terms( array( 'taxonomy' => $taxonomy, 'hide_empty' => false, 'name' => $name, 'orderby' => 'term_id', 'order' => 'ASC', 'number' => 1 ) );
+		// WP_Term_Query sanitizes then unslashes name filters; protect literal backslashes.
+		$terms = get_terms( array( 'taxonomy' => $taxonomy, 'hide_empty' => false, 'name' => array( wp_slash( $name ) ), 'orderby' => 'term_id', 'order' => 'ASC', 'number' => 0 ) );
 		self::check_result( $terms );
-		if ( $terms ) {
-			$id = (int) $terms[0]->term_id;
-		} else {
+		$id = 0;
+		foreach ( $terms as $term ) {
+			if ( $name === $term->name ) { $id = (int) $term->term_id; break; }
+			// A database collation can equate accents too. Only a case-only match
+			// is a valid fallback; an exact spelling later in the results wins.
+			if ( ! $id && self::value_key( $name ) === self::value_key( $term->name ) ) { $id = (int) $term->term_id; }
+		}
+		if ( ! $id ) {
 			$args = $source ? array( 'description' => $source->description, 'slug' => $source->slug ) : array();
 			$created = wp_insert_term( wp_slash( $name ), $taxonomy, wp_slash( $args ) );
 			self::check_result( $created );
@@ -598,11 +611,8 @@ class Schrack_Attribute_Merger {
 			foreach ( $plan['assign'] as $taxonomy => $expected_values ) {
 				$actual_values = wp_get_object_terms( $id, $taxonomy, array( 'fields' => 'names' ) );
 				self::check_result( $actual_values );
-				$expected_values = array_values( array_unique( $expected_values ) );
-				sort( $expected_values );
-				sort( $actual_values );
-				if ( $expected_values !== $actual_values ) {
-					throw new RuntimeException( "Term value verification failed for product {$id}, {$taxonomy}." );
+				if ( self::comparable_values( $expected_values ) !== self::comparable_values( $actual_values ) ) {
+					throw new RuntimeException( "Term value verification failed for product {$id}, {$taxonomy}. Expected: " . wp_json_encode( $expected_values, JSON_UNESCAPED_UNICODE ) . '; found: ' . wp_json_encode( $actual_values, JSON_UNESCAPED_UNICODE ) . '.' );
 				}
 			}
 			$stored = $wpdb->get_var( $wpdb->prepare( "SELECT meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = '_product_attributes'", $id ) );
