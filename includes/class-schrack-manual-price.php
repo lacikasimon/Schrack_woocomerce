@@ -19,8 +19,10 @@ final class Schrack_Manual_Price {
 	/**
 	 * Limits automatic pricing to supplier imports, including legacy item metadata.
 	 * A WooCommerce SKU or a previously stored price is not proof of a supplier link.
+	 *
+	 * @param array<int,string> $sources Supplier sources accepted by the caller.
 	 */
-	public static function is_supplier_product( WC_Product|int $product ): bool {
+	public static function is_supplier_product( WC_Product|int $product, array $sources = array( 'schrack', 'telesystem', 'edoc' ) ): bool {
 		$read_meta = static function ( string $key ) use ( $product ): mixed {
 			return $product instanceof WC_Product
 				? $product->get_meta( $key, true )
@@ -30,10 +32,11 @@ final class Schrack_Manual_Price {
 		$source = is_scalar( $source ) ? sanitize_key( trim( (string) $source ) ) : '';
 
 		if ( '' !== $source ) {
-			return in_array( $source, array( 'schrack', 'telesystem' ), true );
+			return in_array( $source, $sources, true );
 		}
 
-		foreach ( array( '_schrack_item_number', '_telesystem_item_number' ) as $key ) {
+		foreach ( array_intersect( array( 'schrack', 'telesystem' ), $sources ) as $legacy_source ) {
+			$key         = '_' . $legacy_source . '_item_number';
 			$item_number = $read_meta( $key );
 
 			if ( is_scalar( $item_number ) && '' !== trim( (string) $item_number ) ) {

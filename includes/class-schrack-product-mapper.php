@@ -771,7 +771,7 @@ class Schrack_Product_Mapper {
 			throw new RuntimeException( 'WooCommerce product was not found.' );
 		}
 
-		if ( ! Schrack_Manual_Price::is_supplier_product( $product ) ) {
+		if ( ! Schrack_Manual_Price::is_supplier_product( $product, array( 'schrack', 'telesystem' ) ) ) {
 			return (float) $product->get_price( 'edit' );
 		}
 
@@ -814,7 +814,7 @@ class Schrack_Product_Mapper {
 	 * Updates price metadata and WooCommerce lookup rows without loading the product object.
 	 */
 	public function update_price_fast( int $product_id, float $purchase_price ): float {
-		if ( ! Schrack_Manual_Price::is_supplier_product( $product_id ) ) {
+		if ( ! Schrack_Manual_Price::is_supplier_product( $product_id, array( 'schrack', 'telesystem' ) ) ) {
 			return (float) get_post_meta( $product_id, '_price', true );
 		}
 

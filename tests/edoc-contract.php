@@ -11,6 +11,7 @@ function wp_parse_args( $a, $b ) { return array_merge( $b, $a ); }
 function wp_parse_url( $s ) { return parse_url( $s ); }
 function wp_get_environment_type() { return 'production'; }
 function sanitize_text_field( $s ) { return trim( strip_tags( $s ) ); }
+function sanitize_key( $s ) { return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( $s ) ); }
 function absint( $v ) { return abs( (int) $v ); }
 function get_the_terms( $id, $tax ) { return false; }
 function wc_get_product_id_by_sku( $sku ) { foreach ( $GLOBALS['products'] as $id => $p ) { if ( $p->get_sku() === $sku ) { return $id; } } return 0; }

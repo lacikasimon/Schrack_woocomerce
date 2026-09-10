@@ -61,6 +61,8 @@ final class Schrack_EDoc_Importer {
 		$tax_class = is_numeric( $rate ) ? $this->tax_class( (float) $rate, (array) $c['tax_map'] ) : null;
 		$valid = $enabled && is_numeric( $price ) && is_finite( (float) $price ) && (float) $price > 0 && null !== $tax_class;
 		if ( ! $id ) { $product->set_sku( $sku ); $product->set_name( sanitize_text_field( (string) ( $row['name'] ?? $sku ) ) ); $product->set_status( 'draft' ); }
+		// Identify new ERP products before the shared supplier-pricing guard runs.
+		$product->update_meta_data( '_schrack_catalog_source', 'edoc' );
 		$product->set_manage_stock( false ); $product->set_stock_quantity( '' ); $product->set_backorders( 'no' );
 		$product->set_stock_status( $valid && true === ( $row['available'] ?? false ) ? 'instock' : 'outofstock' );
 		if ( ! $valid ) { $product->set_status( 'draft' ); }

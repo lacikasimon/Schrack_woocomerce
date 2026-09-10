@@ -141,7 +141,7 @@ foreach ( array( '60.00', '0.00', '' ) as $price ) {
 	check_same( $before, $test_meta[1], 'Skipped sync must leave all metadata untouched, including sale/empty/zero prices' );
 }
 
-foreach ( array( 'schrack', 'telesystem', 'legacy-schrack', 'legacy-telesystem' ) as $source ) {
+foreach ( array( 'schrack', 'telesystem', 'edoc', 'legacy-schrack', 'legacy-telesystem' ) as $source ) {
 	$metadata = str_starts_with( $source, 'legacy-' )
 		? array( '_' . substr( $source, 7 ) . '_item_number' => 'ITEM-1' )
 		: array( '_schrack_catalog_source' => $source );
@@ -162,5 +162,12 @@ foreach ( array( 'schrack', 'telesystem', 'legacy-schrack', 'legacy-telesystem' 
 
 $other = new WC_Product( 3, array( '_schrack_catalog_source' => 'manual', '_schrack_item_number' => 'OLD-ID' ) );
 check_same( false, Schrack_Manual_Price::is_supplier_product( $other ), 'An explicit non-supplier source must not be treated as a legacy supplier import' );
+
+$erp = new WC_Product( 4, array( '_schrack_catalog_source' => 'edoc', '_regular_price' => '25.00', '_price' => '25.00' ) );
+$before = $test_meta[4];
+check_same( 25.0, $mapper->update_price( 4, 1000 ), 'Schrack mapping must not change ERP pricing' );
+check_same( 25.0, $mapper->update_price_fast( 4, 1000 ), 'Fast Schrack mapping must not change ERP pricing' );
+check_same( null, $sync->sync_product( 4 ), 'ERP products must not reach the Schrack SOAP client' );
+check_same( $before, $test_meta[4], 'Skipped ERP sync must leave metadata untouched' );
 
 echo 'Passed ' . $checks . " price regression checks.\n";

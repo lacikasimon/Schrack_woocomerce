@@ -95,7 +95,7 @@ class Schrack_Price_Sync {
 	public function sync_product( int $product_id ): ?float {
 		$product = wc_get_product( $product_id );
 
-		if ( ! $product instanceof WC_Product || ! Schrack_Manual_Price::is_supplier_product( $product ) ) {
+		if ( ! $product instanceof WC_Product || ! Schrack_Manual_Price::is_supplier_product( $product, array( 'schrack', 'telesystem' ) ) ) {
 			return null;
 		}
 
