@@ -17,6 +17,34 @@ final class Schrack_Manual_Price {
 	public const META_OVERRIDDEN_AT = '_schrack_manual_price_overridden_at';
 
 	/**
+	 * Limits automatic pricing to supplier imports, including legacy item metadata.
+	 * A WooCommerce SKU or a previously stored price is not proof of a supplier link.
+	 */
+	public static function is_supplier_product( WC_Product|int $product ): bool {
+		$read_meta = static function ( string $key ) use ( $product ): mixed {
+			return $product instanceof WC_Product
+				? $product->get_meta( $key, true )
+				: get_post_meta( $product, $key, true );
+		};
+		$source = $read_meta( '_schrack_catalog_source' );
+		$source = is_scalar( $source ) ? sanitize_key( trim( (string) $source ) ) : '';
+
+		if ( '' !== $source ) {
+			return in_array( $source, array( 'schrack', 'telesystem' ), true );
+		}
+
+		foreach ( array( '_schrack_item_number', '_telesystem_item_number' ) as $key ) {
+			$item_number = $read_meta( $key );
+
+			if ( is_scalar( $item_number ) && '' !== trim( (string) $item_number ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * Applies the manual-price rule to a loaded product.
 	 *
 	 * @return array{price:float,manual_active:bool,manual_overridden:bool,manual_price:float|null,automatic_price:float}
@@ -24,6 +52,16 @@ final class Schrack_Manual_Price {
 	public static function resolve_product( WC_Product $product, float $automatic_price ): array {
 		$automatic_price = max( 0.0, $automatic_price );
 		$manual_price    = self::positive_price( $product->get_meta( self::META_PRICE, true ) );
+
+		if ( ! self::is_supplier_product( $product ) ) {
+			$product->delete_meta_data( self::META_AUTOMATIC );
+
+			if ( null !== $manual_price ) {
+				$product->update_meta_data( self::META_STATUS, 'active' );
+			}
+
+			return self::result( $manual_price ?? (float) $product->get_regular_price( 'edit' ), null !== $manual_price, false, $manual_price, 0.0 );
+		}
 
 		$product->update_meta_data( self::META_AUTOMATIC, self::format_price( $automatic_price ) );
 
@@ -55,6 +93,16 @@ final class Schrack_Manual_Price {
 		$automatic_price = max( 0.0, $automatic_price );
 		$manual_price    = self::positive_price( get_post_meta( $product_id, self::META_PRICE, true ) );
 
+		if ( $product_id > 0 && ! self::is_supplier_product( $product_id ) ) {
+			delete_post_meta( $product_id, self::META_AUTOMATIC );
+
+			if ( null !== $manual_price ) {
+				update_post_meta( $product_id, self::META_STATUS, 'active' );
+			}
+
+			return self::result( $manual_price ?? (float) get_post_meta( $product_id, '_regular_price', true ), null !== $manual_price, false, $manual_price, 0.0 );
+		}
+
 		if ( $product_id > 0 ) {
 			update_post_meta( $product_id, self::META_AUTOMATIC, self::format_price( $automatic_price ) );
 		}
@@ -84,10 +132,14 @@ final class Schrack_Manual_Price {
 	 */
 	public static function set_product_price( WC_Product $product, float $manual_price ): array {
 		$manual_price    = max( 0.0, $manual_price );
-		$automatic_price = self::positive_price( $product->get_meta( self::META_AUTOMATIC, true ) );
+		$automatic_price = null;
 
-		if ( null === $automatic_price ) {
-			$automatic_price = self::positive_price( $product->get_regular_price( 'edit' ) );
+		if ( self::is_supplier_product( $product ) ) {
+			$automatic_price = self::positive_price( $product->get_meta( self::META_AUTOMATIC, true ) );
+
+			if ( null === $automatic_price ) {
+				$automatic_price = self::positive_price( $product->get_regular_price( 'edit' ) );
+			}
 		}
 
 		$automatic_price = $automatic_price ?? 0.0;
@@ -109,7 +161,12 @@ final class Schrack_Manual_Price {
 	 * Removes an active manual price and restores the last automatic price.
 	 */
 	public static function clear_product_price( WC_Product $product ): void {
-		$automatic_price = self::positive_price( $product->get_meta( self::META_AUTOMATIC, true ) );
+		$is_supplier     = self::is_supplier_product( $product );
+		$automatic_price = $is_supplier ? self::positive_price( $product->get_meta( self::META_AUTOMATIC, true ) ) : null;
+
+		if ( ! $is_supplier ) {
+			$product->delete_meta_data( self::META_AUTOMATIC );
+		}
 
 		$product->delete_meta_data( self::META_PRICE );
 		$product->delete_meta_data( self::META_STATUS );

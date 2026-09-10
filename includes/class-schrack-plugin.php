@@ -189,6 +189,7 @@ class Schrack_Plugin {
 			'class-schrack-price-sync.php',
 			'class-schrack-stock-sync.php',
 			'class-schrack-product-filter-renderer.php',
+			'class-schrack-navigation.php',
 			'class-schrack-header-renderer.php',
 			'class-schrack-header-search-renderer.php',
 			'class-schrack-product-page-renderer.php',

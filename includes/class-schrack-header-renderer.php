@@ -458,8 +458,48 @@ class Schrack_Header_Renderer {
 		}
 
 		$nodes = $this->with_product_catalog_node( $nodes, $desktop );
+		$nodes = $this->with_additional_category_nodes( $nodes );
 
 		return $this->render_menu_nodes( $nodes, 0, $desktop );
+	}
+
+	/**
+	 * Adds the service and promotion links after Products, preserving existing menu entries.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes Existing top-level menu nodes.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function with_additional_category_nodes( array $nodes ): array {
+		$additional = array();
+		$position   = 0;
+
+		foreach ( Schrack_Navigation::additional_items() as $item ) {
+			$exists = false;
+
+			foreach ( $nodes as $index => $node ) {
+				$label = strtolower( remove_accents( trim( (string) ( $node['label'] ?? '' ) ) ) );
+
+				if ( $this->is_products_menu_node( $node ) ) {
+					$position = $index + 1;
+				}
+
+				if ( $label === $item['slug'] || untrailingslashit( (string) ( $node['href'] ?? '' ) ) === untrailingslashit( $item['href'] ) ) {
+					$exists = true;
+				}
+			}
+
+			if ( ! $exists ) {
+				$additional[] = array(
+					'label'    => $item['label'],
+					'href'     => $item['href'],
+					'children' => array(),
+				);
+			}
+		}
+
+		array_splice( $nodes, $position, 0, $additional );
+
+		return $nodes;
 	}
 
 	/**

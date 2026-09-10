@@ -159,6 +159,10 @@ Frontend unit prices include the imported sales unit directly after the price (f
 
 If a minimum margin is configured, the plugin uses the higher net value before applying TVA.
 
+Automatic sale pricing applies only to Schrack and Telesystem supplier products (including legacy imports identified by their supplier item number). Manually created products keep their entered WooCommerce prices: saving a manual price does not derive an automatic price from the regular price, and clearing it does not restore a stale automatic price. Any old automatic-price metadata on a manual product is removed when that product is saved. Supplier products retain the existing rule: a manual price stays active until a higher automatic supplier price overrides it.
+
+The product editor includes an accent-insensitive category search above the category checklists. It filters both category tabs, keeps matching branches visible, and preserves every checkbox selection, including hidden categories. Parent-category dropdowns also support searching when adding a category inside the product editor or creating/editing a category on the product categories screen. They retain the existing hierarchy and the no-parent option, and remain searchable after WordPress replaces the dropdown following an inline category creation.
+
 ## Product Mapping
 
 Imported products are WooCommerce simple products.

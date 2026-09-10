@@ -82,7 +82,7 @@ class Schrack_Elementor_Featured_Categories_Widget extends \Elementor\Widget_Bas
 				'min'         => 4,
 				'max'         => 12,
 				'step'        => 1,
-				'description' => __( 'Cele mai populate categorii de nivel principal sunt alese automat, dupa numarul de produse.', 'schrack-woocommerce-sync' ),
+				'description' => __( 'Cele mai populate categorii de nivel principal sunt alese automat, după numărul de produse. Servicii și Promoții se adaugă separat în bara de navigare.', 'schrack-woocommerce-sync' ),
 			)
 		);
 

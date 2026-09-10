@@ -27,8 +27,9 @@ class Schrack_Featured_Categories_Renderer {
 			return '<div class="schrack-fcat"><p>' . esc_html__( 'WooCommerce este necesar pentru acest modul.', 'schrack-woocommerce-sync' ) . '</p></div>';
 		}
 
-		$settings = $this->sanitize_settings( $settings );
-		$terms    = $this->main_categories( (int) $settings['category_limit'] );
+		$settings   = $this->sanitize_settings( $settings );
+		$additional = Schrack_Navigation::additional_items();
+		$terms      = $this->main_categories( (int) $settings['category_limit'], array_column( $additional, 'term_id' ) );
 
 		wp_enqueue_style( 'schrack-wc-featured-categories' );
 		wp_enqueue_script( 'schrack-wc-featured-categories' );
@@ -50,7 +51,7 @@ class Schrack_Featured_Categories_Renderer {
 			style="<?php echo esc_attr( $style ); ?>"
 			data-schrack-fcat
 		>
-			<?php echo $this->category_nav( $terms, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+			<?php echo $this->category_nav( $terms, $settings, $additional ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php echo $this->promo_banner( $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php echo $this->category_grids( $terms, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 		</section>
@@ -110,9 +111,10 @@ class Schrack_Featured_Categories_Renderer {
 	/**
 	 * Returns the automatic top-level product categories, ranked by product count.
 	 *
+	 * @param array<int,int> $exclude_ids Categories shown as additional navigation items.
 	 * @return array<int,WP_Term>
 	 */
-	private function main_categories( int $limit ): array {
+	private function main_categories( int $limit, array $exclude_ids ): array {
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
 			return array();
 		}
@@ -125,7 +127,7 @@ class Schrack_Featured_Categories_Renderer {
 				'orderby'    => 'count',
 				'order'      => 'DESC',
 				'number'     => $limit,
-				'exclude'    => $this->uncategorized_term_id(),
+				'exclude'    => array_values( array_unique( array_merge( $this->uncategorized_term_id(), array_filter( $exclude_ids ) ) ) ),
 			)
 		);
 
@@ -157,12 +159,24 @@ class Schrack_Featured_Categories_Renderer {
 	 *
 	 * @param array<int,WP_Term>  $terms Main category terms.
 	 * @param array<string,mixed> $settings Widget settings.
+	 * @param array<int,array<string,mixed>> $additional Additional navigation items.
 	 */
-	private function category_nav( array $terms, array $settings ): string {
-		$hero_style = '';
+	private function category_nav( array $terms, array $settings, array $additional ): string {
+		$items = array();
+
+		foreach ( $terms as $term ) {
+			$items[] = array(
+				'label' => $term->name,
+				'href'  => $this->term_link( $term ),
+				'image' => $this->category_banner_image_url( $term ),
+			);
+		}
+
+		$items      = array_merge( $items, $additional );
+		$hero_style = sprintf( '--schrack-fcat-nav-rows:%d;', (int) ceil( count( $items ) / 6 ) );
 
 		if ( '' !== $settings['hero_background_image'] ) {
-			$hero_style = sprintf( 'background-image:url(%s);', esc_url( $settings['hero_background_image'] ) );
+			$hero_style .= sprintf( 'background-image:url(%s);', esc_url( $settings['hero_background_image'] ) );
 		}
 
 		$overlay_style = sprintf( '--schrack-fcat-overlay-opacity:%s;', esc_attr( (string) ( $settings['hero_overlay_opacity'] / 100 ) ) );
@@ -172,13 +186,13 @@ class Schrack_Featured_Categories_Renderer {
 		<div class="schrack-fcat__hero" style="<?php echo esc_attr( $hero_style ); ?>" data-fcat-hero>
 			<span class="schrack-fcat__hero-overlay" style="<?php echo esc_attr( $overlay_style ); ?>" aria-hidden="true"></span>
 
-			<?php if ( ! empty( $terms ) ) : ?>
+			<?php if ( ! empty( $items ) ) : ?>
 				<nav class="schrack-fcat__nav" aria-label="<?php esc_attr_e( 'Categorii principale', 'schrack-woocommerce-sync' ); ?>" data-fcat-nav>
 					<ul class="schrack-fcat__nav-list">
-						<?php foreach ( $terms as $index => $term ) : ?>
-							<?php $image_url = $this->category_banner_image_url( $term ); ?>
+						<?php foreach ( $items as $index => $item ) : ?>
+							<?php $image_url = $item['image']; ?>
 							<li class="schrack-fcat__nav-item">
-								<a class="schrack-fcat__nav-link" href="<?php echo esc_url( $this->term_link( $term ) ); ?>">
+								<a class="schrack-fcat__nav-link" href="<?php echo esc_url( $item['href'] ); ?>">
 									<span class="schrack-fcat__nav-media" aria-hidden="true">
 										<?php if ( '' !== $image_url ) : ?>
 											<img
@@ -191,7 +205,7 @@ class Schrack_Featured_Categories_Renderer {
 										<?php endif; ?>
 									</span>
 									<span class="schrack-fcat__nav-shade" aria-hidden="true"></span>
-									<span class="schrack-fcat__nav-label"><?php echo esc_html( $term->name ); ?></span>
+									<span class="schrack-fcat__nav-label"><?php echo esc_html( $item['label'] ); ?></span>
 								</a>
 							</li>
 						<?php endforeach; ?>

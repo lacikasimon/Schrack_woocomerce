@@ -1,6 +1,6 @@
 <?php
 /**
- * Product edit screen additions: supplier sidebar box and raw feed data box.
+ * Product edit screen additions: category search, supplier data, and manual prices.
  *
  * @package SchrackWooCommerceSync
  */
@@ -15,6 +15,7 @@ class Schrack_Product_Admin_Fields {
 	 */
 	public function init(): void {
 		add_action( 'add_meta_boxes', array( $this, 'register_meta_boxes' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'woocommerce_product_options_pricing', array( $this, 'render_supplier_price_field' ) );
 		add_action( 'woocommerce_product_options_pricing', array( $this, 'render_manual_price_field' ), 20 );
 		add_action( 'woocommerce_admin_process_product_object', array( $this, 'save_manual_price' ) );
@@ -22,6 +23,33 @@ class Schrack_Product_Admin_Fields {
 		add_action( 'pre_get_posts', array( $this, 'apply_manual_price_filter' ) );
 		add_filter( 'manage_edit-product_columns', array( $this, 'add_manual_price_column' ), 20 );
 		add_action( 'manage_product_posts_custom_column', array( $this, 'render_manual_price_column' ), 20, 2 );
+	}
+
+	/**
+	 * Loads category search in the product editor and product category forms.
+	 */
+	public function enqueue_assets( string $hook_suffix ): void {
+		$screen             = get_current_screen();
+		$is_product_editor  = $screen && 'product' === $screen->post_type && in_array( $hook_suffix, array( 'post.php', 'post-new.php' ), true );
+		$is_category_editor = $screen && 'product_cat' === $screen->taxonomy && in_array( $hook_suffix, array( 'edit-tags.php', 'term.php' ), true );
+
+		if ( ! $is_product_editor && ! $is_category_editor ) {
+			return;
+		}
+
+		wp_enqueue_style( 'schrack-product-admin-select2', WC()->plugin_url() . '/assets/css/select2.css', array(), WC_VERSION );
+		wp_enqueue_style( 'schrack-product-admin', SCHRACK_WC_SYNC_URL . 'assets/product-admin.css', array( 'schrack-product-admin-select2' ), (string) filemtime( SCHRACK_WC_SYNC_PATH . 'assets/product-admin.css' ) );
+		wp_enqueue_script( 'schrack-product-admin', SCHRACK_WC_SYNC_URL . 'assets/product-admin.js', array( 'jquery', 'selectWoo' ), (string) filemtime( SCHRACK_WC_SYNC_PATH . 'assets/product-admin.js' ), true );
+		wp_localize_script(
+			'schrack-product-admin',
+			'schrackProductAdmin',
+			array(
+				'categorySearch'       => __( 'Kategóriák keresése', 'schrack-woocommerce-sync' ),
+				'categoryPlaceholder'  => __( 'Kategória neve…', 'schrack-woocommerce-sync' ),
+				'parentCategorySearch' => __( 'Szülőkategória keresése', 'schrack-woocommerce-sync' ),
+				'noCategories'         => __( 'Nincs találat.', 'schrack-woocommerce-sync' ),
+			)
+		);
 	}
 
 	/**
@@ -161,6 +189,7 @@ class Schrack_Product_Admin_Fields {
 		$automatic_price = get_post_meta( $post->ID, Schrack_Manual_Price::META_AUTOMATIC, true );
 		$status          = sanitize_key( (string) get_post_meta( $post->ID, Schrack_Manual_Price::META_STATUS, true ) );
 		$previous_price  = get_post_meta( $post->ID, Schrack_Manual_Price::META_PREVIOUS, true );
+		$is_supplier     = Schrack_Manual_Price::is_supplier_product( (int) $post->ID );
 
 		woocommerce_wp_text_input(
 			array(
@@ -169,11 +198,13 @@ class Schrack_Product_Admin_Fields {
 				'value'       => is_numeric( $manual_price ) ? wc_format_localized_price( (float) $manual_price ) : '',
 				'data_type'   => 'price',
 				'desc_tip'    => true,
-				'description' => __( 'Amíg a beszállítói adatokból számított automatikus eladási ár nem magasabb, ez az ár marad aktív. Az érték törlésével visszaáll az automatikus ár.', 'schrack-woocommerce-sync' ),
+				'description' => $is_supplier
+					? __( 'Amíg a beszállítói adatokból számított automatikus eladási ár nem magasabb, ez az ár marad aktív. Az érték törlésével visszaáll az automatikus ár.', 'schrack-woocommerce-sync' )
+					: __( 'Kézzel felvitt termék: nincs automatikus árképzés. Az itt megadott ár lesz az eladási ár; a mező törlésekor a WooCommerce-ben megadott ár marad érvényben.', 'schrack-woocommerce-sync' ),
 			)
 		);
 
-		if ( is_numeric( $automatic_price ) ) {
+		if ( $is_supplier && is_numeric( $automatic_price ) ) {
 			woocommerce_wp_text_input(
 				array(
 					'id'                => 'schrack_automatic_price_display',
@@ -187,7 +218,7 @@ class Schrack_Product_Admin_Fields {
 			);
 		}
 
-		if ( 'overridden' === $status && is_numeric( $previous_price ) ) {
+		if ( $is_supplier && 'overridden' === $status && is_numeric( $previous_price ) ) {
 			echo '<p class="form-field"><label>' . esc_html__( 'Kézi ár státusza', 'schrack-woocommerce-sync' ) . '</label><span class="description">';
 			echo esc_html(
 				sprintf(
@@ -204,6 +235,10 @@ class Schrack_Product_Admin_Fields {
 	 * Saves or clears the protected manual price from the WooCommerce product editor.
 	 */
 	public function save_manual_price( WC_Product $product ): void {
+		if ( ! Schrack_Manual_Price::is_supplier_product( $product ) ) {
+			$product->delete_meta_data( Schrack_Manual_Price::META_AUTOMATIC );
+		}
+
 		if ( ! isset( $_POST[ Schrack_Manual_Price::META_PRICE ] ) ) {
 			return;
 		}

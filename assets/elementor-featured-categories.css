@@ -38,7 +38,7 @@
 	background-repeat: no-repeat;
 	background-size: cover;
 	display: flex;
-	min-height: var(--schrack-fcat-hero-height);
+	min-height: max(var(--schrack-fcat-hero-height), calc(var(--schrack-fcat-nav-rows, 2) * 162px + 70px));
 	position: relative;
 }
 
@@ -58,13 +58,10 @@
 .schrack-fcat__nav {
 	align-items: center;
 	background: transparent;
-	bottom: 0;
 	display: flex;
-	left: 0;
-	position: absolute;
-	right: 0;
-	top: 0;
+	position: relative;
 	transition: background 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+	width: 100%;
 	z-index: 40;
 }
 
@@ -74,13 +71,15 @@
 	border-bottom: 1px solid var(--schrack-fcat-border);
 	background: rgba(255, 255, 255, 0.97);
 	box-shadow: 0 12px 30px rgba(20, 31, 43, 0.12);
+	left: 0;
 	position: fixed;
+	top: 0;
 }
 
 .schrack-fcat__nav-list {
 	display: grid;
 	gap: 12px;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(6, minmax(0, 1fr));
 	justify-content: center;
 	list-style: none;
 	margin: 0 auto;
@@ -170,6 +169,7 @@
 	display: flex;
 	flex-wrap: nowrap;
 	gap: 4px;
+	justify-content: start;
 	overflow-x: auto;
 	padding: 14px 24px;
 }
@@ -436,7 +436,7 @@
 
 @media (max-width: 782px) {
 	.schrack-fcat__hero {
-		min-height: 352px;
+		min-height: 356px;
 	}
 
 	.schrack-fcat__nav:not(.is-fixed) .schrack-fcat__nav-list {

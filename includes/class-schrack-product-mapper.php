@@ -771,6 +771,10 @@ class Schrack_Product_Mapper {
 			throw new RuntimeException( 'WooCommerce product was not found.' );
 		}
 
+		if ( ! Schrack_Manual_Price::is_supplier_product( $product ) ) {
+			return (float) $product->get_price( 'edit' );
+		}
+
 		$price_unit      = $this->product_price_unit( $product_id, $product );
 		$purchase_price  = $this->unit_purchase_price( $raw_purchase_price, $price_unit );
 		$automatic_price = $this->markup->calculate_sale_price( $purchase_price, $product_id );
@@ -810,6 +814,10 @@ class Schrack_Product_Mapper {
 	 * Updates price metadata and WooCommerce lookup rows without loading the product object.
 	 */
 	public function update_price_fast( int $product_id, float $purchase_price ): float {
+		if ( ! Schrack_Manual_Price::is_supplier_product( $product_id ) ) {
+			return (float) get_post_meta( $product_id, '_price', true );
+		}
+
 		$raw_purchase_price = max( 0.0, $purchase_price );
 		$price_unit         = $this->product_price_unit( $product_id );
 		$purchase_price     = $this->unit_purchase_price( $raw_purchase_price, $price_unit );
