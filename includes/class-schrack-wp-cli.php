@@ -46,6 +46,7 @@ class Schrack_WP_CLI {
 	public static function register( Schrack_Settings $settings, Schrack_Logger $logger, Schrack_Cron $cron ): void {
 		if ( class_exists( 'WP_CLI' ) ) {
 			WP_CLI::add_command( 'schrack-sync', new self( $settings, $logger, $cron ) );
+			WP_CLI::add_command( 'schrack-sync merge-attributes', array( 'Schrack_Attribute_Merger', 'command' ) );
 		}
 	}
 

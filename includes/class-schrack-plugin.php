@@ -174,6 +174,7 @@ class Schrack_Plugin {
 			'class-schrack-product-exporter.php',
 			'class-schrack-product-importer.php',
 			'class-schrack-attribute-extractor.php',
+			'class-schrack-attribute-merger.php',
 			'class-schrack-soap-client.php',
 			'class-schrack-product-mapper.php',
 			'class-schrack-frontend-image-loader.php',

@@ -99,6 +99,9 @@ class Schrack_Product_Mapper {
 	 */
 	private ?array $dynamic_attribute_registry_cache = null;
 
+	/** Redirects persisted by the opt-in duplicate-attribute migration. */
+	private ?array $merged_attribute_registry_cache = null;
+
 	/**
 	 * Per-request normalized image URL to attachment ID cache.
 	 *
@@ -1193,16 +1196,24 @@ class Schrack_Product_Mapper {
 			return;
 		}
 
-		$attributes    = $product->get_attributes();
-		$position      = count( $attributes );
-		$dynamic_slugs = array();
+		$attributes     = $product->get_attributes();
+		$position       = count( $attributes );
+		$dynamic_slugs  = array();
+		$assigned_slugs = array();
 
 		foreach ( $extracted as $slug => $info ) {
-			$this->apply_taxonomy_attribute( $attributes, $position, (string) $slug, $info );
+			$slug = $this->canonical_attribute_slug( (string) $slug, (string) ( $info['label'] ?? '' ) );
+			if ( ! isset( $assigned_slugs[ $slug ] ) && $this->apply_taxonomy_attribute( $attributes, $position, $slug, $info ) ) {
+				$assigned_slugs[ $slug ] = true;
+			}
 		}
 
 		foreach ( $dynamic as $slug => $info ) {
+			if ( isset( $assigned_slugs[ $slug ], $this->merged_attribute_registry_cache['slugs'][ $slug ] ) ) {
+				continue;
+			}
 			if ( $this->apply_taxonomy_attribute( $attributes, $position, $slug, $info ) ) {
+				$assigned_slugs[ $slug ] = true;
 				$dynamic_slugs[ $slug ] = (string) ( $info['label'] ?? $slug );
 			}
 		}
@@ -1285,9 +1296,9 @@ class Schrack_Product_Mapper {
 	 * "Culoare"/"Material" labels merge into the same shared color/material
 	 * taxonomies Schrack_Attribute_Extractor already uses -- color and material
 	 * mean the same thing regardless of supplier or product category. Everything
-	 * else keeps its own per-feed-column slug, so unrelated category contexts that
-	 * happen to reuse a generic label (e.g. Telesystem's "Tip" for both cameras
-	 * and access-control readers) never merge into one confusing filter.
+	 * else keeps its own per-feed-column slug until the administrator explicitly
+	 * consolidates that label with merge-attributes. Saved redirects then combine
+	 * existing and newly introduced feed columns, retaining the first filled value.
 	 *
 	 * @param array<string,array{label:string,value:string}> $entries Raw key => {label, value}.
 	 * @return array<string,array{label:string,value:string}> Taxonomy slug => {label, value}.
@@ -1328,6 +1339,7 @@ class Schrack_Product_Mapper {
 			$normalized_label = function_exists( 'remove_accents' ) ? remove_accents( $label ) : $label;
 			$normalized_label = strtolower( trim( preg_replace( '/[^a-z0-9]+/i', ' ', $normalized_label ) ?? $normalized_label ) );
 			$slug             = $shared_slugs_by_label[ $normalized_label ] ?? sanitize_key( (string) $key );
+			$slug             = $this->canonical_attribute_slug( $slug, $label );
 
 			if ( '' === $slug || isset( $result[ $slug ] ) ) {
 				continue;
@@ -1426,6 +1438,7 @@ class Schrack_Product_Mapper {
 	 * within the same request.
 	 */
 	private function ensure_attribute_taxonomy( string $slug, string $label ): string {
+		$slug = $this->canonical_attribute_slug( $slug, $label );
 		if ( isset( $this->attribute_taxonomy_cache[ $slug ] ) ) {
 			return $this->attribute_taxonomy_cache[ $slug ];
 		}
@@ -1468,6 +1481,17 @@ class Schrack_Product_Mapper {
 		$this->attribute_taxonomy_cache[ $slug ] = $taxonomy;
 
 		return $taxonomy;
+	}
+
+	/** Reuse the migrated identity instead of recreating a removed feed-column slug. */
+	private function canonical_attribute_slug( string $slug, string $label ): string {
+		if ( null === $this->merged_attribute_registry_cache ) {
+			$stored = get_option( 'schrack_wc_sync_merged_attributes', array() );
+			$this->merged_attribute_registry_cache = is_array( $stored ) ? $stored : array();
+		}
+		$registry  = $this->merged_attribute_registry_cache;
+		$label_key = class_exists( 'Schrack_Attribute_Merger' ) ? Schrack_Attribute_Merger::label_key( $label ) : '';
+		return (string) ( $registry['slugs'][ $slug ] ?? $registry['labels'][ $label_key ] ?? $slug );
 	}
 
 	/**

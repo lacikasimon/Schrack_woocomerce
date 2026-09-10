@@ -233,9 +233,12 @@ wp schrack-sync stock
 wp schrack-sync images
 wp schrack-sync images --drain --batch-size=50 --time-limit=1800
 wp schrack-sync full
+wp schrack-sync merge-attributes
 ```
 
 Use `wp schrack-sync images --drain` for a large initial media backlog when SSH/WP-CLI is available. It bypasses Action Scheduler follow-up latency and keeps processing image batches in the same CLI process until the backlog is clear or the optional batch/time limit is reached. `wp schrack-sync telesystem --drain` does the same for a large initial Telesystem feed import, running consecutive import cycles until the feed is fully imported or the optional run/time limit is reached.
+
+`wp schrack-sync merge-attributes` previews consolidation of global attributes with the same visible label. It retains the first populated value list in the wide export's column order. Apply with `--apply --backup=/absolute/private/path.sql` while imports and product editing are paused. The command creates a full database backup, migrates terms/product assignments, refreshes filtering, and saves redirects used by subsequent supplier and wide CSV imports. See [the Hungarian runbook](scripts/merge-attributes.md) for the standalone script, reports, checks and recovery.
 
 ## Complete WooCommerce product and category export/import
 

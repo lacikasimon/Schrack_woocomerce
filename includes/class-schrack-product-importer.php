@@ -314,6 +314,9 @@ class Schrack_Product_Importer {
 	public function decode_structured_meta( array $data ): array {
 		$separate_attributes     = array();
 		$has_separate_attributes = false;
+		$merged_registry         = get_option( 'schrack_wc_sync_merged_attributes', array() );
+		$merged_registry         = is_array( $merged_registry ) ? $merged_registry : array();
+		$merged_seen             = array();
 
 		foreach ( array_keys( $data ) as $column_id ) {
 			$definition = Schrack_WC_Product_CSV_Exporter::schrack_decode_attribute_column_id( (string) $column_id );
@@ -335,6 +338,21 @@ class Schrack_Product_Importer {
 
 			if ( empty( $values ) ) {
 				continue;
+			}
+
+			// Older wide exports still contain the removed taxonomy names. Honor the
+			// migration's saved identity and the first populated CSV column on import.
+			if ( $definition['taxonomy'] && class_exists( 'Schrack_Attribute_Merger' ) ) {
+				$slug      = wc_attribute_taxonomy_slug( $definition['name'] );
+				$label_key = Schrack_Attribute_Merger::label_key( $definition['label'] );
+				$target    = $merged_registry['slugs'][ $slug ] ?? $merged_registry['labels'][ $label_key ] ?? '';
+				if ( '' !== $target ) {
+					if ( isset( $merged_seen[ $target ] ) ) {
+						continue;
+					}
+					$merged_seen[ $target ] = true;
+					$definition['name'] = wc_attribute_taxonomy_name( $target );
+				}
 			}
 
 			$separate_attributes[] = array(
