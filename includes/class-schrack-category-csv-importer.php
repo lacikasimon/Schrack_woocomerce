@@ -45,6 +45,9 @@ class Schrack_Category_CSV_Importer {
 	 * @return array<string,mixed>|WP_Error
 	 */
 	public function prepare_upload( string $tmp_name, string $original_name, bool $update_existing = true ): array|WP_Error {
+		if ( class_exists( 'Schrack_Attribute_Merge_Job' ) && Schrack_Attribute_Merge_Job::blocks_imports() ) {
+			return new WP_Error( 'attribute_merge_running', 'Unificarea atributelor este în curs. Așteaptă finalizarea înainte de import.' );
+		}
 		$active = $this->active_import();
 
 		if ( null !== $active ) {
@@ -141,6 +144,9 @@ class Schrack_Category_CSV_Importer {
 	 */
 	public function run_batch( string $import_id, int $batch_size = self::DEFAULT_BATCH_SIZE, int $max_seconds = self::DEFAULT_MAX_SECONDS ): array {
 		$status = $this->status();
+		if ( class_exists( 'Schrack_Attribute_Merge_Job' ) && Schrack_Attribute_Merge_Job::blocks_imports() ) {
+			return $status;
+		}
 
 		if ( $import_id !== (string) ( $status['import_id'] ?? '' ) ) {
 			$this->logger->warning(
@@ -369,6 +375,9 @@ class Schrack_Category_CSV_Importer {
 	 * @return array<string,mixed>|WP_Error
 	 */
 	public function resume(): array|WP_Error {
+		if ( class_exists( 'Schrack_Attribute_Merge_Job' ) && Schrack_Attribute_Merge_Job::blocks_imports() ) {
+			return new WP_Error( 'attribute_merge_running', 'Unificarea atributelor este în curs. Reia importul după finalizare.' );
+		}
 		$status    = $this->status();
 		$state     = (string) ( $status['state'] ?? '' );
 		$import_id = sanitize_key( (string) ( $status['import_id'] ?? '' ) );

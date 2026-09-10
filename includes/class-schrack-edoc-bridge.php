@@ -284,6 +284,7 @@ final class Schrack_EDoc_Bridge {
 	}
 
 	private function work_catalog(): void {
+		if ( class_exists( 'Schrack_Attribute_Merge_Job' ) && Schrack_Attribute_Merge_Job::blocks_imports() ) { return; }
 		try {
 			$result = ( new Schrack_EDoc_Importer( $this->settings ) )->run_batch();
 			update_option( 'schrack_edoc_catalog_next', time() + ( ! empty( $result['has_more'] ) ? 1 : 300 ), false );

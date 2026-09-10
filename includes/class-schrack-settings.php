@@ -430,7 +430,7 @@ class Schrack_Settings {
 	 * Returns whether sync work should stop.
 	 */
 	public function is_stop_requested(): bool {
-		return null !== $this->stop_request();
+		return null !== $this->stop_request() || ( class_exists( 'Schrack_Attribute_Merge_Job' ) && Schrack_Attribute_Merge_Job::blocks_imports() );
 	}
 
 	/**

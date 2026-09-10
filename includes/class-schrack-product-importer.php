@@ -70,6 +70,9 @@ class Schrack_Product_Importer {
 	 * @return array<string,mixed>|WP_Error
 	 */
 	public function prepare_upload( string $tmp_name, string $original_name, bool $update_existing, int $user_id, bool $enforce_upload_limit = true ): array|WP_Error {
+		if ( class_exists( 'Schrack_Attribute_Merge_Job' ) && Schrack_Attribute_Merge_Job::blocks_imports() ) {
+			return new WP_Error( 'attribute_merge_active', 'Unificarea atributelor este în curs. Reia importul după finalizare.' );
+		}
 		$current = $this->status();
 		$export  = get_option( Schrack_Product_Exporter::STATUS_OPTION, null );
 		$category_import = ( new Schrack_Category_CSV_Importer( $this->settings, $this->logger ) )->active_import();
@@ -261,6 +264,9 @@ class Schrack_Product_Importer {
 	 * @return array<string,mixed>
 	 */
 	public function resume(): array {
+		if ( class_exists( 'Schrack_Attribute_Merge_Job' ) && Schrack_Attribute_Merge_Job::blocks_imports() ) {
+			return array( 'state' => 'error', 'message' => 'Unificarea atributelor este în curs. Reia importul după finalizare.' );
+		}
 		$status    = $this->status();
 		$state     = (string) ( $status['state'] ?? '' );
 		$import_id = sanitize_key( (string) ( $status['import_id'] ?? '' ) );

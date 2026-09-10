@@ -34,7 +34,9 @@ It must not be used for supplier order submission. Order related SOAP methods, i
 5. Configure TEST or LIVE credentials and save settings.
 6. Enable debug mode temporarily and use the WSDL function/type list to confirm the exact Schrack SOAP request structures.
 
-Example server deploy:
+Deployment uses Git; no release ZIP is needed. On the cPanel hosting account,
+use the existing Git deployment workflow. SSH is not available to the operator.
+The commands below document the repository layout for development or hosts with a terminal:
 
 ```bash
 cd wp-content/plugins
@@ -50,10 +52,28 @@ git pull --ff-only
 
 ## Publishing
 
-Before creating a release ZIP, bump both plugin version values in `schrack-woocommerce-sync.php`:
+Before deploying an update through Git, bump both plugin version values in `schrack-woocommerce-sync.php`:
 
 - Plugin header `Version`
 - `SCHRACK_WC_SYNC_VERSION`
+
+Project conventions and operational constraints are recorded in [AGENTS.md](AGENTS.md).
+
+## Duplicate attribute consolidation
+
+Open **WooCommerce → Unificare atribute**. Choose **Previzualizare**, review the
+duplicate groups and conflicting values, then **Pornește unificarea**. No SSH,
+WP-CLI or database export executable is required for this admin workflow.
+It preserves the first populated export column per product, including its complete
+value list and zero values, and saves redirects for subsequent supplier/CSV imports.
+
+The job runs in checkpointed background batches; keeping the page open also advances
+processing when cron is delayed. Before catalog changes it creates a private SQL
+backup of attributes and shared taxonomy data, downloadable from the same page.
+Supplier imports pause during the operation. Finish CSV transfers first and avoid
+editing products, attributes or categories until completion. See the
+[Hungarian operating guide](scripts/merge-attributes.md) for backup scope, resuming
+after errors, restoration and the optional WP-CLI workflow.
 
 ## Settings
 

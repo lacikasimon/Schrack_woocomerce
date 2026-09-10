@@ -61,6 +61,88 @@ class Schrack_Attribute_Merger {
 		return $this->groups;
 	}
 
+	/** Small, reusable operations for the resumable admin worker. No WP-CLI calls. */
+	public function validate_admin_environment(): void {
+		global $wpdb;
+		foreach ( $this->groups as $group ) {
+			foreach ( $group as $definition ) {
+				$taxonomy = wc_attribute_taxonomy_name( $definition['attribute_name'] );
+				if ( ! taxonomy_exists( $taxonomy ) || $definition['attribute_type'] !== $group[0]['attribute_type'] ) {
+					throw new RuntimeException( "Atribut incompatibil sau neînregistrat: {$taxonomy}." );
+				}
+				$names = array( 'attribute_' . $taxonomy, 'attribute_' . sanitize_title( $definition['attribute_label'] ) );
+				$id = $wpdb->get_var( $wpdb->prepare( "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key IN (%s,%s) LIMIT 1", ...$names ) );
+				self::check_db();
+				if ( $id ) {
+					throw new RuntimeException( "Atribut folosit de variații: {$taxonomy}, produs #{$id}." );
+				}
+			}
+		}
+		foreach ( $this->source_taxonomies() as $source => $target ) {
+			$id = $wpdb->get_var( $wpdb->prepare( "SELECT term_id FROM {$wpdb->term_taxonomy} WHERE taxonomy = %s AND parent <> 0 LIMIT 1", $source ) );
+			self::check_db();
+			if ( $id ) { throw new RuntimeException( "Valori ierarhice: {$source}, #{$id}." ); }
+		}
+		foreach ( array( $wpdb->posts, $wpdb->postmeta, $wpdb->terms, $wpdb->term_taxonomy, $wpdb->term_relationships, $wpdb->termmeta ) as $table ) {
+			$engine = $wpdb->get_var( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s', $table ) );
+			self::check_db();
+			if ( 'innodb' !== strtolower( (string) $engine ) ) { throw new RuntimeException( "Tabelul {$table} trebuie să folosească InnoDB." ); }
+		}
+	}
+
+	public function admin_plan_row( array $row ): array {
+		$raw = maybe_unserialize( $row['meta_value'] );
+		if ( '_default_attributes' === $row['meta_key'] ) {
+			foreach ( is_array( $raw ) ? array_keys( $raw ) : array() as $name ) {
+				if ( isset( $this->taxonomy_groups[ $name ] ) || isset( $this->groups[ self::label_key( $name ) ] ) ) {
+					throw new RuntimeException( 'Atribut implicit de variație la produsul #' . $row['post_id'] );
+				}
+			}
+			return array();
+		}
+		if ( '' === $row['meta_value'] ) { return array(); }
+		if ( ! is_array( $raw ) ) { throw new RuntimeException( 'Atribute invalide la produsul #' . $row['post_id'] ); }
+		$id = (int) $row['post_id'];
+		$plan = $this->plan_product( $raw, static function ( string $taxonomy ) use ( $id ): array {
+			$values = wp_get_object_terms( $id, $taxonomy, array( 'fields' => 'names', 'orderby' => 'term_id' ) );
+			self::check_result( $values );
+			return $values;
+		} );
+		if ( $plan['decisions'] && ( 'product' !== get_post_type( $id ) || count( get_post_meta( $id, '_product_attributes', false ) ) !== 1 ) ) {
+			throw new RuntimeException( "Metadate duplicate sau obiect invalid: #{$id}." );
+		}
+		return $plan;
+	}
+
+	public function admin_apply_row( array $row, array $plan ): void {
+		if ( $plan && $plan['decisions'] ) {
+			$this->apply_product( (int) $row['post_id'], maybe_unserialize( $row['meta_value'] ), $plan );
+		} elseif ( '_product_attributes' === $row['meta_key'] ) {
+			foreach ( (array) maybe_unserialize( $row['meta_value'] ) as $attribute ) {
+				if ( is_array( $attribute ) && isset( $this->taxonomy_groups[ $attribute['name'] ?? '' ] ) ) {
+					$this->refresh_lookup( (int) $row['post_id'] );
+					break;
+				}
+			}
+		}
+	}
+
+	public function admin_sources(): array { return $this->source_taxonomies(); }
+	public function admin_copy_term( string $target, $term ): void {
+		global $wpdb;
+		$wpdb->query( 'START TRANSACTION' ); self::check_db();
+		try {
+			$this->ensure_term( $target, $term->name, $term );
+			$wpdb->query( 'COMMIT' ); self::check_db();
+		} catch ( Throwable $error ) {
+			$wpdb->query( 'ROLLBACK' );
+			// A retry must not see term-query/metadata cache entries from a rolled-back copy.
+			wp_cache_flush();
+			throw $error;
+		}
+	}
+	public function admin_save_registry(): void { $this->save_registry(); }
+
 	/**
 	 * Pure planner. The callback supplies value names for one global attribute.
 	 * "First" means the first populated export column, not the first term in a list.
@@ -175,6 +257,9 @@ class Schrack_Attribute_Merger {
 				throw new RuntimeException( 'Unknown arguments: ' . implode( ', ', array_merge( $args, $unknown ) ) );
 			}
 			$apply = isset( $options['apply'] );
+			if ( $apply && class_exists( 'Schrack_Attribute_Merge_Job' ) && Schrack_Attribute_Merge_Job::blocks_imports() ) {
+				throw new RuntimeException( 'An admin attribute merge is active. Resume it from WooCommerce > Unificare atribute.' );
+			}
 			$batch = (string) ( $options['batch-size'] ?? '200' );
 			if ( ! ctype_digit( $batch ) || (int) $batch < 1 || (int) $batch > 1000 ) {
 				throw new RuntimeException( '--batch-size must be between 1 and 1000.' );
@@ -459,6 +544,7 @@ class Schrack_Attribute_Merger {
 	}
 
 	private function ensure_term( string $taxonomy, string $name, $source = null ): int {
+		$is_new = false;
 		$terms = get_terms( array( 'taxonomy' => $taxonomy, 'hide_empty' => false, 'name' => $name, 'orderby' => 'term_id', 'order' => 'ASC', 'number' => 1 ) );
 		self::check_result( $terms );
 		if ( $terms ) {
@@ -468,12 +554,16 @@ class Schrack_Attribute_Merger {
 			$created = wp_insert_term( wp_slash( $name ), $taxonomy, wp_slash( $args ) );
 			self::check_result( $created );
 			$id = (int) $created['term_id'];
+			$is_new = true;
 		}
 		if ( $source ) {
 			foreach ( get_term_meta( $source->term_id ) as $key => $values ) {
-				if ( metadata_exists( 'term', $id, $key ) ) {
+				if ( ! $is_new && metadata_exists( 'term', $id, $key ) ) {
 					continue;
 				}
+				// WooCommerce's admin term-create hook inserts order=0. A newly copied
+				// value must inherit source metadata instead of keeping generated defaults.
+				if ( $is_new ) { delete_term_meta( $id, $key ); self::check_db(); }
 				foreach ( $values as $value ) {
 					self::check_result( add_term_meta( $id, $key, wp_slash( maybe_unserialize( $value ) ) ) );
 				}

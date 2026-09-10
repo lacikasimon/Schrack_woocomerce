@@ -1,8 +1,24 @@
 # Azonos nevű WooCommerce attribútumok összevonása
 
-A szkript az élő WordPress-adatbázis attribútumait rendezi. A CSV az ellenőrzéshez szolgált mintaként; futtatáskor nincs rá szükség. Az alapértelmezett futtatás csak előnézet, a módosításhoz `--apply` kell.
+A művelet az élő WordPress-adatbázis attribútumait rendezi. A CSV az ellenőrzéshez szolgált mintaként; futtatáskor nincs rá szükség. A frissített bővítmény Git-alapú telepítése után az adminból is használható, SSH és ZIP nélkül.
 
-## Futtatás
+## Indítás a WordPress adminból
+
+1. Nyisd meg: **WooCommerce → Unificare atribute**.
+2. Kattints a **Previzualizare** gombra. Az előnézet nem módosítja a katalógust; megmutatja a névcsoportokat, az érintett termékek számát és legfeljebb 100 értékütközést.
+3. A CSV-importok/exportok befejezése után kattints a **Pornește unificarea** gombra. A saját beszállítói importok szünetelnek, a már futó munkák kifutását megvárja. Addig ne szerkeszd a termékeket, attribútumokat és kategóriákat.
+4. Az első katalógusmódosítás előtt automatikus SQL-mentés készül. A feldolgozás rövid, folytatható háttéradagokban halad; a nyitva hagyott oldal a cron késése esetén is továbbviszi.
+5. Befejezés után töltsd le a mentést a **Descarcă copia de siguranță** gombbal. Új előnézetben már nem lehet duplikált globális névcsoport.
+
+Hiba esetén az ok javítása után a **Reia procesarea** gomb a mentett állapottól folytatja. Az **Oprește temporar** gomb a következő szabad adaghatáron szüneteltet. Az elindított összevonás alatt a saját importok hiba vagy szüneteltetés esetén is szünetelnek. Ha még nem volt katalógusmódosítás, új előnézettel eldobható az előkészítés és feloldható a szüneteltetés. Elérhetőség: `wp-admin/admin.php?page=schrack-sync-attributes`. A művelet és a mentés letöltése WooCommerce-adminisztrációs jogosultsághoz kötött.
+
+Az adminos mentés **nem teljes adatbázismentés**: az attribútumdefiníciókat, a termékek `_product_attributes` adatait, az átirányítási/szűrési nyilvántartásokat, a WooCommerce attribútum-keresőtábláját és a közös taxonómiatáblákat tartalmazza. Utóbbiakhoz a kategóriák, címkék és más taxonómiák adatai és kapcsolatai is tartoznak. Rendeléseket, felhasználókat, árakat és készletet nem ment vagy ír felül. Visszaállításkor viszont a mentés óta történt taxonómia- és attribútummódosítások elvesznek.
+
+A fájl a webgyökéren kívüli privát könyvtárba kerül, PHP-val készül, és nem igényel `mysqldump`-ot. A tárhely PHP-folyamatának írnia kell a webgyökéren kívüli szülőkönyvtárba vagy a rendszer ideiglenes könyvtárába. Ha egyik sem elérhető, az összevonás adatmódosítás nélkül hibával megáll. A letöltött SQL szükség esetén a cPanel **phpMyAdmin → Import** menüjében állítható vissza, az importok és a termék-/taxonómiaszerkesztés szüneteltetése mellett. Ha az összevonás még fut, előbb használd az **Oprește temporar** gombot, és várd meg a szüneteltetett állapotot. Az SQL-visszaállítás törli a korábbi feladat állapotát is, így a régi háttérmunkás nem indul újra a visszaállított adatokon. Utána ürítsd az objektum- és oldalgyorsítótárat a tárhely vagy a cache-bővítmény adminjában.
+
+## Opcionális WP-CLI futtatás fejlesztőknek
+
+Az alábbi terminálos út külön lehetőség; az adminos működéshez nem kell. Alapértelmezetten csak előnézetet készít, a módosításhoz `--apply` szükséges.
 
 Töltsd fel a frissített bővítményt, majd SSH-n vagy a tárhely termináljában lépj a WordPress könyvtárába. Szükséges: aktív WooCommerce, WP-CLI a `db export` paranccsal és működő adatbázis-exportáló kliens, PHP 8.1+, InnoDB termék- és termékattribútum-táblák.
 

@@ -127,6 +127,7 @@ class Schrack_Plugin {
 		$this->product_exporter->init();
 		$this->product_importer = new Schrack_Product_Importer( $this->settings, $this->logger );
 		$this->product_importer->init();
+		( new Schrack_Attribute_Merge_Job() )->init();
 		$this->frontend_image_loader = new Schrack_Frontend_Image_Loader( $this->settings, $this->logger );
 		$this->frontend_image_loader->init();
 		$this->b2b_pricing = new Schrack_B2B_Pricing();
@@ -175,6 +176,7 @@ class Schrack_Plugin {
 			'class-schrack-product-importer.php',
 			'class-schrack-attribute-extractor.php',
 			'class-schrack-attribute-merger.php',
+			'class-schrack-attribute-merge-job.php',
 			'class-schrack-soap-client.php',
 			'class-schrack-product-mapper.php',
 			'class-schrack-frontend-image-loader.php',
