@@ -102,9 +102,7 @@ class Schrack_Product_Page_Renderer {
 				</div>
 			</div>
 
-			<?php if ( $settings['show_recommended_services'] ) : ?>
-				<?php echo Schrack_Product_Services::render( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-			<?php endif; ?>
+			<?php echo Schrack_Product_Services::render( $product, $settings['show_recommended_services'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 
 			<?php if ( $settings['show_specs'] ) : ?>
 				<?php echo $this->specifications( $product, $settings ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -435,6 +433,7 @@ class Schrack_Product_Page_Renderer {
 
 		if ( $product->is_type( 'simple' ) ) {
 			ob_start();
+			echo Schrack_Product_Services::required_notice( $product ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			?>
 			<form class="cart schrack-product-page__cart-form" action="<?php echo esc_url( apply_filters( 'woocommerce_add_to_cart_form_action', $product->get_permalink() ) ); ?>" method="post" enctype="multipart/form-data">
 				<?php

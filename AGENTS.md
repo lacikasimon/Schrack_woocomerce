@@ -51,6 +51,7 @@
   php tests/attribute-merger.php
   php tests/manual-price.php
   php tests/product-services.php
+  php tests/required-services-cart.php
   php tests/product-transfer.php
   php tests/edoc-contract.php
   php tests/edoc-worker.php

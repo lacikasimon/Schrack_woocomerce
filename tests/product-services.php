@@ -17,12 +17,18 @@ function current_user_can( string $capability, int $id ): bool { return $GLOBALS
 function wp_unslash( mixed $value ): mixed { return is_array( $value ) ? array_map( 'wp_unslash', $value ) : stripslashes( $value ); }
 function wc_get_product( int $id ): mixed { return $GLOBALS['products'][ $id ] ?? false; }
 function wp_enqueue_style( string $handle ): void { $GLOBALS['styles'][] = $handle; }
+function wp_enqueue_script( string $handle ): void {}
+function wp_create_nonce( string $action ): string { return 'valid'; }
+function wc_get_cart_url(): string { return '/cos'; }
+class WC_AJAX { public static function get_endpoint( string $action ): string { return '/?wc-ajax=' . $action; } }
+class WC_Admin_Meta_Boxes { public static array $errors = array(); public static function add_error( string $message ): void { self::$errors[] = $message; } }
 function post_password_required( int $id ): bool { return $GLOBALS['products'][ $id ]->protected; }
 function __( string $text, string $domain = '' ): string { return $text; }
 function esc_html( string $text ): string { return htmlspecialchars( $text, ENT_QUOTES, 'UTF-8' ); }
 function esc_attr( string $text ): string { return esc_html( $text ); }
 function esc_url( string $text ): string { return esc_attr( $text ); }
 function esc_html_e( string $text, string $domain = '' ): void { echo esc_html( $text ); }
+function esc_html__( string $text, string $domain = '' ): string { return esc_html( $text ); }
 function esc_attr_e( string $text, string $domain = '' ): void { echo esc_attr( $text ); }
 function wp_strip_all_tags( string $text ): string { return strip_tags( $text ); }
 function strip_shortcodes( string $text ): string { return preg_replace( '/\[[^\]]*\]/', '', $text ); }
@@ -42,9 +48,11 @@ class WC_Product {
 	public bool $protected = false;
 	public string $description = '';
 	public string $price_html = '<span class="amount">1.500,00 lei</span>';
+	public int $parent_id = 0;
 
 	public function __construct( private int $id, public string $name ) { $GLOBALS['products'][ $id ] = $this; }
 	public function get_id(): int { return $this->id; }
+	public function get_parent_id(): int { return $this->parent_id; }
 	public function get_meta( string $key, bool $single = true ): mixed { return $this->meta[ $key ] ?? ''; }
 	public function update_meta_data( string $key, mixed $value ): void { $this->meta[ $key ] = $value; }
 	public function delete_meta_data( string $key ): void { unset( $this->meta[ $key ] ); }
@@ -153,12 +161,43 @@ $sanitize = new ReflectionMethod( $renderer, 'sanitize_settings' );
 check_same( true, $sanitize->invoke( $renderer, array() )['show_recommended_services'], 'Existing Elementor widgets must show services by default' );
 check_same( false, $sanitize->invoke( $renderer, array( 'show_recommended_services' => '' ) )['show_recommended_services'], 'The Elementor switch must allow hiding services' );
 
+$_POST = array( 'schrack_product_services_nonce' => 'valid', 'schrack_required_services_present' => '1', Schrack_Product_Services::REQUIRED_META_KEY => array( '2', '2', '5' ) );
+$services->save( $system );
+check_same( array( 2, 5 ), Schrack_Product_Services::required_ids( $system ), 'Required selections are ordered and unique' );
+check_same( 2, substr_count( Schrack_Product_Services::render( $system, false ), '<article ' ), 'Required services remain visible when recommendations are hidden, including catalog-hidden services' );
+check_same( 2, substr_count( Schrack_Product_Services::render( $system, false ), 'Obligatoriu · adăugat automat' ), 'Each required service has an explicit badge' );
+check_same( true, str_contains( Schrack_Product_Services::required_notice( $system ), $mount->price_html ), 'Required charges show the current customer price beside the buy button' );
+check_same( true, str_contains( Schrack_Product_Services::required_notice( $system ), 'Eliminarea unui serviciu' ), 'Removal consequence is disclosed before purchase' );
+check_same( true, str_contains( Schrack_Product_Services::required_notice( $system ), 'Montaj &lt;test&gt;' ), 'Required notice escapes service names' );
+$variation->parent_id = 1;
+check_same( array( 2, 5 ), Schrack_Product_Services::required_ids( $variation ), 'Variations inherit required links from their parent' );
+foreach ( array( array( '1' ), array( '10' ), array( '9' ), array( '999' ), 'invalid' ) as $selection ) {
+	$_POST[ Schrack_Product_Services::REQUIRED_META_KEY ] = $selection;
+	$services->save( $system );
+	check_same( array( 2, 5 ), Schrack_Product_Services::required_ids( $system ), 'Invalid configurations preserve the last valid selection' );
+}
+$mount->update_meta_data( Schrack_Product_Services::REQUIRED_META_KEY, array( 3 ) );
+$_POST[ Schrack_Product_Services::REQUIRED_META_KEY ] = array( '2' );
+$services->save( $system );
+check_same( array( 2, 5 ), Schrack_Product_Services::required_ids( $system ), 'Nested required services are rejected without deleting saved links' );
+$mount->delete_meta_data( Schrack_Product_Services::REQUIRED_META_KEY );
+check_same( true, count( WC_Admin_Meta_Boxes::$errors ) >= 5, 'Admin receives validation feedback' );
+$_POST = array( 'schrack_product_services_nonce' => 'valid' );
+$services->save( $system );
+check_same( array( 2, 5 ), Schrack_Product_Services::required_ids( $system ), 'Older editor forms cannot accidentally clear required links' );
+$_POST['schrack_required_services_present'] = '1';
+$services->save( $system );
+check_same( array(), Schrack_Product_Services::required_ids( $system ), 'Clearing the required selector removes required links' );
+check_same( '', Schrack_Product_Services::required_notice( $system ), 'Optional-only products have no required charge notice' );
+
 if ( in_array( '--preview', $argv, true ) ) {
 	$mount->name = 'Montaj sistem fotovoltaic';
 	$mount->description = 'Instalarea panourilor, montajul invertorului și conectarea sistemului fotovoltaic.';
 	$check->description = 'Verificarea conexiunilor electrice, testarea protecțiilor și configurarea sistemului.';
 	$check->price_html = '<span class="amount">450,00 lei</span>';
 	$system->update_meta_data( Schrack_Product_Services::META_KEY, array( 2, 3, 10, 11 ) );
+	$system->update_meta_data( Schrack_Product_Services::REQUIRED_META_KEY, array( 2 ) );
+	echo Schrack_Product_Services::required_notice( $system );
 	echo Schrack_Product_Services::render( $system );
 } else {
 	echo 'Passed ' . $checks . " service linking and display checks.\n";

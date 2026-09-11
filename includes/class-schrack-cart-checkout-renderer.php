@@ -395,7 +395,7 @@ class Schrack_Cart_Checkout_Renderer {
 				<?php echo wp_kses_post( $price ); ?>
 			</td>
 			<td class="product-quantity" data-title="<?php esc_attr_e( 'Cantitate', 'schrack-woocommerce-sync' ); ?>">
-				<?php echo $this->quantity_control( $product, $cart_item_key, (int) $cart_item['quantity'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo apply_filters( 'woocommerce_cart_item_quantity', $this->quantity_control( $product, $cart_item_key, (int) $cart_item['quantity'] ), $cart_item_key, $cart_item ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			</td>
 			<td class="product-subtotal" data-title="<?php esc_attr_e( 'Subtotal', 'schrack-woocommerce-sync' ); ?>">
 				<?php echo wp_kses_post( $subtotal ); ?>

@@ -114,3 +114,42 @@
 		padding: 14px;
 	}
 }
+.schrack-product-services__required-notice {
+	margin: 18px 0;
+	padding: 16px 18px;
+	border: 1px solid #d5dfc6;
+	border-radius: 10px;
+	background: #f6f9f1;
+	color: #273523;
+	font-size: 14px;
+	line-height: 1.55;
+}
+
+.schrack-product-services__required-notice ul {
+	margin: 10px 0;
+	padding-left: 20px;
+}
+
+.schrack-product-services__required-notice p {
+	margin: 8px 0 0;
+}
+
+.schrack-product-services__required-notice [role="status"]:not(:empty) {
+	margin-top: 12px;
+	font-weight: 600;
+}
+
+.schrack-product-services__required-notice .is-error {
+	color: #a12622;
+}
+
+.schrack-product-services__required-badge {
+	display: inline-block;
+	margin-bottom: 7px;
+	padding: 3px 8px;
+	border-radius: 5px;
+	background: #edf3e4;
+	color: #354826;
+	font-size: 11px;
+	font-weight: 700;
+}

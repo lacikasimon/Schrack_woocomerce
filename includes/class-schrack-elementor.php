@@ -99,6 +99,13 @@ class Schrack_Elementor {
 			array(),
 			$this->asset_version( 'assets/product-services.css' )
 		);
+		wp_register_script(
+			'schrack-wc-product-services',
+			SCHRACK_WC_SYNC_URL . 'assets/product-services.js',
+			array( 'jquery', 'wc-add-to-cart' ),
+			$this->asset_version( 'assets/product-services.js' ),
+			$this->deferred_script_args()
+		);
 
 		wp_register_style(
 			'schrack-wc-header-search',
