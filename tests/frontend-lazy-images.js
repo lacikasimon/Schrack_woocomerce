@@ -9,6 +9,10 @@ const source = readFileSync(require('node:path').join(__dirname, '../assets/fron
 function image(attributes = {}) {
 	return {
 		nodeType: 1, isConnected: true, attributes: { src: '/placeholder.svg', 'data-schrack-image-src': '/supplier.jpg', ...attributes }, writes: [],
+		naturalWidth: 1, naturalHeight: 1, listeners: {},
+		addEventListener(type, callback) { (this.listeners[type] ??= new Set()).add(callback); },
+		removeEventListener(type, callback) { this.listeners[type]?.delete(callback); },
+		dispatch(type) { [...(this.listeners[type] ?? [])].forEach(callback => callback()); },
 		getAttribute(key) { return this.attributes[key] ?? null; },
 		setAttribute(key, value) { this.attributes[key] = value; this.writes.push(key); },
 		removeAttribute(key) { delete this.attributes[key]; },
@@ -93,4 +97,52 @@ test('browsers without IntersectionObserver still display every product image', 
 	const added = image();
 	state.mutate([{ addedNodes: [added], removedNodes: [] }]);
 	assert.equal(added.getAttribute('src'), '/supplier.jpg');
+});
+
+test('placeholder events do not trigger an early original download; a valid CDN response is retained', () => {
+	const card = image({ 'data-schrack-image-src': '/cdn.jpg', 'data-schrack-image-fallback': '/original.jpg' });
+	const state = setup([card]);
+	card.dispatch('load');
+	card.dispatch('error');
+	assert.equal(card.getAttribute('src'), '/placeholder.svg');
+	state.intersect([{ target: card, isIntersecting: true }]);
+	card.naturalWidth = 260;
+	card.naturalHeight = 145;
+	card.dispatch('load');
+	assert.equal(card.getAttribute('src'), '/cdn.jpg');
+	assert.equal(card.getAttribute('data-schrack-image-fallback'), null);
+	assert.equal(card.listeners.error.size, 0);
+	assert.equal(card.listeners.load.size, 0);
+});
+
+for (const failure of ['error', 'load']) {
+	test(`CDN ${failure === 'error' ? 'network error' : '1x1 placeholder'} falls back once, including AJAX cards`, () => {
+		const state = setup([]);
+		const card = image({ 'data-schrack-image-src': '/cdn.jpg', 'data-schrack-image-fallback': '/original.jpg' });
+		state.mutate([{ addedNodes: [card], removedNodes: [] }]);
+		// Moving a pending card must not attach duplicate listeners.
+		state.mutate([{ addedNodes: [card], removedNodes: [card] }]);
+		assert.equal(card.listeners.error.size, 1);
+		state.intersect([{ target: card, isIntersecting: true }]);
+		assert.equal(card.getAttribute('src'), '/cdn.jpg');
+		card.setAttribute('srcset', '/cdn.jpg 260w');
+		card.setAttribute('sizes', '100vw');
+		card.dispatch(failure);
+		assert.equal(card.getAttribute('src'), '/original.jpg');
+		assert.equal(card.getAttribute('srcset'), null);
+		assert.equal(card.getAttribute('sizes'), null);
+		assert.equal(card.getAttribute('data-schrack-image-fallback'), null);
+		const writesAfterFallback = card.writes.length;
+		card.dispatch('error');
+		card.dispatch('load');
+		assert.equal(card.writes.length, writesAfterFallback, 'A broken original must not cause a retry loop.');
+	});
+}
+
+test('CDN failure handling also works without IntersectionObserver', () => {
+	const card = image({ 'data-schrack-image-src': '/cdn.jpg', 'data-schrack-image-fallback': '/original.jpg' });
+	setup([card], false);
+	assert.equal(card.getAttribute('src'), '/cdn.jpg');
+	card.dispatch('error');
+	assert.equal(card.getAttribute('src'), '/original.jpg');
 });

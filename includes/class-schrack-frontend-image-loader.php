@@ -101,7 +101,7 @@ class Schrack_Frontend_Image_Loader {
 	 * With JavaScript disabled, show only the original image in the noscript fallback.
 	 */
 	public function lazy_images_noscript_style(): void {
-		echo '<noscript><style>img[data-schrack-image-src]{display:none!important}</style></noscript>';
+		echo '<noscript><style>img[data-schrack-image-src]{display:none!important}noscript.schrack-image-fallback{display:contents!important}</style></noscript>';
 	}
 
 	/**
@@ -139,8 +139,16 @@ class Schrack_Frontend_Image_Loader {
 			return $image;
 		}
 
+		$thumbnail = $tag->get_attribute( 'data-schrack-image-thumbnail' );
+		$tag->remove_attribute( 'data-schrack-image-thumbnail' );
+		$tag->remove_attribute( 'data-schrack-image-fallback' );
 		$tag->set_attribute( 'data-no-lazy', '1' );
+		// Keep the original in noscript: CDN failures cannot be handled without JS.
 		$fallback = $tag->get_updated_html();
+		if ( is_string( $thumbnail ) && $thumbnail === self::remote_thumbnail_url( $src ) && $thumbnail !== $src ) {
+			$tag->set_attribute( 'data-schrack-image-fallback', $src );
+			$src = $thumbnail;
+		}
 		$tag->set_attribute( 'data-schrack-image-src', $src );
 		$tag->set_attribute( 'src', SCHRACK_WC_SYNC_URL . 'assets/image-placeholder.svg' );
 		foreach ( array( 'srcset', 'sizes' ) as $attribute ) {
@@ -156,7 +164,7 @@ class Schrack_Frontend_Image_Loader {
 			return $image;
 		}
 
-		return $tag->get_updated_html() . '<noscript>' . $fallback . '</noscript>';
+		return $tag->get_updated_html() . '<noscript class="schrack-image-fallback">' . $fallback . '</noscript>';
 	}
 
 	/**
@@ -528,12 +536,21 @@ class Schrack_Frontend_Image_Loader {
 	 * @return array<string,mixed>
 	 */
 	private function remote_image_attributes( WC_Product $product, mixed $size, array $attr, string $image_url ): array {
-		unset( $attr['src'], $attr['srcset'], $attr['sizes'] );
+		unset( $attr['src'], $attr['srcset'], $attr['sizes'], $attr['data-schrack-image-thumbnail'], $attr['data-schrack-image-fallback'] );
 
 		$attr['src']      = $image_url;
 		$attr['alt']      = isset( $attr['alt'] ) ? sanitize_text_field( (string) $attr['alt'] ) : wp_strip_all_tags( $product->get_name() );
 		$attr['class']    = $this->remote_image_class( $size, (string) ( $attr['class'] ?? '' ) );
 		$attr['decoding'] = (string) ( $attr['decoding'] ?? 'async' );
+
+		// Only our card loader opts in, so the original and a no-JS fallback remain
+		// available. Galleries, full-size images and other renderers keep the source.
+		if ( in_array( $size, array( 'woocommerce_thumbnail', 'shop_catalog', 'shop_thumbnail', 'thumbnail' ), true ) ) {
+			$thumbnail = self::remote_thumbnail_url( $image_url );
+			if ( $thumbnail !== $image_url ) {
+				$attr['data-schrack-image-thumbnail'] = $thumbnail;
+			}
+		}
 
 		if ( empty( $attr['width'] ) || empty( $attr['height'] ) ) {
 			$dimensions = $this->remote_image_dimensions( $size );
@@ -556,6 +573,19 @@ class Schrack_Frontend_Image_Loader {
 		}
 
 		return $attr;
+	}
+
+	/**
+	 * Schrack's own storefront uses this fixed CDN preset for catalogue images.
+	 * Do not invent arbitrary sizes: unsupported presets return a 1x1 image.
+	 * Keep other suppliers, signed URLs and unrecognised paths unchanged.
+	 */
+	private static function remote_thumbnail_url( string $image_url ): string {
+		if ( ! preg_match( '~^https?://(?:image\.schrack\.com|image\.schrackcdn\.com)/foto/(f_[a-z0-9_-]+\.jpg)$~iD', $image_url, $matches ) ) {
+			return $image_url;
+		}
+
+		return 'https://image.schrackcdn.com/260x145/' . $matches[1];
 	}
 
 	/**

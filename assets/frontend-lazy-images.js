@@ -8,6 +8,30 @@
 		if (document.documentElement.hasAttribute('data-schrack-lazy-images')) return;
 		document.documentElement.setAttribute('data-schrack-lazy-images', '');
 
+		const fallbackImages = new WeakSet();
+		function prepareFallback(image) {
+			const original = image.getAttribute('data-schrack-image-fallback');
+			if (!original || fallbackImages.has(image)) return;
+			fallbackImages.add(image);
+			function finish(failed) {
+				// The placeholder may finish loading before the card is visible.
+				if (image.getAttribute('data-schrack-image-src') !== null) return;
+				image.removeEventListener('error', onError);
+				image.removeEventListener('load', onLoad);
+				image.removeAttribute('data-schrack-image-fallback');
+				fallbackImages.delete(image);
+				if (failed) {
+					image.removeAttribute('srcset');
+					image.removeAttribute('sizes');
+					image.setAttribute('src', original);
+				}
+			}
+			function onError() { finish(true); }
+			function onLoad() { finish(image.naturalWidth <= 1 || image.naturalHeight <= 1); }
+			image.addEventListener('error', onError);
+			image.addEventListener('load', onLoad);
+		}
+
 		function load(image) {
 			const src = image.getAttribute('data-schrack-image-src');
 			if (!src) return;
@@ -38,6 +62,7 @@
 		}
 
 		function observe(image) {
+			prepareFallback(image);
 			if (observer) {
 				observer.observe(image);
 			} else {

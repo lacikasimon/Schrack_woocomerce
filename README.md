@@ -250,8 +250,14 @@ AJAX filtering and pagination. Local thumbnails retain their responsive `srcset`
 and `sizes`; the single-product hero remains eager. A `noscript` fallback displays
 the original image when JavaScript is disabled. WordPress versions without the
 HTML Tag Processor retain native lazy loading. LiteSpeed is excluded from
-reprocessing these images and delaying the small loader script. This reduces
-initial downloads; it does not resize supplier originals when they are displayed.
+reprocessing these images and delaying the small loader script.
+For remote Schrack JPGs in these cards, the loader uses the supplier's own
+`image.schrackcdn.com/260x145/` catalogue preset. Only recognised `/foto/f_*.jpg`
+URLs on the two official image hosts are eligible; other suppliers, query strings,
+local media, full-size images and the single-product hero keep their existing URLs.
+An unavailable or 1x1 CDN response falls back once to the original image. With
+JavaScript disabled, the original is used directly. Stored image URLs and media
+import jobs are unchanged; no bulk image download is needed.
 The featured-category navigation uses the same loader for its banner images,
 including images clipped by the horizontal mobile scroller. Only the first two
 banners (the first mobile column) remain eager, with high priority on the first.
