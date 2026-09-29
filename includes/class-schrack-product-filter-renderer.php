@@ -2395,10 +2395,20 @@ class Schrack_Product_Filter_Renderer {
 			}
 		}
 
+		$taxonomies = array();
 		foreach ( $slugs as $slug => $meta ) {
 			$taxonomy = wc_attribute_taxonomy_name( $slug );
+			if ( '' !== $taxonomy && taxonomy_exists( $taxonomy ) ) {
+				$taxonomies[] = $taxonomy;
+			}
+		}
+		$counts_by_taxonomy = $this->available_attribute_counts( $taxonomies, $category_id );
 
-			if ( '' === $taxonomy || ! taxonomy_exists( $taxonomy ) ) {
+		foreach ( $slugs as $slug => $meta ) {
+			$taxonomy = wc_attribute_taxonomy_name( $slug );
+			$available_counts = $counts_by_taxonomy[ $taxonomy ] ?? array();
+
+			if ( empty( $available_counts ) ) {
 				continue;
 			}
 
@@ -2406,18 +2416,13 @@ class Schrack_Product_Filter_Renderer {
 				array(
 					'taxonomy'   => $taxonomy,
 					'hide_empty' => true,
+					'include'    => array_keys( $available_counts ),
 				)
 			);
 
 			if ( is_wp_error( $terms ) || empty( $terms ) ) {
 				continue;
 			}
-
-			$available_counts = $this->available_term_counts(
-				$taxonomy,
-				array_map( static fn ( WP_Term $term ): int => (int) $term->term_id, array_filter( $terms, static fn ( mixed $term ): bool => $term instanceof WP_Term ) ),
-				$category_id
-			);
 
 			$term_options = array();
 
@@ -2462,6 +2467,41 @@ class Schrack_Product_Filter_Renderer {
 		$options[ $category_id ] = $result;
 
 		return $result;
+	}
+
+	/**
+	 * Count all technical facets in one stock/category scan. Request-local only:
+	 * each AJAX request observes current stock, without a persistent stale cache.
+	 *
+	 * @param string[] $taxonomies Registered attribute taxonomies.
+	 * @return array<string,array<int,int>> Taxonomy => term ID => product count.
+	 */
+	private function available_attribute_counts( array $taxonomies, int $category_id ): array {
+		if ( empty( $taxonomies ) ) {
+			return array();
+		}
+		global $wpdb;
+		$taxonomies   = array_values( array_unique( $taxonomies ) );
+		$placeholders = implode( ',', array_fill( 0, count( $taxonomies ), '%s' ) );
+		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+		$scope        = $this->category_scope_clause( 'term_relationships.object_id', $category_id );
+		$sql = "SELECT term_taxonomy.taxonomy, term_taxonomy.term_id, COUNT(DISTINCT term_relationships.object_id) AS total
+			FROM {$wpdb->term_relationships} AS term_relationships
+			INNER JOIN {$wpdb->term_taxonomy} AS term_taxonomy ON term_taxonomy.term_taxonomy_id = term_relationships.term_taxonomy_id
+			INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = term_relationships.object_id
+			INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = term_relationships.object_id
+			WHERE term_taxonomy.taxonomy IN ({$placeholders})
+				AND product_posts.post_type = 'product'
+				AND product_posts.post_status = 'publish'
+				AND lookup.stock_status <> 'outofstock'
+				{$scope['sql']}
+			GROUP BY term_taxonomy.taxonomy, term_taxonomy.term_id";
+		$rows = $wpdb->get_results( $wpdb->prepare( $sql, array_merge( $taxonomies, $scope['params'] ) ), ARRAY_A );
+		$counts = array();
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$counts[ $row['taxonomy'] ][ absint( $row['term_id'] ) ] = absint( $row['total'] );
+		}
+		return $counts;
 	}
 
 	/**

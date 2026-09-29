@@ -367,6 +367,7 @@ class Schrack_Elementor {
 			<section class="schrack-shop-hero<?php echo $is_category ? ' schrack-shop-hero--category' : ''; ?>" aria-labelledby="schrack-shop-hero-title">
 				<div class="schrack-shop-hero__grid" aria-hidden="true"></div>
 				<picture>
+					<source media="(max-width: 720px)" srcset="<?php echo esc_url( SCHRACK_WC_SYNC_URL . 'assets/image-placeholder.svg' ); ?>">
 					<source srcset="<?php echo esc_url( SCHRACK_WC_SYNC_URL . 'assets/shop-hero-technician.webp' ); ?>" type="image/webp">
 					<img
 						class="schrack-shop-hero__worker"
@@ -375,6 +376,8 @@ class Schrack_Elementor {
 						width="700"
 						height="942"
 						decoding="async"
+						loading="eager"
+						data-no-lazy="1"
 						fetchpriority="high"
 					>
 				</picture>

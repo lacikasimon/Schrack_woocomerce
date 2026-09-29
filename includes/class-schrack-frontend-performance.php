@@ -7,9 +7,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Schrack_Frontend_Performance {
 	private bool $consent_enabled = false;
+	private int $catalog_inline_bytes = 0;
 
 	public function init(): void {
 		add_filter( 'style_loader_tag', array( $this, 'inline_critical_style' ), 20, 4 );
+		add_filter( 'style_loader_tag', array( $this, 'inline_catalog_style' ), 21, 4 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_consent' ), 100 );
 		add_action( 'wp_head', array( $this, 'consent_bridge' ), 2 );
 		add_filter( 'script_loader_tag', array( $this, 'script_tag' ), 20, 2 );
@@ -24,6 +26,9 @@ class Schrack_Frontend_Performance {
 			'schrack-wc-featured-categories' => 'elementor-featured-categories.css',
 			'schrack-wc-product-page'        => 'elementor-product-page.css',
 			'schrack-wc-support'             => 'elementor-support.css',
+			'schrack-wc-product-filter'      => 'elementor-products.css',
+			'schrack-wc-shop-archive'        => 'shop-archive.css',
+			'schrack-wc-product-services'    => 'product-services.css',
 		);
 		if ( is_admin() || ! isset( $files[ $handle ] ) || ! apply_filters( 'schrack_wc_sync_inline_critical_css', true ) ) {
 			return $tag;
@@ -33,12 +38,60 @@ class Schrack_Frontend_Performance {
 			return $tag;
 		}
 		$css = file_get_contents( $path );
-		// These styles contain no imports or asset URLs. Retain external loading if
-		// a future stylesheet introduces either, or if another plugin changed src.
-		if ( ! is_string( $css ) || '' === $css || preg_match( '~url\s*\(|@import|</style~i', $css ) || strtok( $href, '?' ) !== SCHRACK_WC_SYNC_URL . 'assets/' . $files[ $handle ] ) {
+		// Relative/remote asset URLs must retain their stylesheet base URL.
+		if ( ! is_string( $css ) || ! $this->can_inline_css( $css ) || strtok( $href, '?' ) !== SCHRACK_WC_SYNC_URL . 'assets/' . $files[ $handle ] ) {
 			return $tag;
 		}
 		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
+	}
+
+	/** Inline only known local layout files, at their original place in the cascade. */
+	public function inline_catalog_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
+		if ( is_admin() || ! $this->is_catalog_page() || ! apply_filters( 'schrack_wc_sync_inline_catalog_css', true ) ) {
+			return $tag;
+		}
+		$files = array(
+			'hello-elementor'                      => 'themes/hello-elementor/assets/css/reset.css',
+			'hello-elementor-theme-style'          => 'themes/hello-elementor/assets/css/theme.css',
+			'hello-elementor-header-footer'        => 'themes/hello-elementor/assets/css/header-footer.css',
+			'elementor-frontend'                   => 'plugins/elementor/assets/css/frontend.min.css',
+			'widget-heading'                       => 'plugins/elementor/assets/css/widget-heading.min.css',
+			'widget-woocommerce-product-price'     => 'plugins/elementor-pro/assets/css/widget-woocommerce-product-price.min.css',
+			'widget-woocommerce-product-images'    => 'plugins/elementor-pro/assets/css/widget-woocommerce-product-images.min.css',
+			'widget-woocommerce-product-data-tabs' => 'plugins/elementor-pro/assets/css/widget-woocommerce-product-data-tabs.min.css',
+			'cookieadmin-style'                    => 'plugins/cookieadmin/assets/css/consent.css',
+		);
+		if ( ! isset( $files[ $handle ] ) || strtok( $href, '?' ) !== content_url( '/' . $files[ $handle ] ) ) {
+			return $tag;
+		}
+		// Custom/CDN sources, conditional tags, RTL replacements and integrity
+		// policies retain their original loading. Never fetch a remote stylesheet.
+		if ( 1 !== preg_match( '~^\s*<link\b[^>]*>\s*$~i', $tag ) || preg_match( '~\b(integrity|onload|disabled)\b~i', $tag ) ) {
+			return $tag;
+		}
+		$path = WP_CONTENT_DIR . '/' . $files[ $handle ];
+		$size = is_readable( $path ) ? filesize( $path ) : false;
+		if ( ! $size || $size > 65536 || $this->catalog_inline_bytes + $size > 131072 ) {
+			return $tag;
+		}
+		$css = file_get_contents( $path );
+		if ( ! is_string( $css ) || ! $this->can_inline_css( $css ) ) {
+			return $tag;
+		}
+		$this->catalog_inline_bytes += strlen( $css );
+		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
+	}
+
+	private function is_catalog_page(): bool {
+		return ( function_exists( 'is_product' ) && is_product() )
+			|| ( function_exists( 'is_shop' ) && is_shop() )
+			|| ( function_exists( 'is_product_taxonomy' ) && is_product_taxonomy() );
+	}
+
+	/** Embedded image data is independent of the stylesheet's base URL. */
+	private function can_inline_css( string $css ): bool {
+		$without_data = preg_replace( '~url\s*\(\s*(?:"data:image/[^"\r\n]*"|\'data:image/[^\'\r\n]*\'|data:image/[^()\s]*)\s*\)~i', '', $css );
+		return '' !== $css && ! preg_match( '~@import|</style~i', $css ) && is_string( $without_data ) && ! preg_match( '~url\s*\(~i', $without_data );
 	}
 
 	/** Integrate only when the existing consent manager is actually enqueued. */

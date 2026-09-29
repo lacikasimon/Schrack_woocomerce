@@ -269,7 +269,7 @@ Regression checks: `node --test tests/frontend-lazy-images.js` and
 `php tests/frontend-lazy-images.php /path/to/wordpress-source`. The PHP check uses
 WordPress's real HTML parser and sanitizer without loading a site or database.
 
-### Frontend performance (0.1.81)
+### Frontend performance (0.1.82)
 
 - The single-product image uses Schrack's verified `340x380` / `1190x1330`
   gallery presets and responsive `srcset`, eager/high-priority loading and an
@@ -279,13 +279,29 @@ WordPress's real HTML parser and sanitizer without loading a site or database.
 - Header search results use the same deferred CDN card loader, including AJAX
   results. Bundled category artwork has 240/480/720 px WebP variants; funding
   logos have lossless WebP variants with responsive sizes. Original files remain.
-- Header, search, category, product-page and support CSS is inlined only when its
+- Header, search, category, product-page, archive/filter, services and support CSS is inlined only when its
   handle is already being printed, preserving cascade order and conditional
   loading. This avoids extra blocking requests on a cold visit at the cost of
-  adding the CSS to HTML. Other plugins and checkout styles retain normal loading.
-  A custom source URL or future CSS containing asset URLs/imports falls back to
+  adding the CSS to HTML. A custom source URL or future CSS containing external
+  asset URLs/imports falls back to
   the external stylesheet. To disable this optimization use
   `add_filter( 'schrack_wc_sync_inline_critical_css', '__return_false' );`.
+- Product/catalog pages also inline an explicit allowlist of installed Hello
+  Elementor, Elementor layout/widget and CookieAdmin CSS files. They keep their
+  original order/media and conditional enqueue behavior. No remote fetch or
+  generated vendor copy is used. Each file is limited to 64 KiB, with a 128 KiB
+  total vendor budget per response. Changed paths, relative asset URLs/imports,
+  conditional/integrity tags or oversized files retain normal external loading.
+  Disable with `schrack_wc_sync_inline_catalog_css`. Other pages, including
+  cart and checkout, retain normal vendor loading.
+- The archive banner explicitly bypasses lazy loading on desktop; its mobile
+  picture source uses the tiny shared placeholder below the existing 720 px
+  hide breakpoint, avoiding the hidden decorative photograph's download.
+- Technical attribute facets count available products across all registered
+  attributes in one aggregate query, then load only matching term IDs. Published
+  products, backorders, category descendants, distinct counts and natural option
+  sorting retain their previous semantics. No persistent stock cache is added.
+  Regression: `php tests/product-filter-counts.php` (in-memory SQLite only).
 - CookieAdmin remains the consent UI and preference/log storage. Its scripts use
   ordered native defer, excluded from LiteSpeed processing. A small integration
   for CookieAdmin 1.2.2 leaves the Google `gtag/js` URL inert until analytics or

@@ -29,6 +29,51 @@ $style = $performance->inline_critical_style( $link, 'schrack-wc-header', '/plug
 verify_image( str_contains( $style, '<style' ) && str_contains( $style, '.schrack-header' ) && ! str_contains( $style, '<link' ), 'Header CSS must retain all rules without a blocking network request.' );
 verify_image( $link === $performance->inline_critical_style( $link, 'unrelated', '/theme.css' ), 'Theme CSS must retain its original tag.' );
 verify_image( $link === $performance->inline_critical_style( $link, 'schrack-wc-header', 'https://custom.example/override.css' ), 'Replaced stylesheets must not be silently overridden.' );
+$archive = $performance->inline_critical_style( $link, 'schrack-wc-shop-archive', '/plugin/assets/shop-archive.css' );
+verify_image( str_contains( $archive, '<style' ) && str_contains( $archive, 'data:image/svg+xml' ), 'Self-contained archive CSS must retain its embedded checkbox icon.' );
+$css_check = new ReflectionMethod( $performance, 'can_inline_css' );
+foreach ( array( 'a{background:url(../image.png)}', '@import "theme.css";', 'a{content:"</style>"}', 'a{background:url("data:image/svg+xml,</style>")}' ) as $unsafe_css ) {
+	verify_image( ! $css_check->invoke( $performance, $unsafe_css ), 'Imports, relative assets and closing tags must retain external loading.' );
+}
+
+// Installed-file fixtures only: no HTTP requests or WordPress/database bootstrap.
+$fixture = sys_get_temp_dir() . '/schrack-css-' . bin2hex( random_bytes( 6 ) );
+define( 'WP_CONTENT_DIR', $fixture );
+function content_url( string $path = '' ): string { return 'https://shop.example/content' . $path; }
+function is_product(): bool { return $GLOBALS['catalog_test'] ?? false; }
+function is_shop(): bool { return false; }
+function is_product_taxonomy(): bool { return false; }
+$directory = $fixture . '/themes/hello-elementor/assets/css';
+mkdir( $directory, 0700, true );
+$path = $directory . '/reset.css';
+$url = content_url( '/themes/hello-elementor/assets/css/reset.css' );
+$external = '<link rel="stylesheet" href="' . $url . '?ver=3" media="screen">';
+try {
+	file_put_contents( $path, 'body{margin:0}' );
+	verify_image( $external === $performance->inline_catalog_style( $external, 'hello-elementor', $url, 'screen' ), 'Non-catalog pages must retain normal theme loading.' );
+	$GLOBALS['catalog_test'] = true;
+	$inlined = $performance->inline_catalog_style( $external, 'hello-elementor', $url . '?ver=3', 'screen' );
+	verify_image( str_contains( $inlined, '<style' ) && str_contains( $inlined, 'media="screen"' ) && str_contains( $inlined, 'body{margin:0}' ), 'Installed catalog layout rules and media must be preserved.' );
+	verify_image( $external === $performance->inline_catalog_style( $external, 'hello-elementor', 'https://cdn.example/reset.css' ), 'A CDN replacement must not be replaced with a different local file.' );
+	$conditional = '<!--[if IE]>' . $external . '<![endif]-->';
+	verify_image( $conditional === $performance->inline_catalog_style( $conditional, 'hello-elementor', $url ), 'Conditional styles must be untouched.' );
+	file_put_contents( $path, 'a{background:url(../image.svg)}' );
+	clearstatcache();
+	verify_image( $external === $performance->inline_catalog_style( $external, 'hello-elementor', $url ), 'Updated vendor CSS with relative assets must fall back to its external URL.' );
+	file_put_contents( $path, str_repeat( ' ', 65537 ) );
+	clearstatcache();
+	verify_image( $external === $performance->inline_catalog_style( $external, 'hello-elementor', $url ), 'Vendor file size must remain bounded.' );
+	file_put_contents( $path, 'body{margin:0}' );
+	clearstatcache();
+	( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 131072 );
+	verify_image( $external === $performance->inline_catalog_style( $external, 'hello-elementor', $url ), 'The total inline budget must remain bounded.' );
+} finally {
+	unlink( $path );
+	while ( str_starts_with( $directory, $fixture ) ) {
+		rmdir( $directory );
+		$directory = dirname( $directory );
+	}
+}
 add_filter( 'schrack_wc_sync_inline_critical_css', '__return_false' );
 verify_image( $link === $performance->inline_critical_style( $link, 'schrack-wc-header', '/plugin/assets/elementor-header.css' ), 'Rollback filter must restore external loading.' );
 echo "Frontend performance total: {$checks} checks passed.\n";
