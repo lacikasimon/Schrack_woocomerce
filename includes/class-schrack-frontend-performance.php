@@ -8,14 +8,105 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Schrack_Frontend_Performance {
 	private bool $consent_enabled = false;
 	private int $catalog_inline_bytes = 0;
+	private bool $onetap_on_demand = false;
 
 	public function init(): void {
 		add_filter( 'style_loader_tag', array( $this, 'inline_critical_style' ), 20, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_catalog_style' ), 21, 4 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_consent' ), 100 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'configure_onetap' ), 100 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'configure_product_gallery' ), 9 );
+		add_filter( 'should_load_block_assets_on_demand', array( $this, 'catalog_block_assets' ) );
 		add_action( 'wp_head', array( $this, 'consent_bridge' ), 2 );
 		add_filter( 'script_loader_tag', array( $this, 'script_tag' ), 20, 2 );
 		add_filter( 'wp_inline_script_attributes', array( $this, 'inline_script_attributes' ) );
+	}
+
+	/** Let rendered blocks enqueue their own assets, including forms/audio/video. */
+	public function catalog_block_assets( bool $on_demand ): bool {
+		return $on_demand || ( ! is_admin() && $this->is_catalog_page() && apply_filters( 'schrack_wc_sync_catalog_block_assets', true ) );
+	}
+
+	/** Our gallery links to originals and does not use WooCommerce's lightbox. */
+	public function configure_product_gallery(): void {
+		if ( is_admin() || ! function_exists( 'is_product' ) || ! is_product() || is_preview()
+			|| ! class_exists( '\ElementorPro\Modules\ThemeBuilder\Module' )
+			|| ! apply_filters( 'schrack_wc_sync_trim_product_gallery', true ) ) {
+			return;
+		}
+		$module = \ElementorPro\Modules\ThemeBuilder\Module::instance();
+		if ( ! method_exists( $module, 'get_conditions_manager' ) ) {
+			return;
+		}
+		$conditions = $module->get_conditions_manager();
+		if ( ! method_exists( $conditions, 'get_documents_for_location' ) ) {
+			return;
+		}
+		$documents = $conditions->get_documents_for_location( 'single' );
+		// Ambiguous locations and unfamiliar widgets retain native gallery support.
+		if ( ! is_array( $documents ) || 1 !== count( $documents ) ) {
+			return;
+		}
+		$document = reset( $documents );
+		if ( ! is_object( $document ) || ! method_exists( $document, 'get_elements_data' ) ) {
+			return;
+		}
+		$data = $document->get_elements_data();
+		if ( ! is_array( $data ) || ! $this->uses_only_our_gallery( $data ) ) {
+			return;
+		}
+		// Rich product content can contain another gallery or a product shortcode.
+		$post = get_queried_object();
+		foreach ( array( $post->post_content ?? '', $post->post_excerpt ?? '' ) as $content ) {
+			if ( has_blocks( $content ) || str_contains( $content, '[' ) || preg_match( '~<(?:script|iframe)\b~i', $content ) ) {
+				return;
+			}
+		}
+		foreach ( array( 'wc-product-gallery-lightbox', 'wc-product-gallery-slider', 'wc-product-gallery-zoom' ) as $feature ) {
+			remove_theme_support( $feature );
+		}
+	}
+
+	/** Fail open for nested templates, third-party widgets and the native gallery. */
+	private function uses_only_our_gallery( array $elements ): bool {
+		$own = false;
+		$pending = $elements;
+		while ( $pending ) {
+			$element = array_pop( $pending );
+			$type = $element['elType'] ?? '';
+			if ( 'widget' === $type ) {
+				$widget = $element['widgetType'] ?? '';
+				if ( ! in_array( $widget, array( 'schrack_product_page', 'woocommerce-product-data-tabs', 'woocommerce-breadcrumb', 'woocommerce-product-title', 'woocommerce-product-price', 'woocommerce-product-short-description', 'woocommerce-product-add-to-cart' ), true ) ) {
+					return false;
+				}
+				$own = $own || 'schrack_product_page' === $widget;
+			} elseif ( ! in_array( $type, array( 'container', 'section', 'column' ), true ) ) {
+				return false;
+			}
+			if ( ! empty( $element['elements'] ) ) {
+				array_push( $pending, ...$element['elements'] );
+			}
+		}
+		return $own;
+	}
+
+	/** Only the inspected OneTap contract is delayed; updates retain native loading. */
+	public function configure_onetap(): void {
+		if ( is_admin() || ! $this->is_catalog_page() || ! defined( 'ACCESSIBILITY_ONETAP_VERSION' ) || '2.14.0' !== ACCESSIBILITY_ONETAP_VERSION
+			|| ! wp_script_is( 'accessibility-onetap', 'enqueued' ) || ! wp_script_is( 'onetap-hotkeys-library', 'enqueued' )
+			|| ! apply_filters( 'schrack_wc_sync_onetap_on_demand', true ) ) {
+			return;
+		}
+		$scripts = wp_scripts();
+		foreach ( array( 'accessibility-onetap' => 'script.min.js', 'onetap-hotkeys-library' => 'hotkeys.js' ) as $handle => $file ) {
+			$source = $scripts->registered[ $handle ]->src ?? '';
+			if ( strtok( $source, '?' ) !== plugins_url( 'accessibility-onetap/assets/js/' . $file ) ) {
+				return;
+			}
+		}
+		$this->onetap_on_demand = true;
+		wp_add_inline_style( 'accessibility-onetap', '.schrack-onetap-error{position:fixed;bottom:90px;left:12px;right:12px;width:max-content;max-width:calc(100vw - 24px);margin:auto;padding:10px;background:#fff;color:#9b1c1c;border:1px solid currentColor;border-radius:6px;font:14px/1.5 system-ui,sans-serif;z-index:2147483647}' );
+		wp_enqueue_script( 'schrack-wc-onetap-loader', SCHRACK_WC_SYNC_URL . 'assets/frontend-onetap.js', array( 'jquery' ), SCHRACK_WC_SYNC_VERSION, array( 'in_footer' => true, 'strategy' => 'defer' ) );
 	}
 
 	/** Keep critical widget CSS in its original cascade position, including late assets. */
@@ -116,7 +207,9 @@ class Schrack_Frontend_Performance {
 
 	/** Exclude consent initialization from LiteSpeed's delayed/minified script pipeline. */
 	public function inline_script_attributes( array $attributes ): array {
-		if ( $this->consent_enabled && str_starts_with( (string) ( $attributes['id'] ?? '' ), 'cookieadmin_' ) ) {
+		$id = (string) ( $attributes['id'] ?? '' );
+		if ( ( $this->consent_enabled && str_starts_with( $id, 'cookieadmin_' ) )
+			|| ( $this->onetap_on_demand && in_array( $id, array( 'accessibility-onetap-js-extra', 'onetap-hotkeys-library-js-extra' ), true ) ) ) {
 			$attributes['data-no-optimize'] = '1';
 			$attributes['data-no-defer'] = '1';
 		}
@@ -124,7 +217,7 @@ class Schrack_Frontend_Performance {
 	}
 
 	public function script_tag( string $tag, string $handle ): string {
-		if ( ! $this->consent_enabled || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+		if ( ( ! $this->consent_enabled && ! $this->onetap_on_demand ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 			return $tag;
 		}
 		$processor = new WP_HTML_Tag_Processor( $tag );
@@ -133,12 +226,21 @@ class Schrack_Frontend_Performance {
 			if ( ! is_string( $src ) ) {
 				continue;
 			}
-			if ( in_array( $handle, array( 'cookieadmin_js', 'cookieadmin_pro_js' ), true ) ) {
+			if ( $this->onetap_on_demand && in_array( $handle, array( 'accessibility-onetap', 'onetap-hotkeys-library' ), true ) ) {
+				$processor->set_attribute( 'type', 'text/plain' );
+				$processor->set_attribute( 'data-schrack-onetap-src', $src );
+				$processor->set_attribute( 'data-no-optimize', '1' );
+				$processor->set_attribute( 'data-no-defer', '1' );
+				$processor->remove_attribute( 'src' );
+			} elseif ( $this->onetap_on_demand && 'schrack-wc-onetap-loader' === $handle ) {
+				$processor->set_attribute( 'data-no-optimize', '1' );
+				$processor->set_attribute( 'data-no-defer', '1' );
+			} elseif ( $this->consent_enabled && in_array( $handle, array( 'cookieadmin_js', 'cookieadmin_pro_js' ), true ) ) {
 				$processor->set_attribute( 'data-no-optimize', '1' );
 				$processor->set_attribute( 'data-no-defer', '1' );
 				// Native ordered defer still finishes before DOMContentLoaded.
 				$processor->set_attribute( 'defer', true );
-			} elseif ( 'www.googletagmanager.com' === wp_parse_url( $src, PHP_URL_HOST ) && '/gtag/js' === wp_parse_url( $src, PHP_URL_PATH ) ) {
+			} elseif ( $this->consent_enabled && 'www.googletagmanager.com' === wp_parse_url( $src, PHP_URL_HOST ) && '/gtag/js' === wp_parse_url( $src, PHP_URL_PATH ) ) {
 				$processor->set_attribute( 'type', 'text/plain' );
 				$processor->set_attribute( 'data-schrack-consent-src', $src );
 				$processor->set_attribute( 'data-no-optimize', '1' );

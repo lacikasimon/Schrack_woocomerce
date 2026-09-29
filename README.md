@@ -269,7 +269,7 @@ Regression checks: `node --test tests/frontend-lazy-images.js` and
 `php tests/frontend-lazy-images.php /path/to/wordpress-source`. The PHP check uses
 WordPress's real HTML parser and sanitizer without loading a site or database.
 
-### Frontend performance (0.1.82)
+### Frontend performance (0.1.83)
 
 - The single-product image uses Schrack's verified `340x380` / `1190x1330`
   gallery presets and responsive `srcset`, eager/high-priority loading and an
@@ -315,7 +315,28 @@ WordPress's real HTML parser and sanitizer without loading a site or database.
   CookieAdmin; keep **Reload on Consent** off. Compact Romanian notice text is
   configured in CookieAdmin's existing consent form, separately from Git.
 
-Checks: `node --test tests/frontend-lazy-images.js tests/frontend-consent.js` and
+- Catalog pages opt into WordPress 6.8+'s block asset loading on demand: rendered
+  blocks still enqueue their own styles/scripts; unused form/media block assets
+  are not enqueued globally. The combined core block stylesheet is retained.
+  Opt out with `schrack_wc_sync_catalog_block_assets`.
+- A single active Elementor product template containing only our product widget
+  and known basic product/tabs widgets does not need WooCommerce's PhotoSwipe,
+  zoom or slider assets. Gallery support is omitted for that request only.
+  Native image widgets, nested templates, unknown widgets, block/shortcode product
+  content and preview pages keep native support. Opt out with
+  `schrack_wc_sync_trim_product_gallery`.
+- OneTap **2.14.0** on catalog pages initializes on toolbar activation or keyboard
+  use for new visitors. Existing saved preferences (including hidden-toolbar
+  choices) initialize immediately. Its original CSS, settings and UI remain;
+  scripts load in dependency order. Failed downloads show a retry message and
+  require another user action. Other versions/custom script sources retain native
+  loading. Opt out with `schrack_wc_sync_onetap_on_demand`.
+- Live Elementor template cleanup is separate from Git: remove the obsolete
+  container hidden on desktop/tablet/mobile when it duplicates the custom product
+  widget. Keep the visible custom widget and Product Data Tabs. Elementor revisions
+  provide rollback; do not remove any currently visible product information.
+
+Checks: `node --test tests/frontend-lazy-images.js tests/frontend-consent.js tests/frontend-onetap.js` and
 `php tests/frontend-performance.php /path/to/wordpress-source`. After pulling the
 release into the live plugin directory, purge LiteSpeed's page/optimization cache.
 

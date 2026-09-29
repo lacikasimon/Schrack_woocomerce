@@ -51,7 +51,8 @@ $external = '<link rel="stylesheet" href="' . $url . '?ver=3" media="screen">';
 try {
 	file_put_contents( $path, 'body{margin:0}' );
 	verify_image( $external === $performance->inline_catalog_style( $external, 'hello-elementor', $url, 'screen' ), 'Non-catalog pages must retain normal theme loading.' );
-	$GLOBALS['catalog_test'] = true;
+$GLOBALS['catalog_test'] = true;
+	verify_image( $performance->catalog_block_assets( false ), 'Catalog blocks must load their own assets on rendering.' );
 	$inlined = $performance->inline_catalog_style( $external, 'hello-elementor', $url . '?ver=3', 'screen' );
 	verify_image( str_contains( $inlined, '<style' ) && str_contains( $inlined, 'media="screen"' ) && str_contains( $inlined, 'body{margin:0}' ), 'Installed catalog layout rules and media must be preserved.' );
 	verify_image( $external === $performance->inline_catalog_style( $external, 'hello-elementor', 'https://cdn.example/reset.css' ), 'A CDN replacement must not be replaced with a different local file.' );
@@ -74,6 +75,34 @@ try {
 		$directory = dirname( $directory );
 	}
 }
+$GLOBALS['catalog_test'] = false;
+$gallery_check = new ReflectionMethod( $performance, 'uses_only_our_gallery' );
+$own_widget = array( 'elType' => 'widget', 'widgetType' => 'schrack_product_page' );
+$tabs_widget = array( 'elType' => 'widget', 'widgetType' => 'woocommerce-product-data-tabs' );
+verify_image( $gallery_check->invoke( $performance, array( array( 'elType' => 'container', 'elements' => array( $own_widget, $tabs_widget ) ) ) ), 'The custom product and native tabs do not require a native image gallery.' );
+foreach ( array( 'woocommerce-product-images', 'template', 'global', 'shortcode', 'third-party-gallery' ) as $other_widget ) {
+	verify_image( ! $gallery_check->invoke( $performance, array( $own_widget, array( 'elType' => 'widget', 'widgetType' => $other_widget ) ) ), 'Native galleries and unknown/nested content must retain all gallery libraries.' );
+}
+verify_image( ! $gallery_check->invoke( $performance, array( $tabs_widget ) ), 'Templates without the custom product renderer must retain gallery support.' );
+verify_image( ! $performance->catalog_block_assets( false ), 'Non-catalog pages must keep the theme block-loading policy.' );
+verify_image( $performance->catalog_block_assets( true ), 'An existing on-demand policy must remain enabled.' );
+$onetap = new ReflectionProperty( $performance, 'onetap_on_demand' );
+$onetap->setValue( $performance, true );
+$enabled->setValue( $performance, false );
+foreach ( array( 'accessibility-onetap', 'onetap-hotkeys-library' ) as $handle ) {
+	$original = '<script id="' . $handle . '-js" nonce="test-nonce" src="/onetap.js" defer></script>';
+	$inert = $performance->script_tag( $original, $handle );
+	$parsed = new WP_HTML_Tag_Processor( $inert );
+	$parsed->next_tag( 'SCRIPT' );
+	verify_image( null === $parsed->get_attribute( 'src' ) && 'text/plain' === $parsed->get_attribute( 'type' ), 'OneTap libraries must not download or execute before activation.' );
+	verify_image( '/onetap.js' === $parsed->get_attribute( 'data-schrack-onetap-src' ) && 'test-nonce' === $parsed->get_attribute( 'nonce' ), 'Original source and CSP nonce must survive.' );
+	verify_image( $inert === $performance->script_tag( $inert, $handle ), 'Repeated OneTap processing must be idempotent.' );
+	$config = $performance->inline_script_attributes( array( 'id' => $handle . '-js-extra' ) );
+	verify_image( '1' === $config['data-no-defer'], 'Vendor configuration must remain ahead of activation.' );
+}
+verify_image( $google === $performance->script_tag( $google, 'google_gtagjs' ), 'OneTap optimization alone must not change Google consent behavior.' );
+$loader = $performance->script_tag( '<script src="/loader.js" defer></script>', 'schrack-wc-onetap-loader' );
+verify_image( str_contains( $loader, 'data-no-optimize="1"' ) && ! str_contains( $loader, 'text/plain' ), 'Small accessibility loader must execute normally and bypass LiteSpeed delay.' );
 add_filter( 'schrack_wc_sync_inline_critical_css', '__return_false' );
 verify_image( $link === $performance->inline_critical_style( $link, 'schrack-wc-header', '/plugin/assets/elementor-header.css' ), 'Rollback filter must restore external loading.' );
 echo "Frontend performance total: {$checks} checks passed.\n";
