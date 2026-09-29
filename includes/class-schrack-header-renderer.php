@@ -317,6 +317,10 @@ class Schrack_Header_Renderer {
 						<img
 							class="<?php echo esc_attr( 'schrack-header__eu-logo ' . $logo['class'] ); ?>"
 							src="<?php echo esc_url( $logo['src'] ); ?>"
+							<?php if ( ! empty( $logo['srcset'] ) ) : ?>
+								srcset="<?php echo esc_attr( $logo['srcset'] ); ?>"
+								sizes="<?php echo esc_attr( $logo['sizes'] ); ?>"
+							<?php endif; ?>
 							alt="<?php echo esc_attr( $logo['alt'] ); ?>"
 							width="<?php echo esc_attr( (string) $logo['width'] ); ?>"
 							height="<?php echo esc_attr( (string) $logo['height'] ); ?>"
@@ -1197,7 +1201,9 @@ class Schrack_Header_Renderer {
 				'class'  => 'is-eu',
 				'height' => 48,
 				'href'   => 'https://european-union.europa.eu/',
-				'src'    => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat.png',
+				'src'    => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat-208.webp',
+				'srcset' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat-104.webp 104w, ' . SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat-208.webp 208w, ' . SCHRACK_WC_SYNC_URL . 'assets/eu-logos/uniunea-europeana-cofinantat-416.webp 416w',
+				'sizes'  => '(max-width: 520px) 88px, (max-width: 780px) 160px, 208px',
 				'width'  => 208,
 			),
 			array(
@@ -1205,7 +1211,9 @@ class Schrack_Header_Renderer {
 				'class'  => 'is-government',
 				'height' => 48,
 				'href'   => 'https://www.gov.ro/',
-				'src'    => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei.png',
+				'src'    => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei-48.webp',
+				'srcset' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei-48.webp 48w, ' . SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei-96.webp 96w, ' . SCHRACK_WC_SYNC_URL . 'assets/eu-logos/guvernul-romaniei-144.webp 144w',
+				'sizes'  => '(max-width: 520px) 32px, (max-width: 780px) 40px, 48px',
 				'width'  => 48,
 			),
 			array(
@@ -1213,7 +1221,9 @@ class Schrack_Header_Renderer {
 				'class'  => 'is-regio',
 				'height' => 48,
 				'href'   => 'https://regionordvest.ro/',
-				'src'    => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest.png',
+				'src'    => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest-48.webp',
+				'srcset' => SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest-48.webp 48w, ' . SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest-96.webp 96w, ' . SCHRACK_WC_SYNC_URL . 'assets/eu-logos/regio-nord-vest-144.webp 144w',
+				'sizes'  => '(max-width: 520px) 32px, (max-width: 780px) 40px, 48px',
 				'width'  => 48,
 			),
 			array(

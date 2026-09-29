@@ -1,7 +1,7 @@
 (function () {
 	'use strict';
 
-	const selector = 'img[data-schrack-image-src]';
+	const selector = 'img[data-schrack-image-src], img[data-schrack-image-fallback]';
 
 	function start() {
 		// One observer also serves cards inserted by filtering, pagination or Elementor.
@@ -30,6 +30,8 @@
 			function onLoad() { finish(image.naturalWidth <= 1 || image.naturalHeight <= 1); }
 			image.addEventListener('error', onError);
 			image.addEventListener('load', onLoad);
+			// Eager gallery images can finish before this deferred script runs.
+			if (image.complete && image.getAttribute('data-schrack-image-src') === null) onLoad();
 		}
 
 		function load(image) {
@@ -63,6 +65,7 @@
 
 		function observe(image) {
 			prepareFallback(image);
+			if (image.getAttribute('data-schrack-image-src') === null) return;
 			if (observer) {
 				observer.observe(image);
 			} else {

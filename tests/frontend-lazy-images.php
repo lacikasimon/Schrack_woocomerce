@@ -14,7 +14,8 @@ if ( ! is_file( $wordpress . '/wp-includes/kses.php' ) ) {
 define( 'ABSPATH', rtrim( $wordpress, '/' ) . '/' );
 define( 'WPINC', 'wp-includes' );
 define( 'SCHRACK_WC_SYNC_URL', '/plugin/' );
-foreach ( array( 'compat.php', 'load.php', 'plugin.php', 'functions.php', 'formatting.php', 'kses.php' ) as $file ) {
+define( 'SCHRACK_WC_SYNC_PATH', dirname( __DIR__ ) . '/' );
+foreach ( array( 'compat.php', 'load.php', 'plugin.php', 'functions.php', 'formatting.php', 'kses.php', 'shortcodes.php', 'media.php' ) as $file ) {
 	require_once ABSPATH . WPINC . '/' . $file;
 }
 // Avoid reading the charset option from a database in this source-only harness.
@@ -107,10 +108,15 @@ $card_fallback = new WP_HTML_Tag_Processor( substr( $card, strpos( $card, $noscr
 $card_fallback->next_tag( 'IMG' );
 verify_image( $supplier_url === $card_fallback->get_attribute( 'src' ) && null === $card_fallback->get_attribute( 'data-schrack-image-fallback' ), 'No-JS cards must use the original, not an unchecked CDN URL.' );
 verify_image( $supplier_url === $attributes['src'], 'Renderers without our loader must retain their existing source.' );
-foreach ( array( 'woocommerce_single', 'full', 'custom-large', array( 800, 800 ) ) as $size ) {
+foreach ( array( 'full', 'custom-large', array( 800, 800 ) ) as $size ) {
 	$large = $remote_attributes->invoke( $loader, $product, $size, array(), $supplier_url );
 	verify_image( ! isset( $large['data-schrack-image-thumbnail'] ) && $supplier_url === $large['src'], 'Full images and unknown sizes must not be downsized.' );
 }
+$main = $remote_attributes->invoke( $loader, $product, 'woocommerce_single', array(), $supplier_url );
+verify_image( 'https://image.schrackcdn.com/340x380/f_liim0030-a.jpg' === $main['src'], 'Main image must use the verified gallery preview.' );
+verify_image( str_contains( $main['srcset'], '/1190x1330/f_liim0030-a.jpg 1190w' ), 'Retina main images need the verified larger candidate.' );
+verify_image( 'eager' === $main['loading'] && 'high' === $main['fetchpriority'] && '1' === $main['data-no-lazy'], 'LCP must be immediately discoverable, with no second lazy loader.' );
+verify_image( 340 === $main['width'] && 380 === $main['height'] && $supplier_url === $main['data-schrack-image-fallback'], 'Gallery dimensions and one-time original fallback must match the CDN preset.' );
 $eager = $remote_attributes->invoke( $loader, $product, 'woocommerce_thumbnail', array( 'loading' => 'eager' ), $supplier_url );
 verify_image( ! str_contains( Schrack_Frontend_Image_Loader::lazy_image_html( '<img ' . $serialize->invoke( $loader, $eager ) . '>' ), 'data-schrack-image-src=' ), 'High-priority images must keep their eager behaviour.' );
 foreach ( array(
@@ -127,10 +133,20 @@ foreach ( array(
 ) as $unsupported ) {
 	$unchanged = $remote_attributes->invoke( $loader, $product, 'woocommerce_thumbnail', array(), $unsupported );
 	verify_image( ! isset( $unchanged['data-schrack-image-thumbnail'] ) && $unsupported === $unchanged['src'], 'Only recognised supplier originals may be mapped: ' . $unsupported );
+	$main_unchanged = $remote_attributes->invoke( $loader, $product, 'woocommerce_single', array(), $unsupported );
+	verify_image( $unsupported === $main_unchanged['src'] && ! isset( $main_unchanged['srcset'] ), 'Main image mapping must reject unsupported URLs too.' );
 }
 $cdn_original = $remote_attributes->invoke( $loader, $product, 'woocommerce_thumbnail', array(), 'https://image.schrackcdn.com/foto/f_liim0030-a.jpg' );
 verify_image( $cdn_url === $cdn_original['data-schrack-image-thumbnail'], 'The supplier CDN original host is also supported.' );
 $forged = str_replace( $cdn_url, 'https://other.example/image.jpg', '<img ' . $serialize->invoke( $loader, $attributes ) . '>' );
 verify_image( ! str_contains( Schrack_Frontend_Image_Loader::lazy_image_html( $forged ), 'https://other.example' ), 'An unrelated thumbnail marker must never override the original.' );
+
+$banner = Schrack_Frontend_Image_Loader::category_image_attributes( '/plugin/assets/home-category-banners/benzi-led-si-accesorii-2.webp' );
+verify_image( str_contains( $banner, '-480.webp"' ) && str_contains( $banner, ' 720w' ), 'Bundled banners must advertise existing responsive files.' );
+$deferred_banner = Schrack_Frontend_Image_Loader::lazy_image_html( '<img ' . $banner . ' loading="lazy">' );
+verify_image( str_contains( $deferred_banner, 'data-schrack-image-srcset=' ), 'Lazy banner srcset must be deferred along with src.' );
+foreach ( array( 'https://custom.example/photo.webp', '/plugin/assets/home-category-banners/../../private.webp', '/plugin/assets/home-category-banners/missing.webp' ) as $custom ) {
+	verify_image( 'src="' . esc_url( $custom ) . '"' === Schrack_Frontend_Image_Loader::category_image_attributes( $custom ), 'Custom/missing banners must preserve their source.' );
+}
 
 echo "Frontend image markup: {$checks} checks passed.\n";

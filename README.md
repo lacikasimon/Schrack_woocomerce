@@ -254,7 +254,7 @@ reprocessing these images and delaying the small loader script.
 For remote Schrack JPGs in these cards, the loader uses the supplier's own
 `image.schrackcdn.com/260x145/` catalogue preset. Only recognised `/foto/f_*.jpg`
 URLs on the two official image hosts are eligible; other suppliers, query strings,
-local media, full-size images and the single-product hero keep their existing URLs.
+local media and explicit full-size image requests keep their existing URLs.
 An unavailable or 1x1 CDN response falls back once to the original image. With
 JavaScript disabled, the original is used directly. Stored image URLs and media
 import jobs are unchanged; no bulk image download is needed.
@@ -268,6 +268,40 @@ cache so cached pages receive the new markup and versioned loader.
 Regression checks: `node --test tests/frontend-lazy-images.js` and
 `php tests/frontend-lazy-images.php /path/to/wordpress-source`. The PHP check uses
 WordPress's real HTML parser and sanitizer without loading a site or database.
+
+### Frontend performance (0.1.81)
+
+- The single-product image uses Schrack's verified `340x380` / `1190x1330`
+  gallery presets and responsive `srcset`, eager/high-priority loading and an
+  explicit LiteSpeed lazy-load exclusion. The original remains accessible through
+  the image link, and is restored once if the CDN fails (including cached 1x1
+  responses). Other suppliers and signed URLs are not rewritten.
+- Header search results use the same deferred CDN card loader, including AJAX
+  results. Bundled category artwork has 240/480/720 px WebP variants; funding
+  logos have lossless WebP variants with responsive sizes. Original files remain.
+- Header, search, category, product-page and support CSS is inlined only when its
+  handle is already being printed, preserving cascade order and conditional
+  loading. This avoids extra blocking requests on a cold visit at the cost of
+  adding the CSS to HTML. Other plugins and checkout styles retain normal loading.
+  A custom source URL or future CSS containing asset URLs/imports falls back to
+  the external stylesheet. To disable this optimization use
+  `add_filter( 'schrack_wc_sync_inline_critical_css', '__return_false' );`.
+- CookieAdmin remains the consent UI and preference/log storage. Its scripts use
+  ordered native defer, excluded from LiteSpeed processing. A small integration
+  for CookieAdmin 1.2.2 leaves the Google `gtag/js` URL inert until analytics or
+  marketing consent is saved. Cached HTML is identical for all visitors; the
+  browser reads the existing consent cookie. Categories map independently to
+  Consent Mode v2, including withdrawal, without reload or polling. After a tag
+  has loaded, withdrawal changes its consent state; it does not unload Google's
+  running library. Google's denied mode may still send cookieless signals.
+  The integration is inactive when CookieAdmin is not enqueued. If its save API
+  is unavailable, the tag stays blocked. Retest this integration after updating
+  CookieAdmin; keep **Reload on Consent** off. Compact Romanian notice text is
+  configured in CookieAdmin's existing consent form, separately from Git.
+
+Checks: `node --test tests/frontend-lazy-images.js tests/frontend-consent.js` and
+`php tests/frontend-performance.php /path/to/wordpress-source`. After pulling the
+release into the live plugin directory, purge LiteSpeed's page/optimization cache.
 
 Telesystem is handled as a separate catalog source. Its products are marked with `_schrack_catalog_source = telesystem` and source-specific metadata such as `_telesystem_item_number`, `_telesystem_price_1`, `_telesystem_price_2`, `_telesystem_stock_text`, and `_telesystem_technical_attributes`. WooCommerce SKUs are prefixed with `TS-` while the original feed code remains in `_telesystem_item_number`, preventing collisions with Schrack item numbers. Telesystem products are not given `_schrack_item_number`, so Schrack SOAP price and stock syncs do not process them. The shared image queue still uses `_schrack_image_url` so Telesystem product images can be downloaded by the existing image sync.
 

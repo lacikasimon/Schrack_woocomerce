@@ -167,6 +167,38 @@ class Schrack_Frontend_Image_Loader {
 		return $tag->get_updated_html() . '<noscript class="schrack-image-fallback">' . $fallback . '</noscript>';
 	}
 
+	/** Responsive variants only for the bundled category artwork; custom URLs stay intact. */
+	public static function category_image_attributes( string $url ): string {
+		$base = SCHRACK_WC_SYNC_URL . 'assets/home-category-banners/';
+		if ( ! str_starts_with( $url, $base ) ) {
+			return 'src="' . esc_url( $url ) . '"';
+		}
+		$name = substr( $url, strlen( $base ) );
+		if ( ! preg_match( '/^[a-z0-9-]+\.webp$/D', $name ) ) {
+			return 'src="' . esc_url( $url ) . '"';
+		}
+		$stem = substr( $name, 0, -5 );
+		if ( ! is_readable( SCHRACK_WC_SYNC_PATH . 'assets/home-category-banners/' . $name ) ) {
+			return 'src="' . esc_url( $url ) . '"';
+		}
+		$dimensions = wp_getimagesize( SCHRACK_WC_SYNC_PATH . 'assets/home-category-banners/' . $name );
+		if ( ! is_array( $dimensions ) ) {
+			return 'src="' . esc_url( $url ) . '"';
+		}
+		foreach ( array( 240, 480, 720 ) as $width ) {
+			if ( ! is_readable( SCHRACK_WC_SYNC_PATH . 'assets/home-category-banners/' . $stem . '-' . $width . '.webp' ) ) {
+				return 'src="' . esc_url( $url ) . '"';
+			}
+		}
+		return sprintf(
+			'src="%s" srcset="%s" sizes="(max-width: 560px) 78vw, (max-width: 782px) 72vw, 240px" width="%d" height="%d"',
+			esc_url( $base . $stem . '-480.webp' ),
+			esc_attr( $base . $stem . '-240.webp 240w, ' . $base . $stem . '-480.webp 480w, ' . $base . $stem . '-720.webp 720w, ' . $url . ' ' . $dimensions[0] . 'w' ),
+			$dimensions[0],
+			$dimensions[1]
+		);
+	}
+
 	/**
 	 * Queues the queried WooCommerce product image import before templates render.
 	 */
@@ -552,6 +584,22 @@ class Schrack_Frontend_Image_Loader {
 			}
 		}
 
+		// Verified presets used by Schrack's own product gallery, with equal aspect
+		// ratios. Full-size/unknown requests and other suppliers retain the original.
+		if ( 'woocommerce_single' === $size ) {
+			$preview = self::remote_thumbnail_url( $image_url, '340x380' );
+			if ( $preview !== $image_url ) {
+				$attr['src'] = $preview;
+				$attr['srcset'] = $preview . ' 340w, ' . self::remote_thumbnail_url( $image_url, '1190x1330' ) . ' 1190w';
+				$attr['sizes'] = '(max-width: 767px) calc(100vw - 48px), (max-width: 1200px) 45vw, 560px';
+				$attr['width'] = 340;
+				$attr['height'] = 380;
+				$attr['data-schrack-image-fallback'] = $image_url;
+			}
+			$attr['loading'] = 'eager';
+			$attr['data-no-lazy'] = '1';
+		}
+
 		if ( empty( $attr['width'] ) || empty( $attr['height'] ) ) {
 			$dimensions = $this->remote_image_dimensions( $size );
 
@@ -580,12 +628,12 @@ class Schrack_Frontend_Image_Loader {
 	 * Do not invent arbitrary sizes: unsupported presets return a 1x1 image.
 	 * Keep other suppliers, signed URLs and unrecognised paths unchanged.
 	 */
-	private static function remote_thumbnail_url( string $image_url ): string {
+	private static function remote_thumbnail_url( string $image_url, string $preset = '260x145' ): string {
 		if ( ! preg_match( '~^https?://(?:image\.schrack\.com|image\.schrackcdn\.com)/foto/(f_[a-z0-9_-]+\.jpg)$~iD', $image_url, $matches ) ) {
 			return $image_url;
 		}
 
-		return 'https://image.schrackcdn.com/260x145/' . $matches[1];
+		return 'https://image.schrackcdn.com/' . $preset . '/' . $matches[1];
 	}
 
 	/**

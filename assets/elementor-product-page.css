@@ -160,6 +160,15 @@
 	overflow: hidden;
 }
 
+.schrack-product-page__zoom {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	cursor: zoom-in;
+}
+
 .schrack-product-page__main-image img {
 	display: block;
 	height: 100%;

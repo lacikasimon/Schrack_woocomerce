@@ -281,7 +281,9 @@ class Schrack_Product_Page_Renderer {
 				);
 
 				if ( '' !== $remote_image ) {
+					echo '<a class="schrack-product-page__zoom" href="' . esc_url( (string) $product->get_meta( '_schrack_image_url', true ) ) . '" target="_blank" rel="noopener noreferrer" aria-label="' . esc_attr__( 'Deschide imaginea la dimensiunea originală', 'schrack-woocommerce-sync' ) . '">';
 					echo $remote_image; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo '</a>';
 				} elseif ( empty( $image_ids ) ) {
 					echo wc_placeholder_img( 'woocommerce_single' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				} else {
@@ -291,6 +293,8 @@ class Schrack_Product_Page_Renderer {
 						false,
 						array(
 							'loading' => 'eager',
+							'fetchpriority' => 'high',
+							'data-no-lazy' => '1',
 						)
 					); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				}

@@ -785,7 +785,7 @@ class Schrack_Header_Search_Renderer {
 		<a class="schrack-header-search__item" href="<?php echo esc_url( $product->get_permalink() ); ?>" role="option">
 			<?php if ( $settings['show_images'] ) : ?>
 				<span class="schrack-header-search__image">
-					<?php echo $product->get_image( 'woocommerce_thumbnail' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo Schrack_Frontend_Image_Loader::lazy_image_html( $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Sanitized by the image helper. ?>
 				</span>
 			<?php endif; ?>
 			<span class="schrack-header-search__body">

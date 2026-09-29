@@ -16,7 +16,7 @@ function image(attributes = {}) {
 		getAttribute(key) { return this.attributes[key] ?? null; },
 		setAttribute(key, value) { this.attributes[key] = value; this.writes.push(key); },
 		removeAttribute(key) { delete this.attributes[key]; },
-		matches() { return this.getAttribute('data-schrack-image-src') !== null; },
+		matches() { return this.getAttribute('data-schrack-image-src') !== null || this.getAttribute('data-schrack-image-fallback') !== null; },
 		querySelectorAll() { return []; }
 	};
 }
@@ -145,4 +145,30 @@ test('CDN failure handling also works without IntersectionObserver', () => {
 	assert.equal(card.getAttribute('src'), '/cdn.jpg');
 	card.dispatch('error');
 	assert.equal(card.getAttribute('src'), '/original.jpg');
+});
+
+for (const width of [0, 1, 340]) {
+	test(`already completed eager gallery image (${width}px) is checked without lazy loading`, () => {
+		const main = image({ src: '/preview.jpg', 'data-schrack-image-fallback': '/original.jpg' });
+		main.removeAttribute('data-schrack-image-src');
+		main.complete = true;
+		main.naturalWidth = width;
+		main.naturalHeight = width;
+		const state = setup([main]);
+		assert.equal(state.observed.size, 0);
+		assert.equal(main.getAttribute('src'), width > 1 ? '/preview.jpg' : '/original.jpg');
+		assert.equal(main.getAttribute('data-schrack-image-fallback'), null);
+		main.dispatch('error');
+		assert.equal(main.getAttribute('src'), width > 1 ? '/preview.jpg' : '/original.jpg');
+	});
+}
+
+test('pending eager gallery image retains fallback listeners until load', () => {
+	const main = image({ src: '/preview.jpg', 'data-schrack-image-fallback': '/original.jpg' });
+	main.removeAttribute('data-schrack-image-src');
+	main.complete = false;
+	setup([main]);
+	assert.equal(main.getAttribute('src'), '/preview.jpg');
+	main.dispatch('error');
+	assert.equal(main.getAttribute('src'), '/original.jpg');
 });
