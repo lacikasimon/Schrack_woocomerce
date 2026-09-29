@@ -370,7 +370,7 @@ class Schrack_Featured_Categories_Renderer {
 		// The homepage renders several category grids. Cache their selection IDs,
 		// while always rebuilding product objects and checking current availability.
 		$cacheable = ! is_user_logged_in() && ( ! function_exists( 'WC' ) || ! WC()->session || ! WC()->session->has_session() );
-		$key = 'schrack_fcat_picks_' . md5( wp_json_encode( array( $args, determine_locale() ) ) );
+		$key = 'schrack_fcat_picks_v2_' . md5( wp_json_encode( array( $args, determine_locale() ) ) );
 		$ids = $cacheable ? get_transient( $key ) : false;
 		if ( ! is_array( $ids ) ) {
 			$ids = Schrack_Catalog_Query::product_ids( $args );

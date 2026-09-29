@@ -420,7 +420,7 @@ The SOAP client is aligned to the received Schrack templates:
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
 
 
-## Store response time tools (v0.1.89)
+## Store response time tools (v0.1.90)
 
 **WooCommerce → Performanță magazin** provides an optional public page warmer.
 Save 1–20 canonical URLs (home, shop, public products or product categories) and
@@ -472,6 +472,8 @@ indexed lookup in WooCommerce's product metadata table. Extra or unfamiliar meta
 conditions and an in-progress lookup regeneration retain the original query.
 The filter `schrack_wc_sync_catalog_stock_lookup` can disable this optimization.
 WordPress post/term/meta caches are primed together before product objects load.
+The header shares the category-image ID cache. The featured-category widget only
+builds its 500-entry category picker in the editor/admin, not on public renders.
 
 Regressions: `php tests/cache-warmer.php`,
 `php tests/cache-invalidation.php /path/to/wordpress-source` and

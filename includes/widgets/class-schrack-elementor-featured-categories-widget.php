@@ -340,6 +340,10 @@ class Schrack_Elementor_Featured_Categories_Widget extends \Elementor\Widget_Bas
 	 * @return array<int,string>
 	 */
 	private function category_options(): array {
+		// The saved category ID renders directly; only the editor needs the 500 labels.
+		if ( ! is_admin() && ! \Elementor\Plugin::$instance->editor->is_edit_mode() ) {
+			return array();
+		}
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
 			return array();
 		}

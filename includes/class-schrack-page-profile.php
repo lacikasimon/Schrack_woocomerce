@@ -26,10 +26,10 @@ final class Schrack_Page_Profile {
 		$documents = array();
 		$widgets = array();
 		$widget_starts = array();
-		add_action( 'elementor/widget/before_render', static function ( $widget ) use ( &$widget_starts ): void {
+		add_action( 'elementor/frontend/widget/before_render', static function ( $widget ) use ( &$widget_starts ): void {
 			$widget_starts[ spl_object_id( $widget ) ] = microtime( true );
 		}, PHP_INT_MIN );
-		add_action( 'elementor/widget/after_render', static function ( $widget ) use ( &$widget_starts, &$widgets ): void {
+		add_action( 'elementor/frontend/widget/after_render', static function ( $widget ) use ( &$widget_starts, &$widgets ): void {
 			$key = spl_object_id( $widget );
 			if ( ! isset( $widget_starts[ $key ] ) ) { return; }
 			$name = get_class( $widget );

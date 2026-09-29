@@ -58,4 +58,8 @@ $cache=[];$query_ids=[];$gridrun();$gridrun();check_home(count($calls)===6,'Empt
 $image=new ReflectionMethod($featured,'first_product_thumbnail_id');$cache=[];$query_ids=[10];$thumbnail=96;$status='publish';$before=$queries;
 check_home(96===$image->invoke($featured,$term),'Featured image fallback works.');$thumbnail=97;
 check_home(97===$image->invoke($featured,$term) && $queries===$before+1,'Featured thumbnail changes stay live without repeated scans.');
+require __DIR__.'/../includes/class-schrack-header-renderer.php';
+$header=new Schrack_Header_Renderer();$image=new ReflectionMethod($header,'first_product_thumbnail_id');
+$before=$queries;check_home(97===$image->invoke($header,$term) && $queries===$before,'Header reuses the homepage category thumbnail ID cache.');
+$status='draft';check_home(0===$image->invoke($header,$term),'Header immediately stops displaying a newly unpublished product image.');
 echo "Homepage selections: $checks checks passed.\n";

@@ -878,6 +878,12 @@ class Schrack_Header_Renderer {
 	 * Finds the first product thumbnail in a category without loading products.
 	 */
 	private function first_product_thumbnail_id( WP_Term $term ): int {
+		$key = 'schrack_home_thumb_' . (int) $term->term_id;
+		$cached = get_transient( $key );
+		if ( is_array( $cached ) && isset( $cached['product_id'] ) ) {
+			$id = (int) $cached['product_id'];
+			return $id > 0 && 'publish' === get_post_status( $id ) ? absint( get_post_thumbnail_id( $id ) ) : 0;
+		}
 		$posts = get_posts(
 			array(
 				'post_type'              => 'product',
@@ -904,11 +910,9 @@ class Schrack_Header_Renderer {
 			)
 		);
 
-		if ( empty( $posts ) ) {
-			return 0;
-		}
-
-		return absint( get_post_thumbnail_id( (int) $posts[0] ) );
+		$id = empty( $posts ) ? 0 : (int) $posts[0];
+		set_transient( $key, array( 'product_id' => $id ), 10 * MINUTE_IN_SECONDS );
+		return $id ? absint( get_post_thumbnail_id( $id ) ) : 0;
 	}
 
 	/**
