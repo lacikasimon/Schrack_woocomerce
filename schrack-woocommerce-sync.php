@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Importator produse furnizori
  * Description: Importă datele cataloagelor furnizorilor și sincronizează prețurile de achiziție și stocurile produselor WooCommerce.
- * Version: 0.1.83
+ * Version: 0.1.84
  * Author: Syshub
  * Requires PHP: 8.1
  * Requires Plugins: woocommerce
@@ -16,10 +16,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SCHRACK_WC_SYNC_VERSION', '0.1.83' );
+define( 'SCHRACK_WC_SYNC_VERSION', '0.1.84' );
 define( 'SCHRACK_WC_SYNC_FILE', __FILE__ );
 define( 'SCHRACK_WC_SYNC_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SCHRACK_WC_SYNC_URL', plugin_dir_url( __FILE__ ) );
+
+require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-page-profile.php';
+Schrack_Page_Profile::maybe_start();
 
 /**
  * Returns the Romanian form of a legacy English or Hungarian plugin string.

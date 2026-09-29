@@ -420,6 +420,38 @@ The SOAP client is aligned to the received Schrack templates:
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
 
 
+## Store response time tools (v0.1.84)
+
+**WooCommerce → Performanță magazin** provides an optional public page warmer.
+Save 1–20 canonical URLs (home, shop, public products or product categories) and
+enable the hourly cycle, or start a single run. One anonymous GET is made per minute;
+failed requests wait five minutes and three consecutive failures stop the run.
+The stop button also disables future automatic runs. Redirects, query parameters,
+foreign hosts, account/checkout pages and hidden/password protected products are
+rejected. Every URL is revalidated before fetching. No shopper cookies are sent.
+Only explicit MISS/HIT response headers are labelled as such; an HTTP 200 alone
+does not prove that caching works. Displayed request durations include the response
+body and are not TTFB.
+
+Progress is stored across short WP-Cron runs with a MySQL connection lock. A real
+hosting cron calling WordPress every minute is recommended (no SSH is necessary to
+configure it in cPanel). Full LiteSpeed page purges trigger a delayed, coalesced
+warmup when automation is enabled. The warmer does not change cache TTLs, cache
+eligibility, price/stock invalidation or the native crawler's server configuration.
+Pages outside the bounded list and personalized requests still need normal PHP
+rendering. Deactivation clears the warmer's scheduled jobs.
+
+The same screen can measure one saved URL without cache. A one-use, 60-second
+ticket bound to the requested URI authorizes the anonymous measurement; results
+are returned only through capability/nonce protected admin AJAX. Only PHP phase
+timings, SQL counts/aggregate timings and peak memory are retained for at most five
+minutes. SQL strings and customer/session data are never stored in the result.
+Instrumentation begins when this plugin file loads, so earlier SQL is not timed.
+The measurement adds a small amount of overhead and is not a browser TTFB test.
+
+Regressions: `php tests/cache-warmer.php` and
+`node --test tests/admin-cache-warmer.js` (no live database or HTTP requests).
+
 ## eDoc ERP integration (v0.1.73)
 
 Open **WooCommerce → eDoc ERP**. The integration is disabled by default. Configure a
