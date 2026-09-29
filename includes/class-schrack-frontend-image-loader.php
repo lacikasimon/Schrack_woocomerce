@@ -64,10 +64,99 @@ class Schrack_Frontend_Image_Loader {
 	 * Registers WooCommerce image fallback and background import hooks.
 	 */
 	public function init(): void {
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_lazy_images' ) );
+		add_action( 'wp_head', array( $this, 'lazy_images_noscript_style' ) );
+		add_filter( 'script_loader_tag', array( $this, 'lazy_images_script_tag' ), 10, 2 );
 		add_action( 'woocommerce_before_single_product', array( $this, 'ensure_current_product_image' ), 5 );
 		add_action( self::BACKGROUND_HOOK, array( $this, 'download_background_product_image' ), 10, 1 );
 		add_filter( 'woocommerce_product_get_image', array( $this, 'remote_product_image_filter' ), 10, 6 );
 		add_filter( 'woocommerce_single_product_image_thumbnail_html', array( $this, 'remote_single_product_image_filter' ), 10, 2 );
+	}
+
+	/**
+	 * Available before any AJAX product cards arrive, including initially empty grids.
+	 */
+	public function enqueue_lazy_images(): void {
+		wp_enqueue_script(
+			'schrack-wc-lazy-images',
+			SCHRACK_WC_SYNC_URL . 'assets/frontend-lazy-images.js',
+			array(),
+			SCHRACK_WC_SYNC_VERSION,
+			array( 'in_footer' => true, 'strategy' => 'defer' )
+		);
+	}
+
+	/**
+	 * Keep the image loader available even when LiteSpeed delays other scripts.
+	 */
+	public function lazy_images_script_tag( string $tag, string $handle ): string {
+		if ( 'schrack-wc-lazy-images' !== $handle ) {
+			return $tag;
+		}
+
+		return str_replace( '<script ', '<script data-no-optimize="1" data-no-defer="1" ', $tag );
+	}
+
+	/**
+	 * With JavaScript disabled, show only the original image in the noscript fallback.
+	 */
+	public function lazy_images_noscript_style(): void {
+		echo '<noscript><style>img[data-schrack-image-src]{display:none!important}</style></noscript>';
+	}
+
+	/**
+	 * Defers an explicitly lazy product-card image until it approaches the viewport.
+	 *
+	 * Sanitize before adding our trusted noscript wrapper: KSES would otherwise strip
+	 * that wrapper and expose the fallback URL to the browser's preload scanner.
+	 * Hero/eager images and third-party picture/lazy loaders retain their own behavior.
+	 */
+	public static function lazy_image_html( string $image ): string {
+		$has_picture = false !== stripos( $image, '<picture' ) || false !== stripos( $image, '<source' );
+		$allowed     = wp_kses_allowed_html( 'post' );
+		foreach ( array( 'srcset', 'sizes', 'decoding', 'fetchpriority' ) as $attribute ) {
+			$allowed['img'][ $attribute ] = true;
+		}
+		$image = wp_kses( $image, $allowed );
+
+		if ( ! class_exists( 'WP_HTML_Tag_Processor' ) || $has_picture ) {
+			return $image;
+		}
+
+		$tag = new WP_HTML_Tag_Processor( $image );
+		if ( ! $tag->next_tag( 'IMG' ) || 'lazy' !== $tag->get_attribute( 'loading' ) || 'high' === $tag->get_attribute( 'fetchpriority' ) ) {
+			return $image;
+		}
+
+		foreach ( array( 'data-src', 'data-srcset', 'data-lazy-src', 'data-lazy-srcset', 'data-no-lazy', 'data-schrack-image-src' ) as $attribute ) {
+			if ( null !== $tag->get_attribute( $attribute ) ) {
+				return $image;
+			}
+		}
+
+		$src = $tag->get_attribute( 'src' );
+		if ( ! is_string( $src ) || '' === trim( $src ) ) {
+			return $image;
+		}
+
+		$tag->set_attribute( 'data-no-lazy', '1' );
+		$fallback = $tag->get_updated_html();
+		$tag->set_attribute( 'data-schrack-image-src', $src );
+		$tag->set_attribute( 'src', SCHRACK_WC_SYNC_URL . 'assets/image-placeholder.svg' );
+		foreach ( array( 'srcset', 'sizes' ) as $attribute ) {
+			$value = $tag->get_attribute( $attribute );
+			if ( is_string( $value ) && '' !== $value ) {
+				$tag->set_attribute( 'data-schrack-image-' . $attribute, $value );
+			}
+			$tag->remove_attribute( $attribute );
+		}
+
+		// Multi-image markup may be managed by a gallery or another plugin.
+		if ( $tag->next_tag( 'IMG' ) ) {
+			return $image;
+		}
+
+		return $tag->get_updated_html() . '<noscript>' . $fallback . '</noscript>';
 	}
 
 	/**

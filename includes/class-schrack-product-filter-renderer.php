@@ -1395,7 +1395,7 @@ class Schrack_Product_Filter_Renderer {
 			$product = $this->frontend_image_loader()->ensure_product_image( $product, 3 );
 		}
 
-		$image      = $settings['show_images'] ? $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) : '';
+		$image      = $settings['show_images'] ? Schrack_Frontend_Image_Loader::lazy_image_html( $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy' ) ) ) : '';
 		$cart_class = 'schrack-product-card__cart button add_to_cart_button';
 		$show_cart_button = $settings['show_add_to_cart'] && $product->is_purchasable() && $product->is_in_stock();
 		$stock_badge = Schrack_Stock_Label::badge( $product );

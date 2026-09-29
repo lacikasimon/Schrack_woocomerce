@@ -1014,7 +1014,7 @@ class Schrack_Homepage_Renderer {
 		?>
 		<article class="schrack-home__product-card">
 			<a class="schrack-home__product-image" href="<?php echo esc_url( $link ); ?>">
-				<?php echo wp_kses_post( $product->get_image( 'woocommerce_thumbnail', array( 'decoding' => 'async', 'loading' => 'lazy' ) ) ); ?>
+				<?php echo Schrack_Frontend_Image_Loader::lazy_image_html( $product->get_image( 'woocommerce_thumbnail', array( 'decoding' => 'async', 'loading' => 'lazy' ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Sanitized by the image helper. ?>
 			</a>
 			<div class="schrack-home__product-body">
 				<a href="<?php echo esc_url( $link ); ?>"><?php echo esc_html( $product->get_name() ); ?></a>

@@ -244,6 +244,20 @@ When `Parallel catalog workers` is above one and Action Scheduler is available, 
 
 Catalog sync stores product image URLs in `_schrack_image_url`. If media-library image import is enabled, image sync then claims existing products with pending image URLs and dispatches parallel Action Scheduler workers, controlled by the image batch size, follow-up delay, download timeout, retry cooldown, and `Parallel image workers` settings. If image import is disabled, pending products are left with their external image URLs and the storefront remote-image fallback continues to use those URLs for products without downloaded images. Image workers stop before PHP timeout/memory pressure and release unfinished claims for the next wave. Failed image downloads are marked in product meta and retried after a cooldown.
 
+Homepage, featured-category and filter/archive product cards defer their image URLs
+until they are within 100 px of the viewport. This also covers cards inserted by
+AJAX filtering and pagination. Local thumbnails retain their responsive `srcset`
+and `sizes`; the single-product hero remains eager. A `noscript` fallback displays
+the original image when JavaScript is disabled. WordPress versions without the
+HTML Tag Processor retain native lazy loading. LiteSpeed is excluded from
+reprocessing these images and delaying the small loader script. This reduces
+initial downloads; it does not resize supplier originals when they are displayed.
+After deploying this change through Git, purge the LiteSpeed page/optimization
+cache so cached pages receive the new markup and versioned loader.
+Regression checks: `node --test tests/frontend-lazy-images.js` and
+`php tests/frontend-lazy-images.php /path/to/wordpress-source`. The PHP check uses
+WordPress's real HTML parser and sanitizer without loading a site or database.
+
 Telesystem is handled as a separate catalog source. Its products are marked with `_schrack_catalog_source = telesystem` and source-specific metadata such as `_telesystem_item_number`, `_telesystem_price_1`, `_telesystem_price_2`, `_telesystem_stock_text`, and `_telesystem_technical_attributes`. WooCommerce SKUs are prefixed with `TS-` while the original feed code remains in `_telesystem_item_number`, preventing collisions with Schrack item numbers. Telesystem products are not given `_schrack_item_number`, so Schrack SOAP price and stock syncs do not process them. The shared image queue still uses `_schrack_image_url` so Telesystem product images can be downloaded by the existing image sync.
 
 ## WP-CLI
