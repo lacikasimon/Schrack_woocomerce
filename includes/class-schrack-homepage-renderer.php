@@ -944,7 +944,7 @@ class Schrack_Homepage_Renderer {
 			'limit'        => (int) $settings['recommended_product_limit'],
 			'orderby'      => 'popularity',
 			'order'        => 'DESC',
-			'return'       => 'objects',
+			'return'       => 'ids',
 		);
 
 		$slugs = $this->recommended_term_slugs( $terms );
@@ -953,21 +953,27 @@ class Schrack_Homepage_Renderer {
 			$args['category'] = $slugs;
 		}
 
-		$products = wc_get_products( $args );
-
-		if ( empty( $products ) && isset( $args['category'] ) ) {
-			unset( $args['category'] );
-			$products = wc_get_products( $args );
+		// Cache only the public ranking, never product objects, prices or stock.
+		// Logged-in/session visitors retain any personalized query filters.
+		$cacheable = ! is_user_logged_in() && ( ! function_exists( 'WC' ) || ! WC()->session || ! WC()->session->has_session() );
+		$key = 'schrack_home_picks_' . md5( wp_json_encode( array( $args, determine_locale() ) ) );
+		$ids = $cacheable ? get_transient( $key ) : false;
+		if ( ! is_array( $ids ) ) {
+			$ids = wc_get_products( $args );
+			if ( empty( $ids ) && isset( $args['category'] ) ) {
+				unset( $args['category'] );
+				$ids = wc_get_products( $args );
+			}
+			$ids = is_array( $ids ) ? array_values( array_filter( array_map( 'absint', $ids ) ) ) : array();
+			if ( $cacheable ) { set_transient( $key, $ids, 10 * MINUTE_IN_SECONDS ); }
 		}
-
-		if ( ! is_array( $products ) ) {
-			return array();
-		}
+		$products = array_map( 'wc_get_product', $ids );
 
 		return array_values(
 			array_filter(
 				$products,
 				static fn( $product ): bool => $product instanceof WC_Product
+					&& 'publish' === $product->get_status()
 					&& $product->is_visible()
 					&& $product->is_in_stock()
 					&& 'instock' === $product->get_stock_status()
@@ -2048,6 +2054,14 @@ class Schrack_Homepage_Renderer {
 	 * Finds the first product thumbnail in a category without loading products.
 	 */
 	private function first_product_thumbnail_id( WP_Term $term ): int {
+		// Empty image searches can scan a large catalog repeatedly. A short-lived
+		// product ID (including a negative result) avoids those scans on page misses.
+		$key = 'schrack_home_thumb_' . (int) $term->term_id;
+		$cached = get_transient( $key );
+		if ( is_array( $cached ) && isset( $cached['product_id'] ) ) {
+			$id = (int) $cached['product_id'];
+			return $id > 0 && 'publish' === get_post_status( $id ) ? absint( get_post_thumbnail_id( $id ) ) : 0;
+		}
 		$posts = get_posts(
 			array(
 				'post_type'              => 'product',
@@ -2074,10 +2088,8 @@ class Schrack_Homepage_Renderer {
 			)
 		);
 
-		if ( empty( $posts ) ) {
-			return 0;
-		}
-
-		return absint( get_post_thumbnail_id( (int) $posts[0] ) );
+		$id = empty( $posts ) ? 0 : (int) $posts[0];
+		set_transient( $key, array( 'product_id' => $id ), 10 * MINUTE_IN_SECONDS );
+		return $id ? absint( get_post_thumbnail_id( $id ) ) : 0;
 	}
 }

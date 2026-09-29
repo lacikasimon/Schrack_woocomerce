@@ -67,7 +67,10 @@ final class Schrack_Page_Profile {
 				// Store only a PHP caller name and aggregate durations; never SQL or arguments.
 				$caller = 'WordPress';
 				foreach ( explode( ', ', (string) ( $query[2] ?? '' ) ) as $part ) {
-					if ( ! str_starts_with( $part, 'wpdb' ) && preg_match( '/^[A-Za-z0-9_\\\\]+(?:::|->)[A-Za-z0-9_]+$/D', $part ) ) { $caller = $part; break; }
+					if ( ! str_starts_with( $part, 'wpdb' ) && preg_match( '/^[A-Za-z0-9_\\\\]+(?:::|->)[A-Za-z0-9_]+$/D', $part ) ) {
+						if ( 'WordPress' === $caller || str_starts_with( $part, 'Schrack_' ) ) { $caller = $part; }
+						if ( str_starts_with( $part, 'Schrack_' ) ) { break; }
+					}
 				}
 				$groups[ $caller ] = ( $groups[ $caller ] ?? 0 ) + $ms;
 			}
