@@ -420,7 +420,7 @@ The SOAP client is aligned to the received Schrack templates:
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
 
 
-## Store response time tools (v0.1.84)
+## Store response time tools (v0.1.85)
 
 **WooCommerce → Performanță magazin** provides an optional public page warmer.
 Save 1–20 canonical URLs (home, shop, public products or product categories) and
@@ -449,7 +449,17 @@ minutes. SQL strings and customer/session data are never stored in the result.
 Instrumentation begins when this plugin file loads, so earlier SQL is not timed.
 The measurement adds a small amount of overhead and is not a browser TTFB test.
 
-Regressions: `php tests/cache-warmer.php` and
+On the inspected LiteSpeed 7.9.1 integration, configured full-purge callbacks on
+`create_term`, `edit_terms`, and `delete_term` retain full public HTML invalidation
+for product categories/attributes but preserve CSS/JS, Redis and PHP OPcache.
+WordPress/WooCommerce still invalidate their term/product objects normally. This
+prevents catalog imports from repeatedly discarding unrelated technical caches.
+Unrelated taxonomies and manual full purges retain their original behavior.
+Cloudflare integration or another LiteSpeed version retains native purging.
+The filter `schrack_wc_sync_preserve_catalog_technical_cache` can opt out.
+
+Regressions: `php tests/cache-warmer.php`,
+`php tests/cache-invalidation.php /path/to/wordpress-source` and
 `node --test tests/admin-cache-warmer.js` (no live database or HTTP requests).
 
 ## eDoc ERP integration (v0.1.73)

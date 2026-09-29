@@ -17,6 +17,7 @@ final class Schrack_Cache_Warmer {
 		add_action( self::CYCLE, array( $this, 'cycle' ) );
 		add_action( self::TICK, array( $this, 'tick' ) );
 		add_action( 'litespeed_purged_all_lscache', array( $this, 'after_purge' ) );
+		add_action( 'schrack_catalog_pages_purged', array( $this, 'after_purge' ) );
 	}
 
 	public function menu(): void {
@@ -35,6 +36,7 @@ final class Schrack_Cache_Warmer {
 		?>
 		<div class="wrap" id="schrack-cache-warmer">
 			<h1>Performanță magazin</h1>
+			<?php if ( Schrack_Cache_Invalidation::is_active() ) { ?><p><strong>Protecția cache-ului tehnic este activă:</strong> modificările de categorii și atribute invalidează paginile, păstrând cache-ul CSS/JS, Redis și OPcache.</p><?php } ?>
 			<p>Preîncălzește maximum 20 de pagini publice, câte una pe minut, fără cookie-uri. Rulează în fundal și după închiderea acestei pagini.</p>
 			<p>Necesită cache de pagină activ și WP-Cron funcțional. Pentru ore exacte folosește un cron al găzduirii. Nu accelerează paginile personalizate sau paginile care nu sunt în listă.</p>
 			<form id="schrack-cache-form">
