@@ -959,14 +959,15 @@ class Schrack_Homepage_Renderer {
 		$key = 'schrack_home_picks_' . md5( wp_json_encode( array( $args, determine_locale() ) ) );
 		$ids = $cacheable ? get_transient( $key ) : false;
 		if ( ! is_array( $ids ) ) {
-			$ids = wc_get_products( $args );
+			$ids = Schrack_Catalog_Query::product_ids( $args );
 			if ( empty( $ids ) && isset( $args['category'] ) ) {
 				unset( $args['category'] );
-				$ids = wc_get_products( $args );
+				$ids = Schrack_Catalog_Query::product_ids( $args );
 			}
 			$ids = is_array( $ids ) ? array_values( array_filter( array_map( 'absint', $ids ) ) ) : array();
 			if ( $cacheable ) { set_transient( $key, $ids, 10 * MINUTE_IN_SECONDS ); }
 		}
+		Schrack_Catalog_Query::prime( $ids );
 		$products = array_map( 'wc_get_product', $ids );
 
 		return array_values(

@@ -210,6 +210,7 @@ class Schrack_Plugin {
 			'class-schrack-return-manager.php',
 			'class-schrack-account-renderer.php',
 			'class-schrack-cart-checkout-renderer.php',
+			'class-schrack-catalog-query.php',
 			'class-schrack-homepage-renderer.php',
 			'class-schrack-featured-categories-renderer.php',
 			'class-schrack-footer-renderer.php',

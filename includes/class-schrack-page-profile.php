@@ -24,6 +24,19 @@ final class Schrack_Page_Profile {
 		$marks = array();
 		$callbacks = array();
 		$documents = array();
+		$widgets = array();
+		$widget_starts = array();
+		add_action( 'elementor/widget/before_render', static function ( $widget ) use ( &$widget_starts ): void {
+			$widget_starts[ spl_object_id( $widget ) ] = microtime( true );
+		}, PHP_INT_MIN );
+		add_action( 'elementor/widget/after_render', static function ( $widget ) use ( &$widget_starts, &$widgets ): void {
+			$key = spl_object_id( $widget );
+			if ( ! isset( $widget_starts[ $key ] ) ) { return; }
+			$name = get_class( $widget );
+			if ( ! preg_match( '/^[A-Za-z0-9_\\\\]+$/D', $name ) ) { $name = 'Widget'; }
+			$widgets[ $name ] = ( $widgets[ $name ] ?? 0 ) + ( microtime( true ) - $widget_starts[ $key ] ) * 1000;
+			unset( $widget_starts[ $key ] );
+		}, PHP_INT_MAX );
 		add_action( 'elementor/post/render', static function ( $id ) use ( &$documents ): void { $documents[ (int) $id ] = true; }, -100 );
 		$mark = static function ( string $name ) use ( &$marks, $start ): void {
 			global $wpdb;
@@ -37,7 +50,7 @@ final class Schrack_Page_Profile {
 		// Wrap only this authorized measurement request; preserve callback IDs/priorities.
 		add_action( 'wp', static function () use ( &$callbacks ): void {
 			global $wp_filter;
-			foreach ( array( 'template_redirect', 'wp_enqueue_scripts', 'wp_head', 'elementor/post/render', 'elementor/css-file/post/enqueue', 'elementor/css-file/before_enqueue', 'elementor/css-file/after_enqueue' ) as $hook ) {
+			foreach ( array( 'template_redirect', 'wp_enqueue_scripts', 'wp_head', 'elementor/post/render', 'elementor/css-file/post/enqueue', 'elementor/css-file/before_enqueue', 'elementor/css-file/after_enqueue', 'woocommerce_get_price_html', 'woocommerce_product_get_image' ) as $hook ) {
 				if ( empty( $wp_filter[ $hook ]->callbacks ) ) { continue; }
 				foreach ( $wp_filter[ $hook ]->callbacks as &$priority ) {
 					foreach ( $priority as &$entry ) {
@@ -55,7 +68,7 @@ final class Schrack_Page_Profile {
 				unset( $priority );
 			}
 		}, PHP_INT_MAX );
-		add_action( 'shutdown', static function () use ( $id, $mark, &$marks, &$callbacks, &$documents, $offset, $original ): void {
+		add_action( 'shutdown', static function () use ( $id, $mark, &$marks, &$callbacks, &$documents, &$widgets, $offset, $original ): void {
 			global $wpdb;
 			$mark( 'shutdown' );
 			$queries = array_slice( $wpdb->queries ?? array(), $offset );
@@ -69,13 +82,13 @@ final class Schrack_Page_Profile {
 				foreach ( explode( ', ', (string) ( $query[2] ?? '' ) ) as $part ) {
 					if ( ! str_starts_with( $part, 'wpdb' ) && preg_match( '/^[A-Za-z0-9_\\\\]+(?:::|->)[A-Za-z0-9_]+$/D', $part ) ) {
 						if ( 'WordPress' === $caller || str_starts_with( $part, 'Schrack_' ) ) { $caller = $part; }
-						if ( str_starts_with( $part, 'Schrack_' ) ) { break; }
 					}
 				}
 				$groups[ $caller ] = ( $groups[ $caller ] ?? 0 ) + $ms;
 			}
 			arsort( $groups );
 			arsort( $callbacks );
+			arsort( $widgets );
 			$wpdb->save_queries = $original;
 			foreach ( $documents as $post_id => &$details ) {
 				$css = get_post_meta( $post_id, '_elementor_css', true );
@@ -90,6 +103,7 @@ final class Schrack_Page_Profile {
 				'db_callers_ms' => array_map( static fn( $ms ) => round( $ms, 1 ), array_slice( $groups, 0, 8, true ) ),
 				'callbacks_ms' => array_map( static fn( $ms ) => round( $ms, 1 ), array_slice( $callbacks, 0, 15, true ) ),
 				'elementor_documents' => $documents,
+				'widgets_ms' => array_map( static fn( $ms ) => round( $ms, 1 ), array_slice( $widgets, 0, 15, true ) ),
 			), 300 );
 		}, PHP_INT_MAX );
 	}
