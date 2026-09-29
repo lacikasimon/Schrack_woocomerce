@@ -420,7 +420,7 @@ The SOAP client is aligned to the received Schrack templates:
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
 
 
-## Store response time tools (v0.1.87)
+## Store response time tools (v0.1.88)
 
 **WooCommerce → Performanță magazin** provides an optional public page warmer.
 Save 1–20 canonical URLs (home, shop, public products or product categories) and
@@ -458,7 +458,7 @@ Unrelated taxonomies and manual full purges retain their original behavior.
 Cloudflare integration or another LiteSpeed version retains native purging.
 The filter `schrack_wc_sync_preserve_catalog_technical_cache` can opt out.
 
-Homepage category-image fallbacks and anonymous product rankings cache only product
+Both homepage renderers' category-image fallbacks and anonymous product rankings cache only product
 IDs for ten minutes, including empty results. Product objects, prices, publication
 state and stock are read again on each render. A selected product's new thumbnail
 is read immediately; a changed category fallback selection or product ranking can
