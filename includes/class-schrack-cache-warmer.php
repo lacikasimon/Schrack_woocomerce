@@ -7,6 +7,7 @@ final class Schrack_Cache_Warmer {
 	public const STATE = 'schrack_cache_warmer_state';
 	public const TICK = 'schrack_cache_warm_tick';
 	public const CYCLE = 'schrack_cache_warm_cycle';
+	public const REWARM = 'schrack_cache_rewarm';
 	public const LIMIT = 20;
 
 	public function init(): void {
@@ -16,6 +17,7 @@ final class Schrack_Cache_Warmer {
 		add_action( 'admin_init', array( $this, 'ensure_schedule' ) );
 		add_action( self::CYCLE, array( $this, 'cycle' ) );
 		add_action( self::TICK, array( $this, 'tick' ) );
+		add_action( self::REWARM, array( $this, 'rewarm' ) );
 		add_action( 'litespeed_purged_all_lscache', array( $this, 'after_purge' ) );
 		add_action( 'schrack_catalog_pages_purged', array( $this, 'after_purge' ) );
 	}
@@ -108,6 +110,7 @@ final class Schrack_Cache_Warmer {
 	public static function clear_schedule(): void {
 		wp_clear_scheduled_hook( self::CYCLE );
 		wp_clear_scheduled_hook( self::TICK );
+		wp_clear_scheduled_hook( self::REWARM );
 	}
 
 	private function schedule_tick( int $delay ): void {
@@ -137,10 +140,22 @@ final class Schrack_Cache_Warmer {
 		if ( ! $this->config()['enabled'] ) { return; }
 		$this->locked( function (): void {
 			$state = get_option( self::STATE, array() );
-			if ( 'running' === ( $state['status'] ?? '' ) || (int) ( $state['started'] ?? 0 ) > time() - 900 ) { return; }
-			$this->start();
-			$this->schedule_tick( 120 );
+			if ( ! wp_next_scheduled( self::REWARM ) ) {
+				wp_schedule_single_event( max( time() + 120, (int) ( $state['started'] ?? 0 ) + 900 ), self::REWARM );
+			}
 		} );
+	}
+
+	/** Remember purges during an active run, including URLs visited before the purge. */
+	public function rewarm(): void {
+		if ( ! $this->config()['enabled'] ) { return; }
+		$result = $this->locked( function () {
+			$state = get_option( self::STATE, array() );
+			if ( 'running' === ( $state['status'] ?? '' ) ) { return false; }
+			$this->start();
+			return true;
+		} );
+		if ( true !== $result && ! wp_next_scheduled( self::REWARM ) ) { wp_schedule_single_event( time() + 120, self::REWARM ); }
 	}
 
 	public function tick(): void {

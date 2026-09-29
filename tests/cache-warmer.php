@@ -75,6 +75,8 @@ check(array() === $requests[0][1]['cookies'] && 0 === $requests[0][1]['redirecti
 check('MISS' === $options[Schrack_Cache_Warmer::STATE]['results'][0]['cache'], 'MISS not falsely reported as HIT.');
 $allow_lock = false; $warm->tick(); check(1 === count($requests), 'Concurrent worker cannot request.'); $allow_lock = true;
 $before = $options[Schrack_Cache_Warmer::STATE]; $warm->after_purge(); check($before === $options[Schrack_Cache_Warmer::STATE], 'Purge during run does not restart it.');
+check($events[Schrack_Cache_Warmer::REWARM] === $now+900, 'Purge during a run is remembered for later.');
+$warm->after_purge(); check($events[Schrack_Cache_Warmer::REWARM] === $now+900,'Import purge bursts coalesce into one delayed job.');
 ajax('start'); check($before === $options[Schrack_Cache_Warmer::STATE], 'Repeated start is idempotent.');
 ajax('stop'); $warm->tick(); $warm->cycle(); $warm->after_purge();
 check(!$events && !$warm->config()['enabled'] && 1 === count($requests), 'Stop prevents both queued and recurring work.');

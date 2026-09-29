@@ -23,6 +23,8 @@ final class Schrack_Page_Profile {
 		$start = (float) ( $_SERVER['REQUEST_TIME_FLOAT'] ?? microtime( true ) );
 		$marks = array();
 		$callbacks = array();
+		$documents = array();
+		add_action( 'elementor/post/render', static function ( $id ) use ( &$documents ): void { $documents[ (int) $id ] = true; }, -100 );
 		$mark = static function ( string $name ) use ( &$marks, $start ): void {
 			global $wpdb;
 			$marks[] = array( 'phase' => $name, 'ms' => round( ( microtime( true ) - $start ) * 1000, 1 ), 'queries' => (int) $wpdb->num_queries );
@@ -35,7 +37,7 @@ final class Schrack_Page_Profile {
 		// Wrap only this authorized measurement request; preserve callback IDs/priorities.
 		add_action( 'wp', static function () use ( &$callbacks ): void {
 			global $wp_filter;
-			foreach ( array( 'template_redirect', 'wp_enqueue_scripts', 'wp_head' ) as $hook ) {
+			foreach ( array( 'template_redirect', 'wp_enqueue_scripts', 'wp_head', 'elementor/post/render', 'elementor/css-file/post/enqueue', 'elementor/css-file/before_enqueue', 'elementor/css-file/after_enqueue' ) as $hook ) {
 				if ( empty( $wp_filter[ $hook ]->callbacks ) ) { continue; }
 				foreach ( $wp_filter[ $hook ]->callbacks as &$priority ) {
 					foreach ( $priority as &$entry ) {
@@ -53,7 +55,7 @@ final class Schrack_Page_Profile {
 				unset( $priority );
 			}
 		}, PHP_INT_MAX );
-		add_action( 'shutdown', static function () use ( $id, $mark, &$marks, &$callbacks, $offset, $original ): void {
+		add_action( 'shutdown', static function () use ( $id, $mark, &$marks, &$callbacks, &$documents, $offset, $original ): void {
 			global $wpdb;
 			$mark( 'shutdown' );
 			$queries = array_slice( $wpdb->queries ?? array(), $offset );
@@ -72,12 +74,19 @@ final class Schrack_Page_Profile {
 			arsort( $groups );
 			arsort( $callbacks );
 			$wpdb->save_queries = $original;
+			foreach ( $documents as $post_id => &$details ) {
+				$css = get_post_meta( $post_id, '_elementor_css', true );
+				$assets = get_post_meta( $post_id, '_elementor_page_assets', true );
+				$details = array( 'css_status' => $css['status'] ?? '', 'dynamic_elements' => count( $css['dynamic_elements_ids'] ?? array() ), 'assets_saved' => is_array( $assets ), 'asset_groups' => is_array( $assets ) ? count( $assets ) : 0 );
+			}
+			unset( $details );
 			set_transient( 'schrack_profile_result_' . $id, array(
 				'phases' => $marks, 'measured_db_ms' => SAVEQUERIES ? round( $db_ms, 1 ) : null,
 				'sql_timing_available' => (bool) SAVEQUERIES,
 				'measured_queries' => count( $queries ), 'memory_mb' => round( memory_get_peak_usage( true ) / 1048576, 1 ),
 				'db_callers_ms' => array_map( static fn( $ms ) => round( $ms, 1 ), array_slice( $groups, 0, 8, true ) ),
 				'callbacks_ms' => array_map( static fn( $ms ) => round( $ms, 1 ), array_slice( $callbacks, 0, 15, true ) ),
+				'elementor_documents' => $documents,
 			), 300 );
 		}, PHP_INT_MAX );
 	}
