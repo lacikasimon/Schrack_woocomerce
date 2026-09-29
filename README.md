@@ -252,6 +252,11 @@ the original image when JavaScript is disabled. WordPress versions without the
 HTML Tag Processor retain native lazy loading. LiteSpeed is excluded from
 reprocessing these images and delaying the small loader script. This reduces
 initial downloads; it does not resize supplier originals when they are displayed.
+The featured-category navigation uses the same loader for its banner images,
+including images clipped by the horizontal mobile scroller. Only the first two
+banners (the first mobile column) remain eager, with high priority on the first.
+Other visible banners load automatically on desktop; horizontal scrolling loads
+newly revealed banners on mobile. The original images remain available without JS.
 After deploying this change through Git, purge the LiteSpeed page/optimization
 cache so cached pages receive the new markup and versioned loader.
 Regression checks: `node --test tests/frontend-lazy-images.js` and

@@ -195,13 +195,16 @@ class Schrack_Featured_Categories_Renderer {
 								<a class="schrack-fcat__nav-link" href="<?php echo esc_url( $item['href'] ); ?>">
 									<span class="schrack-fcat__nav-media" aria-hidden="true">
 										<?php if ( '' !== $image_url ) : ?>
-											<img
-												src="<?php echo esc_url( $image_url ); ?>"
-												alt=""
-												decoding="async"
-												loading="<?php echo esc_attr( $index < 5 ? 'eager' : 'lazy' ); ?>"
-												<?php if ( 0 === $index ) : ?>fetchpriority="high"<?php endif; ?>
-											>
+											<?php
+											// Keep the first mobile column eager; observe the clipped horizontal strip for the rest.
+											$image = sprintf(
+												'<img src="%s" alt="" decoding="async" loading="%s"%s>',
+												esc_url( $image_url ),
+												$index < 2 ? 'eager' : 'lazy',
+												0 === $index ? ' fetchpriority="high"' : ''
+											);
+											echo Schrack_Frontend_Image_Loader::lazy_image_html( $image ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Sanitized by the image helper.
+											?>
 										<?php endif; ?>
 									</span>
 									<span class="schrack-fcat__nav-shade" aria-hidden="true"></span>
