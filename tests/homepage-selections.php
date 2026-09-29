@@ -63,4 +63,8 @@ require __DIR__.'/../includes/class-schrack-header-renderer.php';
 $header=new Schrack_Header_Renderer();$image=new ReflectionMethod($header,'first_product_thumbnail_id');
 $before=$queries;check_home(97===$image->invoke($header,$term) && $queries===$before,'Header reuses the homepage category thumbnail ID cache.');
 $status='draft';check_home(0===$image->invoke($header,$term),'Header immediately stops displaying a newly unpublished product image.');
+$cold=new ReflectionProperty(Schrack_Page_Profile::class,'cold_selections');$cold->setValue(null,true);
+$before=count($calls);$gridrun();$gridrun();check_home(count($calls)===$before+2,'Authorized cold measurement bypasses ranking IDs each time.');
+$before=$queries;$image->invoke($header,$term);$image->invoke($header,$term);check_home($queries===$before+2,'Cold measurement also reselects category image IDs.');
+$cold->setValue(null,false);
 echo "Homepage selections: $checks checks passed.\n";

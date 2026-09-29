@@ -120,19 +120,29 @@ final class Schrack_Page_Profile {
 		$parts = wp_parse_url( $url );
 		set_transient( 'schrack_profile_ticket_' . $id, array( 'uri' => ( $parts['path'] ?? '/' ) . '?' . $parts['query'], 'cold_selections' => $cold_selections ), 60 );
 		$started = microtime( true );
-		$response = wp_safe_remote_get( $url, array(
-			'timeout' => 25, 'redirection' => 0, 'cookies' => array(), 'limit_response_size' => 2097152,
-			'headers' => array( 'X-Schrack-Profile' => $key ),
-		) );
+		$curl = null;
+		$capture = static function ( $handle, $args, $request_url ) use ( &$curl, $url ): void {
+			if ( $request_url === $url && $handle instanceof \CurlHandle ) { $curl = $handle; }
+		};
+		add_action( 'http_api_curl', $capture, 10, 3 );
+		try {
+			$response = wp_safe_remote_get( $url, array(
+				'timeout' => 25, 'redirection' => 0, 'cookies' => array(), 'limit_response_size' => 2097152,
+				'headers' => array( 'X-Schrack-Profile' => $key ),
+			) );
+		} finally { remove_action( 'http_api_curl', $capture, 10 ); }
+		// PHP 8 retains cURL info while we hold the handle; other transports report null.
+		$ttfb = $curl && function_exists( 'curl_getinfo' ) ? curl_getinfo( $curl, CURLINFO_STARTTRANSFER_TIME ) : 0;
 		$result = get_transient( 'schrack_profile_result_' . $id );
 		delete_transient( 'schrack_profile_ticket_' . $id );
 		delete_transient( 'schrack_profile_result_' . $id );
 		return array(
 			'http_status' => is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response ),
 			'total_ms' => round( ( microtime( true ) - $started ) * 1000, 1 ),
+			'ttfb_ms' => $ttfb > 0 ? round( $ttfb * 1000, 1 ) : null,
 			'profile' => is_array( $result ) ? $result : null,
 			'cold_selections' => $cold_selections,
-			'note' => 'Durata HTTP totală include rețeaua și descărcarea; nu este TTFB. SQL este măsurat numai după încărcarea modulului, cu un mic cost de instrumentare.',
+			'note' => 'TTFB este timpul până la primul octet, măsurat de pe server prin cURL (null dacă nu este disponibil). Durata totală include descărcarea. SQL este măsurat după încărcarea modulului, cu un mic cost de instrumentare.',
 		);
 	}
 }

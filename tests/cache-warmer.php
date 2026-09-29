@@ -20,6 +20,7 @@ function get_transient( $k ) { return $GLOBALS['transients'][$k] ?? false; }
 function set_transient( $k, $v, $ttl ) { $GLOBALS['transients'][$k] = $v; }
 function delete_transient( $k ) { unset( $GLOBALS['transients'][$k] ); }
 function add_action( $k, $v, $priority = 10 ) { $GLOBALS['hooks'][$k][] = $v; }
+function remove_action( $k, $v, $priority = 10 ) { $GLOBALS['hooks'][$k] = array_filter($GLOBALS['hooks'][$k] ?? array(), static fn($callback) => $callback !== $v); }
 function do_action( $k, ...$args ) { foreach ( $GLOBALS['hooks'][$k] ?? array() as $fn ) { $fn(...$args); } }
 function wp_next_scheduled( $k ) { return $GLOBALS['events'][$k] ?? false; }
 function wp_schedule_event( $t, $interval, $k ) { $GLOBALS['events'][$k] = $t; }
@@ -95,12 +96,18 @@ check(!Schrack_Page_Profile::cold_selections(),'Cold profiling is off on ordinar
 $_SERVER = array(); Schrack_Page_Profile::maybe_start(); check(!$wpdb->save_queries && !$hooks, 'Normal visitors have no profiling cost.');
 $_SERVER['HTTP_X_SCHRACK_PROFILE'] = str_repeat('a',64); Schrack_Page_Profile::maybe_start(); check(!$wpdb->save_queries, 'Forged header cannot profile.');
 $id = hash('sha256',str_repeat('a',64)); $ticket = 'schrack_profile_ticket_'.$id;
-$transients[$ticket] = array('uri'=>'/product/lamp/?schrack_perf_probe=1');
+$transients[$ticket] = array('uri'=>'/product/lamp/?schrack_perf_probe=1','cold_selections'=>true);
 $_SERVER['REQUEST_METHOD']='GET'; $_SERVER['REQUEST_URI']='/cart/'; Schrack_Page_Profile::maybe_start(); check(!$wpdb->save_queries,'Ticket is bound to URI.');
+check(!Schrack_Page_Profile::cold_selections(),'Mismatched cold ticket cannot bypass selection cache.');
 $_SERVER['REQUEST_URI']=$transients[$ticket]['uri']; Schrack_Page_Profile::maybe_start(); check($wpdb->save_queries && !isset($transients[$ticket]),'Valid one-use ticket enables measurement.');
+check(Schrack_Page_Profile::cold_selections(),'Validated cold ticket enables selection bypass.');
 $wpdb->queries[] = array("SELECT 'sensitive customer data'",0.012,'Schrack_Product_Mapper->render, wpdb->get_results');
 do_action('plugins_loaded'); do_action('shutdown');
 $result=$transients['schrack_profile_result_'.$id];
 check(12.0 === $result['measured_db_ms'] && !str_contains(json_encode($result),'sensitive'), 'Only aggregate SQL timings retained.');
 check(!$wpdb->save_queries, 'Original profiler state restored.');
+$GLOBALS['http_callback']=null;
+$measurement=Schrack_Page_Profile::measure(home_url('/'));
+check(null === $measurement['ttfb_ms'],'Missing cURL timing is unknown, never substituted with total duration.');
+check(empty($hooks['http_api_curl']),'Transport observer is removed after the measurement.');
 echo "Cache warmer: $count checks passed.\n";

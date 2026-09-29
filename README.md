@@ -420,7 +420,7 @@ The SOAP client is aligned to the received Schrack templates:
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
 
 
-## Store response time tools (v0.1.90)
+## Store response time tools (v0.1.92)
 
 **WooCommerce → Performanță magazin** provides an optional public page warmer.
 Save 1–20 canonical URLs (home, shop, public products or product categories) and
@@ -448,6 +448,13 @@ timings, SQL counts/aggregate timings and peak memory are retained for at most f
 minutes. SQL strings and customer/session data are never stored in the result.
 Instrumentation begins when this plugin file loads, so earlier SQL is not timed.
 The measurement adds a small amount of overhead and is not a browser TTFB test.
+The cold-selection measurement also bypasses our product-ranking/category-image
+ID transients for that one authenticated probe, without clearing the store cache.
+WordPress/Redis and OPcache retain their normal behavior. Both measurement modes
+share the same public URL allowlist, capability/nonce checks and cooldown.
+When cURL is available, `ttfb_ms` separately reports the time until the first byte
+from the server's own measurement request. Other transports return `null` for this
+field; total HTTP duration is never presented as first-byte timing.
 
 On the inspected LiteSpeed 7.9.1 integration, configured full-purge callbacks on
 `create_term`, `edit_terms`, and `delete_term` retain full public HTML invalidation
@@ -475,7 +482,8 @@ WordPress post/term/meta caches are primed together before product objects load.
 The header shares the category-image ID cache. The featured-category widget only
 builds its 500-entry category picker in the editor/admin, not on public renders.
 
-Regressions: `php tests/cache-warmer.php`,
+Regressions: `php tests/cache-warmer.php`, `php tests/catalog-query.php`,
+`php tests/homepage-selections.php`, `php tests/elementor-category-options.php`,
 `php tests/cache-invalidation.php /path/to/wordpress-source` and
 `node --test tests/admin-cache-warmer.js` (no live database or HTTP requests).
 
