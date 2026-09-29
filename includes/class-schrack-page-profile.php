@@ -3,6 +3,9 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class Schrack_Page_Profile {
+	private static bool $cold_selections = false;
+	/** Only a valid one-use administrator ticket can request a cold selection test. */
+	public static function cold_selections(): bool { return self::$cold_selections; }
 	/** No profiling work on ordinary visits, including cache-warming requests. */
 	public static function maybe_start(): void {
 		$key = $_SERVER['HTTP_X_SCHRACK_PROFILE'] ?? '';
@@ -12,6 +15,7 @@ final class Schrack_Page_Profile {
 		if ( ! is_array( $ticket ) || ( $_SERVER['REQUEST_METHOD'] ?? '' ) !== 'GET'
 			|| ! hash_equals( $ticket['uri'], (string) ( $_SERVER['REQUEST_URI'] ?? '' ) ) ) { return; }
 		delete_transient( 'schrack_profile_ticket_' . $id );
+		self::$cold_selections = ! empty( $ticket['cold_selections'] );
 		if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
 		do_action( 'litespeed_control_set_nocache', 'Private administrator performance measurement' );
 		add_action( 'send_headers', 'nocache_headers' );
@@ -50,7 +54,7 @@ final class Schrack_Page_Profile {
 		// Wrap only this authorized measurement request; preserve callback IDs/priorities.
 		add_action( 'wp', static function () use ( &$callbacks ): void {
 			global $wp_filter;
-			foreach ( array( 'template_redirect', 'wp_enqueue_scripts', 'wp_head', 'elementor/post/render', 'elementor/css-file/post/enqueue', 'elementor/css-file/before_enqueue', 'elementor/css-file/after_enqueue', 'woocommerce_get_price_html', 'woocommerce_product_get_image' ) as $hook ) {
+			foreach ( array( 'template_redirect', 'wp_enqueue_scripts', 'wp_head', 'shutdown', 'elementor/post/render', 'elementor/css-file/post/enqueue', 'elementor/css-file/before_enqueue', 'elementor/css-file/after_enqueue', 'woocommerce_get_price_html', 'woocommerce_product_get_image' ) as $hook ) {
 				if ( empty( $wp_filter[ $hook ]->callbacks ) ) { continue; }
 				foreach ( $wp_filter[ $hook ]->callbacks as &$priority ) {
 					foreach ( $priority as &$entry ) {
@@ -109,12 +113,12 @@ final class Schrack_Page_Profile {
 	}
 
 	/** Caller must first authorize the administrator and validate the public URL. */
-	public static function measure( string $url ): array {
+	public static function measure( string $url, bool $cold_selections = false ): array {
 		$key = bin2hex( random_bytes( 32 ) );
 		$id = hash( 'sha256', $key );
 		$url = add_query_arg( 'schrack_perf_probe', wp_generate_uuid4(), $url );
 		$parts = wp_parse_url( $url );
-		set_transient( 'schrack_profile_ticket_' . $id, array( 'uri' => ( $parts['path'] ?? '/' ) . '?' . $parts['query'] ), 60 );
+		set_transient( 'schrack_profile_ticket_' . $id, array( 'uri' => ( $parts['path'] ?? '/' ) . '?' . $parts['query'], 'cold_selections' => $cold_selections ), 60 );
 		$started = microtime( true );
 		$response = wp_safe_remote_get( $url, array(
 			'timeout' => 25, 'redirection' => 0, 'cookies' => array(), 'limit_response_size' => 2097152,
@@ -127,6 +131,7 @@ final class Schrack_Page_Profile {
 			'http_status' => is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response ),
 			'total_ms' => round( ( microtime( true ) - $started ) * 1000, 1 ),
 			'profile' => is_array( $result ) ? $result : null,
+			'cold_selections' => $cold_selections,
 			'note' => 'Durata HTTP totală include rețeaua și descărcarea; nu este TTFB. SQL este măsurat numai după încărcarea modulului, cu un mic cost de instrumentare.',
 		);
 	}

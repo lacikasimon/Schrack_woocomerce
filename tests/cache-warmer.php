@@ -90,6 +90,8 @@ $before = count($requests); $warm->tick(); check($before === count($requests), '
 ajax('start'); $options[Schrack_Cache_Warmer::STATE]['attempts'] = 3; $warm->tick();
 check('error' === $options[Schrack_Cache_Warmer::STATE]['status'] && $before === count($requests), 'Repeated process failures are bounded.');
 check(!ajax('profile',array('url'=>home_url('/cart/')))->ok,'Cannot profile private URL.');
+check(!ajax('profile_cold',array('url'=>home_url('/cart/')))->ok,'Cold profile also rejects private URLs.');
+check(!Schrack_Page_Profile::cold_selections(),'Cold profiling is off on ordinary requests.');
 $_SERVER = array(); Schrack_Page_Profile::maybe_start(); check(!$wpdb->save_queries && !$hooks, 'Normal visitors have no profiling cost.');
 $_SERVER['HTTP_X_SCHRACK_PROFILE'] = str_repeat('a',64); Schrack_Page_Profile::maybe_start(); check(!$wpdb->save_queries, 'Forged header cannot profile.');
 $id = hash('sha256',str_repeat('a',64)); $ticket = 'schrack_profile_ticket_'.$id;

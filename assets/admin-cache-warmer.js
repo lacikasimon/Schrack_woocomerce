@@ -73,7 +73,7 @@
 		clearTimeout(timer); busy = true;
 		const buttons = root.querySelectorAll('button');
 		buttons.forEach(button => { button.disabled = true; });
-		message.textContent = name === 'profile' ? 'Măsurare în curs…' : 'Se procesează…';
+		message.textContent = name.startsWith('profile') ? 'Măsurare în curs…' : 'Se procesează…';
 		try {
 			const data = name === 'save' ? {urls: form.elements.urls.value, enabled: form.elements.enabled.checked ? '1' : '0'} : {url: select.value};
 			render(await request(name, data), name === 'save');

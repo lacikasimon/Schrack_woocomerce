@@ -879,7 +879,7 @@ class Schrack_Header_Renderer {
 	 */
 	private function first_product_thumbnail_id( WP_Term $term ): int {
 		$key = 'schrack_home_thumb_' . (int) $term->term_id;
-		$cached = get_transient( $key );
+		$cached = Schrack_Page_Profile::cold_selections() ? false : get_transient( $key );
 		if ( is_array( $cached ) && isset( $cached['product_id'] ) ) {
 			$id = (int) $cached['product_id'];
 			return $id > 0 && 'publish' === get_post_status( $id ) ? absint( get_post_thumbnail_id( $id ) ) : 0;

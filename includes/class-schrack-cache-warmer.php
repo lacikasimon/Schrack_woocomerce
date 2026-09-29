@@ -54,6 +54,8 @@ final class Schrack_Cache_Warmer {
 			<p>O singură cerere anonimă fără cache. Rezultatul este privat; nu se păstrează SQL, cookie-uri sau date de clienți.</p>
 			<label for="schrack-profile-url">Pagina de măsurat</label> <select id="schrack-profile-url"><?php foreach ( $config['urls'] as $url ) { ?><option value="<?php echo esc_attr( $url ); ?>"><?php echo esc_html( $url ); ?></option><?php } ?></select>
 			<button type="button" class="button" data-command="profile">Măsoară</button>
+			<button type="button" class="button" data-command="profile_cold">Măsoară selecțiile la rece</button>
+			<p>Testul la rece ocolește și cache-ul selecțiilor de produse și imagini din pagina principală, fără să golească memoria cache a magazinului.</p>
 			<pre id="schrack-profile-result" style="white-space:pre-wrap" aria-live="polite"></pre>
 		</div>
 		<?php
@@ -227,12 +229,12 @@ final class Schrack_Cache_Warmer {
 				self::clear_schedule();
 				$state = get_option( self::STATE, array() ); $state['status'] = 'stopped';
 				update_option( self::STATE, $state, false );
-			} elseif ( 'profile' === $command ) {
+			} elseif ( in_array( $command, array( 'profile', 'profile_cold' ), true ) ) {
 				$url = wp_unslash( $_POST['url'] ?? '' );
 				if ( ! is_string( $url ) || ! in_array( $url, $this->config()['urls'], true ) || ! $this->public_url( $url ) ) { return new WP_Error( 'url', 'Alege o pagină salvată și publică.' ); }
 				if ( get_transient( 'schrack_profile_cooldown' ) ) { return new WP_Error( 'busy', 'Așteaptă un minut între măsurări.' ); }
 				set_transient( 'schrack_profile_cooldown', 1, 60 );
-				return array( 'measurement' => Schrack_Page_Profile::measure( $url ) );
+				return array( 'measurement' => Schrack_Page_Profile::measure( $url, 'profile_cold' === $command ) );
 			} else { return new WP_Error( 'command', 'Comandă necunoscută.' ); }
 			return $this->status();
 		} );

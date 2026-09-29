@@ -957,7 +957,7 @@ class Schrack_Homepage_Renderer {
 		// Logged-in/session visitors retain any personalized query filters.
 		$cacheable = ! is_user_logged_in() && ( ! function_exists( 'WC' ) || ! WC()->session || ! WC()->session->has_session() );
 		$key = 'schrack_home_picks_' . md5( wp_json_encode( array( $args, determine_locale() ) ) );
-		$ids = $cacheable ? get_transient( $key ) : false;
+		$ids = $cacheable && ! Schrack_Page_Profile::cold_selections() ? get_transient( $key ) : false;
 		if ( ! is_array( $ids ) ) {
 			$ids = Schrack_Catalog_Query::product_ids( $args );
 			if ( empty( $ids ) && isset( $args['category'] ) ) {
@@ -2058,7 +2058,7 @@ class Schrack_Homepage_Renderer {
 		// Empty image searches can scan a large catalog repeatedly. A short-lived
 		// product ID (including a negative result) avoids those scans on page misses.
 		$key = 'schrack_home_thumb_' . (int) $term->term_id;
-		$cached = get_transient( $key );
+		$cached = Schrack_Page_Profile::cold_selections() ? false : get_transient( $key );
 		if ( is_array( $cached ) && isset( $cached['product_id'] ) ) {
 			$id = (int) $cached['product_id'];
 			return $id > 0 && 'publish' === get_post_status( $id ) ? absint( get_post_thumbnail_id( $id ) ) : 0;

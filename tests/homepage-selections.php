@@ -23,6 +23,7 @@ function wc_get_product($id){return $GLOBALS['products'][$id]??false;}
 function get_posts($args){$GLOBALS['queries']++;return $GLOBALS['query_ids'];}
 function get_post_thumbnail_id($id){return $GLOBALS['thumbnail'];}
 function get_post_status($id){return $GLOBALS['status'];}
+require __DIR__.'/../includes/class-schrack-page-profile.php';
 require __DIR__.'/../includes/class-schrack-catalog-query.php';
 require __DIR__.'/../includes/class-schrack-homepage-renderer.php';
 $renderer=new Schrack_Homepage_Renderer();$recommended=new ReflectionMethod($renderer,'recommended_products');$image=new ReflectionMethod($renderer,'first_product_thumbnail_id');$checks=0;
