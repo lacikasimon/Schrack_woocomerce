@@ -744,3 +744,9 @@ v0.1.111 requests footer placement for the known jQuery/WooCommerce chain,
 including the source-less jQuery alias. Native WordPress dependency grouping
 can still move libraries into the head for head-dependent scripts. Existing
 inline code and execution order remain intact when defer is ineligible.
+
+v0.1.112 can inline the inspected locally generated Poppins/Figtree CSS after
+Elementor local Google Fonts is enabled in its Performance settings. Only
+absolute font URLs under the current uploads directory are accepted; remote or
+relative URLs, imports, modified tags and oversize files retain native loading.
+The existing 128 KiB shared inline budget and font-display rules are preserved.

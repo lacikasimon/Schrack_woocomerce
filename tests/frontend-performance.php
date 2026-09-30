@@ -117,6 +117,29 @@ try {
 	clearstatcache();
 	( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 131072 );
 	verify_image( $generated_tag === $performance->inline_elementor_style( $generated_tag, 'elementor-post-123', $generated_url ), 'Generated styles share the bounded inline budget.' );
+	mkdir( $generated . '/elementor/google-fonts/css', 0700, true );
+	$font_path = $generated . '/elementor/google-fonts/css/poppins.css';
+	$font_url = 'https://shop.example/uploads/elementor/google-fonts/css/poppins.css';
+	$font_tag = '<link rel="stylesheet" href="' . $font_url . '" media="screen">';
+	$font_css = '@font-face{font-family:Poppins;font-display:swap;src:url(https://shop.example/uploads/elementor/google-fonts/fonts/poppins-1234abcd.woff2) format("woff2")}';
+	try {
+		( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 0 );
+		file_put_contents( $font_path, $font_css );
+		$font_inline = $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', $font_url . '?ver=1', 'screen' );
+		verify_image( str_contains( $font_inline, '<style' ) && str_contains( $font_inline, $font_css ) && str_contains( $font_inline, 'media="screen"' ), 'Absolute local font URLs, swap behavior and cascade media are preserved verbatim.' );
+		verify_image( $font_tag === $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', 'https://cdn.example/poppins.css' ), 'Replaced font stylesheets retain native loading.' );
+		foreach ( array( str_replace( 'https://shop.example/uploads/', '../', $font_css ), str_replace( 'shop.example', 'other.example', $font_css ), $font_css . '@import "other.css";', $font_css . '</style>' ) as $changed_css ) {
+			file_put_contents( $font_path, $changed_css );
+			clearstatcache();
+			verify_image( $font_tag === $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', $font_url ), 'Relative, external, imported or unsafe font CSS must fall back unchanged.' );
+		}
+		file_put_contents( $font_path, $font_css );
+		clearstatcache();
+		( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 131072 );
+		verify_image( $font_tag === $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', $font_url ), 'Font CSS shares the total inline budget.' );
+	} finally {
+		unlink( $font_path ); rmdir( $generated . '/elementor/google-fonts/css' ); rmdir( $generated . '/elementor/google-fonts' );
+	}
 } finally {
 	unlink( $generated_path ); rmdir( $generated . '/elementor/css' ); rmdir( $generated . '/elementor' ); rmdir( $generated );
 	$GLOBALS['front_page_test'] = false;

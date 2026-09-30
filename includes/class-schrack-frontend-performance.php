@@ -15,6 +15,7 @@ class Schrack_Frontend_Performance {
 		add_filter( 'style_loader_tag', array( $this, 'inline_critical_style' ), 20, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_catalog_style' ), 21, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_elementor_style' ), 22, 4 );
+		add_filter( 'style_loader_tag', array( $this, 'inline_local_font_style' ), 23, 4 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_ordered_scripts' ), 110 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_consent' ), 100 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_onetap' ), 100 );
@@ -265,6 +266,43 @@ class Schrack_Frontend_Performance {
 		if ( ! $size || $size > 65536 || $this->catalog_inline_bytes + $size > 131072 ) { return $tag; }
 		$css = file_get_contents( $path );
 		if ( ! is_string( $css ) || ! $this->can_inline_css( $css ) ) { return $tag; }
+		$this->catalog_inline_bytes += strlen( $css );
+		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
+	}
+
+	/** Local Elementor font URLs are absolute, so their CSS base does not change. */
+	public function inline_local_font_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
+		if ( is_admin() || ! $this->is_catalog_page() || is_preview()
+			|| ! apply_filters( 'schrack_wc_sync_inline_local_font_css', true )
+			|| ! preg_match( '/^elementor-gf-local-(poppins|figtree)$/D', $handle, $match )
+			|| 1 !== preg_match( '~^\s*<link\b[^>]*>\s*$~i', $tag )
+			|| preg_match( '~\b(integrity|onload|disabled)\b~i', $tag ) ) {
+			return $tag;
+		}
+		$uploads = wp_upload_dir( null, false );
+		$relative = '/elementor/google-fonts/css/' . $match[1] . '.css';
+		if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] )
+			|| strtok( $href, '?' ) !== $uploads['baseurl'] . $relative ) {
+			return $tag;
+		}
+		$root = realpath( $uploads['basedir'] . '/elementor/google-fonts/css' );
+		$path = realpath( $uploads['basedir'] . $relative );
+		if ( ! $root || ! $path || ! str_starts_with( $path, $root . DIRECTORY_SEPARATOR ) || ! is_readable( $path ) ) {
+			return $tag;
+		}
+		$size = filesize( $path );
+		if ( ! $size || $size > 65536 || $this->catalog_inline_bytes + $size > 131072 ) {
+			return $tag;
+		}
+		$css = file_get_contents( $path );
+		if ( ! is_string( $css ) || preg_match( '~@import|</style~i', $css ) ) {
+			return $tag;
+		}
+		$prefix = preg_quote( $uploads['baseurl'] . '/elementor/google-fonts/fonts/' . $match[1] . '-', '~' );
+		$without_fonts = preg_replace( '~url\s*\(\s*(["\']?)' . $prefix . '[a-f0-9]{8}\.woff2\1\s*\)~', '', $css, -1, $font_count );
+		if ( ! $font_count || ! is_string( $without_fonts ) || preg_match( '~url\s*\(~i', $without_fonts ) ) {
+			return $tag;
+		}
 		$this->catalog_inline_bytes += strlen( $css );
 		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
 	}
