@@ -77,6 +77,13 @@ final class Schrack_Cache_Warmer {
 			|| isset( $p['query'] ) || isset( $p['fragment'] ) || isset( $p['user'] ) || isset( $p['pass'] )
 			|| preg_match( '/[\\\\\x00-\x20]/', $url ) || ! wp_http_validate_url( $url ) ) { return ''; }
 		if ( $url === home_url( '/' ) ) { return $url; }
+		// WooCommerce's shop is a product archive, so url_to_postid() can return
+		// zero even though its configured published page has this exact permalink.
+		$shop_id = (int) wc_get_page_id( 'shop' );
+		if ( $shop_id > 0 && get_permalink( $shop_id ) === $url ) {
+			$shop = get_post( $shop_id );
+			return $shop && 'page' === $shop->post_type && 'publish' === $shop->post_status && '' === $shop->post_password ? $url : '';
+		}
 		$id = url_to_postid( $url );
 		if ( $id ) {
 			$post = get_post( $id );

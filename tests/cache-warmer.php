@@ -36,8 +36,8 @@ function home_url( $s = '' ) { return 'https://shop.example' . $s; }
 function wp_parse_url( $s ) { return parse_url( $s ); }
 function wp_http_validate_url( $s ) { return ! str_contains( $s, '%00' ); }
 function untrailingslashit( $s ) { return rtrim( $s, '/' ); }
-function url_to_postid( $s ) { return array( home_url('/product/lamp/') => 10, home_url('/shop/') => 11, home_url('/cart/') => 12, home_url('/product/hidden/') => 13, home_url('/product/draft/') => 14, home_url('/product/password/') => 15 )[ $s ] ?? 0; }
-function get_post( $id ) { return (object) array( 'post_status' => 14 === $id ? 'draft' : 'publish', 'post_password' => 15 === $id ? 'secret' : '', 'post_type' => in_array( $id, array(10,13,14,15) ) ? 'product' : 'page' ); }
+function url_to_postid( $s ) { if ( !empty($GLOBALS['shop_archive_test']) && $s === home_url('/shop/') ) { return 0; } return array( home_url('/product/lamp/') => 10, home_url('/shop/') => 11, home_url('/cart/') => 12, home_url('/product/hidden/') => 13, home_url('/product/draft/') => 14, home_url('/product/password/') => 15 )[ $s ] ?? 0; }
+function get_post( $id ) { if ( 11 === $id && isset($GLOBALS['shop_test_post']) ) { return $GLOBALS['shop_test_post']; } return (object) array( 'post_status' => 14 === $id ? 'draft' : 'publish', 'post_password' => 15 === $id ? 'secret' : '', 'post_type' => in_array( $id, array(10,13,14,15) ) ? 'product' : 'page' ); }
 function wc_get_product( $id ) { return new class($id) { public function __construct(private int $id) {} public function get_catalog_visibility() { return 13 === $this->id ? 'hidden' : 'visible'; } }; }
 function wc_get_page_id( $p ) { return 11; }
 function get_permalink( $id ) { return home_url( 10 === $id ? '/product/lamp/' : '/shop/' ); }
@@ -110,4 +110,14 @@ $GLOBALS['http_callback']=null;
 $measurement=Schrack_Page_Profile::measure(home_url('/'));
 check(null === $measurement['ttfb_ms'],'Missing cURL timing is unknown, never substituted with total duration.');
 check(empty($hooks['http_api_curl']),'Transport observer is removed after the measurement.');
+$GLOBALS['shop_archive_test'] = true;
+$shop_warmer = new Schrack_Cache_Warmer();
+check(home_url('/shop/') === $shop_warmer->public_url(home_url('/shop/')), 'Canonical configured shop archive is valid without a reverse post ID.');
+foreach (array(array('draft',''),array('private',''),array('publish','secret')) as $fields) {
+ $GLOBALS['shop_test_post']=(object)array('post_type'=>'page','post_status'=>$fields[0],'post_password'=>$fields[1]);
+ check('' === $shop_warmer->public_url(home_url('/shop/')), 'Non-public configured shop pages must remain rejected.');
+}
+unset($GLOBALS['shop_test_post']);
+check('' === $shop_warmer->public_url(home_url('/shop/?add-to-cart=10')), 'Shop query actions must remain rejected.');
+check('' === $shop_warmer->public_url(home_url('/shop')), 'Noncanonical shop aliases must remain rejected.');
 echo "Cache warmer: $count checks passed.\n";
