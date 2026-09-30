@@ -8,9 +8,9 @@ $clock = 0.0; $now = 10000; $can = true; $nonce = true; $allow_lock = true; $loc
 class WP_Error { public function __construct( public string $code, public string $message ) {} public function get_error_message() { return $this->message; } }
 class Json extends \Exception { public function __construct( public bool $ok, public mixed $data, public int $status ) {} }
 class FakeDB {
-	public string $options = 'custom_options'; public string $posts = 'custom_posts'; public string $last_error = ''; public bool $save_queries = false; public array $queries = array(); public int $num_queries = 7;
+	public string $options = 'custom_options'; public string $posts = 'custom_posts'; public string $wc_product_meta_lookup = 'custom_product_lookup'; public string $last_error = ''; public bool $save_queries = false; public array $queries = array(); public int $num_queries = 7;
 	public function prepare( $sql, ...$args ) { foreach($args as $arg) { $sql=preg_replace('/%[sd]/',(string)$arg,$sql,1); } return $sql; }
-	public function get_col($sql) { $GLOBALS['catalog_sql'][]=$sql; preg_match('/ID > (\d+)/',$sql,$m); return array_slice(array_values(array_filter($GLOBALS['catalog_ids'] ?? array(),static fn($id)=>$id>(int)$m[1])),0,100); }
+	public function get_col($sql) { $GLOBALS['catalog_sql'][]=$sql; preg_match('/ID > (\d+)/',$sql,$m); return array_slice(array_values(array_filter($GLOBALS['catalog_ids'] ?? array(),static fn($id)=>$id>(int)$m[1] && ( !str_contains($sql, "warm_stock.stock_status = 'instock'") || ($GLOBALS['stock_statuses'][$id] ?? 'instock') === 'instock' ))),0,100); }
 	public function get_var( $sql ) { global $allow_lock, $lock_held; if ( str_contains( $sql, 'RELEASE_LOCK' ) ) { $lock_held = false; return 1; } if ( ! $allow_lock || $lock_held ) { return 0; } $lock_held = true; return 1; }
 }
 $wpdb = new FakeDB();
@@ -40,7 +40,7 @@ function wp_http_validate_url( $s ) { return ! str_contains( $s, '%00' ); }
 function untrailingslashit( $s ) { return rtrim( $s, '/' ); }
 function url_to_postid( $s ) { if(preg_match('~/product/p(\d+)/$~',$s,$m)) { return (int)$m[1]; } if ( !empty($GLOBALS['shop_archive_test']) && $s === home_url('/shop/') ) { return 0; } return array( home_url('/product/lamp/') => 10, home_url('/shop/') => 11, home_url('/cart/') => 12, home_url('/product/hidden/') => 13, home_url('/product/draft/') => 14, home_url('/product/password/') => 15 )[ $s ] ?? 0; }
 function get_post( $id ) { if ( 11 === $id && isset($GLOBALS['shop_test_post']) ) { return $GLOBALS['shop_test_post']; } return (object) array( 'post_status' => 14 === $id ? 'draft' : 'publish', 'post_password' => 15 === $id ? 'secret' : '', 'post_type' => ( $id >= 20 || in_array( $id, array(10,13,14,15) ) ) ? 'product' : 'page' ); }
-function wc_get_product( $id ) { return new class($id) { public function __construct(private int $id) {} public function get_catalog_visibility() { return 13 === $this->id || in_array($this->id,$GLOBALS['hidden_ids'] ?? array()) ? 'hidden' : (in_array($this->id,$GLOBALS['search_ids'] ?? array()) ? 'search' : 'visible'); } }; }
+function wc_get_product( $id ) { return new class($id) { public function __construct(private int $id) {} public function get_stock_status() { return $GLOBALS['stock_statuses'][$this->id] ?? 'instock'; } public function get_catalog_visibility() { return 13 === $this->id || in_array($this->id,$GLOBALS['hidden_ids'] ?? array()) ? 'hidden' : (in_array($this->id,$GLOBALS['search_ids'] ?? array()) ? 'search' : 'visible'); } }; }
 function wc_get_page_id( $p ) { return 11; }
 function get_permalink( $id ) { if($id>=20) { return home_url('/product/p'.$id.'/'); } return home_url( 10 === $id ? '/product/lamp/' : '/shop/' ); }
 function get_terms($args) { return array((object)array('term_id'=>1)); }
@@ -128,6 +128,7 @@ check('' === $shop_warmer->public_url(home_url('/shop')), 'Noncanonical shop ali
 // Full catalogue traversal must not stop at the manual-list or result-history limit.
 $GLOBALS['catalog_ids'] = range(100,329);
 $GLOBALS['hidden_ids'] = array(105,205);
+$GLOBALS['stock_statuses']=array(120=>'outofstock',310=>'onbackorder',320=>'outofstock');
 $GLOBALS['catalog_sql'] = array();
 $GLOBALS['response_factory'] = null;
 $response = array('code'=>200,'cache'=>'hit');
@@ -135,12 +136,15 @@ check(ajax('save',array('urls'=>home_url('/'),'enabled'=>'1','discover'=>'1'))->
 $rounds=0;
 while('running' === $options[Schrack_Cache_Warmer::STATE]['status'] && ++$rounds < 40) { $warm->tick(); }
 $state=$options[Schrack_Cache_Warmer::STATE];
-check('complete' === $state['status'] && 228 === $state['products_processed'],'All public products beyond 100 must be visited; hidden products are excluded.');
+check('complete' === $state['status'] && 225 === $state['products_processed'],'All public in-stock products beyond 100 must be visited; hidden, sold-out and backordered products are excluded.');
 check(100 === count($state['results']) && 329 === $state['product_after'],'Persist only bounded recent results and the durable product cursor.');
-check(count($GLOBALS['catalog_sql'])>=3 && str_contains($GLOBALS['catalog_sql'][0],'custom_posts') && str_contains($GLOBALS['catalog_sql'][1],'ID > 199'),'Keyset pages use actual table names and advance after the last scanned ID.');
+check(count($GLOBALS['catalog_sql'])>=3 && str_contains($GLOBALS['catalog_sql'][0],'custom_posts') && str_contains($GLOBALS['catalog_sql'][1],'ID > 200'),'Keyset pages use actual table names and advance after the last scanned ID.');
 check($state['confirmed']===$state['processed'] && 0 === $state['unconfirmed'],'Only explicit HIT responses contribute to confirmed coverage.');
 ajax('save',array('urls'=>home_url('/'),'enabled'=>'1','discover'=>'1'));$before=count($requests);$warm->tick();
 check(50===count($requests)-$before,'Fast cached responses advance up to fifty pages while cold batches remain limited to five builds.');
+check(str_contains($GLOBALS['catalog_sql'][0],'custom_product_lookup') && str_contains($GLOBALS['catalog_sql'][0],"warm_stock.stock_status = 'instock'"),'The keyset query filters stock in the actual WooCommerce lookup table before materializing URLs.');
+check(!array_filter($requests,static fn($r)=>in_array($r[0],array(get_permalink(120),get_permalink(310),get_permalink(320)),true)),'Stock-excluded catalogue IDs never produce HTTP requests.');
+$GLOBALS['stock_statuses']=array();
 // A MISS gets exactly one later GET and becomes confirmed only when that GET is HIT.
 $GLOBALS['catalog_ids']=array(); $GLOBALS['hidden_ids']=array(); $seen=array();
 $GLOBALS['response_factory']=function($url) use (&$seen) { $n=($seen[$url] ?? 0)+1;$seen[$url]=$n;return array('code'=>200,'cache'=>$n===1?'miss':'hit'); };
@@ -180,5 +184,21 @@ $GLOBALS['http_callback']=null;(new Schrack_Cache_Warmer())->tick();
 check($options[Schrack_Cache_Warmer::STATE]['cursor']>0,'A new worker resumes saved progress.');
 ajax('stop');$before=count($requests);$warm->tick();$warm->rewarm();
 check($before===count($requests) && !$events,'Stop also disables full-catalogue and priority-refresh work.');
+
+// Both manual queues and already-saved product batches obey current stock.
+$GLOBALS['catalog_ids']=array(); $response=array('code'=>200,'cache'=>'hit');
+$GLOBALS['stock_statuses']=array(20=>'outofstock',21=>'onbackorder');
+check($warm->public_url(get_permalink(20))===get_permalink(20) && ''===$warm->public_url(get_permalink(20),true),'Public profiling eligibility is separate from in-stock warming eligibility.');
+ajax('save',array('urls'=>implode("\n",array(get_permalink(20),get_permalink(21),get_permalink(22))),'enabled'=>'1'));
+check(!in_array(get_permalink(20),$options[Schrack_Cache_Warmer::STATE]['urls'],true) && !in_array(get_permalink(21),$options[Schrack_Cache_Warmer::STATE]['urls'],true),'Unavailable manual selections are omitted without preventing settings saves.');
+$GLOBALS['stock_statuses'][22]='outofstock';$before=count($requests);$warm->tick();
+check('complete'===$options[Schrack_Cache_Warmer::STATE]['status'] && !array_filter(array_slice($requests,$before),static fn($r)=>str_contains($r[0],'/product/')),'Products sold out after queueing are skipped without HTTP requests or stopping the run.');
+$GLOBALS['stock_statuses'][20]='instock';$warm->cycle();$before=count($requests);$warm->tick();
+check((bool)array_filter(array_slice($requests,$before),static fn($r)=>$r[0]===get_permalink(20)),'Restocked products are included in the next automatic run.');
+$GLOBALS['stock_statuses']=array();
+$GLOBALS['response_factory']=function($url) { if($url===get_permalink(20)) { $GLOBALS['stock_statuses'][20]='outofstock'; return array('code'=>200,'cache'=>'miss'); } return array('code'=>200,'cache'=>'hit'); };
+ajax('save',array('urls'=>get_permalink(20),'enabled'=>'1'));$before=count($requests);$warm->tick();
+$state=$options[Schrack_Cache_Warmer::STATE];
+check(1===count(array_filter(array_slice($requests,$before),static fn($r)=>$r[0]===get_permalink(20))) && 'complete'===$state['status'] && 'OMIS'===$state['results'][2]['cache'],'Stock loss between MISS and confirmation skips the second request and does not claim a confirmed HIT.');
 
 echo "Cache warmer: $count checks passed.\n";

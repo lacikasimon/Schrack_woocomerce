@@ -35,7 +35,7 @@
 		}
 		const state = data.state || {};
 		running = state.status === 'running';
-		status.textContent = (labels[state.status] || state.status) + ' — ' + (state.catalog ? (state.processed || 0) + ' pagini · produse parcurse: ' + (state.products_processed || 0) + ' · HIT confirmat: ' + (state.confirmed || 0) + ' · neconfirmat: ' + (state.unconfirmed || 0) + ' · ' + (state.phase === 'products' ? 'întregul catalog' : 'pagini prioritare') : (state.cursor || 0) + '/' + (state.urls || []).length) +
+		status.textContent = (labels[state.status] || state.status) + ' — ' + (state.catalog ? (state.processed || 0) + ' pagini · produse în stoc parcurse: ' + (state.products_processed || 0) + ' · HIT confirmat: ' + (state.confirmed || 0) + ' · neconfirmat: ' + (state.unconfirmed || 0) + ' · ' + (state.phase === 'products' ? 'catalogul în stoc' : 'pagini prioritare') : (state.cursor || 0) + '/' + (state.urls || []).length) +
 			(data.next ? ' · Următoarea cerere: ' + new Date(data.next * 1000).toLocaleTimeString('ro-RO') : '') +
 			(data.cron_disabled ? ' · WP-Cron la vizite este dezactivat; este necesar cron-ul găzduirii.' : '');
 		results.replaceChildren();

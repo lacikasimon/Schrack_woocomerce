@@ -41,7 +41,7 @@ test('all-product save and asynchronous coverage preserve the priority input',as
 	const h=harness();await h.resolve('idle');h.elements['schrack-cache-form'].events.submit({preventDefault(){}});await h.flush();
 	assert.equal(h.calls[1].command,'save');assert.equal(h.calls[1].discover,'1');assert.equal(h.calls[1].urls,'unsaved input');
 	await h.resolve('running',{catalog:true,phase:'products',processed:150,products_processed:125,confirmed:149,unconfirmed:1,results:[{url:'/p/',http:200,cache:'MISS',verified:true,ms:1500,verify_ms:25},{url:'/q/',http:200,cache:'MISS',verified:false,ms:1400}]});
-	assert.match(h.elements['schrack-cache-status'].textContent,/produse parcurse: 125.*HIT confirmat: 149/);
+	assert.match(h.elements['schrack-cache-status'].textContent,/produse în stoc parcurse: 125.*HIT confirmat: 149/);
 	assert.equal(h.elements['schrack-cache-results'].children[0].children[2].textContent,'MISS → HIT');
 	assert.equal(h.elements['schrack-cache-results'].children[1].children[2].textContent,'MISS · neconfirmat');
 	assert.equal(h.elements['schrack-cache-form'].elements.urls.value,'unsaved input');

@@ -490,7 +490,12 @@ warmer's scheduled jobs.
 
 Enable **Preîncălzește toate produsele publice** on that same admin screen to scan
 every published, password-free product whose catalogue visibility is `visible` or
-`catalog` or `search`. There is no total product limit. Home and the canonical WooCommerce
+`catalog` or `search`. Since v0.1.102 only products with WooCommerce stock status
+`instock` are warmed, including manual priority product URLs. Sold-out and
+backordered products are excluded in the lookup query and rechecked immediately
+before each GET. Stock changes after queueing are skipped without HTTP requests
+or stopping the run; restocked products enter the next automatic pass. Public
+profiling can still inspect saved sold-out URLs. There is no total product limit. Home and the canonical WooCommerce
 shop run first, followed by manual priority URLs and up to 24 nonempty categories.
 Published product IDs are then scanned in pages of 100 using a saved ID cursor
 and the actual WordPress posts table. At most three empty/hidden pages are scanned

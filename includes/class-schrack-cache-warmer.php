@@ -43,11 +43,11 @@ final class Schrack_Cache_Warmer {
 		<div class="wrap" id="schrack-cache-warmer">
 			<h1>Performanță magazin</h1>
 			<?php if ( Schrack_Cache_Invalidation::is_active() ) { ?><p><strong>Protecția cache-ului tehnic este activă:</strong> modificările de categorii și atribute invalidează paginile, păstrând cache-ul CSS/JS, Redis și OPcache.</p><?php } ?>
-			<p>Preîncălzește lista prioritară și, opțional, toate produsele publice, în loturi de cel mult 50 de cereri succesive, cu cel mult 5 pagini fără HIT pe lot. Bugetul de 15 secunde este verificat între cereri; o cerere poate dura cel mult 20 de secunde. Pagina principală și magazinul au prioritate. Nu trimite cookie-uri. Rulează în fundal și după închiderea acestei pagini.</p>
+			<p>Preîncălzește lista prioritară și, opțional, toate produsele publice în stoc, în loturi de cel mult 50 de cereri succesive, cu cel mult 5 pagini fără HIT pe lot. Produsele fără stoc și cele în precomandă sunt omise, inclusiv din lista prioritară. Bugetul de 15 secunde este verificat între cereri; o cerere poate dura cel mult 20 de secunde. Pagina principală și magazinul au prioritate. Nu trimite cookie-uri. Rulează în fundal și după închiderea acestei pagini.</p>
 			<p>Necesită cache de pagină activ și WP-Cron funcțional. Pentru pornire regulată folosește un cron al găzduirii. Un catalog mare poate necesita ore sau zile; starea se păstrează între loturi. Paginile personalizate nu sunt preîncălzite.</p>
 			<form id="schrack-cache-form">
 				<p><label><input type="checkbox" name="enabled" <?php checked( $config['enabled'] ); ?>> Preîncălzire automată la fiecare oră și după golirea cache-ului de pagini</label></p>
-				<p><label><input type="checkbox" name="discover" <?php checked( $config['discover'] ); ?>> Preîncălzește toate produsele publice și adaugă 24 de categorii principale</label></p>
+				<p><label><input type="checkbox" name="discover" <?php checked( $config['discover'] ); ?>> Preîncălzește toate produsele publice în stoc și adaugă 24 de categorii principale</label></p>
 				<p><label for="schrack-cache-urls">URL-uri publice: pagina principală, magazin, categorii sau produse publicate (unul pe rând)</label></p>
 				<textarea id="schrack-cache-urls" name="urls" rows="9" class="large-text code" maxlength="30000"><?php echo esc_textarea( implode( "\n", $config['urls'] ) ); ?></textarea>
 				<p><button type="submit" class="button button-primary">Salvează</button> <button type="button" class="button" data-command="start">Pornește acum</button> <button type="button" class="button" data-command="stop">Oprește și dezactivează automatizarea</button></p>
@@ -87,14 +87,14 @@ final class Schrack_Cache_Warmer {
 		}
 		$urls = array();
 		foreach ( array_unique( $candidates ) as $url ) {
-			if ( is_string( $url ) && $this->public_url( $url ) ) { $urls[] = $url; }
+			if ( is_string( $url ) && $this->public_url( $url, true ) ) { $urls[] = $url; }
 			if ( count( $urls ) >= self::LIMIT + 26 ) { break; }
 		}
 		return $urls;
 	}
 
 	/** Reject aliases, query actions, credentials, external/private and hidden pages. */
-	public function public_url( string $url ): string {
+	public function public_url( string $url, bool $in_stock_only = false ): string {
 		$url = trim( $url );
 		$p = wp_parse_url( $url );
 		$home = wp_parse_url( home_url( '/' ) );
@@ -118,6 +118,7 @@ final class Schrack_Cache_Warmer {
 			if ( 'product' === $post->post_type ) {
 				$product = wc_get_product( $id );
 				if ( ! $product || ! in_array( $product->get_catalog_visibility(), array( 'visible', 'catalog', 'search' ), true ) ) { return ''; }
+				if ( $in_stock_only && 'instock' !== $product->get_stock_status() ) { return ''; }
 			} elseif ( $id !== wc_get_page_id( 'shop' ) ) { return ''; }
 			return get_permalink( $id ) === $url ? $url : '';
 		}
@@ -200,7 +201,7 @@ final class Schrack_Cache_Warmer {
 		if ( true !== $result && ! wp_next_scheduled( self::REWARM ) ) { wp_schedule_single_event( time() + 120, self::REWARM ); }
 	}
 
-	/** Scan published product IDs in durable keyset pages; no full catalogue in memory. */
+	/** Scan published in-stock product IDs in durable keyset pages. */
 	private function next_urls( array &$state ): void {
 		if ( isset( $state['verify_index'] ) || (int) $state['cursor'] < count( $state['urls'] ) ) { return; }
 		if ( isset( $state['resume'] ) ) {
@@ -210,12 +211,16 @@ final class Schrack_Cache_Warmer {
 		}
 		if ( empty( $state['catalog'] ) ) { $state['status'] = 'complete'; return; }
 		global $wpdb;
+		$lookup = $wpdb->wc_product_meta_lookup ?? $wpdb->prefix . 'wc_product_meta_lookup';
 		$state['phase'] = 'products';
 		// Bound empty/hidden pages too: continue in the next scheduled job if needed.
 		for ( $page = 0; $page < 3; ++$page ) {
 			$ids = $wpdb->get_col( $wpdb->prepare(
 				"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'product' AND post_status = 'publish'
-				AND post_password = '' AND ID > %d ORDER BY ID ASC LIMIT %d",
+				AND post_password = '' AND ID > %d
+				AND EXISTS (SELECT 1 FROM {$lookup} AS warm_stock
+					WHERE warm_stock.product_id = {$wpdb->posts}.ID AND warm_stock.stock_status = 'instock')
+				ORDER BY ID ASC LIMIT %d",
 				(int) $state['product_after'], self::CATALOG_BATCH
 			) );
 			if ( ! is_array( $ids ) || ! empty( $wpdb->last_error ) ) { $state['status'] = 'error'; return; }
@@ -230,7 +235,7 @@ final class Schrack_Cache_Warmer {
 			$state['urls'] = array(); $state['cursor'] = 0;
 			foreach ( $ids as $id ) {
 				$url = get_permalink( (int) $id );
-				if ( is_string( $url ) && $this->public_url( $url ) ) { $state['urls'][] = $url; }
+				if ( is_string( $url ) && $this->public_url( $url, true ) ) { $state['urls'][] = $url; }
 			}
 			if ( $state['urls'] ) { return; }
 		}
@@ -258,12 +263,26 @@ final class Schrack_Cache_Warmer {
 				$verifying = isset( $state['verify_index'] );
 				$index = $verifying ? (int) $state['verify_index'] : (int) $state['cursor'];
 				$raw_url = $verifying ? ( $state['verify_url'] ?? $state['urls'][ $index ] ?? '' ) : ( $state['urls'][ $index ] ?? '' );
-				$url = $this->public_url( (string) $raw_url );
+				$url = $this->public_url( (string) $raw_url, true );
+				if ( ! $url ) {
+					// Publication, visibility or stock can change after the queue was saved.
+					// Skip without an HTTP request or an error that stops the catalogue run.
+					if ( $verifying ) {
+						$state['results'][ $index ]['cache'] = 'OMIS';
+						$state['results'][ $index ]['verified'] = false;
+						$state['unconfirmed'] = (int) ( $state['unconfirmed'] ?? 0 ) + 1;
+						unset( $state['verify_index'], $state['verify_url'] );
+					} else { ++$state['cursor']; }
+					$state['attempts'] = 0; $state['updated'] = time();
+					update_option( self::STATE, $state, false );
+					if ( microtime( true ) - $batch_start >= self::BATCH_SECONDS ) { break; }
+					continue;
+				}
 				$start = microtime( true );
-				$response = $url ? wp_safe_remote_get( $url, array(
+				$response = wp_safe_remote_get( $url, array(
 					'timeout' => 20, 'redirection' => 0, 'cookies' => array(), 'limit_response_size' => 2097152,
 					'user-agent' => 'Mozilla/5.0 (compatible; SchrackCacheWarm/1.1)',
-				) ) : new WP_Error( 'not_public', 'Pagina nu mai este publică.' );
+				) );
 				$code = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
 				$cache = is_wp_error( $response ) ? '' : strtolower( (string) wp_remote_retrieve_header( $response, 'x-litespeed-cache' ) );
 				$ms = (int) round( ( microtime( true ) - $start ) * 1000 );
