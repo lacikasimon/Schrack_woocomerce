@@ -57,6 +57,9 @@ try {
 	verify_image( str_contains( $performance->inline_catalog_style( $external, 'hello-elementor', $url, 'screen' ), '<style' ) && $performance->catalog_block_assets( false ), 'The storefront home reuses safe critical CSS and on-demand block assets.' );
 	$GLOBALS['front_page_test'] = false;
 $GLOBALS['catalog_test'] = true;
+	verify_image( str_contains( $performance->inline_catalog_style( $external, 'woocommerce-layout', $url . '?ver=3', 'screen' ), '<style' ), 'Inspected local vendor handles can reuse self-contained rules.' );
+	verify_image( $external === $performance->inline_catalog_style( $external, 'woocommerce-layout', content_url( '/themes/../themes/hello-elementor/assets/css/reset.css' ) ), 'Traversal paths must never be resolved for inlining.' );
+	verify_image( $external === $performance->inline_catalog_style( $external, 'woocommerce-layout', 'https://cdn.example/reset.css' ), 'Inspected handles still preserve replaced external sources.' );
 	verify_image( $performance->catalog_block_assets( false ), 'Catalog blocks must load their own assets on rendering.' );
 	$inlined = $performance->inline_catalog_style( $external, 'hello-elementor', $url . '?ver=3', 'screen' );
 	verify_image( str_contains( $inlined, '<style' ) && str_contains( $inlined, 'media="screen"' ) && str_contains( $inlined, 'body{margin:0}' ), 'Installed catalog layout rules and media must be preserved.' );

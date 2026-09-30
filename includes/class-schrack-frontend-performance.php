@@ -202,6 +202,19 @@ class Schrack_Frontend_Performance {
 			'widget-woocommerce-product-data-tabs' => 'plugins/elementor-pro/assets/css/widget-woocommerce-product-data-tabs.min.css',
 			'cookieadmin-style'                    => 'plugins/cookieadmin/assets/css/consent.css',
 		);
+		// Only these inspected storefront handles may resolve their own local path.
+		// The file still has to be self-contained and within the shared size budget.
+		if ( ! isset( $files[ $handle ] ) && in_array( $handle, array( 'woocommerce-layout', 'woocommerce-smallscreen', 'woocommerce-general', 'accessibility-onetap', 'accessibility-onetap-fonts-readable', 'base-desktop', 'base-mobile' ), true ) ) {
+			$base = content_url( '/' );
+			$source = strtok( $href, '?' );
+			if ( ! str_starts_with( $source, $base ) ) { return $tag; }
+			$relative = substr( $source, strlen( $base ) );
+			if ( ! preg_match( '~^[A-Za-z0-9_./-]+\.css$~D', $relative ) || preg_match( '~(?:^|/)\.\.?(?:/|$)~', $relative ) ) { return $tag; }
+			$root = realpath( WP_CONTENT_DIR );
+			$resolved = realpath( WP_CONTENT_DIR . '/' . $relative );
+			if ( ! $root || ! $resolved || ! str_starts_with( $resolved, $root . DIRECTORY_SEPARATOR ) ) { return $tag; }
+			$files[ $handle ] = $relative;
+		}
 		if ( ! isset( $files[ $handle ] ) || strtok( $href, '?' ) !== content_url( '/' . $files[ $handle ] ) ) {
 			return $tag;
 		}

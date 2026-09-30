@@ -734,3 +734,8 @@ CSS also avoids a blocking request. Known jQuery/WooCommerce scripts request nat
 ordered defer; WordPress retains blocking execution whenever inline scripts or
 other dependencies require it. These changes exclude cart, checkout and account
 pages and preserve existing async strategies.
+
+v0.1.110 applies the same bounded, self-contained CSS policy to inspected
+WooCommerce, OneTap and Elementor atomic layout handles. Their source must resolve
+inside the current WordPress content directory without traversal. Files containing
+relative fonts/images or imports retain normal external loading.
