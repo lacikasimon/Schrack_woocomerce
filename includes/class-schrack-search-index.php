@@ -116,10 +116,13 @@ PRIMARY KEY  (product_id)
 				if ( microtime( true ) - $started > 5 ) { break; }
 			}
 			if ( microtime( true ) - $started < 5 && $state['cursor'] < $state['upper'] ) {
-				$ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type='product' AND ID>%d AND ID<=%d ORDER BY ID LIMIT 100", $state['cursor'], $state['upper'] ) );
+				$ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type='product' AND ID>%d AND ID<=%d ORDER BY ID LIMIT 500", $state['cursor'], $state['upper'] ) );
 				if ( $wpdb->last_error ) { throw new RuntimeException( 'Catalogul nu poate fi citit.' ); }
 				if ( ! $ids ) { $state['cursor'] = $state['upper']; }
-				if ( $ids ) { update_meta_cache( 'post', $ids ); }
+				if ( $ids ) {
+					if ( function_exists( '_prime_post_caches' ) ) { _prime_post_caches( $ids, false, true ); }
+					else { update_meta_cache( 'post', $ids ); }
+				}
 				foreach ( $ids as $id ) {
 					$this->write_document( (int) $id );
 					$state['cursor'] = (int) $id;

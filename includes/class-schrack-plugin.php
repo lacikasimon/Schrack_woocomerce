@@ -197,6 +197,7 @@ class Schrack_Plugin {
 			'class-schrack-search-index.php',
 			'class-schrack-log-archive.php',
 			'class-schrack-performance-tools.php',
+			'class-schrack-seo-compatibility.php',
 			'class-schrack-stock-label.php',
 			'class-schrack-b2b-pricing.php',
 			'class-schrack-newsletter.php',

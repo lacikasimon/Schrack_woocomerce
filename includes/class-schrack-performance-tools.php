@@ -28,6 +28,8 @@ final class Schrack_Performance_Tools {
 			<p id="schrack-performance-message" role="status" aria-live="polite"></p>
 			<pre id="schrack-performance-state" style="white-space:pre-wrap" aria-live="polite">Se citește starea…</pre>
 			<p><button type="button" class="button" data-operation="seo_audit">Verifică utilizarea metadatelor SEO</button></p>
+			<p><button type="button" class="button" data-operation="seo_primary">Păstrează categoriile primare Yoast în SiteSEO</button> <button type="button" class="button" data-operation="seo_restore">Restabilește categoriile primare anterioare</button></p>
+			<p>Se completează numai selecțiile SiteSEO goale. Datele Yoast și selecțiile SiteSEO existente se păstrează. Dezactivarea Yoast se face separat, după verificarea titlurilor, canonical, robots, schemei și sitemap-ului.</p>
 			<pre id="schrack-seo-audit" style="white-space:pre-wrap" aria-live="polite"></pre>
 		</section>
 		<?php
@@ -59,7 +61,9 @@ final class Schrack_Performance_Tools {
 		$types = $wpdb->get_results( $wpdb->prepare( "SELECT post_type,post_status,COUNT(*) AS entries FROM {$wpdb->posts} WHERE post_type LIKE %s GROUP BY post_type,post_status", '%redirect%' ), ARRAY_A );
 		$legacy = get_option( 'wpseo_taxonomy_meta', array() ); $legacy_count = 0;
 		foreach ( (array) $legacy as $values ) { $legacy_count += is_array( $values ) ? count( $values ) : 0; }
-		return array( 'post_metadata' => $rows, 'term_metadata' => $terms, 'redirects' => $types, 'yoast_legacy_terms' => $legacy_count, 'siteseo_options_keys' => array_keys( (array) get_option( 'siteseo_titles_option_name', array() ) ) );
+		$yoast = (array) get_option( 'wpseo_titles', array() );
+		$siteseo = (array) get_option( 'siteseo_titles_option_name', array() );
+		return array( 'yoast_redirects' => count( (array) get_option( 'wpseo-premium-redirects-base', array() ) ), 'yoast_title_settings' => array_intersect_key( $yoast, array_flip( array( 'title-home-wpseo', 'metadesc-home-wpseo', 'title-product', 'metadesc-product', 'title-tax-product_cat', 'metadesc-tax-product_cat', 'noindex-product', 'noindex-tax-product_cat' ) ) ), 'siteseo_title_settings' => array_intersect_key( $siteseo, array_flip( array( 'titles_home_site_title', 'titles_home_site_desc', 'titles_single_titles', 'titles_tax_titles' ) ) ), 'post_metadata' => $rows, 'term_metadata' => $terms, 'redirects' => $types, 'yoast_legacy_terms' => $legacy_count, 'siteseo_options_keys' => array_keys( (array) get_option( 'siteseo_titles_option_name', array() ) ) );
 	}
 	public function ajax(): void {
 		if ( ! current_user_can( 'manage_woocommerce' ) ) { wp_send_json_error( 'Acces refuzat.', 403 ); }
@@ -75,6 +79,8 @@ final class Schrack_Performance_Tools {
 				case 'archive': ( new Schrack_Log_Archive() )->start(); break;
 				case 'archive_stop': ( new Schrack_Log_Archive() )->stop(); break;
 				case 'restore': ( new Schrack_Log_Archive() )->start( true ); break;
+				case 'seo_primary': $result = ( new Schrack_SEO_Compatibility() )->merge(); wp_send_json_success( array( 'seo_audit' => $result ) ); break;
+				case 'seo_restore': $result = ( new Schrack_SEO_Compatibility() )->restore(); wp_send_json_success( array( 'seo_audit' => $result ) ); break;
 				case 'seo_audit': wp_send_json_success( array( 'seo_audit' => $this->seo_audit() ) ); break;
 				case 'status': break;
 				default: throw new RuntimeException( 'Operațiune necunoscută.' );

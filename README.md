@@ -703,3 +703,14 @@ Isolated checks: `php tests/search-index.php`, `php tests/log-archive.php`,
 `php tests/elementor-assets.php`, `php tests/catalog-facet-cache.php`, and
 `php tests/product-filter-counts.php`. They use disposable SQLite/files or test
 doubles, without production credentials or a WordPress database.
+
+v0.1.107 primes product posts and metadata together during index construction and
+raises the initial batch limit to 500 while keeping the five-second budget.
+The SEO audit reports populated field counts and the public title templates of
+both systems. A separate reversible operation fills only missing SiteSEO 1.4.1
+primary product categories from Yoast (up to 100 selections), after validating
+product membership. Existing SiteSEO values, Yoast source metadata, redirects
+and both plugins' options remain stored. Restore preserves subsequent edits.
+Plugin deactivation remains a separate operation requiring plugin-management
+permission; verify canonical URLs, robots, title templates, schema and sitemaps
+before and after choosing one active SEO provider.
