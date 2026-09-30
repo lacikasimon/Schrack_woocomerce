@@ -197,6 +197,53 @@ try {
 	$GLOBALS['front_page_test'] = false;
 }
 
+// Public translations are immutable assets; nonce/configuration stay request-local.
+$language_directory = sys_get_temp_dir() . '/schrack-onetap-languages-' . bin2hex( random_bytes( 6 ) );
+mkdir( $language_directory, 0700 );
+$previous_uploads = $GLOBALS['uploads_test'];
+$GLOBALS['uploads_test'] = array( 'basedir' => $language_directory, 'baseurl' => 'https://shop.example/uploads' );
+$prepare = new ReflectionMethod( $performance, 'prepare_onetap_languages' );
+$labels = array( 'en' => array( 'header' => array( 'title' => str_repeat( 'Accessible ', 1800 ) ) ), 'ro' => array( 'header' => array( 'title' => 'Accesibilitate & </script>' ) ) );
+$configuration = array( 'ajaxUrl' => 'https://shop.example/admin-ajax.php', 'nonce' => 'not-for-public-file', 'activeLanguage' => 'ro', 'languages' => $labels, 'showModules' => array( 'readable-font' => 'on' ) );
+$localized = 'var onetapAjaxObject = ' . wp_json_encode( $configuration ) . ';';
+try {
+	$prepared = $prepare->invoke( $performance, $localized );
+	verify_image( is_array( $prepared ), 'The inspected standalone configuration can externalize its large public translations.' );
+	$asset = $language_directory . '/schrack-frontend-cache/onetap/' . basename( $prepared['url'] );
+	$public_json = file_get_contents( $asset );
+	verify_image( $labels === json_decode( $public_json, true ), 'Every language and label must survive serialization exactly.' );
+	verify_image( ! str_contains( $public_json, 'not-for-public-file' ) && ! str_contains( $public_json, 'admin-ajax.php' ) && ! str_contains( $public_json, 'showModules' ), 'Public cache files must exclude nonce, AJAX URL and site/visitor settings.' );
+	$small_config = json_decode( substr( $prepared['data'], strlen( 'var onetapAjaxObject = ' ), -1 ), true );
+	verify_image( $small_config['nonce'] === $configuration['nonce'] && $small_config['activeLanguage'] === 'ro' && $small_config['showModules'] === $configuration['showModules'] && empty( $small_config['languages'] ), 'Request-local settings must remain intact before asynchronous activation.' );
+	verify_image( ! str_contains( $prepared['data'], '</script>' ), 'Localized inline configuration must retain safe JSON encoding.' );
+	verify_image( $prepared === $prepare->invoke( $performance, $localized ) && 1 === count( glob( dirname( $asset ) . '/*.json' ) ), 'Identical requests must reuse one immutable translation file.' );
+	$configuration['nonce'] = 'new-request-nonce';
+	$updated = $prepare->invoke( $performance, 'var onetapAjaxObject = ' . wp_json_encode( $configuration ) . ';' );
+	verify_image( $updated['url'] === $prepared['url'] && str_contains( $updated['data'], 'new-request-nonce' ), 'Nonce rotation must not alter or enter the public language asset.' );
+	$configuration['languages']['ro']['header']['title'] = 'Traducere nouă';
+	$updated = $prepare->invoke( $performance, 'var onetapAjaxObject = ' . wp_json_encode( $configuration ) . ';' );
+	verify_image( $updated['url'] !== $prepared['url'], 'Changed translations must produce a fresh cache URL.' );
+	foreach ( array( $localized . 'var other = true;', 'var other = {};', 'var onetapAjaxObject = {broken};', 'var onetapAjaxObject = {"languages":[]};', 'var onetapAjaxObject = {"languages":{"en":"small"}};', 'var onetapAjaxObject = ' . wp_json_encode( array( 'languages' => array( 'en' => str_repeat( 'x', 786433 ) ) ) ) . ';' ) as $other_data ) {
+		verify_image( null === $prepare->invoke( $performance, $other_data ), 'Changed vendor contracts, invalid, small and oversized payloads must retain native inline loading.' );
+	}
+	$GLOBALS['uploads_test']['error'] = 'Unavailable';
+	verify_image( null === $prepare->invoke( $performance, $localized ), 'Unavailable uploads must retain the complete original inline data.' );
+	unset( $GLOBALS['uploads_test']['error'] );
+	( new ReflectionProperty( $performance, 'onetap_languages_url' ) )->setValue( $performance, $prepared['url'] );
+	( new ReflectionProperty( $performance, 'onetap_on_demand' ) )->setValue( $performance, true );
+	$loader_tag = $performance->script_tag( '<script src="/loader.js" defer></script>', 'schrack-wc-onetap-loader' );
+	verify_image( str_contains( $loader_tag, 'data-schrack-onetap-languages="' . $prepared['url'] . '"' ), 'The normal loader must receive the public asset URL.' );
+	add_filter( 'schrack_wc_sync_onetap_languages_on_demand', '__return_false' );
+	verify_image( null === $prepare->invoke( $performance, $localized ), 'The language rollback filter must restore native inline data.' );
+	remove_filter( 'schrack_wc_sync_onetap_languages_on_demand', '__return_false' );
+} finally {
+	foreach ( glob( $language_directory . '/schrack-frontend-cache/onetap/*.json' ) as $file ) { unlink( $file ); }
+	rmdir( $language_directory . '/schrack-frontend-cache/onetap' ); rmdir( $language_directory . '/schrack-frontend-cache' ); rmdir( $language_directory );
+	$GLOBALS['uploads_test'] = $previous_uploads;
+	( new ReflectionProperty( $performance, 'onetap_languages_url' ) )->setValue( $performance, '' );
+	( new ReflectionProperty( $performance, 'onetap_on_demand' ) )->setValue( $performance, false );
+}
+
 // Exercise WordPress's actual strategy eligibility, including dependent fallbacks.
 foreach ( array( 'class-wp-dependency.php', 'class-wp-dependencies.php', 'class-wp-scripts.php' ) as $file ) { require_once ABSPATH . WPINC . '/' . $file; }
 $GLOBALS['wp_scripts'] = ( new ReflectionClass( WP_Scripts::class ) )->newInstanceWithoutConstructor();

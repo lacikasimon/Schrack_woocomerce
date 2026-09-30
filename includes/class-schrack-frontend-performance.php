@@ -10,6 +10,7 @@ class Schrack_Frontend_Performance {
 	private int $catalog_inline_bytes = 0;
 	private int $vendor_inline_bytes = 0;
 	private bool $onetap_on_demand = false;
+	private string $onetap_languages_url = '';
 	private bool $preload_product_image = false;
 
 	public function init(): void {
@@ -164,8 +165,74 @@ class Schrack_Frontend_Performance {
 			}
 		}
 		$this->onetap_on_demand = true;
+		$data = $scripts->get_data( 'accessibility-onetap', 'data' );
+		$prepared = is_string( $data ) ? $this->prepare_onetap_languages( $data ) : null;
+		if ( null !== $prepared ) {
+			$scripts->add_data( 'accessibility-onetap', 'data', $prepared['data'] );
+			$this->onetap_languages_url = $prepared['url'];
+		}
 		wp_add_inline_style( 'accessibility-onetap', '.schrack-onetap-error{position:fixed;bottom:90px;left:12px;right:12px;width:max-content;max-width:calc(100vw - 24px);margin:auto;padding:10px;background:#fff;color:#9b1c1c;border:1px solid currentColor;border-radius:6px;font:14px/1.5 system-ui,sans-serif;z-index:2147483647}' );
 		wp_enqueue_script( 'schrack-wc-onetap-loader', SCHRACK_WC_SYNC_URL . 'assets/frontend-onetap.js', array( 'jquery' ), SCHRACK_WC_SYNC_VERSION, array( 'in_footer' => true, 'strategy' => 'defer' ) );
+	}
+
+	/** Cache only public translations, never the nonce or visitor/site configuration. */
+	private function prepare_onetap_languages( string $data ): ?array {
+		if ( ! apply_filters( 'schrack_wc_sync_onetap_languages_on_demand', true )
+			|| ! preg_match( '~^\s*var onetapAjaxObject\s*=\s*(\{.*\});\s*$~sD', $data, $match ) ) {
+			return null;
+		}
+		$config = json_decode( $match[1], true, 64 );
+		if ( ! is_array( $config ) || empty( $config['languages'] ) || ! is_array( $config['languages'] ) ) {
+			return null;
+		}
+		$json = wp_json_encode( $config['languages'] );
+		if ( ! is_string( $json ) || strlen( $json ) < 16384 || strlen( $json ) > 786432 ) {
+			return null;
+		}
+		$uploads = wp_upload_dir( null, false );
+		if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] )
+			|| ! in_array( wp_parse_url( $uploads['baseurl'], PHP_URL_SCHEME ), array( 'http', 'https' ), true ) ) {
+			return null;
+		}
+		$root = realpath( $uploads['basedir'] );
+		$directory = $uploads['basedir'] . '/schrack-frontend-cache/onetap';
+		if ( ! $root || is_link( $uploads['basedir'] . '/schrack-frontend-cache' ) || is_link( $directory ) || ! wp_mkdir_p( $directory ) ) {
+			return null;
+		}
+		$directory = realpath( $directory );
+		if ( ! $directory || ! str_starts_with( $directory, $root . DIRECTORY_SEPARATOR ) ) {
+			return null;
+		}
+		$name = 'languages-' . hash( 'sha256', $json ) . '.json';
+		$path = $directory . '/' . $name;
+		if ( is_link( $path ) ) {
+			return null;
+		}
+		if ( ! is_file( $path ) || filesize( $path ) !== strlen( $json ) ) {
+			if ( ! is_writable( $directory ) ) {
+				return null;
+			}
+			// Publish atomically; simultaneous uncached visits produce the same file.
+			$temp = tempnam( $directory, '.onetap-' );
+			if ( ! $temp ) {
+				return null;
+			}
+			$written = @file_put_contents( $temp, $json, LOCK_EX );
+			// tempnam creates mode 0600; set serving permissions before publication.
+			$published = strlen( $json ) === $written && @chmod( $temp, 0644 ) && @rename( $temp, $path );
+			if ( is_file( $temp ) ) {
+				unlink( $temp );
+			}
+			if ( ! $published ) {
+				return null;
+			}
+		}
+		$config['languages'] = new stdClass();
+		$small = wp_json_encode( $config );
+		return is_string( $small ) ? array(
+			'data' => 'var onetapAjaxObject = ' . $small . ';',
+			'url' => trailingslashit( $uploads['baseurl'] ) . 'schrack-frontend-cache/onetap/' . $name,
+		) : null;
 	}
 
 	/** Readable fonts must not replace the theme's Roboto fallback before OneTap use. */
@@ -447,6 +514,9 @@ class Schrack_Frontend_Performance {
 			} elseif ( $this->onetap_on_demand && 'schrack-wc-onetap-loader' === $handle ) {
 				$processor->set_attribute( 'data-no-optimize', '1' );
 				$processor->set_attribute( 'data-no-defer', '1' );
+				if ( '' !== $this->onetap_languages_url ) {
+					$processor->set_attribute( 'data-schrack-onetap-languages', $this->onetap_languages_url );
+				}
 			} elseif ( $this->consent_enabled && in_array( $handle, array( 'cookieadmin_js', 'cookieadmin_pro_js' ), true ) ) {
 				$processor->set_attribute( 'data-no-optimize', '1' );
 				$processor->set_attribute( 'data-no-defer', '1' );

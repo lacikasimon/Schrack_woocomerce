@@ -773,3 +773,16 @@ even when Readable Font has not been selected. Inline and external stylesheets
 retain their original media and activate before native OneTap scripts. Saved
 preferences, keyboard activation and retry behavior keep their existing startup;
 disabling OneTap on-demand loading restores native font loading as well.
+
+v0.1.116 removes OneTap's large public translation dictionary from initial HTML.
+The inspected 2.14.0 standalone localized object keeps its nonce, selected
+language, settings and AJAX URL inline; only `languages` is published as an
+immutable JSON file under `uploads/schrack-frontend-cache/onetap/`. Files are
+content-hashed, bounded to 768 KiB and published atomically. The loader fetches
+all languages without cookies before native scripts on use, or immediately for
+saved preferences. Failures show the existing retry message and retry only on
+activation. Unwritable uploads, changed source contracts and small payloads
+retain the full inline configuration. Disable this addition with
+`schrack_wc_sync_onetap_languages_on_demand`; the main OneTap on-demand rollback
+also preserves native behavior. No nonce or visitor/site configuration is saved
+in public translation assets.

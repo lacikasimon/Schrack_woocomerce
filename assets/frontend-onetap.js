@@ -5,6 +5,8 @@
 		const sources = Array.from(document.querySelectorAll('script[data-schrack-onetap-src]'));
 		if (!sources.length) return;
 		const fonts = Array.from(document.querySelectorAll('[data-schrack-onetap-font-media]'));
+		const languageSource = document.querySelector('script[data-schrack-onetap-languages]');
+		let languagesReady = !languageSource;
 		const toggle = document.querySelector('.onetap-toggle');
 		const panel = document.querySelector('nav.onetap-accessibility');
 		const container = document.querySelector('.onetap-container-toggle');
@@ -62,9 +64,17 @@
 			if (toggle) toggle.setAttribute('aria-busy', 'true');
 			if (openRequested) announce('Se încarcă opțiunile de accesibilitate…');
 			// The vendor's hotkeys library must finish before its main script.
+			const translations = languagesReady ? Promise.resolve() : fetch(languageSource.getAttribute('data-schrack-onetap-languages'), {credentials: 'omit', cache: 'force-cache'}).then(function (response) {
+				if (!response.ok) throw new Error('OneTap translations could not load');
+				return response.json();
+			}).then(function (languages) {
+				if (!languages || typeof languages !== 'object' || Array.isArray(languages) || !window.onetapAjaxObject) throw new Error('Invalid OneTap translations');
+				window.onetapAjaxObject.languages = languages;
+				languagesReady = true;
+			});
 			pending = sources.reduce(function (previous, source) {
 				return previous.then(function () { return script(source); });
-			}, Promise.resolve()).then(function () {
+			}, translations).then(function () {
 				return new Promise(function (resolve) { window.jQuery(resolve); });
 			}).then(function () {
 				ready = true;

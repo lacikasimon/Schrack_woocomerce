@@ -5,11 +5,14 @@ const fs = require('node:fs');
 const code = fs.readFileSync(require('node:path').join(__dirname, '../assets/frontend-onetap.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function page({saved = null, blocked = false, missingButton = false, hidden = null} = {}) {
+function page({saved = null, blocked = false, missingButton = false, hidden = null, translations = false, languageFailure = false} = {}) {
 	const listeners = {};
 	const downloads = [];
 	const messages = [];
 	const replayed = [];
+	const fetches = [];
+	let languageFailureRemaining = languageFailure;
+	const browserWindow = {jQuery: callback => callback(), onetapAjaxObject: {nonce: 'request-only', languages: {}}};
 	const attrs = {};
 	let opens = 0;
 	const toggle = missingButton ? null : {
@@ -36,7 +39,7 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 	const document = {
 		readyState: 'complete',
 		querySelectorAll: selector => selector === '[data-schrack-onetap-font-media]' ? fonts : sources,
-		querySelector: selector => ({'.onetap-toggle': toggle, 'nav.onetap-accessibility': panel, '.onetap-container-toggle': container})[selector],
+		querySelector: selector => ({'.onetap-toggle': toggle, 'nav.onetap-accessibility': panel, '.onetap-container-toggle': container, 'script[data-schrack-onetap-languages]': translations ? {getAttribute: () => '/uploads/languages-hash.json'} : null})[selector],
 		addEventListener: (name, callback) => { listeners[name] = callback; },
 		removeEventListener: name => { delete listeners[name]; },
 		createElement: () => ({setAttribute() {}}),
@@ -46,7 +49,12 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 		if (blocked) throw new Error('storage denied');
 		return key === 'onetap-accessibility-free' ? saved : hidden;
 	}};
-	vm.runInNewContext(code, {document, window: {jQuery: callback => callback()}, localStorage: storage, sessionStorage: storage, KeyboardEvent: class { constructor(type, values) { Object.assign(this, {type}, values); } }});
+	vm.runInNewContext(code, {document, window: browserWindow, fetch: async (url, options) => {
+		fetches.push({url, options});
+		const ok = !languageFailureRemaining;
+		languageFailureRemaining = false;
+		return {ok, json: async () => ({en: {header: {title: 'Accessibility'}}, ro: {header: {title: 'Accesibilitate'}}})};
+	}, localStorage: storage, sessionStorage: storage, KeyboardEvent: class { constructor(type, values) { Object.assign(this, {type}, values); } }});
 	function event(name, values = {}) {
 		const e = {target: {closest: () => true}, preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; }, ...values};
 		listeners[name]?.(e);
@@ -59,8 +67,45 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 		downloads[1].onload();
 		await flush();
 	}
-	return {listeners, downloads, messages, replayed, toggle, panel, container, attrs, sources, fontAttrs, event, complete, opens: () => opens};
+	return {listeners, downloads, messages, replayed, toggle, panel, container, attrs, sources, fontAttrs, fetches, browserWindow, event, complete, opens: () => opens};
 }
+
+test('public translations download only on activation, before native scripts, with no cookies', async () => {
+	const p = page({translations: true});
+	await flush();
+	assert.equal(p.fetches.length, 0);
+	p.event('click');
+	p.event('click');
+	await flush();
+	assert.equal(p.fetches.length, 1);
+	assert.equal(p.fetches[0].options.credentials, 'omit');
+	assert.equal(p.fetches[0].options.cache, 'force-cache');
+	assert.equal(p.browserWindow.onetapAjaxObject.languages.ro.header.title, 'Accesibilitate');
+	assert.equal(p.browserWindow.onetapAjaxObject.nonce, 'request-only');
+	await p.complete();
+	assert.equal(p.opens(), 1);
+});
+
+test('translation failures show an error and retry only on user demand', async () => {
+	const p = page({translations: true, languageFailure: true});
+	p.event('click');
+	await flush();
+	assert.equal(p.downloads.length, 0);
+	assert.match(p.messages[0].textContent, /nu s-au încărcat/);
+	assert.equal(p.fetches.length, 1);
+	p.event('click');
+	await p.complete();
+	assert.equal(p.fetches.length, 2);
+	assert.equal(p.downloads.length, 2);
+});
+
+test('saved preferences load translations immediately before restoring vendor behavior', async () => {
+	const p = page({saved: '{}', translations: true});
+	await p.complete();
+	assert.equal(p.fetches.length, 1);
+	assert.equal(p.opens(), 0);
+	assert.equal(p.fontAttrs.media, 'screen');
+});
 
 test('new visitor gets a focusable toolbar button without downloading libraries', async () => {
 	const p = page();
