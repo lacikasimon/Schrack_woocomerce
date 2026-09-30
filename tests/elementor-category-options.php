@@ -8,6 +8,7 @@ namespace {
 	define( 'ABSPATH', __DIR__ );
 	$admin = false; $editing = false; $calls = 0;
 	function is_admin() { return $GLOBALS['admin']; }
+	function __( $text, $domain = '' ) { return $text; }
 	function taxonomy_exists( $name ) { return true; }
 	function is_wp_error( $value ) { return false; }
 	class WP_Term { public $term_id = 12; public $name = 'Iluminat'; public $count = 30; }
@@ -21,5 +22,15 @@ namespace {
 	if ( array( 12 => 'Iluminat (30)' ) !== $method->invoke( $widget ) ) { throw new \RuntimeException( 'Frontend editor must retain category choices.' ); }
 	$editing = false; $admin = true;
 	if ( array( 12 => 'Iluminat (30)' ) !== $method->invoke( $widget ) || 2 !== $calls ) { throw new \RuntimeException( 'Admin/AJAX editor must retain choices.' ); }
-	echo "Elementor category options: 3 checks passed.\n";
+	require __DIR__ . '/../includes/widgets/class-schrack-elementor-product-filter-widget.php';
+	$widget = new Schrack_Elementor_Product_Filter_Widget();
+	$method = new \ReflectionMethod( $widget, 'category_options' );
+	$admin = false; $calls = 0;
+	if ( array( '' => 'Toate categoriile' ) !== $method->invoke( $widget ) || 0 !== $calls ) { throw new \RuntimeException( 'Public filter controls must not scan the category catalogue.' ); }
+	$editing = true;
+	$expected = array( '' => 'Toate categoriile', 12 => 'Iluminat' );
+	if ( $expected !== $method->invoke( $widget ) ) { throw new \RuntimeException( 'Frontend filter editor must retain category labels.' ); }
+	$editing = false; $admin = true;
+	if ( $expected !== $method->invoke( $widget ) || 2 !== $calls ) { throw new \RuntimeException( 'Admin filter editor must retain all choices.' ); }
+	echo "Elementor category options: 6 checks passed.\n";
 }

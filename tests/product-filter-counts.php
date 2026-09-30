@@ -2,6 +2,7 @@
 /** Facet SQL regressions on disposable in-memory SQLite; no WordPress/database credentials. */
 define( 'ABSPATH', __DIR__ );
 define( 'ARRAY_A', 'ARRAY_A' );
+function sanitize_text_field( string $value ): string { return trim( strip_tags( $value ) ); }
 function absint( mixed $value ): int { return abs( (int) $value ); }
 function taxonomy_exists( string $taxonomy ): bool { return in_array( $taxonomy, array( 'product_cat', 'pa_ip', 'pa_color', 'pa_empty' ), true ); }
 function get_term_children( int $id, string $taxonomy ): array { return 10 === $id ? array( 11 ) : array(); }
@@ -18,6 +19,7 @@ class WP_Term {
 class Facet_Test_DB {
 	public string $prefix = 'testshop_';
 	public string $posts = 'testshop_posts';
+	public string $postmeta = 'testshop_postmeta';
 	public string $term_relationships = 'testshop_term_relationships';
 	public string $term_taxonomy = 'testshop_term_taxonomy';
 	public int $queries = 0;
@@ -81,4 +83,46 @@ verify_count( 1 === $wpdb->queries - $before, 'Repeated renders within the same 
 $wpdb->db->exec( "UPDATE testshop_wc_product_meta_lookup SET stock_status='outofstock' WHERE product_id=2" );
 $updated = $batch->invoke( new Schrack_Product_Filter_Renderer(), array( 'pa_color' ), 10 );
 verify_count( array( 3 => 1 ) === $updated['pa_color'], 'Fresh count requests must observe stock changes.' );
+// Metadata facets must preserve the original SQL semantics while sharing a scan.
+$wpdb->db->exec( "CREATE TABLE testshop_postmeta (post_id INTEGER, meta_key TEXT, meta_value TEXT);
+UPDATE testshop_wc_product_meta_lookup SET stock_status='onbackorder' WHERE product_id=2;
+INSERT INTO testshop_postmeta VALUES
+(1,'_schrack_manufacturer','A'),(1,'_schrack_manufacturer','A'),(1,'_schrack_product_line','A'),
+(2,'_schrack_manufacturer','B'),(2,'_schrack_product_line','0'),
+(3,'_schrack_manufacturer','Out'),(4,'_schrack_manufacturer','Draft'),(6,'_schrack_manufacturer','Variation'),
+(5,'_schrack_manufacturer','Other'),(5,'_schrack_product_line',''),(5,'unrelated','Not a facet');" );
+$metadata = new ReflectionMethod( $renderer, 'metadata_filter_options' );
+$manufacturer = new ReflectionMethod( $renderer, 'manufacturer_options' );
+$line = new ReflectionMethod( $renderer, 'product_line_options' );
+$scope = new ReflectionMethod( $renderer, 'category_scope_clause' );
+$keys = array( '_schrack_manufacturer', '_schrack_product_line' );
+foreach ( array( 0, 10, 11, 12, 999 ) as $category ) {
+	$current = new Schrack_Product_Filter_Renderer();
+	$before = $wpdb->queries;
+	$result = $metadata->invoke( $current, $category, $keys );
+	verify_count( 1 === $wpdb->queries - $before, 'Two enabled metadata facets must share one query.' );
+	$manufacturer->invoke( $current, $category );
+	$line->invoke( $current, $category );
+	verify_count( 1 === $wpdb->queries - $before, 'Reading prepared facets must not repeat the query.' );
+	foreach ( $keys as $key ) {
+		$clause = $scope->invoke( $current, 'meta.post_id', $category );
+		$reference = $wpdb->get_results( $wpdb->prepare( "SELECT meta.meta_value AS name, COUNT(DISTINCT meta.post_id) AS total
+			FROM testshop_postmeta AS meta
+			INNER JOIN testshop_posts AS product_posts ON product_posts.ID=meta.post_id
+			INNER JOIN testshop_wc_product_meta_lookup AS lookup ON lookup.product_id=meta.post_id
+			WHERE meta.meta_key=%s AND meta.meta_value<>'' AND product_posts.post_type='product'
+			AND product_posts.post_status='publish' AND lookup.stock_status<>'outofstock'
+			{$clause['sql']} GROUP BY meta.meta_value ORDER BY meta.meta_value ASC", array_merge( array( $key ), $clause['params'] ) ), ARRAY_A );
+		$expected = array_map( static fn( array $row ): array => array( 'name' => $row['name'], 'count' => (int) $row['total'] ), $reference );
+		verify_count( $expected === $result[ $key ], 'Batched metadata must match old distinct/category/stock/ordering semantics.' );
+	}
+}
+$current = new Schrack_Product_Filter_Renderer();
+$before = $wpdb->queries;
+verify_count( array() === $metadata->invoke( $current, 10, array() ) && $before === $wpdb->queries, 'Disabled facets must not query.' );
+$first = $manufacturer->invoke( $current, 10 );
+verify_count( array( array( 'name' => 'A', 'count' => 1 ), array( 'name' => 'B', 'count' => 1 ) ) === $first, 'Duplicates, drafts, variations, other categories and out-of-stock products must not inflate metadata counts.' );
+verify_count( array( array( 'name' => '0', 'count' => 1 ), array( 'name' => 'A', 'count' => 1 ) ) === $line->invoke( $current, 10 ), 'The zero label is a value and late-enabled facets must load correctly.' );
+$wpdb->db->exec( "UPDATE testshop_wc_product_meta_lookup SET stock_status='outofstock' WHERE product_id=2" );
+verify_count( array( array( 'name' => 'A', 'count' => 1 ) ) === $manufacturer->invoke( new Schrack_Product_Filter_Renderer(), 10 ), 'New metadata renders must observe current stock without persistent caches.' );
 echo "Product filter counts: {$checks} checks passed.\n";

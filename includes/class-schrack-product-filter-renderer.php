@@ -21,6 +21,9 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private ?Schrack_Frontend_Image_Loader $image_loader = null;
 
+	/** Request-local metadata facets, keyed by category and metadata key. */
+	private array $metadata_facets = array();
+
 	/**
 	 * Renders the full filter widget shell and the initial product results.
 	 *
@@ -49,6 +52,14 @@ class Schrack_Product_Filter_Renderer {
 		$sidebar_category_ids = array_map( static fn ( WP_Term $term ): int => (int) $term->term_id, $sidebar_categories );
 		$category_search_value = $category['id'] > 0 && ! in_array( (int) $category['id'], $sidebar_category_ids, true ) ? $category['label'] : $filters['category_search'];
 		$active_filter_count  = $this->active_filter_count( $filters );
+		$metadata_keys = array();
+		if ( $settings['show_manufacturer_filter'] ) {
+			$metadata_keys[] = '_schrack_manufacturer';
+		}
+		if ( $settings['show_product_line_filter'] ) {
+			$metadata_keys[] = '_schrack_product_line';
+		}
+		$this->metadata_filter_options( $filters['category'], $metadata_keys );
 		$manufacturers        = $settings['show_manufacturer_filter'] ? $this->manufacturer_options( $filters['category'] ) : array();
 		$product_lines        = $settings['show_product_line_filter'] ? $this->product_line_options( $filters['category'] ) : array();
 		$show_special_offer   = $settings['show_special_offer_filter'] && $this->has_special_offer_products( $filters['category'] );
@@ -2177,126 +2188,73 @@ class Schrack_Product_Filter_Renderer {
 	 * @return array<int,array{name:string,count:int}>
 	 */
 	private function manufacturer_options( int $category_id = 0 ): array {
-		global $wpdb;
+		$options = $this->metadata_filter_options( $category_id, array( '_schrack_manufacturer' ) );
+		return $options['_schrack_manufacturer'] ?? array();
+	}
 
-		static $options = array();
-
-		if ( isset( $options[ $category_id ] ) ) {
-			return $options[ $category_id ];
-		}
-
-		$lookup_table   = $wpdb->prefix . 'wc_product_meta_lookup';
-		$category_scope = $this->category_scope_clause( 'manufacturer_meta.post_id', $category_id );
-		$params         = array_merge( array( '_schrack_manufacturer' ), $category_scope['params'] );
-
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT manufacturer_meta.meta_value AS name, COUNT(DISTINCT manufacturer_meta.post_id) AS total
-				FROM {$wpdb->postmeta} AS manufacturer_meta
-				INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = manufacturer_meta.post_id
-				INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = manufacturer_meta.post_id
-				WHERE manufacturer_meta.meta_key = %s
-					AND manufacturer_meta.meta_value <> ''
-					AND product_posts.post_type = 'product'
-					AND product_posts.post_status = 'publish'
-					AND lookup.stock_status <> 'outofstock'
-					{$category_scope['sql']}
-				GROUP BY manufacturer_meta.meta_value
-				ORDER BY manufacturer_meta.meta_value ASC",
-				$params
-			),
-			ARRAY_A
-		);
-
-		if ( ! is_array( $rows ) ) {
-			$options[ $category_id ] = array();
-
-			return $options[ $category_id ];
-		}
-
-		$result = array();
-
-		foreach ( $rows as $row ) {
-			$name = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
-
-			if ( '' === $name ) {
-				continue;
-			}
-
-			$result[] = array(
-				'name'  => $name,
-				'count' => max( 0, absint( $row['total'] ?? 0 ) ),
-			);
-		}
-
-		$options[ $category_id ] = $result;
-
-		return $result;
+	/** Available product-line labels, sharing the manufacturer category scan. */
+	private function product_line_options( int $category_id = 0 ): array {
+		$options = $this->metadata_filter_options( $category_id, array( '_schrack_product_line' ) );
+		return $options['_schrack_product_line'] ?? array();
 	}
 
 	/**
-	 * Returns product line/series options (e.g. "EGLO Light", "Eglo Connect") collected
-	 * from the Schrack catalog's merchandising group name, restricted to products that
-	 * are currently available (see available_term_counts() for the same definition).
+	 * Aggregate enabled metadata facets together over distinct category products.
+	 * The derived category set lets the database use post_id indexes instead of
+	 * testing category membership against every matching row in the whole catalog.
+	 * Counts remain live for each request; no stock/price results are persisted.
 	 *
-	 * @return array<int,array{name:string,count:int}>
+	 * @return array<string,array<int,array{name:string,count:int}>>
 	 */
-	private function product_line_options( int $category_id = 0 ): array {
+	private function metadata_filter_options( int $category_id, array $keys ): array {
+		$keys = array_values( array_intersect( array_unique( $keys ), array( '_schrack_manufacturer', '_schrack_product_line' ) ) );
+		$cached = $this->metadata_facets[ $category_id ] ?? array();
+		$missing = array_values( array_diff( $keys, array_keys( $cached ) ) );
+		if ( empty( $missing ) ) {
+			return $cached;
+		}
 		global $wpdb;
-
-		static $options = array();
-
-		if ( isset( $options[ $category_id ] ) ) {
-			return $options[ $category_id ];
+		$lookup_table = $wpdb->wc_product_meta_lookup ?? $wpdb->prefix . 'wc_product_meta_lookup';
+		$params = array();
+		$category_join = '';
+		if ( $category_id > 0 && taxonomy_exists( 'product_cat' ) ) {
+			$ids = $this->category_and_descendant_ids( $category_id );
+			$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+			$category_join = " INNER JOIN (
+				SELECT DISTINCT category_rel.object_id
+				FROM {$wpdb->term_relationships} AS category_rel
+				INNER JOIN {$wpdb->term_taxonomy} AS category_tt ON category_tt.term_taxonomy_id = category_rel.term_taxonomy_id
+				WHERE category_tt.taxonomy = 'product_cat' AND category_tt.term_id IN ({$placeholders})
+			) AS category_products ON category_products.object_id = product_posts.ID";
+			$params = $ids;
 		}
-
-		$lookup_table   = $wpdb->prefix . 'wc_product_meta_lookup';
-		$category_scope = $this->category_scope_clause( 'product_line_meta.post_id', $category_id );
-		$params         = array_merge( array( '_schrack_product_line' ), $category_scope['params'] );
-
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT product_line_meta.meta_value AS name, COUNT(DISTINCT product_line_meta.post_id) AS total
-				FROM {$wpdb->postmeta} AS product_line_meta
-				INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = product_line_meta.post_id
-				INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = product_line_meta.post_id
-				WHERE product_line_meta.meta_key = %s
-					AND product_line_meta.meta_value <> ''
-					AND product_posts.post_type = 'product'
-					AND product_posts.post_status = 'publish'
-					AND lookup.stock_status <> 'outofstock'
-					{$category_scope['sql']}
-				GROUP BY product_line_meta.meta_value
-				ORDER BY product_line_meta.meta_value ASC",
-				$params
-			),
-			ARRAY_A
-		);
-
-		if ( ! is_array( $rows ) ) {
-			$options[ $category_id ] = array();
-
-			return $options[ $category_id ];
+		$placeholders = implode( ',', array_fill( 0, count( $missing ), '%s' ) );
+		$params = array_merge( $params, $missing );
+		$sql = "SELECT facet_meta.meta_key AS facet, facet_meta.meta_value AS name, COUNT(DISTINCT facet_meta.post_id) AS total
+			FROM {$wpdb->posts} AS product_posts
+			{$category_join}
+			INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = product_posts.ID
+			INNER JOIN {$wpdb->postmeta} AS facet_meta ON facet_meta.post_id = product_posts.ID
+			WHERE facet_meta.meta_key IN ({$placeholders})
+				AND facet_meta.meta_value <> ''
+				AND product_posts.post_type = 'product'
+				AND product_posts.post_status = 'publish'
+				AND lookup.stock_status <> 'outofstock'
+			GROUP BY facet_meta.meta_key, facet_meta.meta_value
+			ORDER BY facet_meta.meta_value ASC";
+		$rows = $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A );
+		foreach ( $missing as $key ) {
+			$cached[ $key ] = array();
 		}
-
-		$result = array();
-
-		foreach ( $rows as $row ) {
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
 			$name = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
-
-			if ( '' === $name ) {
-				continue;
+			$key = (string) ( $row['facet'] ?? '' );
+			if ( '' !== $name && in_array( $key, $missing, true ) ) {
+				$cached[ $key ][] = array( 'name' => $name, 'count' => absint( $row['total'] ?? 0 ) );
 			}
-
-			$result[] = array(
-				'name'  => $name,
-				'count' => max( 0, absint( $row['total'] ?? 0 ) ),
-			);
 		}
-
-		$options[ $category_id ] = $result;
-
-		return $result;
+		$this->metadata_facets[ $category_id ] = $cached;
+		return $cached;
 	}
 
 	/**

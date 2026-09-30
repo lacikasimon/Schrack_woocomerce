@@ -420,6 +420,15 @@ The SOAP client is aligned to the received Schrack templates:
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
 
 
+## Category rendering (v0.1.94)
+
+The product-filter widget loads its category choice labels only inside Elementor's
+editor. Public rendering still uses the saved category ID. Enabled manufacturer
+and product-line facets share one aggregate query scoped to distinct products in
+the selected category and its descendants. Request-local reuse avoids duplicate
+queries while keeping fresh stock and publication status on each new request.
+No persistent price, stock, or facet-result cache is introduced.
+
 ## Product hero discovery (v0.1.93)
 
 For a verified Elementor single-product template containing one visible current-product

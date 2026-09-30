@@ -378,6 +378,10 @@ class Schrack_Elementor_Product_Filter_Widget extends \Elementor\Widget_Base {
 		$options = array(
 			'' => __( 'Toate categoriile', 'schrack-woocommerce-sync' ),
 		);
+		// Saved IDs render directly; labels are only used in Elementor's editor.
+		if ( ! is_admin() && ! \Elementor\Plugin::$instance->editor->is_edit_mode() ) {
+			return $options;
+		}
 
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
 			return $options;
