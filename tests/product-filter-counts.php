@@ -2,6 +2,7 @@
 /** Facet SQL regressions on disposable in-memory SQLite; no WordPress/database credentials. */
 define( 'ABSPATH', __DIR__ );
 define( 'ARRAY_A', 'ARRAY_A' );
+function do_action( string $hook, mixed ...$args ): void {}
 function sanitize_text_field( string $value ): string { return trim( strip_tags( $value ) ); }
 function absint( mixed $value ): int { return abs( (int) $value ); }
 function taxonomy_exists( string $taxonomy ): bool { return in_array( $taxonomy, array( 'product_cat', 'pa_ip', 'pa_color', 'pa_empty' ), true ); }

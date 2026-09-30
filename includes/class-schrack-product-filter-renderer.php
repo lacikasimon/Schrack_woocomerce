@@ -45,7 +45,9 @@ class Schrack_Product_Filter_Renderer {
 		$instance_id = '' !== $instance_id ? sanitize_html_class( $instance_id ) : 'schrack-products-' . wp_rand( 1000, 999999 );
 		$form_id             = $instance_id . '-filter-form';
 		$filters             = $this->sanitize_filters( $this->request_filters( $settings ) );
+		do_action( 'schrack_filter_profile_mark', 'results_start' );
 		$results             = $this->render_results( $settings, $filters );
+		do_action( 'schrack_filter_profile_mark', 'results_end' );
 		$config              = $this->public_settings( $settings );
 		$category            = $this->category_for_picker( $filters['category'] );
 		$default_category    = $this->category_for_picker( $settings['default_category'] );
@@ -62,7 +64,9 @@ class Schrack_Product_Filter_Renderer {
 		if ( $settings['show_product_line_filter'] ) {
 			$metadata_keys[] = '_schrack_product_line';
 		}
+		do_action( 'schrack_filter_profile_mark', 'metadata_start' );
 		$this->metadata_filter_options( $filters['category'], $metadata_keys );
+		do_action( 'schrack_filter_profile_mark', 'metadata_end' );
 		$manufacturers        = $settings['show_manufacturer_filter'] ? $this->manufacturer_options( $filters['category'] ) : array();
 		$product_lines        = $settings['show_product_line_filter'] ? $this->product_line_options( $filters['category'] ) : array();
 		$show_special_offer   = $settings['show_special_offer_filter'] && $this->has_special_offer_products( $filters['category'] );
@@ -253,7 +257,7 @@ class Schrack_Product_Filter_Renderer {
 							<?php endif; ?>
 
 							<?php if ( $settings['show_attribute_filters'] ) : ?>
-								<?php echo $this->attribute_filters_html( $filters ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+								<?php echo $results['facets_html'] ?? $this->attribute_filters_html( $filters ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 							<?php endif; ?>
 
 							<?php if ( $settings['show_stock_filter'] || $show_special_offer ) : ?>
@@ -406,7 +410,9 @@ class Schrack_Product_Filter_Renderer {
 	 * @param array<string,mixed> $filters Sanitized frontend filters.
 	 */
 	private function attribute_filters_html( array $filters ): string {
+		do_action( 'schrack_filter_profile_mark', 'attributes_start' );
 		$groups = $this->attribute_filter_options( (int) ( $filters['category'] ?? 0 ) );
+		do_action( 'schrack_filter_profile_mark', 'attribute_options_end' );
 
 		ob_start();
 		?>
@@ -1008,6 +1014,7 @@ class Schrack_Product_Filter_Renderer {
 	 * @param array<string,mixed> $filters Filters.
 	 */
 	private function category_explorer( array $filters ): string {
+		do_action( 'schrack_filter_profile_mark', 'categories_start' );
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
 			return '';
 		}
@@ -1030,6 +1037,7 @@ class Schrack_Product_Filter_Renderer {
 		}
 
 		$child_available_counts = $this->category_tree_available_counts( $child_categories );
+		do_action( 'schrack_filter_profile_mark', 'category_counts_end' );
 
 		// Categories with no currently available products in their full subtree
 		// are not useful as navigation targets in the browser.
@@ -2416,6 +2424,7 @@ class Schrack_Product_Filter_Renderer {
 			}
 		}
 		$counts_by_taxonomy = $this->available_attribute_counts( $taxonomies, $category_id );
+		do_action( 'schrack_filter_profile_mark', 'attribute_counts_end' );
 		$terms_by_taxonomy = array();
 		$term_ids = array();
 		foreach ( $counts_by_taxonomy as $counts ) {
@@ -2434,6 +2443,7 @@ class Schrack_Product_Filter_Renderer {
 			}
 		}
 
+		do_action( 'schrack_filter_profile_mark', 'attribute_terms_end' );
 
 		foreach ( $slugs as $slug => $meta ) {
 			$taxonomy = wc_attribute_taxonomy_name( $slug );

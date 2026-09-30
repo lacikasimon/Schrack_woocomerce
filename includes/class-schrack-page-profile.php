@@ -46,6 +46,9 @@ final class Schrack_Page_Profile {
 			global $wpdb;
 			$marks[] = array( 'phase' => $name, 'ms' => round( ( microtime( true ) - $start ) * 1000, 1 ), 'queries' => (int) $wpdb->num_queries );
 		};
+		add_action( 'schrack_filter_profile_mark', static function ( string $stage ) use ( $mark ): void {
+			if ( preg_match( '/^[a-z_]{1,40}$/D', $stage ) ) { $mark( 'filter_' . $stage ); }
+		} );
 		$mark( 'plugin_file' );
 		foreach ( array( 'plugins_loaded', 'init', 'wp', 'template_redirect', 'wp_enqueue_scripts', 'wp_head', 'wp_footer' ) as $hook ) {
 			add_action( $hook, static function () use ( $mark, $hook ): void { $mark( $hook ); }, PHP_INT_MAX );
