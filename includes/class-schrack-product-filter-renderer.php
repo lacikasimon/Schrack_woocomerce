@@ -742,7 +742,10 @@ class Schrack_Product_Filter_Renderer {
 			$join        .= " LEFT JOIN {$lookup_table} AS schrack_filter_lookup ON ({$wpdb->posts}.ID = schrack_filter_lookup.product_id)";
 		}
 
-		if ( $this->uses_item_number_join( $query ) ) {
+		if ( $this->uses_item_number_join( $query ) && class_exists( 'Schrack_Search_Index' ) && Schrack_Search_Index::ready() ) {
+			$query->set( 'schrack_use_search_index', true );
+			$join .= Schrack_Search_Index::join();
+		} elseif ( $this->uses_item_number_join( $query ) ) {
 			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_item_meta ON ({$wpdb->posts}.ID = schrack_filter_item_meta.post_id AND schrack_filter_item_meta.meta_key = '_schrack_item_number')";
 			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_ean_meta ON ({$wpdb->posts}.ID = schrack_filter_ean_meta.post_id AND schrack_filter_ean_meta.meta_key = '_schrack_ean')";
 			$join .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_filter_item_meta ON ({$wpdb->posts}.ID = telesystem_filter_item_meta.post_id AND telesystem_filter_item_meta.meta_key = '_telesystem_item_number')";
@@ -763,6 +766,9 @@ class Schrack_Product_Filter_Renderer {
 		$search = trim( (string) $query->get( 'schrack_product_filter_search' ) );
 
 		if ( '' !== $search ) {
+			if ( $query->get( 'schrack_use_search_index' ) ) {
+				$where .= ' AND ' . Schrack_Search_Index::predicate( $search );
+			} else {
 			$like = '%' . $wpdb->esc_like( $search ) . '%';
 
 			$where .= $wpdb->prepare(
@@ -780,6 +786,7 @@ class Schrack_Product_Filter_Renderer {
 			);
 		}
 
+		}
 		$min_price = $query->get( 'schrack_product_filter_min_price' );
 		$max_price = $query->get( 'schrack_product_filter_max_price' );
 
@@ -2234,11 +2241,16 @@ class Schrack_Product_Filter_Renderer {
 		}
 
 		if ( null === $this->category_children ) {
-			$parents = get_terms( array(
+			$load_parents = static fn() => get_terms( array(
 				'taxonomy' => 'product_cat', 'fields' => 'id=>parent',
 				'hide_empty' => false, 'hierarchical' => false,
 				'update_term_meta_cache' => false,
 			) );
+			try { $parents = class_exists( 'Schrack_Catalog_Facet_Cache' ) ? Schrack_Catalog_Facet_Cache::remember( 'category-parents', static function() use ( $load_parents ): array {
+				$parents = $load_parents();
+				if ( ! is_array( $parents ) ) { throw new RuntimeException( 'Hierarchy unavailable.' ); }
+				return $parents;
+			}, true ) : $load_parents(); } catch ( RuntimeException $e ) { $parents = false; }
 			if ( ! is_array( $parents ) ) {
 				$children = get_term_children( $category_id, 'product_cat' );
 				return array_merge( array( $category_id ), is_array( $children ) ? $children : array() );
@@ -2292,15 +2304,15 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function metadata_filter_options( int $category_id, array $keys ): array {
 		$keys = array_values( array_intersect( array_unique( $keys ), array( '_schrack_manufacturer', '_schrack_product_line' ) ) );
-		if ( 0 !== $category_id || ! $keys || ! class_exists( 'Schrack_Catalog_Facet_Cache' ) ) {
+		if ( ! $keys || ! class_exists( 'Schrack_Catalog_Facet_Cache' ) ) {
 			return $this->compute_metadata_filter_options( $category_id, $keys );
 		}
-		$cached = $this->metadata_facets[0] ?? array();
+		$cached = $this->metadata_facets[ $category_id ] ?? array();
 		if ( ! array_diff( $keys, array_keys( $cached ) ) ) { return $cached; }
 		sort( $keys );
-		$result = Schrack_Catalog_Facet_Cache::remember( 'metadata:' . implode( ',', $keys ), fn(): array => $this->compute_metadata_filter_options( 0, $keys ) );
-		$this->metadata_facets[0] = $result + $cached;
-		return $this->metadata_facets[0];
+		$result = Schrack_Catalog_Facet_Cache::remember( 'metadata:' . $category_id . ':' . implode( ',', $keys ), fn(): array => $this->compute_metadata_filter_options( $category_id, $keys ) );
+		$this->metadata_facets[ $category_id ] = $result + $cached;
+		return $this->metadata_facets[ $category_id ];
 	}
 
 	private function compute_metadata_filter_options( int $category_id, array $keys ): array {
@@ -2414,8 +2426,8 @@ class Schrack_Product_Filter_Renderer {
 	 * @return array<string,array{slug:string,label:string,terms:array<int,array{id:int,name:string,count:int}>}>
 	 */
 	private function attribute_filter_options( int $category_id = 0 ): array {
-		if ( 0 === $category_id && class_exists( 'Schrack_Catalog_Facet_Cache' ) ) {
-			return Schrack_Catalog_Facet_Cache::remember( 'attributes', fn(): array => $this->compute_attribute_filter_options( 0 ) );
+		if ( class_exists( 'Schrack_Catalog_Facet_Cache' ) ) {
+			return Schrack_Catalog_Facet_Cache::remember( 'attributes:' . $category_id, fn(): array => $this->compute_attribute_filter_options( $category_id ) );
 		}
 		return $this->compute_attribute_filter_options( $category_id );
 	}

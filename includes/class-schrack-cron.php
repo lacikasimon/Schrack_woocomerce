@@ -1407,6 +1407,7 @@ class Schrack_Cron {
 	public function raise_action_scheduler_concurrency( mixed $current ): int {
 		$concurrency = max( 1, (int) $current, $this->catalog_parallel_workers(), $this->image_parallel_workers() );
 
+		if ( get_option( 'schrack_background_profile', false ) ) { $concurrency = min( $concurrency, 2 ); }
 		return $this->is_low_memory_host() ? min( $concurrency, Schrack_Memory_Guard::parallel_worker_limit() ) : $concurrency;
 	}
 

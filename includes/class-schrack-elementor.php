@@ -539,7 +539,12 @@ class Schrack_Elementor {
 			return;
 		}
 
-		$query->set( 's', $search );
+		if ( class_exists( 'Schrack_Search_Index' ) && Schrack_Search_Index::ready() ) {
+			$query->set( 's', '' );
+			$query->set( 'schrack_archive_index_search', $search );
+		} else {
+			$query->set( 's', $search );
+		}
 	}
 
 	/**

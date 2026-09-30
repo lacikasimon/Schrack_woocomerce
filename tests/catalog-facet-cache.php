@@ -27,7 +27,7 @@ function verify(bool $ok,string $message): void { ++$GLOBALS['checks']; if(!$ok)
 $compute=function() use (&$computations,&$stock): array { ++$computations; return array('count'=>$stock); };
 $get=fn()=>Schrack_Catalog_Facet_Cache::remember('counts',$compute);
 verify($get()===array('count'=>3) && $get()===array('count'=>3) && $computations===1,'Unchanged public requests reuse an aggregate.');
-verify(reset($GLOBALS['transients'])['ttl']===120,'Aggregates have a bounded two-minute lifetime.');
+verify(reset($GLOBALS['transients'])['ttl']===1800,'Aggregates have a bounded thirty-minute lifetime.');
 foreach(array('woocommerce_product_set_stock','woocommerce_product_set_stock_status','woocommerce_update_product','woocommerce_delete_product_transients','clean_term_cache','woocommerce_attribute_updated','update_option_schrack_wc_sync_dynamic_attributes') as $hook) {
  ++$stock; fire($hook); verify($get()===array('count'=>$stock),'Mutation hook must invalidate: '.$hook);
 }
@@ -39,9 +39,10 @@ foreach(array('product_cat','pa_color') as $taxonomy) {
  ++$stock; fire('set_object_terms',1,array(),array(),$taxonomy); verify($get()===array('count'=>$stock),'Category and attribute membership changes invalidate.');
 }
 ++$stock; fire('clean_post_cache',1,(object)array('post_type'=>'product')); verify($get()===array('count'=>$stock),'Publication/deletion post invalidation refreshes aggregates.');
-foreach(array('admin','ajax','cold') as $flag) {
+foreach(array('admin','cold') as $flag) {
  $GLOBALS[$flag]=true; $before=$computations; $get(); $get(); verify($computations===$before+2,'Bypass aggregate cache for '.$flag); $GLOBALS[$flag]=false;
 }
+$GLOBALS['admin']=$GLOBALS['ajax']=true; $before=$computations; $get(); $get(); verify($computations===$before,'Public AJAX reuses aggregate data.'); $GLOBALS['admin']=$GLOBALS['ajax']=false;
 $GLOBALS['enabled']=false; $before=$computations; $get(); $get(); verify($computations===$before+2,'The feature can be disabled.'); $GLOBALS['enabled']=true;
 $GLOBALS['locale']='hu_HU'; $before=$computations; $get(); verify($computations===$before+1,'Translated labels must not cross locales.');
 $GLOBALS['transients']=array();
@@ -50,4 +51,8 @@ verify(empty($GLOBALS['transients']),'A mutation during computation must not pub
 $before=$computations; $get(); $GLOBALS['transients']=array(); $get(); verify($computations===$before+2,'Missing or expired entries rebuild.');
 Schrack_Catalog_Facet_Cache::remember('empty',fn()=>array());
 verify(Schrack_Catalog_Facet_Cache::remember('empty',fn()=>array('wrong'))===array(),'Empty aggregates are valid cached values.');
+$builds=0; $hierarchy=function() use (&$builds): array { ++$builds; return array(2=>1); };
+Schrack_Catalog_Facet_Cache::remember('parents',$hierarchy,true); fire('woocommerce_product_set_stock'); Schrack_Catalog_Facet_Cache::remember('parents',$hierarchy,true); verify($builds===1,'Stock updates retain the category topology.');
+fire('edited_product_cat'); Schrack_Catalog_Facet_Cache::remember('parents',$hierarchy,true); verify($builds===2,'Reparenting invalidates the category topology.');
+$GLOBALS['wpdb']=(object)array('last_error'=>'SQL failure'); $GLOBALS['transients']=array(); Schrack_Catalog_Facet_Cache::remember('failed',fn()=>array()); verify(!$GLOBALS['transients'],'Failed SQL must not publish an empty aggregate.');
 echo "Catalog facet cache: {$checks} checks passed.\n";

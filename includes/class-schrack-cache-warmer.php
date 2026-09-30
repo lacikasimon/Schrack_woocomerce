@@ -64,6 +64,7 @@ final class Schrack_Cache_Warmer {
 			<button type="button" class="button" data-command="profile_cold">Măsoară selecțiile la rece</button>
 			<p>Testul la rece ocolește și cache-ul selecțiilor de produse, imagini și al agregatelor de catalog, fără să golească memoria cache a magazinului.</p>
 			<pre id="schrack-profile-result" style="white-space:pre-wrap" aria-live="polite"></pre>
+			<?php do_action( 'schrack_performance_tools' ); ?>
 		</div>
 		<?php
 	}

@@ -1,13 +1,17 @@
 <?php
-/** Short-lived public catalogue aggregates with mutation-driven invalidation. */
+/** Public catalogue aggregates with mutation-driven invalidation. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class Schrack_Catalog_Facet_Cache {
 	private const GENERATION = 'schrack_catalog_facet_generation';
+	private const HIERARCHY = 'schrack_category_hierarchy_generation';
 
 	public function init(): void {
 		foreach ( array( 'woocommerce_delete_product_transients', 'woocommerce_product_set_stock', 'woocommerce_variation_set_stock', 'woocommerce_product_set_stock_status', 'woocommerce_variation_set_stock_status', 'woocommerce_new_product', 'woocommerce_update_product', 'woocommerce_delete_product', 'woocommerce_update_product_variation', 'clean_term_cache', 'woocommerce_attribute_added', 'woocommerce_attribute_updated', 'woocommerce_attribute_deleted' ) as $hook ) {
 			add_action( $hook, array( self::class, 'invalidate' ), PHP_INT_MAX, 0 );
+		}
+		foreach ( array( 'created_product_cat', 'edited_product_cat', 'delete_product_cat' ) as $hook ) {
+			add_action( $hook, array( self::class, 'invalidate_hierarchy' ), PHP_INT_MAX, 0 );
 		}
 		add_action( 'clean_post_cache', array( $this, 'post_changed' ), PHP_INT_MAX, 2 );
 		add_action( 'set_object_terms', array( $this, 'terms_changed' ), PHP_INT_MAX, 4 );
@@ -20,6 +24,11 @@ final class Schrack_Catalog_Facet_Cache {
 	public static function invalidate(): void {
 		// A UUID also distinguishes consecutive changes within the same second.
 		update_option( self::GENERATION, wp_generate_uuid4(), false );
+	}
+
+	public static function invalidate_hierarchy(): void {
+		update_option( self::HIERARCHY, wp_generate_uuid4(), false );
+		self::invalidate();
 	}
 
 	public function post_changed( int $id, $post ): void {
@@ -35,16 +44,17 @@ final class Schrack_Catalog_Facet_Cache {
 	}
 
 	/** Cache only public counts/options, never prices, customer data or product HTML. */
-	public static function remember( string $scope, callable $compute ): array {
-		if ( is_admin() || wp_doing_ajax()
+	public static function remember( string $scope, callable $compute, bool $hierarchy = false ): array {
+		$option = $hierarchy ? self::HIERARCHY : self::GENERATION;
+		if ( ( is_admin() && ! wp_doing_ajax() )
 			|| ( class_exists( 'Schrack_Page_Profile' ) && Schrack_Page_Profile::cold_selections() )
 			|| ! apply_filters( 'schrack_wc_sync_catalog_facet_cache', true ) ) {
 			return $compute();
 		}
-		$generation = get_option( self::GENERATION, '' );
+		$generation = get_option( $option, '' );
 		if ( '' === $generation ) {
-			add_option( self::GENERATION, wp_generate_uuid4(), '', false );
-			$generation = get_option( self::GENERATION, '' );
+			add_option( $option, wp_generate_uuid4(), '', false );
+			$generation = get_option( $option, '' );
 		}
 		$key = 'schrack_facets_' . md5( SCHRACK_WC_SYNC_VERSION . '|' . get_locale() . '|' . $scope );
 		$cached = get_transient( $key );
@@ -53,9 +63,9 @@ final class Schrack_Catalog_Facet_Cache {
 		}
 		$data = $compute();
 		// A concurrent catalogue edit must never publish this older snapshot.
-		wp_cache_delete( self::GENERATION, 'options' );
-		if ( $generation === get_option( self::GENERATION, '' ) ) {
-			set_transient( $key, array( 'generation' => $generation, 'data' => $data ), 120 );
+		wp_cache_delete( $option, 'options' );
+		if ( $generation === get_option( $option, '' ) && empty( $GLOBALS['wpdb']->last_error ) ) {
+			set_transient( $key, array( 'generation' => $generation, 'data' => $data ), $hierarchy ? 86400 : 1800 );
 		}
 		return $data;
 	}

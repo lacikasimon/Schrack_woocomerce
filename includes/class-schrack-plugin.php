@@ -131,9 +131,13 @@ class Schrack_Plugin {
 		$this->frontend_image_loader = new Schrack_Frontend_Image_Loader( $this->settings, $this->logger );
 		$this->frontend_image_loader->init();
 		( new Schrack_Frontend_Performance() )->init();
+		( new Schrack_Elementor_Assets() )->init();
 		( new Schrack_Cache_Warmer() )->init();
 		( new Schrack_Cache_Invalidation() )->init();
 		( new Schrack_Catalog_Facet_Cache() )->init();
+		( new Schrack_Search_Index() )->init();
+		( new Schrack_Log_Archive() )->init();
+		( new Schrack_Performance_Tools() )->init();
 		$this->b2b_pricing = new Schrack_B2B_Pricing();
 		$this->b2b_pricing->init();
 		$this->newsletter = new Schrack_Newsletter();
@@ -186,9 +190,13 @@ class Schrack_Plugin {
 			'class-schrack-product-mapper.php',
 			'class-schrack-frontend-image-loader.php',
 			'class-schrack-frontend-performance.php',
+			'class-schrack-elementor-assets.php',
 			'class-schrack-cache-warmer.php',
 			'class-schrack-cache-invalidation.php',
 			'class-schrack-catalog-facet-cache.php',
+			'class-schrack-search-index.php',
+			'class-schrack-log-archive.php',
+			'class-schrack-performance-tools.php',
 			'class-schrack-stock-label.php',
 			'class-schrack-b2b-pricing.php',
 			'class-schrack-newsletter.php',

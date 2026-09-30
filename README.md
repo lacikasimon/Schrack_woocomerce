@@ -649,3 +649,57 @@ Playwright flow for HPOS and legacy order storage. Installation upgrades create 
 bridge tables (`schrack_edoc_orders`, `schrack_edoc_commands`, `schrack_edoc_nonces`)
 without rewriting WooCommerce orders. Deactivation stops bridge scheduling and retains
 the journal and snapshots so reenabling can safely resume.
+
+### Server response tools (v0.1.106)
+
+**WooCommerce → Performanță magazin** also provides asynchronous, capability and
+nonce protected controls for the server profile, search index and private log
+retention. Applying the profile preserves a snapshot of only the four changed
+settings: debug off, log level info, two catalogue workers and one image worker.
+The profile caps Action Scheduler at two concurrent batches across the site.
+Rollback restores those four settings without touching supplier credentials.
+Disable visit-triggered WP-Cron only after verifying a working minute hosting
+cron for `wp-cron.php`; a separate control restores it.
+
+The search document table uses the actual site prefix and keeps title, excerpt,
+content, SKU and each supplier code/EAN in separate fields. This removes the six
+postmeta joins while preserving literal substring searches and the existing
+fuzzy candidate ordering. It is a denormalized lookup, not a full-text search
+that discards short codes or punctuation. All published products are indexed;
+stock, taxonomy and customer visibility filtering remain in their original
+queries. A saved keyset cursor processes at most 100 products and checks a
+five-second budget between products. WP-Cron continues work after closing admin.
+Search uses the existing query until the initial build and dirty queue complete.
+Product edits enqueue revision-fenced updates; pending writes temporarily fall
+back to the original search. Neither private products nor partial builds become
+search results. Restart continues progress and retries a failed worker.
+
+Category metadata and attribute facets now share the mutation-invalidated cache
+on scoped category pages and AJAX, with a 30-minute maximum lifetime. Category
+parent maps have a separate 24-hour generation so stock changes do not rebuild
+the taxonomy topology. Only public counts and options are cached, never prices,
+customer records or rendered HTML. SQL errors do not publish empty aggregates.
+
+Saved Elementor template CSS/assets can avoid constructing theme documents
+solely for style preparation on public store pages. This compatibility path is
+restricted to the inspected Elementor 4.2.4 / Pro 4.2.3 pair. Native condition
+checks, render hooks, asset enabling and CSS order remain intact. Missing saved
+metadata, custom page templates, editor/preview contexts and other versions keep
+native preparation. Dynamic customer/product HTML remains live.
+
+Log retention keeps debug/info for 30 days and warning/error for 90 days. Each
+background batch archives at most 500 immutable rows into private gzip JSON
+segments outside the web root, with permissions 0700/0600, SHA-256 verification
+and durable checkpoints. An InnoDB transaction compares the originals before
+deleting only the backed-up IDs. Crash recovery is idempotent. Retention checks
+daily after starting; stop or restore suspends automation. Archives remain on
+the hosting account and are never automatically deleted. Admin restore preserves
+IDs, timestamps, nulls and context; collisions stop without overwriting data.
+No TRUNCATE or long blocking OPTIMIZE is used. Removing rows does not promise an
+immediate reduction in the physical InnoDB file size. Insufficient private
+storage, disk space or verification errors stop before removing affected rows.
+
+Isolated checks: `php tests/search-index.php`, `php tests/log-archive.php`,
+`php tests/elementor-assets.php`, `php tests/catalog-facet-cache.php`, and
+`php tests/product-filter-counts.php`. They use disposable SQLite/files or test
+doubles, without production credentials or a WordPress database.

@@ -269,6 +269,11 @@ class Schrack_Header_Search_Renderer {
 			return $join;
 		}
 
+		if ( class_exists( 'Schrack_Search_Index' ) && Schrack_Search_Index::ready() ) {
+			$query->set( 'schrack_use_search_index', true );
+			return $join . Schrack_Search_Index::join();
+		}
+
 		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
 		$join        .= " LEFT JOIN {$lookup_table} AS schrack_header_lookup ON ({$wpdb->posts}.ID = schrack_header_lookup.product_id)";
 		$join        .= " LEFT JOIN {$wpdb->postmeta} AS schrack_header_item_meta ON ({$wpdb->posts}.ID = schrack_header_item_meta.post_id AND schrack_header_item_meta.meta_key = '_schrack_item_number')";
@@ -295,6 +300,10 @@ class Schrack_Header_Search_Renderer {
 
 		if ( '' === $search ) {
 			return $where;
+		}
+
+		if ( $query->get( 'schrack_use_search_index' ) ) {
+			return $where . ' AND ' . Schrack_Search_Index::predicate( $search );
 		}
 
 		$like = '%' . $wpdb->esc_like( $search ) . '%';
@@ -500,6 +509,10 @@ class Schrack_Header_Search_Renderer {
 
 		if ( empty( $prefixes ) ) {
 			return array();
+		}
+
+		if ( class_exists( 'Schrack_Search_Index' ) && Schrack_Search_Index::ready() ) {
+			return Schrack_Search_Index::fuzzy_ids( $prefixes, (int) $settings['fuzzy_pool'] );
 		}
 
 		$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
