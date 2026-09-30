@@ -8,6 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Schrack_Frontend_Performance {
 	private bool $consent_enabled = false;
 	private int $catalog_inline_bytes = 0;
+	private int $vendor_inline_bytes = 0;
 	private bool $onetap_on_demand = false;
 	private bool $preload_product_image = false;
 
@@ -16,6 +17,7 @@ class Schrack_Frontend_Performance {
 		add_filter( 'style_loader_tag', array( $this, 'inline_catalog_style' ), 21, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_elementor_style' ), 22, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_local_font_style' ), 23, 4 );
+		add_filter( 'style_loader_tag', array( $this, 'inline_vendor_asset_style' ), 24, 4 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_ordered_scripts' ), 110 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_consent' ), 100 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_onetap' ), 100 );
@@ -305,6 +307,70 @@ class Schrack_Frontend_Performance {
 		}
 		$this->catalog_inline_bytes += strlen( $css );
 		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
+	}
+
+	/** Preserve inspected vendor rules and resolve only their known local assets. */
+	public function inline_vendor_asset_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
+		$files = array(
+			'woocommerce-general'                => 'woocommerce/assets/css/woocommerce.css',
+			'accessibility-onetap'               => 'accessibility-onetap/assets/css/accessibility-onetap-front-end.min.css',
+			'accessibility-onetap-fonts-readable' => 'accessibility-onetap/assets/css/onetap-fonts-readable.min.css',
+		);
+		if ( is_admin() || ! $this->is_catalog_page() || is_preview() || ! isset( $files[ $handle ] )
+			|| ! apply_filters( 'schrack_wc_sync_inline_vendor_asset_css', true )
+			|| strtok( $href, '?' ) !== plugins_url( $files[ $handle ] )
+			|| 1 !== preg_match( '~^\s*<link\b[^>]*>\s*$~i', $tag )
+			|| preg_match( '~\b(integrity|onload|disabled)\b~i', $tag ) ) {
+			return $tag;
+		}
+		$root = realpath( WP_PLUGIN_DIR );
+		$path = realpath( WP_PLUGIN_DIR . '/' . $files[ $handle ] );
+		if ( ! $root || ! $path || ! str_starts_with( $path, $root . DIRECTORY_SEPARATOR ) || ! is_readable( $path ) ) {
+			return $tag;
+		}
+		$size = filesize( $path );
+		// This separate 192 KiB budget admits the three inspected files only.
+		if ( ! $size || $size > 98304 || $this->vendor_inline_bytes + $size > 196608 ) {
+			return $tag;
+		}
+		$css = file_get_contents( $path );
+		$css = is_string( $css ) ? $this->vendor_css_assets( $css, $handle ) : null;
+		if ( null === $css || $this->vendor_inline_bytes + strlen( $css ) > 196608 ) {
+			return $tag;
+		}
+		$this->vendor_inline_bytes += strlen( $css );
+		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
+	}
+
+	/** Unfamiliar URL syntax or new assets retain the original stylesheet. */
+	private function vendor_css_assets( string $css, string $handle ): ?string {
+		if ( '' === $css || preg_match( '~@import|</style~i', $css ) ) {
+			return null;
+		}
+		$allowed = array(
+			'woocommerce-general' => '~^\.\./(?:fonts/WooCommerce\.(?:woff2?|ttf)|images/icons/(?:loader\.svg|credit-cards/(?:visa|mastercard|laser|diners|maestro|jcb|amex|discover)\.svg))$~D',
+			'accessibility-onetap' => '~^\.\./images/cursor[123]\.png$~D',
+			'accessibility-onetap-fonts-readable' => '~^\.\./fonts/Roboto/Roboto-(?:(?:Thin|Light|Regular|Medium|Bold|Black)(?:-Italic)?|Italic)\.woff2$~D',
+		);
+		if ( ! isset( $allowed[ $handle ] ) ) {
+			return null;
+		}
+		$plugin = 'woocommerce-general' === $handle ? 'woocommerce' : 'accessibility-onetap';
+		$valid = true;
+		$resolved = preg_replace_callback( '~url\s*\(\s*("[^"\r\n]*"|\'[^\'\r\n]*\'|[^()\s]*)\s*\)~i', static function( array $match ) use ( $handle, $allowed, $plugin, &$valid ): string {
+			$url = trim( $match[1], "\"'" );
+			if ( str_starts_with( $url, 'data:image/' ) ) {
+				return $match[0];
+			}
+			if ( ! preg_match( $allowed[ $handle ], $url ) ) {
+				$valid = false;
+				return $match[0];
+			}
+			return 'url("' . plugins_url( $plugin . '/assets/' . substr( $url, 3 ) ) . '")';
+		}, $css );
+		// Check the original too: malformed URL tokens must not evade validation.
+		$probe = preg_replace( '~url\s*\(\s*("[^"\r\n]*"|\'[^\'\r\n]*\'|[^()\s]*)\s*\)~i', '', $css );
+		return $valid && is_string( $resolved ) && is_string( $probe ) && ! preg_match( '~url\s*\(~i', $probe ) ? $resolved : null;
 	}
 
 	/** Embedded image data is independent of the stylesheet's base URL. */

@@ -85,6 +85,45 @@ $GLOBALS['catalog_test'] = true;
 }
 $GLOBALS['catalog_test'] = false;
 
+// Three exact vendor files: preserve rules, media and asset destinations.
+$vendor_fixture = sys_get_temp_dir() . '/schrack-vendor-css-' . bin2hex( random_bytes( 6 ) );
+define( 'WP_PLUGIN_DIR', $vendor_fixture );
+function plugins_url( string $path = '', string $plugin = '' ): string { return content_url( '/plugins/' . $path ); }
+$vendor_files = array(
+	'woocommerce-general' => array( 'woocommerce/assets/css/woocommerce.css', 'a{background:url("../images/icons/loader.svg")}@font-face{src:url(../fonts/WooCommerce.woff2)}', 'woocommerce/assets/images/icons/loader.svg' ),
+	'accessibility-onetap' => array( 'accessibility-onetap/assets/css/accessibility-onetap-front-end.min.css', 'a{cursor:url(../images/cursor1.png),auto;background:url(data:image/svg+xml,%3Csvg%3E)}', 'accessibility-onetap/assets/images/cursor1.png' ),
+	'accessibility-onetap-fonts-readable' => array( 'accessibility-onetap/assets/css/onetap-fonts-readable.min.css', '@font-face{font-family:Roboto;src:url(\'../fonts/Roboto/Roboto-Regular.woff2\')}@font-face{src:url(../fonts/Roboto/Roboto-Italic.woff2)}', 'accessibility-onetap/assets/fonts/Roboto/Roboto-Regular.woff2' ),
+);
+$GLOBALS['front_page_test'] = true;
+try {
+	foreach ( $vendor_files as $handle => [ $file, $css, $asset ] ) {
+		$path = $vendor_fixture . '/' . $file;
+		if ( ! is_dir( dirname( $path ) ) ) { mkdir( dirname( $path ), 0700, true ); }
+		$url = plugins_url( $file );
+		$tag = '<link rel="stylesheet" href="' . $url . '" media="screen">';
+		file_put_contents( $path, $css ); clearstatcache();
+		$inlined = $performance->inline_vendor_asset_style( $tag, $handle, $url . '?ver=1', 'screen' );
+		verify_image( str_contains( $inlined, '<style' ) && str_contains( $inlined, plugins_url( $asset ) ) && str_contains( $inlined, 'media="screen"' ), 'Vendor CSS preserves its original asset URL destination and media.' );
+		verify_image( $tag === $performance->inline_vendor_asset_style( $tag, $handle, 'https://cdn.example/changed.css' ), 'Vendor source replacements retain native loading.' );
+		$integrity = str_replace( '<link ', '<link integrity="sha256-test" ', $tag );
+		verify_image( $integrity === $performance->inline_vendor_asset_style( $integrity, $handle, $url ), 'Integrity-tagged vendor CSS must not be rewritten.' );
+		foreach ( array( $css . '@import "other.css";', $css . '</style><script>bad</script>', $css . 'a{background:url(../unknown.png)}', $css . 'a{background:url(https://other.example/image.png)}', $css . 'a{background:url(var(--image))}' ) as $changed_css ) {
+			file_put_contents( $path, $changed_css ); clearstatcache();
+			verify_image( $tag === $performance->inline_vendor_asset_style( $tag, $handle, $url ), 'Uninspected assets and unsafe or unfamiliar CSS retain external loading.' );
+		}
+		file_put_contents( $path, str_repeat( ' ', 98305 ) ); clearstatcache();
+		verify_image( $tag === $performance->inline_vendor_asset_style( $tag, $handle, $url ), 'A vendor file cannot exceed the per-file limit.' );
+		file_put_contents( $path, $css ); clearstatcache();
+		( new ReflectionProperty( $performance, 'vendor_inline_bytes' ) )->setValue( $performance, 196608 );
+		verify_image( $tag === $performance->inline_vendor_asset_style( $tag, $handle, $url ), 'The additional vendor inline budget is bounded.' );
+		( new ReflectionProperty( $performance, 'vendor_inline_bytes' ) )->setValue( $performance, 0 );
+	}
+} finally {
+	foreach ( $vendor_files as [ $file ] ) { unlink( $vendor_fixture . '/' . $file ); }
+	foreach ( array( '/woocommerce/assets/css', '/woocommerce/assets', '/woocommerce', '/accessibility-onetap/assets/css', '/accessibility-onetap/assets', '/accessibility-onetap', '' ) as $dir ) { rmdir( $vendor_fixture . $dir ); }
+	$GLOBALS['front_page_test'] = false;
+}
+
 // Generated Elementor CSS must match the current local upload directory exactly.
 $generated = sys_get_temp_dir() . '/schrack-elementor-css-' . bin2hex( random_bytes( 6 ) );
 $GLOBALS['uploads_test'] = array( 'basedir' => $generated, 'baseurl' => 'https://shop.example/uploads' );

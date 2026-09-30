@@ -755,3 +755,13 @@ v0.1.113 gives the two inspected font files up to 64 KiB additional room after
 the existing 128 KiB layout limit. The combined inline budget never exceeds
 192 KiB; other layout files retain their previous bounds. This avoids keeping
 both tiny compressed font stylesheets external when layout CSS uses its budget.
+
+v0.1.114 inlines three exact local vendor stylesheets on catalog pages:
+WooCommerce general, OneTap frontend and OneTap readable fonts. Inspected
+relative image/font URLs are resolved to their original absolute plugin asset
+destinations, preserving rules, media and cascade order. Unknown assets, changed
+sources, imports, special link attributes and oversized files retain native
+loading. The separate vendor budget is 192 KiB with a 96 KiB per-file limit;
+all inline budgets combined stay within 384 KiB. Disable this addition with
+`schrack_wc_sync_inline_vendor_asset_css`. Cart, checkout and account retain
+their existing loading behavior.
