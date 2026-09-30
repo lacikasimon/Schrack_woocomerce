@@ -43,8 +43,9 @@ function get_post( $id ) { if ( 11 === $id && isset($GLOBALS['shop_test_post']) 
 function wc_get_product( $id ) { return new class($id) { public function __construct(private int $id) {} public function get_stock_status() { return $GLOBALS['stock_statuses'][$this->id] ?? 'instock'; } public function get_catalog_visibility() { return 13 === $this->id || in_array($this->id,$GLOBALS['hidden_ids'] ?? array()) ? 'hidden' : (in_array($this->id,$GLOBALS['search_ids'] ?? array()) ? 'search' : 'visible'); } }; }
 function wc_get_page_id( $p ) { return 11; }
 function get_permalink( $id ) { if($id>=20) { return home_url('/product/p'.$id.'/'); } return home_url( 10 === $id ? '/product/lamp/' : '/shop/' ); }
-function get_terms($args) { if(isset($args['include'])) { $GLOBALS['category_args'][]=$args; return array_map(static fn($id)=>(object)array('term_id'=>$id,'count'=>0),$args['include']); } return array((object)array('term_id'=>1)); }
-function get_term_by( $field, $slug, $tax ) { if(preg_match('/^c(\d+)$/',$slug,$m) && in_array((int)$m[1],$GLOBALS['category_ids'] ?? array(),true)) { return (object)array('term_id'=>(int)$m[1]); } return 'lights' === $slug ? (object) array('term_id' => 1) : false; }
+function category_nonempty($id) { if(!in_array($id,$GLOBALS['empty_category_ids'] ?? array(),true)) { return true; } foreach($GLOBALS['category_children'][$id] ?? array() as $child) { if(category_nonempty($child)) { return true; } } return false; }
+function get_terms($args) { if(isset($args['include'])) { $GLOBALS['category_args'][]=$args; $ids=array_values(array_filter($args['include'],static fn($id)=>empty($args['hide_empty']) || category_nonempty($id))); return ($args['fields'] ?? '')==='ids' ? $ids : array_map(static fn($id)=>(object)array('term_id'=>$id,'count'=>in_array($id,$GLOBALS['empty_category_ids'] ?? array(),true)?0:1),$ids); } return array((object)array('term_id'=>1,'count'=>1)); }
+function get_term_by( $field, $slug, $tax ) { if(preg_match('/^c(\d+)$/',$slug,$m) && in_array((int)$m[1],$GLOBALS['category_ids'] ?? array(),true)) { return (object)array('term_id'=>(int)$m[1],'count'=>in_array((int)$m[1],$GLOBALS['empty_category_ids'] ?? array(),true)?0:1); } return 'lights' === $slug ? (object) array('term_id' => 1,'count'=>1) : false; }
 function get_term_link( $t ) { return home_url($t->term_id>=100 ? '/category/'.($t->term_id%2 ? 'parent/' : '').'c'.$t->term_id.'/' : '/category/lights/'); }
 function is_wp_error( $v ) { return $v instanceof WP_Error; }
 function wp_safe_remote_get( $url, $args ) { $GLOBALS['requests'][] = array($url, $args); if ( !empty($GLOBALS['http_callback']) ) { ($GLOBALS['http_callback'])(); }  $GLOBALS['clock'] += $GLOBALS['request_duration'] ?? 0.0; return isset($GLOBALS['response_factory']) ? ($GLOBALS['response_factory'])($url) : ($GLOBALS['response'] ?? array('code'=>200,'cache'=>'miss')); }
@@ -185,7 +186,7 @@ check($options[Schrack_Cache_Warmer::STATE]['cursor']>0,'A new worker resumes sa
 ajax('stop');$before=count($requests);$warm->tick();$warm->rewarm();
 check($before===count($requests) && !$events,'Stop also disables full-catalogue and priority-refresh work.');
 
-// All categories, including empty nested terms beyond 24/100, precede products.
+// All nonempty categories, including nested terms beyond 24/100, precede products.
 $GLOBALS['category_ids']=range(100,329);$GLOBALS['category_sql']=$GLOBALS['category_args']=array();
 $GLOBALS['catalog_ids']=range(100,499);$GLOBALS['stock_statuses']=array();$GLOBALS['response_factory']=null;$response=array('code'=>200,'cache'=>'hit');
 ajax('save',array('urls'=>home_url('/'),'enabled'=>'1','discover'=>'1'));$before=count($requests);
@@ -193,8 +194,8 @@ for($i=0;$i<5;$i++) { $warm->tick(); }
 $state=$options[Schrack_Cache_Warmer::STATE];
 check(230===$state['categories_processed'] && 17===$state['products_processed'],'All 230 categories are warmed before the first product batch, beyond the old 24-category cap.');
 $recent=array_slice($requests,$before);
-check(count(array_filter($recent,static fn($r)=>str_contains($r[0],'/category/parent/')))===115,'Nested category canonical paths are preserved, including empty categories.');
-check(str_contains($GLOBALS['category_sql'][0],'custom_term_taxonomy') && str_contains($GLOBALS['category_sql'][1],'term_id > 199') && false===$GLOBALS['category_args'][0]['hide_empty'],'Category keyset scans use actual table names and include empty terms.');
+check(count(array_filter($recent,static fn($r)=>str_contains($r[0],'/category/parent/')))===115,'Nested category canonical paths are preserved, for nonempty categories.');
+check(str_contains($GLOBALS['category_sql'][0],'custom_term_taxonomy') && str_contains($GLOBALS['category_sql'][1],'term_id > 199') && true===$GLOBALS['category_args'][0]['hide_empty'],'Category keyset scans use actual table names and filter out empty terms.');
 $product_cursor=$state['cursor'];$product_after=$state['product_after'];$warm->cycle();$warm->tick();$state=$options[Schrack_Cache_Warmer::STATE];
 check('categories'===$state['phase'] && $state['category_resume']['cursor']===$product_cursor && $state['product_after']===$product_after,'An hourly cycle reheats categories while retaining the exact pending product queue.');
 $category_after=$state['category_after'];$warm->cycle();$warm->rewarm();$warm->tick();$state=$options[Schrack_Cache_Warmer::STATE];
@@ -210,6 +211,19 @@ unset($state['categories_complete'],$state['category_after']);$options[Schrack_C
 ajax('start');$warm->tick();$state=$options[Schrack_Cache_Warmer::STATE];
 check('categories'===$state['phase'] && $state['category_resume']['cursor']===$product_cursor && $state['product_after']===$product_after,'Upgrading an active product-only run preserves its queue while starting all-category warming.');
 $GLOBALS['category_ids']=array();$GLOBALS['catalog_ids']=array();
+
+// Empty categories are omitted; zero-count parents with populated descendants remain.
+$GLOBALS['category_ids']=range(100,329);$GLOBALS['empty_category_ids']=array(100,101,200);$GLOBALS['category_children']=array(101=>array(102));$GLOBALS['catalog_ids']=array();
+ajax('save',array('urls'=>home_url('/'),'enabled'=>'1','discover'=>'1'));$before=count($requests);
+for($i=0;$i<10 && 'running'===$options[Schrack_Cache_Warmer::STATE]['status'];$i++) { $warm->tick(); }
+$visited=array_column(array_slice($requests,$before),0);
+check(!in_array(home_url('/category/c100/'),$visited,true) && !in_array(home_url('/category/c200/'),$visited,true),'Empty categories never produce warming requests.');
+check(in_array(home_url('/category/parent/c101/'),$visited,true) && 228===$options[Schrack_Cache_Warmer::STATE]['categories_processed'],'A zero direct-count parent with populated children is still warmed.');
+$GLOBALS['empty_category_ids']=array();$GLOBALS['category_children']=array();
+ajax('save',array('urls'=>home_url('/category/c100/'),'enabled'=>'1'));$GLOBALS['empty_category_ids']=array(100);$before=count($requests);$warm->tick();
+check(!in_array(home_url('/category/c100/'),array_column(array_slice($requests,$before),0),true) && 'complete'===$options[Schrack_Cache_Warmer::STATE]['status'],'A category emptied after queueing is skipped without interrupting the run.');
+check($warm->public_url(home_url('/category/c100/'))===home_url('/category/c100/'),'An empty public category can still be profiled separately.');
+$GLOBALS['empty_category_ids']=array();$GLOBALS['category_ids']=array();
 
 // Both manual queues and already-saved product batches obey current stock.
 $GLOBALS['catalog_ids']=array(); $response=array('code'=>200,'cache'=>'hit');

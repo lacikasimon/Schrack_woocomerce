@@ -488,7 +488,7 @@ warmer's scheduled jobs.
 
 ### All-product preload (v0.1.100)
 
-Enable **Preîncălzește toate categoriile și produsele publice în stoc** on that same admin screen to scan
+Enable **Preîncălzește categoriile cu produse și toate produsele publice în stoc** on that same admin screen to scan
 every published, password-free product whose catalogue visibility is `visible` or
 `catalog` or `search`. Since v0.1.102 only products with WooCommerce stock status
 `instock` are warmed, including manual priority product URLs. Sold-out and
@@ -498,8 +498,12 @@ or stopping the run; restocked products enter the next automatic pass. Public
 profiling can still inspect saved sold-out URLs. There is no total product limit. Home and the canonical WooCommerce
 shop run first, followed by manual priority URLs and up to 24 nonempty categories.
 Since v0.1.103 every canonical product category archive is then scanned in
-keyset pages of 100 term IDs, including nested and empty categories, before
-products. The first 24 categories are priorities, not a total category limit.
+keyset pages of 100 term IDs, including nested categories, before
+products. The first 24 categories are priorities, not a total category limit. Since
+v0.1.105 WordPress `hide_empty` excludes empty categories from warming, including
+manual and already-saved queues. Parents with products in descendants remain
+eligible. Category emptiness is rechecked immediately before GET; product stock
+filtering is unchanged.
 Published product IDs are then scanned in pages of 100 using a saved ID cursor
 and the actual WordPress posts table. At most three empty/hidden pages are scanned
 per job. No full catalogue URL list is kept in memory.

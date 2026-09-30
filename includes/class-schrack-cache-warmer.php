@@ -48,8 +48,8 @@ final class Schrack_Cache_Warmer {
 			<p>Necesită cache de pagină activ și WP-Cron funcțional. Pentru pornire regulată folosește un cron al găzduirii. Un catalog mare poate necesita ore sau zile; starea se păstrează între loturi. Paginile personalizate nu sunt preîncălzite.</p>
 			<form id="schrack-cache-form">
 				<p><label><input type="checkbox" name="enabled" <?php checked( $config['enabled'] ); ?>> Preîncălzire automată la fiecare oră și după golirea cache-ului de pagini</label></p>
-				<p><label><input type="checkbox" name="discover" <?php checked( $config['discover'] ); ?>> Preîncălzește toate categoriile și produsele publice în stoc</label></p>
-				<p>Categoriile și subcategoriile, inclusiv cele fără produse, sunt parcurse înaintea produselor. În timpul unui catalog lung, categoriile sunt reîncălzite la ciclul orar fără a reseta progresul produselor.</p>
+				<p><label><input type="checkbox" name="discover" <?php checked( $config['discover'] ); ?>> Preîncălzește categoriile cu produse și toate produsele publice în stoc</label></p>
+				<p>Categoriile goale sunt omise. Categoriile părinte cu produse în subcategorii sunt păstrate. Categoriile sunt parcurse înaintea produselor și reîncălzite la ciclul orar fără a reseta progresul produselor.</p>
 				<p><label for="schrack-cache-urls">URL-uri publice: pagina principală, magazin, categorii sau produse publicate (unul pe rând)</label></p>
 				<textarea id="schrack-cache-urls" name="urls" rows="9" class="large-text code" maxlength="30000"><?php echo esc_textarea( implode( "\n", $config['urls'] ) ); ?></textarea>
 				<p><button type="submit" class="button button-primary">Salvează</button> <button type="button" class="button" data-command="start">Pornește acum</button> <button type="button" class="button" data-command="stop">Oprește și dezactivează automatizarea</button></p>
@@ -126,7 +126,13 @@ final class Schrack_Cache_Warmer {
 		}
 		$slug = rawurldecode( basename( untrailingslashit( $p['path'] ?? '' ) ) );
 		$term = get_term_by( 'slug', $slug, 'product_cat' );
-		return $term && get_term_link( $term ) === $url ? $url : '';
+		if ( ! $term || get_term_link( $term ) !== $url ) { return ''; }
+		if ( $in_stock_only && 0 === (int) $term->count ) {
+			// WordPress's hierarchical hide_empty keeps parents with populated children.
+			$ids = get_terms( array( 'taxonomy' => 'product_cat', 'include' => array( (int) $term->term_id ), 'hide_empty' => true, 'fields' => 'ids', 'number' => 1 ) );
+			if ( ! is_array( $ids ) || ! in_array( (int) $term->term_id, array_map( 'intval', $ids ), true ) ) { return ''; }
+		}
+		return $url;
 	}
 
 	/** Connection-level lock is released on process death and shared by UI/workers. */
@@ -250,13 +256,13 @@ final class Schrack_Cache_Warmer {
 					break;
 				}
 				// Resolve links through WordPress so nested categories keep canonical paths.
-				$terms = get_terms( array( 'taxonomy' => 'product_cat', 'include' => array_map( 'intval', $ids ), 'hide_empty' => false, 'number' => self::CATEGORY_BATCH ) );
+				$terms = get_terms( array( 'taxonomy' => 'product_cat', 'include' => array_map( 'intval', $ids ), 'hide_empty' => true, 'number' => self::CATEGORY_BATCH ) );
 				if ( is_wp_error( $terms ) ) { $state['status'] = 'error'; return; }
 				$state['category_after'] = max( array_map( 'intval', $ids ) );
 				$state['urls'] = array(); $state['cursor'] = 0;
 				foreach ( $terms as $term ) {
 					$url = get_term_link( $term );
-					if ( is_string( $url ) && $this->public_url( $url ) ) { $state['urls'][] = $url; }
+					if ( is_string( $url ) && $this->public_url( $url, true ) ) { $state['urls'][] = $url; }
 				}
 				if ( $state['urls'] ) { return; }
 			}
