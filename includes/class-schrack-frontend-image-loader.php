@@ -243,6 +243,7 @@ class Schrack_Frontend_Image_Loader {
 		}
 
 		$this->ensure_product_image( $product, 1 );
+		do_action( 'schrack_wc_sync_prepare_product_hero', $product );
 	}
 
 	/**
@@ -619,6 +620,10 @@ class Schrack_Frontend_Image_Loader {
 				$attr['width'] = 340;
 				$attr['height'] = 380;
 				$attr['data-schrack-image-fallback'] = $image_url;
+			}
+			if ( class_exists( 'Schrack_Product_Hero_Cache' ) ) {
+				$cached = Schrack_Product_Hero_Cache::attributes( $product, $image_url );
+				if ( $cached ) { $attr = array_merge( $attr, $cached ); }
 			}
 			$attr['loading'] = 'eager';
 			$attr['data-no-lazy'] = '1';

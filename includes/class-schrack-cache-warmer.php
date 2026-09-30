@@ -343,6 +343,13 @@ final class Schrack_Cache_Warmer {
 					continue;
 				}
 				$start = microtime( true );
+				// Prepare even on an HTML cache hit. This action only schedules work;
+				// downloads and WebP conversion run in a separate background job.
+				if ( ! $verifying ) {
+					$hero_id = url_to_postid( $url );
+					$hero_product = $hero_id > 0 ? wc_get_product( $hero_id ) : false;
+					if ( $hero_product instanceof WC_Product ) { do_action( 'schrack_wc_sync_prepare_product_hero', $hero_product ); }
+				}
 				$response = wp_safe_remote_get( $url, array(
 					'timeout' => 20, 'redirection' => 0, 'cookies' => array(), 'limit_response_size' => 2097152,
 					'user-agent' => 'Mozilla/5.0 (compatible; SchrackCacheWarm/1.1)',

@@ -798,3 +798,13 @@ exact local common rules within the existing layout budget; replaced sources,
 imports and special tags retain external loading. Disable separate block
 styles with `schrack_wc_sync_separate_core_block_assets`, or catalog inlining
 with its existing filter. Admin, feeds and REST keep the native core exclusions.
+
+### Készleten lévő termékek fő képének WebP-gyorsítótára (0.1.118)
+
+A saját termékoldal külső Schrack fő képéhez külön háttérfeladat készít 340, 680 és 1190 px széles WebP változatot. Csak publikált, jelszó nélküli, katalógusban látható, `instock` termék jogosult, ha nincs helyi fő képe. Ez független a teljes katalógus Media Library-importjának kapcsolójától. A nagyítás eredeti képe megmarad.
+
+A látogató és a **Cache előmelegítés** folyamata csak sorba állít; a letöltés és átalakítás az Action Scheduler `schrack-product-heroes` csoportjában, tartalékként WP-Cronban fut. Az előmelegítő HTML cache-találatkor is előkészíti a termék fő képét. A WordPress **Eszközök → Scheduled Actions** felületén a `schrack_wc_sync_product_hero` feladat állapota látható és kézzel is futtatható.
+
+A forrás kizárólag a Schrack ellenőrzött 1190×1330 JPEG-előbeállítása; HTTP legfeljebb 15 mp, 1 MiB, átirányítás és cookie nélkül. Az `uploads/schrack-frontend-cache/product-heroes/` könyvtárban forrás- és beállításfüggő hash azonosítja a fájlokat. Mindhárom valódi WebP sikeres mentése után publikáljuk a metaadatot, és csak az érintett termék LiteSpeed cache-ét ürítjük. Megváltozott forrás, hiányzó fájl, codec- vagy hálózati hiba esetén a korábbi CDN-kép marad; hiba után 1 óra az automatikus újrapróbálkozás várakozása. A fő kép preloadja és a képtag azonos responsive változatokat használ.
+
+Visszaállítás: `schrack_wc_sync_product_hero_cache` filter `false`. Ez megállítja az új előkészítést és visszaadja a korábbi képkimenetet. Teszt adatbázis és hálózat nélkül, natív WordPress GD szerkesztővel: `php tests/product-hero-cache.php /path/to/wordpress-source`.
