@@ -124,6 +124,19 @@ try {
 	$GLOBALS['front_page_test'] = false;
 }
 
+// OneTap's font faces are inactive until its existing preference-aware loader runs.
+$readable_url = plugins_url( 'accessibility-onetap/assets/css/onetap-fonts-readable.min.css' );
+$readable_tag = '<link rel="stylesheet" href="' . $readable_url . '" media="screen">';
+verify_image( $readable_tag === $performance->delay_onetap_font_style( $readable_tag, 'accessibility-onetap-fonts-readable', $readable_url, 'screen' ), 'Native OneTap loading must keep readable fonts active.' );
+( new ReflectionProperty( $performance, 'onetap_on_demand' ) )->setValue( $performance, true );
+foreach ( array( $readable_tag, '<style id="accessibility-onetap-fonts-readable-css" media="screen">@font-face{font-family:Roboto}</style>' ) as $font_tag ) {
+	$delayed = $performance->delay_onetap_font_style( $font_tag, 'accessibility-onetap-fonts-readable', $readable_url . '?ver=2', 'screen' );
+	verify_image( str_contains( $delayed, 'media="not all"' ) && str_contains( $delayed, 'data-schrack-onetap-font-media="screen"' ), 'Inline and external readable fonts preserve their media for activation on use.' );
+}
+verify_image( $readable_tag === $performance->delay_onetap_font_style( $readable_tag, 'unrelated', $readable_url ), 'Other font stylesheets must remain active.' );
+verify_image( $readable_tag === $performance->delay_onetap_font_style( $readable_tag, 'accessibility-onetap-fonts-readable', 'https://cdn.example/fonts.css' ), 'Replaced OneTap font sources retain native loading.' );
+( new ReflectionProperty( $performance, 'onetap_on_demand' ) )->setValue( $performance, false );
+
 // Generated Elementor CSS must match the current local upload directory exactly.
 $generated = sys_get_temp_dir() . '/schrack-elementor-css-' . bin2hex( random_bytes( 6 ) );
 $GLOBALS['uploads_test'] = array( 'basedir' => $generated, 'baseurl' => 'https://shop.example/uploads' );

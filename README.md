@@ -765,3 +765,11 @@ loading. The separate vendor budget is 192 KiB with a 96 KiB per-file limit;
 all inline budgets combined stay within 384 KiB. Disable this addition with
 `schrack_wc_sync_inline_vendor_asset_css`. Cart, checkout and account retain
 their existing loading behavior.
+
+v0.1.115 keeps the inspected OneTap readable-font stylesheet inactive until its
+preference-aware loader starts. The vendor's global Roboto font faces otherwise
+match the theme's fallback stack and download several large fonts on first load,
+even when Readable Font has not been selected. Inline and external stylesheets
+retain their original media and activate before native OneTap scripts. Saved
+preferences, keyboard activation and retry behavior keep their existing startup;
+disabling OneTap on-demand loading restores native font loading as well.

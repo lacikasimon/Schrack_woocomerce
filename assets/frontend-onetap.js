@@ -4,6 +4,7 @@
 	function init() {
 		const sources = Array.from(document.querySelectorAll('script[data-schrack-onetap-src]'));
 		if (!sources.length) return;
+		const fonts = Array.from(document.querySelectorAll('[data-schrack-onetap-font-media]'));
 		const toggle = document.querySelector('.onetap-toggle');
 		const panel = document.querySelector('nav.onetap-accessibility');
 		const container = document.querySelector('.onetap-container-toggle');
@@ -50,6 +51,14 @@
 		function start(open) {
 			openRequested = openRequested || open;
 			if (ready || pending) return pending;
+			// Restore the original font stylesheet media before saved settings or
+			// native controls can enable Readable Font. New visitors avoid loading
+			// these large fallback fonts for ordinary storefront content.
+			fonts.forEach(function (font) {
+				font.setAttribute('media', font.getAttribute('data-schrack-onetap-font-media'));
+				font.removeAttribute('data-schrack-onetap-font-media');
+			});
+			fonts.length = 0;
 			if (toggle) toggle.setAttribute('aria-busy', 'true');
 			if (openRequested) announce('Se încarcă opțiunile de accesibilitate…');
 			// The vendor's hotkeys library must finish before its main script.

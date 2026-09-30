@@ -18,6 +18,7 @@ class Schrack_Frontend_Performance {
 		add_filter( 'style_loader_tag', array( $this, 'inline_elementor_style' ), 22, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_local_font_style' ), 23, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_vendor_asset_style' ), 24, 4 );
+		add_filter( 'style_loader_tag', array( $this, 'delay_onetap_font_style' ), 25, 4 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_ordered_scripts' ), 110 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_consent' ), 100 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_onetap' ), 100 );
@@ -165,6 +166,23 @@ class Schrack_Frontend_Performance {
 		$this->onetap_on_demand = true;
 		wp_add_inline_style( 'accessibility-onetap', '.schrack-onetap-error{position:fixed;bottom:90px;left:12px;right:12px;width:max-content;max-width:calc(100vw - 24px);margin:auto;padding:10px;background:#fff;color:#9b1c1c;border:1px solid currentColor;border-radius:6px;font:14px/1.5 system-ui,sans-serif;z-index:2147483647}' );
 		wp_enqueue_script( 'schrack-wc-onetap-loader', SCHRACK_WC_SYNC_URL . 'assets/frontend-onetap.js', array( 'jquery' ), SCHRACK_WC_SYNC_VERSION, array( 'in_footer' => true, 'strategy' => 'defer' ) );
+	}
+
+	/** Readable fonts must not replace the theme's Roboto fallback before OneTap use. */
+	public function delay_onetap_font_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
+		if ( ! $this->onetap_on_demand || 'accessibility-onetap-fonts-readable' !== $handle
+			|| strtok( $href, '?' ) !== plugins_url( 'accessibility-onetap/assets/css/onetap-fonts-readable.min.css' )
+			|| ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+			return $tag;
+		}
+		$processor = new WP_HTML_Tag_Processor( $tag );
+		if ( ! $processor->next_tag() || ! in_array( $processor->get_tag(), array( 'STYLE', 'LINK' ), true ) ) {
+			return $tag;
+		}
+		$processor->set_attribute( 'data-schrack-onetap-font-media', $media );
+		$processor->set_attribute( 'media', 'not all' );
+		$processor->set_attribute( 'data-no-optimize', '1' );
+		return $processor->get_updated_html();
 	}
 
 	/** Keep critical widget CSS in its original cascade position, including late assets. */

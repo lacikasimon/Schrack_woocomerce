@@ -27,9 +27,15 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 		},
 		after: node => downloads.push(node),
 	}));
+	const fontAttrs = {'data-schrack-onetap-font-media': 'screen', media: 'not all'};
+	const fonts = [{
+		getAttribute: key => fontAttrs[key],
+		setAttribute: (key, value) => { fontAttrs[key] = value; },
+		removeAttribute: key => { delete fontAttrs[key]; },
+	}];
 	const document = {
 		readyState: 'complete',
-		querySelectorAll: () => sources,
+		querySelectorAll: selector => selector === '[data-schrack-onetap-font-media]' ? fonts : sources,
 		querySelector: selector => ({'.onetap-toggle': toggle, 'nav.onetap-accessibility': panel, '.onetap-container-toggle': container})[selector],
 		addEventListener: (name, callback) => { listeners[name] = callback; },
 		removeEventListener: name => { delete listeners[name]; },
@@ -53,7 +59,7 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 		downloads[1].onload();
 		await flush();
 	}
-	return {listeners, downloads, messages, replayed, toggle, panel, container, attrs, sources, event, complete, opens: () => opens};
+	return {listeners, downloads, messages, replayed, toggle, panel, container, attrs, sources, fontAttrs, event, complete, opens: () => opens};
 }
 
 test('new visitor gets a focusable toolbar button without downloading libraries', async () => {
@@ -62,6 +68,7 @@ test('new visitor gets a focusable toolbar button without downloading libraries'
 	assert.equal(p.downloads.length, 0);
 	assert.equal(p.container.style.display, 'block');
 	assert.equal(p.panel.inert, '');
+	assert.equal(p.fontAttrs.media, 'not all');
 });
 
 test('first activation loads once, in dependency order, then opens the native toolbar', async () => {
@@ -73,6 +80,8 @@ test('first activation loads once, in dependency order, then opens the native to
 	assert.equal(p.downloads[0].src, 'hotkeys.js');
 	assert.equal(p.downloads[0].nonce, 'csp-nonce');
 	assert.equal(p.attrs['aria-busy'], 'true');
+	assert.equal(p.fontAttrs.media, 'screen');
+	assert.equal(p.fontAttrs['data-schrack-onetap-font-media'], undefined);
 	await p.complete();
 	assert.equal(p.downloads[1].src, 'script.min.js');
 	assert.equal(p.opens(), 1);
@@ -85,6 +94,7 @@ test('existing accessibility preferences initialize immediately, without opening
 	await p.complete();
 	assert.equal(p.downloads.length, 2);
 	assert.equal(p.opens(), 0);
+	assert.equal(p.fontAttrs.media, 'screen');
 });
 
 test('hidden toolbar preferences remain hidden and delegate to the vendor', async () => {
