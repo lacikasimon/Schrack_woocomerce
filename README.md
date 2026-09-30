@@ -786,3 +786,15 @@ retain the full inline configuration. Disable this addition with
 `schrack_wc_sync_onetap_languages_on_demand`; the main OneTap on-demand rollback
 also preserves native behavior. No nonce or visitor/site configuration is saved
 in public translation assets.
+
+v0.1.117 includes `wc-single-product` in native footer grouping on catalog
+pages. Product tabs, reviews and their dependencies retain their execution
+order; other head dependents still promote libraries when needed. Core block
+styles now use WordPress's separate-asset policy on frontend requests from
+registration time, before the main query exists. Actual rendered blocks retain
+their native styles, while `wp-block-library` uses the small shared `common`
+rules rather than the full block stylesheet. Catalog pages can inline these
+exact local common rules within the existing layout budget; replaced sources,
+imports and special tags retain external loading. Disable separate block
+styles with `schrack_wc_sync_separate_core_block_assets`, or catalog inlining
+with its existing filter. Admin, feeds and REST keep the native core exclusions.

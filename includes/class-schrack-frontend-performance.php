@@ -15,6 +15,7 @@ class Schrack_Frontend_Performance {
 
 	public function init(): void {
 		add_filter( 'style_loader_tag', array( $this, 'inline_critical_style' ), 20, 4 );
+		add_filter( 'style_loader_tag', array( $this, 'inline_core_common_style' ), 21, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_catalog_style' ), 21, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_elementor_style' ), 22, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_local_font_style' ), 23, 4 );
@@ -25,6 +26,7 @@ class Schrack_Frontend_Performance {
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_onetap' ), 100 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_product_gallery' ), 9 );
 		add_filter( 'should_load_block_assets_on_demand', array( $this, 'catalog_block_assets' ) );
+		add_filter( 'should_load_separate_core_block_assets', array( $this, 'separate_core_block_assets' ) );
 		add_action( 'wp_head', array( $this, 'consent_bridge' ), 2 );
 		add_action( 'wp_head', array( $this, 'preload_product_image' ), 2 );
 		add_filter( 'script_loader_tag', array( $this, 'script_tag' ), 20, 2 );
@@ -35,7 +37,7 @@ class Schrack_Frontend_Performance {
 	public function configure_ordered_scripts(): void {
 		if ( is_admin() || ! $this->is_catalog_page() || is_preview() || ! apply_filters( 'schrack_wc_sync_ordered_frontend_scripts', true ) ) { return; }
 		$scripts = wp_scripts();
-		foreach ( array( 'jquery', 'jquery-core', 'jquery-migrate', 'wc-jquery-blockui', 'wc-js-cookie', 'woocommerce', 'wc-add-to-cart', 'wc-cart-fragments' ) as $handle ) {
+		foreach ( array( 'jquery', 'jquery-core', 'jquery-migrate', 'wc-jquery-blockui', 'wc-js-cookie', 'woocommerce', 'wc-add-to-cart', 'wc-cart-fragments', 'wc-single-product' ) as $handle ) {
 			if ( ! isset( $scripts->registered[ $handle ] ) ) {
 				continue;
 			}
@@ -51,6 +53,41 @@ class Schrack_Frontend_Performance {
 	/** Let rendered blocks enqueue their own assets, including forms/audio/video. */
 	public function catalog_block_assets( bool $on_demand ): bool {
 		return $on_demand || ( ! is_admin() && $this->is_catalog_page() && apply_filters( 'schrack_wc_sync_catalog_block_assets', true ) );
+	}
+
+	/** Core block handles are registered before the main query knows the page type. */
+	public function separate_core_block_assets( bool $separate ): bool {
+		return $separate || ( ! is_admin() && apply_filters( 'schrack_wc_sync_separate_core_block_assets', true ) );
+	}
+
+	/** The small shared core rules still apply; individual blocks load natively. */
+	public function inline_core_common_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
+		if ( is_admin() || ! $this->is_catalog_page() || is_preview() || 'wp-block-library' !== $handle
+			|| ! apply_filters( 'schrack_wc_sync_inline_catalog_css', true )
+			|| 1 !== preg_match( '~^\s*<link\b[^>]*>\s*$~i', $tag ) || preg_match( '~\b(integrity|onload|disabled)\b~i', $tag ) ) {
+			return $tag;
+		}
+		$source = strtok( $href, '?' );
+		$file = null;
+		foreach ( array( 'common.min.css', 'common.css' ) as $name ) {
+			if ( $source === includes_url( 'css/dist/block-library/' . $name ) ) {
+				$file = ABSPATH . WPINC . '/css/dist/block-library/' . $name;
+				break;
+			}
+		}
+		if ( null === $file || ! is_readable( $file ) ) {
+			return $tag;
+		}
+		$size = filesize( $file );
+		if ( ! $size || $size > 16384 || $this->catalog_inline_bytes + $size > 131072 ) {
+			return $tag;
+		}
+		$css = file_get_contents( $file );
+		if ( ! is_string( $css ) || ! $this->can_inline_css( $css ) ) {
+			return $tag;
+		}
+		$this->catalog_inline_bytes += strlen( $css );
+		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
 	}
 
 	/** Our gallery links to originals and does not use WooCommerce's lightbox. */
