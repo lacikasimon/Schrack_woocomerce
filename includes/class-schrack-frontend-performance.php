@@ -9,6 +9,7 @@ class Schrack_Frontend_Performance {
 	private bool $consent_enabled = false;
 	private int $catalog_inline_bytes = 0;
 	private bool $onetap_on_demand = false;
+	private bool $preload_product_image = false;
 
 	public function init(): void {
 		add_filter( 'style_loader_tag', array( $this, 'inline_critical_style' ), 20, 4 );
@@ -18,6 +19,7 @@ class Schrack_Frontend_Performance {
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_product_gallery' ), 9 );
 		add_filter( 'should_load_block_assets_on_demand', array( $this, 'catalog_block_assets' ) );
 		add_action( 'wp_head', array( $this, 'consent_bridge' ), 2 );
+		add_action( 'wp_head', array( $this, 'preload_product_image' ), 2 );
 		add_filter( 'script_loader_tag', array( $this, 'script_tag' ), 20, 2 );
 		add_filter( 'wp_inline_script_attributes', array( $this, 'inline_script_attributes' ) );
 	}
@@ -55,6 +57,7 @@ class Schrack_Frontend_Performance {
 		if ( ! is_array( $data ) || ! $this->uses_only_our_gallery( $data ) ) {
 			return;
 		}
+		$this->preload_product_image = $this->uses_current_product_image( $data );
 		// Rich product content can contain another gallery or a product shortcode.
 		$post = get_queried_object();
 		foreach ( array( $post->post_content ?? '', $post->post_excerpt ?? '' ) as $content ) {
@@ -65,6 +68,39 @@ class Schrack_Frontend_Performance {
 		foreach ( array( 'wc-product-gallery-lightbox', 'wc-product-gallery-slider', 'wc-product-gallery-zoom' ) as $feature ) {
 			remove_theme_support( $feature );
 		}
+	}
+
+	/** Discover the product hero in the head, before the large navigation markup. */
+	public function preload_product_image(): void {
+		if ( $this->preload_product_image && apply_filters( 'schrack_wc_sync_preload_product_image', true ) ) {
+			do_action( 'schrack_wc_sync_product_image_preload' );
+			$this->preload_product_image = false;
+		}
+	}
+
+	/** Only a single, visible current-product gallery has a predictable hero. */
+	private function uses_current_product_image( array $elements ): bool {
+		$count = 0;
+		$pending = $elements;
+		while ( $pending ) {
+			$element = array_pop( $pending );
+			$settings = $element['settings'] ?? array();
+			foreach ( array( '__dynamic__', 'hide_desktop', 'hide_tablet', 'hide_mobile', 'e_display_conditions' ) as $key ) {
+				if ( ! empty( $settings[ $key ] ) ) {
+					return false;
+				}
+			}
+			if ( 'schrack_product_page' === ( $element['widgetType'] ?? '' ) ) {
+				if ( 'current' !== ( $settings['product_source'] ?? 'current' ) || 'yes' !== ( $settings['show_gallery'] ?? 'yes' ) ) {
+					return false;
+				}
+				++$count;
+			}
+			if ( ! empty( $element['elements'] ) ) {
+				array_push( $pending, ...$element['elements'] );
+			}
+		}
+		return 1 === $count;
 	}
 
 	/** Fail open for nested templates, third-party widgets and the native gallery. */

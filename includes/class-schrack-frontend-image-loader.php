@@ -66,11 +66,35 @@ class Schrack_Frontend_Image_Loader {
 	public function init(): void {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_lazy_images' ) );
 		add_action( 'wp_head', array( $this, 'lazy_images_noscript_style' ) );
+		add_action( 'schrack_wc_sync_product_image_preload', array( $this, 'preload_current_product_image' ) );
 		add_filter( 'script_loader_tag', array( $this, 'lazy_images_script_tag' ), 10, 2 );
 		add_action( 'woocommerce_before_single_product', array( $this, 'ensure_current_product_image' ), 5 );
 		add_action( self::BACKGROUND_HOOK, array( $this, 'download_background_product_image' ), 10, 1 );
 		add_filter( 'woocommerce_product_get_image', array( $this, 'remote_product_image_filter' ), 10, 6 );
 		add_filter( 'woocommerce_single_product_image_thumbnail_html', array( $this, 'remote_single_product_image_filter' ), 10, 2 );
+	}
+
+	/** Called only after the active template's current-product gallery is verified. */
+	public function preload_current_product_image(): void {
+		$product = wc_get_product( get_queried_object_id() );
+		if ( ! $product instanceof WC_Product || $this->product_has_local_image( $product ) ) {
+			return;
+		}
+		$url = $this->product_remote_image_url( $product );
+		if ( '' === $url ) {
+			return;
+		}
+		// Reuse the gallery's exact candidates and sizes; never fetch or queue an
+		// image here. No href for responsive preloads avoids legacy double downloads.
+		$image = $this->remote_image_attributes( $product, 'woocommerce_single', array(), $url );
+		$attributes = array( 'rel' => 'preload', 'as' => 'image', 'fetchpriority' => 'high', 'data-no-optimize' => '1' );
+		if ( ! empty( $image['srcset'] ) ) {
+			$attributes['imagesrcset'] = $image['srcset'];
+			$attributes['imagesizes'] = $image['sizes'];
+		} else {
+			$attributes['href'] = $image['src'];
+		}
+		echo '<link ' . $this->image_attributes_html( $attributes ) . ">\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	/**

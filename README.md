@@ -420,6 +420,17 @@ The SOAP client is aligned to the received Schrack templates:
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
 
 
+## Product hero discovery (v0.1.93)
+
+For a verified Elementor single-product template containing one visible current-product
+gallery, the remote hero image is now preloaded in the document head. It uses the
+same `imagesrcset`/`imagesizes` as the gallery and does not trigger image import or
+any server-side image download. Local images, custom/hidden/dynamic galleries,
+multiple galleries and unfamiliar templates retain normal image discovery.
+The filter `schrack_wc_sync_preload_product_image` can disable this optimization.
+This improves image discovery; it does not bypass PHP or guarantee a browser LCP.
+Responsive preload follows the [browser guidance](https://web.dev/articles/preload-responsive-images).
+
 ## Store response time tools (v0.1.92)
 
 **WooCommerce → Performanță magazin** provides an optional public page warmer.

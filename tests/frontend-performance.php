@@ -79,6 +79,28 @@ $GLOBALS['catalog_test'] = false;
 $gallery_check = new ReflectionMethod( $performance, 'uses_only_our_gallery' );
 $own_widget = array( 'elType' => 'widget', 'widgetType' => 'schrack_product_page' );
 $tabs_widget = array( 'elType' => 'widget', 'widgetType' => 'woocommerce-product-data-tabs' );
+$hero_check = new ReflectionMethod( $performance, 'uses_current_product_image' );
+verify_image( $hero_check->invoke( $performance, array( array( 'elType' => 'container', 'elements' => array( $own_widget, $tabs_widget ) ) ) ), 'One current product gallery may preload its hero.' );
+foreach ( array( array( 'product_source' => 'custom' ), array( 'show_gallery' => '' ), array( 'hide_mobile' => 'hidden-mobile' ), array( '__dynamic__' => array( 'product_source' => 'tag' ) ), array( 'e_display_conditions' => array( 'condition' ) ) ) as $settings ) {
+	$changed = $own_widget;
+	$changed['settings'] = $settings;
+	verify_image( ! $hero_check->invoke( $performance, array( $changed ) ), 'Custom, disabled, hidden or dynamic galleries must not preload a guessed hero.' );
+}
+verify_image( ! $hero_check->invoke( $performance, array( $own_widget, $own_widget ) ) && ! $hero_check->invoke( $performance, array( $tabs_widget ) ), 'Duplicate or missing galleries must not preload.' );
+verify_image( ! $hero_check->invoke( $performance, array( array( 'settings' => array( 'hide_desktop' => 'hidden-desktop' ), 'elements' => array( $own_widget ) ) ) ), 'Hidden containers must prevent unnecessary hero downloads too.' );
+$preload_calls = 0;
+add_action( 'schrack_wc_sync_product_image_preload', static function () use ( &$preload_calls ): void { ++$preload_calls; } );
+$hero_flag = new ReflectionProperty( $performance, 'preload_product_image' );
+$performance->preload_product_image();
+verify_image( 0 === $preload_calls, 'Unverified templates must not request a hero preload.' );
+$hero_flag->setValue( $performance, true );
+$performance->preload_product_image();
+$performance->preload_product_image();
+verify_image( 1 === $preload_calls, 'A verified gallery must preload at most once.' );
+$hero_flag->setValue( $performance, true );
+add_filter( 'schrack_wc_sync_preload_product_image', '__return_false' );
+$performance->preload_product_image();
+verify_image( 1 === $preload_calls, 'The rollback filter must suppress hero preloading.' );
 verify_image( $gallery_check->invoke( $performance, array( array( 'elType' => 'container', 'elements' => array( $own_widget, $tabs_widget ) ) ) ), 'The custom product and native tabs do not require a native image gallery.' );
 foreach ( array( 'woocommerce-product-images', 'template', 'global', 'shortcode', 'third-party-gallery' ) as $other_widget ) {
 	verify_image( ! $gallery_check->invoke( $performance, array( $own_widget, array( 'elType' => 'widget', 'widgetType' => $other_widget ) ) ), 'Native galleries and unknown/nested content must retain all gallery libraries.' );

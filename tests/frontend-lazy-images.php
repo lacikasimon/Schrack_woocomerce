@@ -90,8 +90,16 @@ verify_image( str_contains( $noscript_style, 'noscript.schrack-image-fallback{di
 // Exercise the remote-image attributes and the card helper together. No WooCommerce
 // bootstrap, image import queue or database is needed for these pure markup paths.
 class WC_Product {
+	public string $image_url = '';
+	public int $image_id = 0;
 	public function get_name(): string { return 'KARO II LED'; }
+	public function get_image_id(): int { return $this->image_id; }
+	public function get_meta( string $key, bool $single = true ): string { return '_schrack_image_url' === $key ? $this->image_url : ''; }
 }
+function get_queried_object_id(): int { return 123; }
+function wc_get_product( int $id ): mixed { return $GLOBALS['preload_test_product'] ?? false; }
+function get_post_type( int $id ): string { return 'attachment'; }
+function wp_attachment_is_image( int $id ): bool { return true; }
 $remote_attributes = new ReflectionMethod( $loader, 'remote_image_attributes' );
 $serialize = new ReflectionMethod( $loader, 'image_attributes_html' );
 $product = new WC_Product();
@@ -113,6 +121,32 @@ foreach ( array( 'full', 'custom-large', array( 800, 800 ) ) as $size ) {
 	verify_image( ! isset( $large['data-schrack-image-thumbnail'] ) && $supplier_url === $large['src'], 'Full images and unknown sizes must not be downsized.' );
 }
 $main = $remote_attributes->invoke( $loader, $product, 'woocommerce_single', array(), $supplier_url );
+$GLOBALS['preload_test_product'] = $product;
+$product->image_url = $supplier_url;
+ob_start();
+$loader->preload_current_product_image();
+$preload_html = ob_get_clean();
+$preload = new WP_HTML_Tag_Processor( $preload_html );
+$preload->next_tag( 'LINK' );
+verify_image( $main['srcset'] === $preload->get_attribute( 'imagesrcset' ) && $main['sizes'] === $preload->get_attribute( 'imagesizes' ), 'Head preload must select exactly the same responsive image as the gallery.' );
+verify_image( 'preload' === $preload->get_attribute( 'rel' ) && 'image' === $preload->get_attribute( 'as' ) && 'high' === $preload->get_attribute( 'fetchpriority' ), 'Hero preload must have image type and high priority.' );
+verify_image( null === $preload->get_attribute( 'href' ), 'Browsers without responsive preload support must not download an extra small image.' );
+foreach ( array( 'local', 'missing', 'invalid-product' ) as $case ) {
+	$product->image_id = 'local' === $case ? 99 : 0;
+	$product->image_url = 'missing' === $case ? '' : $supplier_url;
+	$GLOBALS['preload_test_product'] = 'invalid-product' === $case ? false : $product;
+	ob_start();
+	$loader->preload_current_product_image();
+	verify_image( '' === ob_get_clean(), 'Local/missing images and invalid products must not preload a supplier fallback.' );
+}
+$product->image_id = 0;
+$product->image_url = 'https://supplier.example/photo.jpg?a=1&b=2';
+$GLOBALS['preload_test_product'] = $product;
+ob_start();
+$loader->preload_current_product_image();
+$plain_preload = new WP_HTML_Tag_Processor( ob_get_clean() );
+$plain_preload->next_tag( 'LINK' );
+verify_image( $product->image_url === $plain_preload->get_attribute( 'href' ) && null === $plain_preload->get_attribute( 'imagesrcset' ), 'Other supplier images must retain the escaped original URL without invented variants.' );
 verify_image( 'https://image.schrackcdn.com/340x380/f_liim0030-a.jpg' === $main['src'], 'Main image must use the verified gallery preview.' );
 verify_image( str_contains( $main['srcset'], '/1190x1330/f_liim0030-a.jpg 1190w' ), 'Retina main images need the verified larger candidate.' );
 verify_image( 'eager' === $main['loading'] && 'high' === $main['fetchpriority'] && '1' === $main['data-no-lazy'], 'LCP must be immediately discoverable, with no second lazy loader.' );
