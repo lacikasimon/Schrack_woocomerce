@@ -43,6 +43,8 @@ function content_url( string $path = '' ): string { return 'https://shop.example
 function is_product(): bool { return $GLOBALS['catalog_test'] ?? false; }
 function is_shop(): bool { return false; }
 function is_product_taxonomy(): bool { return false; }
+function is_front_page(): bool { return $GLOBALS['front_page_test'] ?? false; }
+function is_preview(): bool { return $GLOBALS['preview_test'] ?? false; }
 $directory = $fixture . '/themes/hello-elementor/assets/css';
 mkdir( $directory, 0700, true );
 $path = $directory . '/reset.css';
@@ -51,6 +53,9 @@ $external = '<link rel="stylesheet" href="' . $url . '?ver=3" media="screen">';
 try {
 	file_put_contents( $path, 'body{margin:0}' );
 	verify_image( $external === $performance->inline_catalog_style( $external, 'hello-elementor', $url, 'screen' ), 'Non-catalog pages must retain normal theme loading.' );
+	$GLOBALS['front_page_test'] = true;
+	verify_image( str_contains( $performance->inline_catalog_style( $external, 'hello-elementor', $url, 'screen' ), '<style' ) && $performance->catalog_block_assets( false ), 'The storefront home reuses safe critical CSS and on-demand block assets.' );
+	$GLOBALS['front_page_test'] = false;
 $GLOBALS['catalog_test'] = true;
 	verify_image( $performance->catalog_block_assets( false ), 'Catalog blocks must load their own assets on rendering.' );
 	$inlined = $performance->inline_catalog_style( $external, 'hello-elementor', $url . '?ver=3', 'screen' );
@@ -76,6 +81,63 @@ $GLOBALS['catalog_test'] = true;
 	}
 }
 $GLOBALS['catalog_test'] = false;
+
+// Generated Elementor CSS must match the current local upload directory exactly.
+$generated = sys_get_temp_dir() . '/schrack-elementor-css-' . bin2hex( random_bytes( 6 ) );
+$GLOBALS['uploads_test'] = array( 'basedir' => $generated, 'baseurl' => 'https://shop.example/uploads' );
+define( 'WP_CONTENT_URL', 'https://shop.example/content' );
+add_filter( 'pre_option_siteurl', static fn() => 'https://shop.example' );
+add_filter( 'pre_option_upload_path', static fn() => '' );
+add_filter( 'pre_option_upload_url_path', static fn() => '' );
+add_filter( 'pre_option_uploads_use_yearmonth_folders', static fn() => 0 );
+add_filter( 'upload_dir', static fn() => $GLOBALS['uploads_test'] );
+mkdir( $generated . '/elementor/css', 0700, true );
+$generated_path = $generated . '/elementor/css/post-123.css';
+$generated_url = 'https://shop.example/uploads/elementor/css/post-123.css';
+$generated_tag = '<link rel="stylesheet" href="' . $generated_url . '?ver=9" media="screen">';
+$GLOBALS['front_page_test'] = true;
+( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 0 );
+try {
+	file_put_contents( $generated_path, '.elementor-123{display:grid}' );
+	verify_image( str_contains( $performance->inline_elementor_style( $generated_tag, 'elementor-post-123', $generated_url . '?ver=9', 'screen' ), '<style' ), 'Generated local layout CSS avoids an extra render-blocking request.' );
+	verify_image( $generated_tag === $performance->inline_elementor_style( $generated_tag, 'elementor-post-123', 'https://cdn.example/post-123.css' ), 'External or replaced Elementor CSS remains untouched.' );
+	$GLOBALS['preview_test'] = true;
+	verify_image( $generated_tag === $performance->inline_elementor_style( $generated_tag, 'elementor-post-123', $generated_url ), 'Elementor previews retain external CSS.' );
+	$GLOBALS['preview_test'] = false;
+	file_put_contents( $generated_path, 'a{background:url(../asset.png)}' );
+	clearstatcache();
+	verify_image( $generated_tag === $performance->inline_elementor_style( $generated_tag, 'elementor-post-123', $generated_url ), 'Relative URLs preserve the original CSS base.' );
+	file_put_contents( $generated_path, '</style><script>bad</script>' );
+	clearstatcache();
+	verify_image( $generated_tag === $performance->inline_elementor_style( $generated_tag, 'elementor-post-123', $generated_url ), 'Generated closing tags cannot become executable markup.' );
+	file_put_contents( $generated_path, '.elementor-123{display:grid}' );
+	clearstatcache();
+	( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 131072 );
+	verify_image( $generated_tag === $performance->inline_elementor_style( $generated_tag, 'elementor-post-123', $generated_url ), 'Generated styles share the bounded inline budget.' );
+} finally {
+	unlink( $generated_path ); rmdir( $generated . '/elementor/css' ); rmdir( $generated . '/elementor' ); rmdir( $generated );
+	$GLOBALS['front_page_test'] = false;
+}
+
+// Exercise WordPress's actual strategy eligibility, including dependent fallbacks.
+foreach ( array( 'class-wp-dependency.php', 'class-wp-dependencies.php', 'class-wp-scripts.php' ) as $file ) { require_once ABSPATH . WPINC . '/' . $file; }
+$GLOBALS['wp_scripts'] = ( new ReflectionClass( WP_Scripts::class ) )->newInstanceWithoutConstructor();
+$scripts = wp_scripts();
+$scripts->add( 'jquery-core', '/jquery.js' );
+$scripts->add( 'woocommerce', '/woocommerce.js', array( 'jquery-core' ) );
+$scripts->enqueue( 'woocommerce' );
+$GLOBALS['front_page_test'] = true;
+$performance->configure_ordered_scripts();
+$eligible = new ReflectionMethod( $scripts, 'get_eligible_loading_strategy' );
+verify_image( 'defer' === $eligible->invoke( $scripts, 'jquery-core' ), 'WordPress can defer the complete known dependency chain in order.' );
+$scripts->add_inline_script( 'woocommerce', 'window.example = true;', 'after' );
+verify_image( '' === $eligible->invoke( $scripts, 'jquery-core' ), 'An after-inline dependent forces the entire chain back to blocking safely.' );
+$scripts->add_data( 'woocommerce', 'after', array() );
+$scripts->add( 'custom-dependent', '/custom.js', array( 'jquery-core' ) );
+$scripts->enqueue( 'custom-dependent' );
+( new ReflectionProperty( $scripts, 'dependents_map' ) )->setValue( $scripts, array() );
+verify_image( '' === $eligible->invoke( $scripts, 'jquery-core' ), 'Unknown blocking dependents retain their required execution order.' );
+$GLOBALS['front_page_test'] = false;
 $gallery_check = new ReflectionMethod( $performance, 'uses_only_our_gallery' );
 $own_widget = array( 'elType' => 'widget', 'widgetType' => 'schrack_product_page' );
 $tabs_widget = array( 'elType' => 'widget', 'widgetType' => 'woocommerce-product-data-tabs' );

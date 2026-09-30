@@ -14,6 +14,8 @@ class Schrack_Frontend_Performance {
 	public function init(): void {
 		add_filter( 'style_loader_tag', array( $this, 'inline_critical_style' ), 20, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_catalog_style' ), 21, 4 );
+		add_filter( 'style_loader_tag', array( $this, 'inline_elementor_style' ), 22, 4 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'configure_ordered_scripts' ), 110 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_consent' ), 100 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_onetap' ), 100 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_product_gallery' ), 9 );
@@ -22,6 +24,17 @@ class Schrack_Frontend_Performance {
 		add_action( 'wp_head', array( $this, 'preload_product_image' ), 2 );
 		add_filter( 'script_loader_tag', array( $this, 'script_tag' ), 20, 2 );
 		add_filter( 'wp_inline_script_attributes', array( $this, 'inline_script_attributes' ) );
+	}
+
+	/** Native WordPress dependency checks retain blocking scripts when required. */
+	public function configure_ordered_scripts(): void {
+		if ( is_admin() || ! $this->is_catalog_page() || is_preview() || ! apply_filters( 'schrack_wc_sync_ordered_frontend_scripts', true ) ) { return; }
+		$scripts = wp_scripts();
+		foreach ( array( 'jquery-core', 'jquery-migrate', 'wc-jquery-blockui', 'wc-js-cookie', 'woocommerce', 'wc-add-to-cart', 'wc-cart-fragments' ) as $handle ) {
+			if ( isset( $scripts->registered[ $handle ] ) && ! $scripts->get_data( $handle, 'strategy' ) ) {
+				$scripts->add_data( $handle, 'strategy', 'defer' );
+			}
+		}
 	}
 
 	/** Let rendered blocks enqueue their own assets, including forms/audio/video. */
@@ -150,6 +163,7 @@ class Schrack_Frontend_Performance {
 		$files = array(
 			'schrack-wc-header'              => 'elementor-header.css',
 			'schrack-wc-header-search'       => 'elementor-header-search.css',
+			'schrack-wc-footer'              => 'elementor-footer.css',
 			'schrack-wc-featured-categories' => 'elementor-featured-categories.css',
 			'schrack-wc-product-page'        => 'elementor-product-page.css',
 			'schrack-wc-support'             => 'elementor-support.css',
@@ -210,9 +224,30 @@ class Schrack_Frontend_Performance {
 	}
 
 	private function is_catalog_page(): bool {
-		return ( function_exists( 'is_product' ) && is_product() )
+		return is_front_page()
+			|| ( function_exists( 'is_product' ) && is_product() )
 			|| ( function_exists( 'is_shop' ) && is_shop() )
 			|| ( function_exists( 'is_product_taxonomy' ) && is_product_taxonomy() );
+	}
+
+	/** Inline self-contained generated layout CSS; fonts/relative URLs stay external. */
+	public function inline_elementor_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
+		if ( is_admin() || ! $this->is_catalog_page() || is_preview()
+			|| ! apply_filters( 'schrack_wc_sync_inline_elementor_css', true )
+			|| ! preg_match( '/^elementor-post-([1-9][0-9]*)$/D', $handle, $match )
+			|| 1 !== preg_match( '~^\s*<link\b[^>]*>\s*$~i', $tag )
+			|| preg_match( '~\b(integrity|onload|disabled)\b~i', $tag ) ) { return $tag; }
+		$uploads = wp_upload_dir( null, false );
+		$relative = '/elementor/css/post-' . $match[1] . '.css';
+		if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] )
+			|| strtok( $href, '?' ) !== $uploads['baseurl'] . $relative ) { return $tag; }
+		$path = $uploads['basedir'] . $relative;
+		$size = is_readable( $path ) ? filesize( $path ) : false;
+		if ( ! $size || $size > 65536 || $this->catalog_inline_bytes + $size > 131072 ) { return $tag; }
+		$css = file_get_contents( $path );
+		if ( ! is_string( $css ) || ! $this->can_inline_css( $css ) ) { return $tag; }
+		$this->catalog_inline_bytes += strlen( $css );
+		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
 	}
 
 	/** Embedded image data is independent of the stylesheet's base URL. */

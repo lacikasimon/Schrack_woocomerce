@@ -723,3 +723,14 @@ before first use does not create an invalid state. Performance status polls ever
 15 seconds, pauses when hidden and backs off on errors. Private probes also show
 saved Elementor asset/CSS stages and facet cache hits, misses and mutation races;
 ordinary requests do not retain these diagnostics.
+
+v0.1.109 extends the storefront performance policy to the home page: block assets
+load on demand and the inspected OneTap integration starts on use for new visitors,
+while saved accessibility preferences still start immediately. Self-contained
+Elementor post CSS from the current local uploads directory is inlined at its
+original cascade position within the shared 128 KiB budget; relative URLs, fonts,
+previews and replaced/CDN files retain their external stylesheets. Footer layout
+CSS also avoids a blocking request. Known jQuery/WooCommerce scripts request native
+ordered defer; WordPress retains blocking execution whenever inline scripts or
+other dependencies require it. These changes exclude cart, checkout and account
+pages and preserve existing async strategies.
