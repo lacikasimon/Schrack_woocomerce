@@ -1269,6 +1269,14 @@ class Schrack_Product_Filter_Renderer {
 	 * @return array<int,int> Category term ID => available product count.
 	 */
 	private function category_tree_available_counts( array $categories ): array {
+		if ( ! class_exists( 'Schrack_Catalog_Facet_Cache' ) ) { return $this->compute_category_tree_available_counts( $categories ); }
+		$ids = array_map( static fn( $term ): int => $term instanceof WP_Term ? (int) $term->term_id : 0, $categories );
+		$counts = Schrack_Catalog_Facet_Cache::remember( 'trees:' . implode( ',', $ids ), fn(): array => $this->compute_category_tree_available_counts( $categories ) );
+		$this->category_tree_counts += $counts;
+		return $counts;
+	}
+
+	private function compute_category_tree_available_counts( array $categories ): array {
 		$counts = array();
 		$batch = array();
 		$pairs = 0;
@@ -2284,6 +2292,19 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function metadata_filter_options( int $category_id, array $keys ): array {
 		$keys = array_values( array_intersect( array_unique( $keys ), array( '_schrack_manufacturer', '_schrack_product_line' ) ) );
+		if ( 0 !== $category_id || ! $keys || ! class_exists( 'Schrack_Catalog_Facet_Cache' ) ) {
+			return $this->compute_metadata_filter_options( $category_id, $keys );
+		}
+		$cached = $this->metadata_facets[0] ?? array();
+		if ( ! array_diff( $keys, array_keys( $cached ) ) ) { return $cached; }
+		sort( $keys );
+		$result = Schrack_Catalog_Facet_Cache::remember( 'metadata:' . implode( ',', $keys ), fn(): array => $this->compute_metadata_filter_options( 0, $keys ) );
+		$this->metadata_facets[0] = $result + $cached;
+		return $this->metadata_facets[0];
+	}
+
+	private function compute_metadata_filter_options( int $category_id, array $keys ): array {
+		$keys = array_values( array_intersect( array_unique( $keys ), array( '_schrack_manufacturer', '_schrack_product_line' ) ) );
 		$cached = $this->metadata_facets[ $category_id ] ?? array();
 		$missing = array_values( array_diff( $keys, array_keys( $cached ) ) );
 		if ( empty( $missing ) ) {
@@ -2393,6 +2414,13 @@ class Schrack_Product_Filter_Renderer {
 	 * @return array<string,array{slug:string,label:string,terms:array<int,array{id:int,name:string,count:int}>}>
 	 */
 	private function attribute_filter_options( int $category_id = 0 ): array {
+		if ( 0 === $category_id && class_exists( 'Schrack_Catalog_Facet_Cache' ) ) {
+			return Schrack_Catalog_Facet_Cache::remember( 'attributes', fn(): array => $this->compute_attribute_filter_options( 0 ) );
+		}
+		return $this->compute_attribute_filter_options( $category_id );
+	}
+
+	private function compute_attribute_filter_options( int $category_id = 0 ): array {
 		static $options = array();
 
 		if ( isset( $options[ $category_id ] ) ) {

@@ -810,6 +810,10 @@ class Schrack_Elementor {
 	 * @return array<int,WP_Term>
 	 */
 	private function shop_root_categories(): array {
+		return Schrack_Catalog_Facet_Cache::remember( 'shop_root_categories', fn(): array => $this->compute_shop_root_categories() );
+	}
+
+	private function compute_shop_root_categories(): array {
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
 			return array();
 		}

@@ -420,6 +420,27 @@ The SOAP client is aligned to the received Schrack templates:
 Catalog calls request `ResultType=download`, and catalog responses with `Return > DownloadURL` are downloaded before parsing. CSV catalog sync tries the available Schrack CSV method versions from newest to older (`GetCatalogAsCsvV34`, then V33/V32/V31/V30) so one broken method version does not stop the whole import. Use the WSDL debug screen and TEST environment before LIVE usage, because full catalog field mapping still depends on the actual CSV/XML file headers returned by Schrack.
 
 
+## Shop aggregate reuse (v0.1.99)
+
+The public shop batches category-subtree counts, reads the category hierarchy once,
+and fetches technical attribute terms across taxonomies in one request. The initial
+sidebar reuses its already-rendered facet HTML. Distinct counts still exclude drafts,
+variations and unavailable products while retaining backorders and descendant categories.
+
+Public category counts, unscoped shop facet options and shop overview categories use
+a two-minute aggregate cache. Product saves/deletions, stock/status updates, relevant
+metadata, category/attribute membership and taxonomy changes invalidate its generation.
+Concurrent edits prevent an older computation from being saved. AJAX filtering, admin
+requests and the cold-selection diagnostic bypass this cache. Prices, product HTML,
+carts and customer data are not stored. The first request after expiration or a catalogue
+edit rebuilds the aggregates; page-cache MISS and aggregate-cache MISS are distinct.
+Disable with `schrack_wc_sync_catalog_facet_cache` if an external writer bypasses
+WordPress/WooCommerce invalidation hooks. Normal imports use those APIs.
+
+The warmer accepts the exact published public WooCommerce shop URL even when
+WordPress reverse URL lookup does not resolve the product archive to its page ID.
+The private profiler includes individual filter rendering stages.
+
 ## Category rendering (v0.1.94)
 
 The product-filter widget loads its category choice labels only inside Elementor's
@@ -427,7 +448,7 @@ editor. Public rendering still uses the saved category ID. Enabled manufacturer
 and product-line facets share one aggregate query scoped to distinct products in
 the selected category and its descendants. Request-local reuse avoids duplicate
 queries while keeping fresh stock and publication status on each new request.
-No persistent price, stock, or facet-result cache is introduced.
+This v0.1.94 change introduced no persistent cache; v0.1.99 adds the bounded aggregate cache described above.
 
 ## Product hero discovery (v0.1.93)
 

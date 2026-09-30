@@ -133,6 +133,7 @@ class Schrack_Plugin {
 		( new Schrack_Frontend_Performance() )->init();
 		( new Schrack_Cache_Warmer() )->init();
 		( new Schrack_Cache_Invalidation() )->init();
+		( new Schrack_Catalog_Facet_Cache() )->init();
 		$this->b2b_pricing = new Schrack_B2B_Pricing();
 		$this->b2b_pricing->init();
 		$this->newsletter = new Schrack_Newsletter();
@@ -187,6 +188,7 @@ class Schrack_Plugin {
 			'class-schrack-frontend-performance.php',
 			'class-schrack-cache-warmer.php',
 			'class-schrack-cache-invalidation.php',
+			'class-schrack-catalog-facet-cache.php',
 			'class-schrack-stock-label.php',
 			'class-schrack-b2b-pricing.php',
 			'class-schrack-newsletter.php',
