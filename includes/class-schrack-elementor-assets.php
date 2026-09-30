@@ -38,6 +38,7 @@ final class Schrack_Elementor_Assets {
 		if ( ! $plan ) { return; }
 		remove_action( 'wp_enqueue_scripts', $original, $priority );
 		add_action( 'wp_enqueue_scripts', static function() use ( $plan, $elementor ): void {
+			do_action( 'schrack_performance_profile_mark', 'elementor_saved_assets_start' );
 			$css = array();
 			foreach ( $plan as $entry ) {
 				do_action( 'elementor/post/render', $entry['id'] );
@@ -45,7 +46,9 @@ final class Schrack_Elementor_Assets {
 				if ( $entry['assets'] ) { $elementor->assets_loader->enable_assets( $entry['assets'] ); }
 			}
 			$elementor->frontend->enqueue_styles();
+			do_action( 'schrack_performance_profile_mark', 'elementor_saved_css_start' );
 			foreach ( $css as $file ) { $file->enqueue(); }
+			do_action( 'schrack_performance_profile_mark', 'elementor_saved_assets_end' );
 		}, $priority );
 	}
 }

@@ -5,7 +5,7 @@
 	const state = document.getElementById('schrack-performance-state');
 	const message = document.getElementById('schrack-performance-message');
 	const seo = document.getElementById('schrack-seo-audit');
-	let busy = false, timer = null, retry = 5000;
+	let busy = false, timer = null, retry = 15000;
 	const buttons = root.querySelectorAll('button[data-operation]');
 	function later(delay) { clearTimeout(timer); if (!document.hidden) timer = setTimeout(() => run('status'), delay); }
 	async function run(operation) {
@@ -21,7 +21,7 @@
 			const response = await fetch(schrackPerformanceTools.ajax, {method: 'POST', body, credentials: 'same-origin', signal: controller.signal});
 			const result = await response.json();
 			if (!response.ok || !result.success) throw new Error(typeof result.data === 'string' ? result.data : 'Cererea a eșuat.');
-			retry = 5000;
+			retry = 15000;
 			if (result.data.seo_audit) seo.textContent = JSON.stringify(result.data.seo_audit, null, 2);
 			else {
 				state.textContent = JSON.stringify(result.data, null, 2);

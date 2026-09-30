@@ -9,6 +9,7 @@ final class Schrack_Search_Index {
 	private const FIELDS = array( 'title', 'excerpt', 'content', 'sku', 'schrack_item', 'schrack_ean', 'telesystem_item', 'telesystem_ean', 'edoc_item', 'edoc_ean' );
 
 	public function init(): void {
+		add_action( 'admin_init', array( $this, 'ensure_schedule' ) );
 		add_action( self::TICK, array( $this, 'tick' ) );
 		add_action( 'save_post_product', array( $this, 'dirty' ), 100, 1 );
 		add_action( 'before_delete_post', array( $this, 'deleted' ), 10, 2 );
@@ -18,6 +19,12 @@ final class Schrack_Search_Index {
 		add_filter( 'posts_join', array( $this, 'archive_join' ), 20, 2 );
 		add_filter( 'posts_where', array( $this, 'archive_where' ), 20, 2 );
 	}
+
+	public function ensure_schedule(): void {
+		$state = get_option( self::STATE, array() );
+		if ( 'running' === ( $state['status'] ?? '' ) ) { $this->schedule(); }
+	}
+	public static function clear_schedule(): void { wp_clear_scheduled_hook( self::TICK ); }
 
 	public static function table(): string { global $wpdb; return $wpdb->prefix . 'schrack_search_documents'; }
 	private static function dirty_table(): string { return self::table() . '_dirty'; }
@@ -71,9 +78,14 @@ PRIMARY KEY  (product_id)
 ) {$collate};" );
 		if ( $wpdb->last_error ) { throw new RuntimeException( 'Crearea indexului de căutare a eșuat.' ); }
 		$state = get_option( self::STATE, array() );
-		if ( empty( $state ) ) {
+		if ( empty( $state ) || ! empty( $state['needs_rebuild'] ) ) {
 			$upper = (int) $wpdb->get_var( "SELECT MAX(ID) FROM {$wpdb->posts} WHERE post_type = 'product'" );
 			update_option( self::STATE, array( 'cursor' => 0, 'upper' => $upper, 'processed' => 0, 'ready' => false, 'status' => 'running' ), false );
+		} elseif ( 'error' === ( $state['status'] ?? '' ) ) {
+			$state['status'] = 'running';
+			$state['ready'] = false;
+			unset( $state['error'] );
+			update_option( self::STATE, $state, false );
 		}
 		$this->schedule();
 	}
@@ -92,7 +104,7 @@ PRIMARY KEY  (product_id)
 		$dirty = self::dirty_table();
 		$result = $wpdb->query( $wpdb->prepare( "INSERT INTO {$dirty} (product_id,revision) VALUES (%d,1) ON DUPLICATE KEY UPDATE revision=revision+1", $id ) );
 		// The dirty row itself fences readers; never overwrite a worker's cursor.
-		if ( false === $result ) { update_option( self::STATE, array_merge( $state, array( 'ready' => false, 'status' => 'error' ) ), false ); }
+		if ( false === $result ) { update_option( self::STATE, array_merge( $state, array( 'ready' => false, 'status' => 'error', 'needs_rebuild' => true ) ), false ); }
 		$this->schedule();
 	}
 	private function schedule(): void {
@@ -106,13 +118,14 @@ PRIMARY KEY  (product_id)
 		try {
 			$state = get_option( self::STATE, array() );
 			if ( ! $state ) { return; }
+			if ( ! empty( $state['needs_rebuild'] ) ) { throw new RuntimeException( 'Rebuild required.' ); }
 			$dirty = self::dirty_table();
 			$rows = $wpdb->get_results( "SELECT product_id,revision FROM {$dirty} ORDER BY product_id LIMIT 100", ARRAY_A );
 			if ( $wpdb->last_error ) { throw new RuntimeException( 'Indexul nu poate fi citit.' ); }
 			$started = microtime( true );
 			foreach ( $rows as $row ) {
 				$this->write_document( (int) $row['product_id'] );
-				$wpdb->query( $wpdb->prepare( "DELETE FROM {$dirty} WHERE product_id=%d AND revision=%d", $row['product_id'], $row['revision'] ) );
+				if ( false === $wpdb->query( $wpdb->prepare( "DELETE FROM {$dirty} WHERE product_id=%d AND revision=%d", $row['product_id'], $row['revision'] ) ) ) { throw new RuntimeException( 'Dirty checkpoint failed.' ); }
 				if ( microtime( true ) - $started > 5 ) { break; }
 			}
 			if ( microtime( true ) - $started < 5 && $state['cursor'] < $state['upper'] ) {

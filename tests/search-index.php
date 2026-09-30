@@ -9,6 +9,7 @@ function wp_schedule_single_event($time,$hook){}
 function update_meta_cache($type,$ids){}
 function apply_filters($key,$value) { return $value; }
 function get_post($id) { if (isset($GLOBALS['during_read'])) { $callback=$GLOBALS['during_read']; unset($GLOBALS['during_read']); $callback(); } return $GLOBALS['posts'][$id]??null; }
+function get_post_type($id) { return $GLOBALS['posts'][$id]->post_type??false; }
 function get_post_meta($id,$key,$single=false) { $values=$GLOBALS['meta'][$id][$key]??array();return $single?($values[0]??''):$values; }
 class WP_Query { private array $data;public function __construct($data){$this->data=$data;}public function get($key){return $this->data[$key]??'';}public function set($key,$value){$this->data[$key]=$value;} }
 class SearchDB {
@@ -18,7 +19,7 @@ class SearchDB {
  public function prepare($sql,...$params){$params=is_array($params[0]??null)?$params[0]:$params;$i=0;return preg_replace_callback('/%[sd]/',function($m)use(&$i,$params){$v=$params[$i++];return $m[0]==='%d'?(string)(int)$v:$this->db->quote($v);},$sql);}
  private function sql($sql){return preg_replace("/LIKE ('(?:[^']|'')*')/",'$0 ESCAPE '. $this->db->quote('\\'),$sql);}
  public function get_results($sql,$mode){return $this->db->query($this->sql($sql))->fetchAll(PDO::FETCH_ASSOC);}
- public function query($sql){return $this->db->exec($sql);}
+ public function query($sql){if(!empty($GLOBALS['fail_write'])){unset($GLOBALS['fail_write']);return false;}return $this->db->exec($sql);}
  public function get_var($sql){if(str_contains($sql,'GET_LOCK')||str_contains($sql,'RELEASE_LOCK'))return '1';$v=$this->db->query($this->sql($sql))->fetchColumn();return false===$v?null:$v;}
  public function get_col($sql){return $this->db->query($this->sql($sql))->fetchAll(PDO::FETCH_COLUMN);}
  public function replace($table,$data,$formats){$q=$this->db->prepare('INSERT OR REPLACE INTO '.$table.'('.implode(',',array_keys($data)).') VALUES ('.implode(',',array_fill(0,count($data),'?')).')');return $q->execute(array_values($data));}
@@ -66,4 +67,7 @@ $GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>false,'cursor'=>
 $GLOBALS['during_read']=function() use ($wpdb){$wpdb->db->exec('UPDATE custom_schrack_search_documents_dirty SET revision=revision+1 WHERE product_id=1');};
 $job->tick(); verify_search(!Schrack_Search_Index::ready() && (int)$wpdb->get_var('SELECT revision FROM custom_schrack_search_documents_dirty WHERE product_id=1')===3,'A concurrent edit survives the dirty-row deletion fence.');
 $job->tick(); verify_search(Schrack_Search_Index::ready() && get_option(Schrack_Search_Index::STATE)['processed']===4,'A resumed worker finishes its saved cursor and dirty queue before enabling search.');
+$GLOBALS['fail_write']=true;$job->dirty(2);
+verify_search(!Schrack_Search_Index::ready() && !empty(get_option(Schrack_Search_Index::STATE)['needs_rebuild']),'A lost dirty mark disables the index and requires rebuilding.');
+$job->tick();verify_search(!Schrack_Search_Index::ready() && get_option(Schrack_Search_Index::STATE)['status']==='error','An empty dirty queue cannot enable a stale index after a failed mark.');
 echo "Search index: {$checks} checks passed.\n";

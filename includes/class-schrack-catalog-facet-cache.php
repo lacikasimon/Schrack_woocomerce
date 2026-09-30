@@ -59,14 +59,17 @@ final class Schrack_Catalog_Facet_Cache {
 		$key = 'schrack_facets_' . md5( SCHRACK_WC_SYNC_VERSION . '|' . get_locale() . '|' . $scope );
 		$cached = get_transient( $key );
 		if ( is_array( $cached ) && ( $cached['generation'] ?? null ) === $generation && isset( $cached['data'] ) && is_array( $cached['data'] ) ) {
+			do_action( 'schrack_performance_profile_mark', 'facet_cache_hit' );
 			return $cached['data'];
 		}
+		do_action( 'schrack_performance_profile_mark', is_array( $cached ) ? 'facet_cache_invalidated' : 'facet_cache_miss' );
 		$data = $compute();
 		// A concurrent catalogue edit must never publish this older snapshot.
 		wp_cache_delete( $option, 'options' );
 		if ( $generation === get_option( $option, '' ) && empty( $GLOBALS['wpdb']->last_error ) ) {
+			do_action( 'schrack_performance_profile_mark', 'facet_cache_saved' );
 			set_transient( $key, array( 'generation' => $generation, 'data' => $data ), $hierarchy ? 86400 : 1800 );
-		}
+		} else { do_action( 'schrack_performance_profile_mark', $generation !== get_option( $option, '' ) ? 'facet_cache_race' : 'facet_cache_sql_error' ); }
 		return $data;
 	}
 }

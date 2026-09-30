@@ -40,6 +40,7 @@ foreach(array(array(1,'debug',$old),array(2,'info',$old),array(3,'warning',$old)
 }
 $job=new Schrack_Log_Archive();
 try {
+ $job->stop(); verify_archive(get_option(Schrack_Log_Archive::STATE,array())===array(),'Stopping before first start does not create an invalid archive state.');
  $job->start(); $state=get_option(Schrack_Log_Archive::STATE); $dir=$state['directory'];
  verify_archive((fileperms($dir)&0777)===0700 && !str_starts_with($dir,ABSPATH),'Archive is private and outside webroot.');
  $GLOBALS['fail_checkpoint']=true; $job->tick(); $state=get_option(Schrack_Log_Archive::STATE);

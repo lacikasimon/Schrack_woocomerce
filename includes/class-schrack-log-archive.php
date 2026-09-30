@@ -6,8 +6,15 @@ final class Schrack_Log_Archive {
 	public const TICK = 'schrack_log_archive_tick';
 	private const CYCLE = 'schrack_log_archive_cycle';
 	public function init(): void {
+		add_action( 'admin_init', array( $this, 'ensure_schedule' ) );
 		add_action( self::TICK, array( $this, 'tick' ) );
 		add_action( self::CYCLE, array( $this, 'cycle' ) );
+	}
+	public static function clear_schedule(): void { wp_clear_scheduled_hook( self::TICK ); wp_clear_scheduled_hook( self::CYCLE ); }
+	public function ensure_schedule(): void {
+		$state = get_option( self::STATE, array() );
+		if ( ! empty( $state['enabled'] ) && ! wp_next_scheduled( self::CYCLE ) ) { wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', self::CYCLE ); }
+		if ( 'running' === ( $state['status'] ?? '' ) ) { $this->schedule(); }
 	}
 	public function cycle(): void {
 		$state = get_option( self::STATE, array() );
@@ -54,7 +61,9 @@ final class Schrack_Log_Archive {
 	}
 	public function stop(): void {
 		$this->locked( static function(): void {
-			$state = get_option( self::STATE, array() ); $state['status'] = 'stopped'; $state['enabled'] = false; wp_clear_scheduled_hook( self::CYCLE ); update_option( self::STATE, $state, false ); wp_clear_scheduled_hook( self::TICK );
+			$state = get_option( self::STATE, array() );
+			if ( ! $state ) { return; }
+			$state['status'] = 'stopped'; $state['enabled'] = false; wp_clear_scheduled_hook( self::CYCLE ); update_option( self::STATE, $state, false ); wp_clear_scheduled_hook( self::TICK );
 		} );
 	}
 	private function schedule(): void { if ( ! wp_next_scheduled( self::TICK ) ) { wp_schedule_single_event( time() + 30, self::TICK ); } }
@@ -115,7 +124,7 @@ final class Schrack_Log_Archive {
 					foreach ( $rows as $row ) {
 						$existing = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id=%d", $row['id'] ), ARRAY_A );
 						if ( $wpdb->last_error ) { throw new RuntimeException( 'Restaurarea nu poate fi verificată.' ); }
-						if ( $existing && $existing != $row ) { throw new RuntimeException( 'ID de jurnal reutilizat; restaurarea s-a oprit fără suprascriere.' ); }
+						if ( $existing && $existing !== $row ) { throw new RuntimeException( 'ID de jurnal reutilizat; restaurarea s-a oprit fără suprascriere.' ); }
 						if ( ! $existing && false === $wpdb->insert( $table, $row ) ) { throw new RuntimeException( 'Restaurarea a eșuat.' ); }
 					}
 					$state['restored'] += count( $rows ); $state['restore_cursor'] = $next;
@@ -146,7 +155,7 @@ final class Schrack_Log_Archive {
 						$current = $wpdb->get_results( "SELECT * FROM {$table} WHERE id IN ({$set}) FOR UPDATE", ARRAY_A );
 						if ( $wpdb->last_error ) { throw new RuntimeException( 'Jurnalul nu poate fi verificat.' ); }
 						$original = array_column( $rows, null, 'id' );
-						foreach ( $current as $row ) { if ( $row != $original[ $row['id'] ] ) { throw new RuntimeException( 'Jurnal modificat; arhivarea s-a oprit.' ); } }
+						foreach ( $current as $row ) { if ( $row !== $original[ $row['id'] ] ) { throw new RuntimeException( 'Jurnal modificat; arhivarea s-a oprit.' ); } }
 						if ( false === $wpdb->query( "DELETE FROM {$table} WHERE id IN ({$set})" ) || false === $wpdb->query( 'COMMIT' ) ) { throw new RuntimeException( 'Retenția jurnalului a eșuat.' ); }
 					} catch ( Throwable $e ) { $wpdb->query( 'ROLLBACK' ); throw $e; }
 					$state['cursor'] = max( $ids ); $state['archived'] += count( $rows ); ++$state['segments']; unset( $state['pending'] );

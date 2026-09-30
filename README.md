@@ -714,3 +714,12 @@ and both plugins' options remain stored. Restore preserves subsequent edits.
 Plugin deactivation remains a separate operation requiring plugin-management
 permission; verify canonical URLs, robots, title templates, schema and sitemaps
 before and after choosing one active SEO provider.
+
+v0.1.108 hardens interrupted index writes: a failed dirty mark requires a rebuild
+before indexed queries can resume, and failed dirty checkpoints stop visibly.
+Deactivation clears the new schedules; the next admin visit resumes unfinished
+jobs after reactivation. Archive comparison uses exact field equality and stopping
+before first use does not create an invalid state. Performance status polls every
+15 seconds, pauses when hidden and backs off on errors. Private probes also show
+saved Elementor asset/CSS stages and facet cache hits, misses and mutation races;
+ordinary requests do not retain these diagnostics.

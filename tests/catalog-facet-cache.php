@@ -6,6 +6,7 @@ $GLOBALS['options'] = $GLOBALS['transients'] = $GLOBALS['hooks'] = array();
 $GLOBALS['admin'] = $GLOBALS['ajax'] = $GLOBALS['cold'] = false;
 $GLOBALS['enabled'] = true;
 $GLOBALS['locale'] = 'ro_RO';
+function do_action($hook,...$args): void {}
 function add_action($hook, $callback, $priority=10, $args=1): void { $GLOBALS['hooks'][$hook][] = array($callback,$args); }
 function fire($hook, ...$args): void { foreach ($GLOBALS['hooks'][$hook] ?? array() as [$cb,$accepted]) { $cb(...array_slice($args,0,$accepted)); } }
 function update_option($key,$value,$autoload=false): void { $GLOBALS['options'][$key]=$value; }

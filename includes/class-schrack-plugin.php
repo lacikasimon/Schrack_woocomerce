@@ -282,6 +282,10 @@ class Schrack_Plugin {
 		Schrack_EDoc_Bridge::clear_schedule();
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-cache-warmer.php';
 		Schrack_Cache_Warmer::clear_schedule();
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-search-index.php';
+		Schrack_Search_Index::clear_schedule();
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-log-archive.php';
+		Schrack_Log_Archive::clear_schedule();
 	}
 
 	/**

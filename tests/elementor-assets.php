@@ -32,7 +32,7 @@ namespace {
  function is_admin(){return $GLOBALS['admin'];}function is_preview(){return $GLOBALS['preview'];}function is_front_page(){return false;}function is_shop(){return false;}function is_product(){return true;}function is_product_taxonomy(){return false;}
  function get_the_ID(){return 1;}function get_queried_object_id(){return 1;}function get_post_type($id){return $GLOBALS['post_type'];}function get_page_template_slug($id){return $GLOBALS['template'];}
  function apply_filters($hook,$value){return $value;}function metadata_exists($type,$id,$key){return array_key_exists($key,$GLOBALS['meta'][$id]??array());}function get_post_meta($id,$key,$single){return $GLOBALS['meta'][$id][$key]??'';}
- function has_action($hook,$callback){return $GLOBALS['original']?10:false;}function remove_action($hook,$callback,$priority){$GLOBALS['original']=false;}function add_action($hook,$callback,$priority=10){$GLOBALS['replacement']=$callback;}function do_action($hook,$id){$GLOBALS['events'][]='render:'.$id;}
+ function has_action($hook,$callback){return $GLOBALS['original']?10:false;}function remove_action($hook,$callback,$priority){$GLOBALS['original']=false;}function add_action($hook,$callback,$priority=10){$GLOBALS['replacement']=$callback;}function do_action($hook,$id){if ($hook==='elementor/post/render') $GLOBALS['events'][]='render:'.$id;}
  require __DIR__.'/../includes/class-schrack-elementor-assets.php';
  $checks=0;function verify_assets($ok,$why){++$GLOBALS['checks'];if(!$ok)throw new \RuntimeException($why);}
  $job=new \Schrack_Elementor_Assets();$GLOBALS['original']=true;$job->prepare();
