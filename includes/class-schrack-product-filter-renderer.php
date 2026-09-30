@@ -27,6 +27,9 @@ class Schrack_Product_Filter_Renderer {
 	/** Distinct category-subtree counts, reused only during this render request. */
 	private array $category_tree_counts = array();
 
+	/** One hierarchy snapshot avoids repeatedly deserializing the full taxonomy. */
+	private ?array $category_children = null;
+
 	/**
 	 * Renders the full filter widget shell and the initial product results.
 	 *
@@ -1310,10 +1313,10 @@ class Schrack_Product_Filter_Renderer {
 		$lookup = $wpdb->wc_product_meta_lookup ?? $wpdb->prefix . 'wc_product_meta_lookup';
 		$sql = "SELECT tree.root_id, COUNT(DISTINCT product_posts.ID) AS total
 			FROM ({$mapping}) AS tree
-			INNER JOIN {$wpdb->term_taxonomy} AS tt ON tt.term_id = tree.term_id AND tt.taxonomy = 'product_cat'
-			INNER JOIN {$wpdb->term_relationships} AS rel ON rel.term_taxonomy_id = tt.term_taxonomy_id
-			INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = rel.object_id
-			INNER JOIN {$lookup} AS lookup ON lookup.product_id = product_posts.ID
+			STRAIGHT_JOIN {$wpdb->term_taxonomy} AS tt ON tt.term_id = tree.term_id AND tt.taxonomy = 'product_cat'
+			STRAIGHT_JOIN {$wpdb->term_relationships} AS rel ON rel.term_taxonomy_id = tt.term_taxonomy_id
+			STRAIGHT_JOIN {$lookup} AS lookup ON lookup.product_id = rel.object_id
+			STRAIGHT_JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = rel.object_id
 			WHERE product_posts.post_type = 'product' AND product_posts.post_status = 'publish'
 				AND lookup.stock_status <> 'outofstock'
 			GROUP BY tree.root_id";
@@ -2222,13 +2225,30 @@ class Schrack_Product_Filter_Renderer {
 			return $cache[ $category_id ];
 		}
 
-		$ids = array( $category_id );
-		$children = get_term_children( $category_id, 'product_cat' );
-
-		if ( is_array( $children ) ) {
-			foreach ( $children as $child_id ) {
-				$ids[] = (int) $child_id;
+		if ( null === $this->category_children ) {
+			$parents = get_terms( array(
+				'taxonomy' => 'product_cat', 'fields' => 'id=>parent',
+				'hide_empty' => false, 'hierarchical' => false,
+				'update_term_meta_cache' => false,
+			) );
+			if ( ! is_array( $parents ) ) {
+				$children = get_term_children( $category_id, 'product_cat' );
+				return array_merge( array( $category_id ), is_array( $children ) ? $children : array() );
 			}
+			$this->category_children = array();
+			foreach ( $parents as $id => $parent ) {
+				$this->category_children[ (int) $parent ][] = (int) $id;
+			}
+		}
+		$ids = array();
+		$pending = array( $category_id );
+		$seen = array();
+		while ( $pending ) {
+			$id = array_pop( $pending );
+			if ( isset( $seen[ $id ] ) ) { continue; }
+			$seen[ $id ] = true;
+			$ids[] = $id;
+			foreach ( $this->category_children[ $id ] ?? array() as $child ) { $pending[] = $child; }
 		}
 
 		$cache[ $category_id ] = array_values( array_unique( array_map( 'absint', $ids ) ) );

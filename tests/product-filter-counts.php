@@ -50,6 +50,14 @@ INSERT INTO testshop_wc_product_meta_lookup VALUES (1,'instock'),(2,'onbackorder
 INSERT INTO testshop_term_taxonomy VALUES (101,1,'pa_ip'),(102,2,'pa_ip'),(103,3,'pa_color'),(104,4,'pa_color'),(110,10,'product_cat'),(111,11,'product_cat'),(112,12,'product_cat');
 INSERT INTO testshop_term_relationships VALUES (1,101),(1,103),(1,110),(1,111),(2,102),(2,103),(2,111),(3,101),(3,104),(3,110),(4,101),(4,104),(4,110),(5,101),(5,104),(5,112),(6,101),(6,110);" );
 function get_terms( array $args ): array {
+	if ( ( $args['fields'] ?? '' ) === 'id=>parent' ) {
+		$GLOBALS['hierarchy_reads'] = ( $GLOBALS['hierarchy_reads'] ?? 0 ) + 1;
+		$parents = array( 11 => 10 );
+		foreach ( $GLOBALS['children_override'] ?? array() as $root => $children ) {
+			foreach ( $children as $child ) { $parents[$child] = $root; }
+		}
+		return $parents;
+	}
 	$GLOBALS['term_requests'][] = $args;
 	$terms = array( 1 => 'IP10', 2 => 'IP2', 3 => 'Alb', 4 => 'Negru' );
 	return array_map( static fn( int $id ): WP_Term => new WP_Term( $id, $terms[ $id ], $id <= 2 ? 'pa_ip' : 'pa_color' ), $args['include'] );
@@ -153,4 +161,14 @@ $large = $trees->invoke( new Schrack_Product_Filter_Renderer(), array( new WP_Te
 verify_count( array(1000=>2,11=>2) === $large, 'Large trees retain a single distinct-count fallback without summing duplicate memberships.' );
 $wpdb->db->exec( "UPDATE testshop_wc_product_meta_lookup SET stock_status='outofstock' WHERE product_id=2" );
 verify_count( 1 === $trees->invoke( new Schrack_Product_Filter_Renderer(), $categories )[10], 'Fresh category renders must observe stock changes.' );
+$GLOBALS['children_override'][9000] = array(9001);
+$GLOBALS['children_override'][9001] = array(9002);
+$GLOBALS['children_override'][9002] = array(9000);
+$descendants = new ReflectionMethod( $renderer, 'category_and_descendant_ids' );
+$current = new Schrack_Product_Filter_Renderer();
+$before = $GLOBALS['hierarchy_reads'];
+$ids = $descendants->invoke( $current, 9000 ); sort($ids);
+verify_count( array(9000,9001,9002) === $ids, 'Deep descendants must be included once even if a malformed hierarchy contains a cycle.' );
+$descendants->invoke( $current, 9001 );
+verify_count( 1 === $GLOBALS['hierarchy_reads'] - $before, 'Multiple subtree traversals must reuse one taxonomy hierarchy snapshot.' );
 echo "Product filter counts: {$checks} checks passed.\n";
