@@ -135,7 +135,7 @@ try {
 		}
 		file_put_contents( $font_path, $font_css );
 		clearstatcache();
-		( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 131072 );
+		( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 196608 );
 		verify_image( $font_tag === $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', $font_url ), 'Font CSS shares the total inline budget.' );
 	} finally {
 		unlink( $font_path ); rmdir( $generated . '/elementor/google-fonts/css' ); rmdir( $generated . '/elementor/google-fonts' );

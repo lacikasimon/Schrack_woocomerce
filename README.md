@@ -750,3 +750,8 @@ Elementor local Google Fonts is enabled in its Performance settings. Only
 absolute font URLs under the current uploads directory are accepted; remote or
 relative URLs, imports, modified tags and oversize files retain native loading.
 The existing 128 KiB shared inline budget and font-display rules are preserved.
+
+v0.1.113 gives the two inspected font files up to 64 KiB additional room after
+the existing 128 KiB layout limit. The combined inline budget never exceeds
+192 KiB; other layout files retain their previous bounds. This avoids keeping
+both tiny compressed font stylesheets external when layout CSS uses its budget.

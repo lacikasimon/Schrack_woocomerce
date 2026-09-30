@@ -291,7 +291,7 @@ class Schrack_Frontend_Performance {
 			return $tag;
 		}
 		$size = filesize( $path );
-		if ( ! $size || $size > 65536 || $this->catalog_inline_bytes + $size > 131072 ) {
+		if ( ! $size || $size > 65536 || $this->catalog_inline_bytes + $size > 196608 ) {
 			return $tag;
 		}
 		$css = file_get_contents( $path );
