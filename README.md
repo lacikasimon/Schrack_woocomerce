@@ -488,7 +488,7 @@ warmer's scheduled jobs.
 
 ### All-product preload (v0.1.100)
 
-Enable **Preîncălzește toate produsele publice** on that same admin screen to scan
+Enable **Preîncălzește toate categoriile și produsele publice în stoc** on that same admin screen to scan
 every published, password-free product whose catalogue visibility is `visible` or
 `catalog` or `search`. Since v0.1.102 only products with WooCommerce stock status
 `instock` are warmed, including manual priority product URLs. Sold-out and
@@ -497,19 +497,25 @@ before each GET. Stock changes after queueing are skipped without HTTP requests
 or stopping the run; restocked products enter the next automatic pass. Public
 profiling can still inspect saved sold-out URLs. There is no total product limit. Home and the canonical WooCommerce
 shop run first, followed by manual priority URLs and up to 24 nonempty categories.
+Since v0.1.103 every canonical product category archive is then scanned in
+keyset pages of 100 term IDs, including nested and empty categories, before
+products. The first 24 categories are priorities, not a total category limit.
 Published product IDs are then scanned in pages of 100 using a saved ID cursor
 and the actual WordPress posts table. At most three empty/hidden pages are scanned
 per job. No full catalogue URL list is kept in memory.
 
 Progress survives closed browser tabs and interrupted workers; an hourly trigger
-does not reset a scan already running. Full page-cache purges queue a priority
+does not reset product progress. During a long product scan, the hourly trigger
+queues a separate category pass, saving and restoring the pending product URLs.
+An unfinished category pass is allowed to finish rather than restarting hourly. Full page-cache purges queue a priority
 refresh with a five-minute cooldown. A long product scan resumes from its saved
 place afterwards, then repeats the product pass to cover pages visited before
-the purge. Disabling automation with the stop button cancels scheduled work.
+the purge. Category pages visited before the purge are also revisited; a
+priority refresh preserves both pending category and product queues. Disabling automation with the stop button cancels scheduled work.
 
 An initial `MISS` gets exactly one confirmation GET: only a real subsequent `HIT`
 is reported as `MISS → HIT`. Repeated MISS responses remain unconfirmed. The UI
-shows processed product visits, confirmed/unconfirmed page visits and the latest
+shows processed category/product visits, confirmed/unconfirmed page visits and the latest
 100 results. Counts include repeat visits after a purge, not distinct products.
 Large catalogues can take hours or days depending on server response time. This
 uses the existing page cache and minute hosting cron; it does not require enabling

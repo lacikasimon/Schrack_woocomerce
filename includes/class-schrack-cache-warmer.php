@@ -13,6 +13,7 @@ final class Schrack_Cache_Warmer {
 	public const BATCH_COLD_PAGES = 5;
 	public const BATCH_SECONDS = 15;
 	public const CATALOG_BATCH = 100;
+	public const CATEGORY_BATCH = 100;
 
 	public function init(): void {
 		add_action( 'admin_menu', array( $this, 'menu' ) );
@@ -47,7 +48,8 @@ final class Schrack_Cache_Warmer {
 			<p>Necesită cache de pagină activ și WP-Cron funcțional. Pentru pornire regulată folosește un cron al găzduirii. Un catalog mare poate necesita ore sau zile; starea se păstrează între loturi. Paginile personalizate nu sunt preîncălzite.</p>
 			<form id="schrack-cache-form">
 				<p><label><input type="checkbox" name="enabled" <?php checked( $config['enabled'] ); ?>> Preîncălzire automată la fiecare oră și după golirea cache-ului de pagini</label></p>
-				<p><label><input type="checkbox" name="discover" <?php checked( $config['discover'] ); ?>> Preîncălzește toate produsele publice în stoc și adaugă 24 de categorii principale</label></p>
+				<p><label><input type="checkbox" name="discover" <?php checked( $config['discover'] ); ?>> Preîncălzește toate categoriile și produsele publice în stoc</label></p>
+				<p>Categoriile și subcategoriile, inclusiv cele fără produse, sunt parcurse înaintea produselor. În timpul unui catalog lung, categoriile sunt reîncălzite la ciclul orar fără a reseta progresul produselor.</p>
 				<p><label for="schrack-cache-urls">URL-uri publice: pagina principală, magazin, categorii sau produse publicate (unul pe rând)</label></p>
 				<textarea id="schrack-cache-urls" name="urls" rows="9" class="large-text code" maxlength="30000"><?php echo esc_textarea( implode( "\n", $config['urls'] ) ); ?></textarea>
 				<p><button type="submit" class="button button-primary">Salvează</button> <button type="button" class="button" data-command="start">Pornește acum</button> <button type="button" class="button" data-command="stop">Oprește și dezactivează automatizarea</button></p>
@@ -163,13 +165,20 @@ final class Schrack_Cache_Warmer {
 		}
 		$urls = $this->queue_urls();
 		if ( ! $urls ) { return; }
-		update_option( self::STATE, array( 'status' => 'running', 'urls' => $urls, 'cursor' => 0, 'results' => array(), 'failures' => 0, 'started' => time(), 'updated' => time(), 'phase' => 'priority', 'catalog' => $this->config()['discover'], 'product_after' => 0, 'processed' => 0, 'products_processed' => 0, 'products_scanned' => 0, 'confirmed' => 0, 'unconfirmed' => 0 ), false );
+		update_option( self::STATE, array( 'status' => 'running', 'urls' => $urls, 'cursor' => 0, 'results' => array(), 'failures' => 0, 'started' => time(), 'updated' => time(), 'phase' => 'priority', 'catalog' => $this->config()['discover'], 'category_after' => 0, 'categories_complete' => false, 'categories_processed' => 0, 'product_after' => 0, 'processed' => 0, 'products_processed' => 0, 'products_scanned' => 0, 'confirmed' => 0, 'unconfirmed' => 0 ), false );
 		$this->schedule_tick( 10 );
 	}
 
 	public function cycle(): void {
 		if ( ! $this->config()['enabled'] ) { return; }
-		$this->locked( function (): void { $this->start(); } );
+		$this->locked( function (): void {
+			$state = get_option( self::STATE, array() );
+			if ( 'running' === ( $state['status'] ?? '' ) && ! empty( $state['catalog'] ) && ! empty( $state['categories_complete'] ) ) {
+				$state['categories_pending'] = true;
+				update_option( self::STATE, $state, false );
+			}
+			$this->start();
+		} );
 	}
 
 	/** Coalesce import purge bursts, restarting priority pages within a five-minute cooldown. */
@@ -191,6 +200,8 @@ final class Schrack_Cache_Warmer {
 				if ( empty( $state['catalog'] ) ) { return false; }
 				$state['priority_pending'] = $this->queue_urls();
 				$state['repeat_catalog'] = true;
+				if ( ! empty( $state['categories_complete'] ) ) { $state['categories_pending'] = true; }
+				else { $state['repeat_categories'] = true; }
 				$state['priority_refreshed'] = time();
 				update_option( self::STATE, $state, false );
 				return true;
@@ -201,7 +212,7 @@ final class Schrack_Cache_Warmer {
 		if ( true !== $result && ! wp_next_scheduled( self::REWARM ) ) { wp_schedule_single_event( time() + 120, self::REWARM ); }
 	}
 
-	/** Scan published in-stock product IDs in durable keyset pages. */
+	/** Scan all category IDs, then published in-stock product IDs, in durable pages. */
 	private function next_urls( array &$state ): void {
 		if ( isset( $state['verify_index'] ) || (int) $state['cursor'] < count( $state['urls'] ) ) { return; }
 		if ( isset( $state['resume'] ) ) {
@@ -211,6 +222,40 @@ final class Schrack_Cache_Warmer {
 		}
 		if ( empty( $state['catalog'] ) ) { $state['status'] = 'complete'; return; }
 		global $wpdb;
+		if ( empty( $state['categories_complete'] ) ) {
+			$state['phase'] = 'categories';
+			for ( $page = 0; $page < 3; ++$page ) {
+				$ids = $wpdb->get_col( $wpdb->prepare(
+					"SELECT term_id FROM {$wpdb->term_taxonomy} WHERE taxonomy = 'product_cat'
+					AND term_id > %d ORDER BY term_id ASC LIMIT %d",
+					(int) ( $state['category_after'] ?? 0 ), self::CATEGORY_BATCH
+				) );
+				if ( ! is_array( $ids ) || ! empty( $wpdb->last_error ) ) { $state['status'] = 'error'; return; }
+				if ( ! $ids ) {
+					if ( ! empty( $state['repeat_categories'] ) ) {
+						$state['category_after'] = 0; unset( $state['repeat_categories'] ); continue;
+					}
+					$state['categories_complete'] = true;
+					if ( isset( $state['category_resume'] ) ) {
+						foreach ( $state['category_resume'] as $key => $value ) { $state[ $key ] = $value; }
+						unset( $state['category_resume'] );
+						if ( (int) $state['cursor'] < count( $state['urls'] ) ) { return; }
+					}
+					break;
+				}
+				// Resolve links through WordPress so nested categories keep canonical paths.
+				$terms = get_terms( array( 'taxonomy' => 'product_cat', 'include' => array_map( 'intval', $ids ), 'hide_empty' => false, 'number' => self::CATEGORY_BATCH ) );
+				if ( is_wp_error( $terms ) ) { $state['status'] = 'error'; return; }
+				$state['category_after'] = max( array_map( 'intval', $ids ) );
+				$state['urls'] = array(); $state['cursor'] = 0;
+				foreach ( $terms as $term ) {
+					$url = get_term_link( $term );
+					if ( is_string( $url ) && $this->public_url( $url ) ) { $state['urls'][] = $url; }
+				}
+				if ( $state['urls'] ) { return; }
+			}
+			if ( empty( $state['categories_complete'] ) ) { return; }
+		}
 		$lookup = $wpdb->wc_product_meta_lookup ?? $wpdb->prefix . 'wc_product_meta_lookup';
 		$state['phase'] = 'products';
 		// Bound empty/hidden pages too: continue in the next scheduled job if needed.
@@ -252,6 +297,12 @@ final class Schrack_Cache_Warmer {
 				if ( ! isset( $state['resume'] ) ) { $state['resume'] = array_intersect_key( $state, array_flip( array( 'urls', 'cursor', 'phase' ) ) ); }
 				$state['urls'] = $state['priority_pending']; $state['cursor'] = 0; $state['phase'] = 'priority_refresh';
 				unset( $state['priority_pending'] );
+			}
+			if ( ! empty( $state['categories_pending'] ) && ! isset( $state['verify_index'] ) && ! isset( $state['resume'] ) && 'products' === ( $state['phase'] ?? '' ) ) {
+				$state['category_resume'] = array_intersect_key( $state, array_flip( array( 'urls', 'cursor', 'phase' ) ) );
+				$state['category_after'] = 0; $state['categories_complete'] = false;
+				$state['urls'] = array(); $state['cursor'] = 0; $state['phase'] = 'categories';
+				unset( $state['categories_pending'] );
 			}
 			for ( $request = 0; $request < self::BATCH_REQUESTS; ++$request ) {
 				$state['attempts'] = (int) ( $state['attempts'] ?? 0 ) + 1;
@@ -306,6 +357,7 @@ final class Schrack_Cache_Warmer {
 						$state[ $key ] = (int) ( $state[ $key ] ?? 0 ) + 1;
 					}
 					if ( 'products' === ( $state['phase'] ?? '' ) ) { ++$state['products_processed']; }
+					if ( 'categories' === ( $state['phase'] ?? '' ) ) { $state['categories_processed'] = (int) ( $state['categories_processed'] ?? 0 ) + 1; }
 					if ( 200 === $code && 'miss' === $cache ) {
 						$state['verify_index'] = count( $state['results'] ) - 1; $state['verify_url'] = $raw_url;
 					}
