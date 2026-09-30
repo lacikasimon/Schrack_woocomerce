@@ -202,6 +202,13 @@ check($state['category_after']===$category_after && $state['category_resume']['c
 for($i=0;$i<50 && 'running'===$options[Schrack_Cache_Warmer::STATE]['status'];$i++) { $warm->tick(); }
 $state=$options[Schrack_Cache_Warmer::STATE];
 check('complete'===$state['status'] && 690===$state['categories_processed'] && 800===$state['products_processed'],'Hourly category refresh and a full purge cover every category/product without skipping paused URLs.');
+// A running v0.1.102 product scan upgrades without losing its current queue.
+ajax('save',array('urls'=>home_url('/'),'enabled'=>'1','discover'=>'1'));
+for($i=0;$i<5;$i++) { $warm->tick(); }
+$state=$options[Schrack_Cache_Warmer::STATE];$product_cursor=$state['cursor'];$product_after=$state['product_after'];
+unset($state['categories_complete'],$state['category_after']);$options[Schrack_Cache_Warmer::STATE]=$state;
+ajax('start');$warm->tick();$state=$options[Schrack_Cache_Warmer::STATE];
+check('categories'===$state['phase'] && $state['category_resume']['cursor']===$product_cursor && $state['product_after']===$product_after,'Upgrading an active product-only run preserves its queue while starting all-category warming.');
 $GLOBALS['category_ids']=array();$GLOBALS['catalog_ids']=array();
 
 // Both manual queues and already-saved product batches obey current stock.

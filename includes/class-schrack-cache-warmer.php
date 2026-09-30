@@ -160,6 +160,12 @@ final class Schrack_Cache_Warmer {
 	private function start(): void {
 		$state = get_option( self::STATE, array() );
 		if ( 'running' === ( $state['status'] ?? '' ) ) {
+			// Upgrade an existing product-only run by pausing its current queue,
+			// rather than discarding the cursor to activate the new category phase.
+			if ( ! empty( $state['catalog'] ) && ! array_key_exists( 'categories_complete', $state ) && 'products' === ( $state['phase'] ?? '' ) ) {
+				$state['categories_pending'] = true;
+				update_option( self::STATE, $state, false );
+			}
 			if ( ! wp_next_scheduled( self::TICK ) ) { $this->schedule_tick( 60 ); }
 			return;
 		}

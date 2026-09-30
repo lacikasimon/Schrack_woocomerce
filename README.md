@@ -507,7 +507,9 @@ per job. No full catalogue URL list is kept in memory.
 Progress survives closed browser tabs and interrupted workers; an hourly trigger
 does not reset product progress. During a long product scan, the hourly trigger
 queues a separate category pass, saving and restoring the pending product URLs.
-An unfinished category pass is allowed to finish rather than restarting hourly. Full page-cache purges queue a priority
+An unfinished category pass is allowed to finish rather than restarting hourly.
+A product-only run from v0.1.102 can activate the new category pass with
+**Pornește acum** (v0.1.104) while preserving its current product queue. Full page-cache purges queue a priority
 refresh with a five-minute cooldown. A long product scan resumes from its saved
 place afterwards, then repeats the product pass to cover pages visited before
 the purge. Category pages visited before the purge are also revisited; a
