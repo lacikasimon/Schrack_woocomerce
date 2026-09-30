@@ -5,7 +5,7 @@ define( 'ARRAY_A', 'ARRAY_A' );
 function sanitize_text_field( string $value ): string { return trim( strip_tags( $value ) ); }
 function absint( mixed $value ): int { return abs( (int) $value ); }
 function taxonomy_exists( string $taxonomy ): bool { return in_array( $taxonomy, array( 'product_cat', 'pa_ip', 'pa_color', 'pa_empty' ), true ); }
-function get_term_children( int $id, string $taxonomy ): array { return 10 === $id ? array( 11 ) : array(); }
+function get_term_children( int $id, string $taxonomy ): array { return $GLOBALS['children_override'][$id] ?? (10 === $id ? array( 11 ) : array()); }
 function wc_attribute_taxonomy_name( string $slug ): string { return 'pa_' . $slug; }
 function get_option( string $name, mixed $default = false ): mixed { return $default; }
 function is_wp_error( mixed $value ): bool { return false; }
@@ -14,7 +14,7 @@ class Schrack_Attribute_Extractor {
 	public static function label_for_slug( string $slug ): string { return $slug; }
 }
 class WP_Term {
-	public function __construct( public int $term_id, public string $name ) {}
+	public function __construct( public int $term_id, public string $name, public string $taxonomy = 'product_cat' ) {}
 }
 class Facet_Test_DB {
 	public string $prefix = 'testshop_';
@@ -32,9 +32,11 @@ class Facet_Test_DB {
 			return '%d' === $match[0] ? (string) (int) $value : $this->db->quote( (string) $value );
 		}, $sql );
 	}
+	public function get_var( string $sql ): mixed { ++$this->queries; return $this->db->query( $sql )->fetchColumn(); }
 	public function get_results( string $sql, string $mode ): array {
 		++$this->queries;
-		return $this->db->query( $sql )->fetchAll( PDO::FETCH_ASSOC );
+		// SQLite has no MySQL join-order directive; INNER JOIN preserves row semantics.
+		return $this->db->query( str_replace( 'STRAIGHT_JOIN', 'INNER JOIN', $sql ) )->fetchAll( PDO::FETCH_ASSOC );
 	}
 }
 $wpdb = new Facet_Test_DB();
@@ -49,7 +51,7 @@ INSERT INTO testshop_term_relationships VALUES (1,101),(1,103),(1,110),(1,111),(
 function get_terms( array $args ): array {
 	$GLOBALS['term_requests'][] = $args;
 	$terms = array( 1 => 'IP10', 2 => 'IP2', 3 => 'Alb', 4 => 'Negru' );
-	return array_map( static fn( int $id ): WP_Term => new WP_Term( $id, $terms[ $id ] ), $args['include'] );
+	return array_map( static fn( int $id ): WP_Term => new WP_Term( $id, $terms[ $id ], $id <= 2 ? 'pa_ip' : 'pa_color' ), $args['include'] );
 }
 require __DIR__ . '/../includes/class-schrack-product-filter-renderer.php';
 $renderer = new Schrack_Product_Filter_Renderer();
@@ -77,7 +79,8 @@ $before = $wpdb->queries;
 $groups = $options->invoke( $renderer, 10 );
 verify_count( array( 'pa_ip', 'pa_color' ) === array_keys( $groups ), 'Empty facets must be omitted.' );
 verify_count( array( 'IP2', 'IP10' ) === array_column( $groups['pa_ip']['terms'], 'name' ), 'Natural option order must remain intact.' );
-verify_count( array( 3 ) === $GLOBALS['term_requests'][1]['include'], 'Only available terms from the selected category should be fetched.' );
+$requested_ids = $GLOBALS['term_requests'][0]['include']; sort($requested_ids);
+verify_count( array( 1, 2, 3 ) === $requested_ids && 1 === count( $GLOBALS['term_requests'] ), 'Only available terms should be fetched in one batch across taxonomies.' );
 $options->invoke( $renderer, 10 );
 verify_count( 1 === $wpdb->queries - $before, 'Repeated renders within the same request must reuse their counts.' );
 $wpdb->db->exec( "UPDATE testshop_wc_product_meta_lookup SET stock_status='outofstock' WHERE product_id=2" );
@@ -125,4 +128,28 @@ verify_count( array( array( 'name' => 'A', 'count' => 1 ), array( 'name' => 'B',
 verify_count( array( array( 'name' => '0', 'count' => 1 ), array( 'name' => 'A', 'count' => 1 ) ) === $line->invoke( $current, 10 ), 'The zero label is a value and late-enabled facets must load correctly.' );
 $wpdb->db->exec( "UPDATE testshop_wc_product_meta_lookup SET stock_status='outofstock' WHERE product_id=2" );
 verify_count( array( array( 'name' => 'A', 'count' => 1 ) ) === $manufacturer->invoke( new Schrack_Product_Filter_Renderer(), 10 ), 'New metadata renders must observe current stock without persistent caches.' );
+$wpdb->db->exec( "UPDATE testshop_wc_product_meta_lookup SET stock_status='onbackorder' WHERE product_id=2" );
+$trees = new ReflectionMethod( $renderer, 'category_tree_available_counts' );
+$single = new ReflectionMethod( $renderer, 'available_product_count_for_category_tree' );
+$current = new Schrack_Product_Filter_Renderer();
+$categories = array_map( static fn( int $id ): WP_Term => new WP_Term( $id, 'Category' ), array( 10, 11, 12, 999 ) );
+$before = $wpdb->queries;
+$counts = $trees->invoke( $current, $categories );
+verify_count( 1 === $wpdb->queries - $before, 'Many category trees must share one count query.' );
+verify_count( array( 10 => 2, 11 => 2, 12 => 1, 999 => 0 ) === $counts, 'Overlapping parent/child memberships must count products once per tree, with fresh stock and publication checks.' );
+foreach ( $categories as $category ) {
+ verify_count( $counts[$category->term_id] === $single->invoke( new Schrack_Product_Filter_Renderer(), $category->term_id ), 'Batched tree count must equal the original individual SQL.' );
+}
+$before = $wpdb->queries;
+$trees->invoke( $current, $categories );
+$single->invoke( $current, 10 );
+verify_count( $wpdb->queries === $before, 'Navigation and summary must reuse request-local category counts.' );
+$before = $wpdb->queries;
+$trees->invoke( new Schrack_Product_Filter_Renderer(), array_map( static fn( int $id ): WP_Term => new WP_Term( $id, 'Empty' ), range( 2000, 2800 ) ) );
+verify_count( 3 === $wpdb->queries - $before, 'Large flat catalogues must use bounded batches of at most 400 mappings.' );
+$GLOBALS['children_override'][1000] = array_merge( array(10,11), range(3000,3399) );
+$large = $trees->invoke( new Schrack_Product_Filter_Renderer(), array( new WP_Term(1000,'Large'),new WP_Term(11,'Child') ) );
+verify_count( array(1000=>2,11=>2) === $large, 'Large trees retain a single distinct-count fallback without summing duplicate memberships.' );
+$wpdb->db->exec( "UPDATE testshop_wc_product_meta_lookup SET stock_status='outofstock' WHERE product_id=2" );
+verify_count( 1 === $trees->invoke( new Schrack_Product_Filter_Renderer(), $categories )[10], 'Fresh category renders must observe stock changes.' );
 echo "Product filter counts: {$checks} checks passed.\n";

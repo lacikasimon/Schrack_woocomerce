@@ -24,6 +24,9 @@ class Schrack_Product_Filter_Renderer {
 	/** Request-local metadata facets, keyed by category and metadata key. */
 	private array $metadata_facets = array();
 
+	/** Distinct category-subtree counts, reused only during this render request. */
+	private array $category_tree_counts = array();
+
 	/**
 	 * Renders the full filter widget shell and the initial product results.
 	 *
@@ -1256,16 +1259,62 @@ class Schrack_Product_Filter_Renderer {
 	 */
 	private function category_tree_available_counts( array $categories ): array {
 		$counts = array();
-
+		$batch = array();
+		$pairs = 0;
 		foreach ( $categories as $category ) {
-			if ( ! $category instanceof WP_Term ) {
+			if ( ! $category instanceof WP_Term ) { continue; }
+			$id = (int) $category->term_id;
+			if ( $id <= 0 || ! taxonomy_exists( 'product_cat' ) ) { $counts[ $id ] = 0; continue; }
+			if ( isset( $this->category_tree_counts[ $id ] ) ) {
+				$counts[ $id ] = $this->category_tree_counts[ $id ];
 				continue;
 			}
-
-			$term_id            = (int) $category->term_id;
-			$counts[ $term_id ] = $this->available_product_count_for_category_tree( $term_id );
+			if ( isset( $batch[ $id ] ) ) { continue; }
+			$ids = $this->category_and_descendant_ids( $id );
+			// Keep UNION construction bounded; unusually large individual trees
+			// retain the existing IN query without splitting a distinct count.
+			if ( count( $ids ) > 400 ) {
+				$counts[ $id ] = $this->available_product_count_for_category_tree( $id );
+				continue;
+			}
+			if ( $pairs + count( $ids ) > 400 ) {
+				$counts += $this->count_category_tree_batch( $batch );
+				$batch = array(); $pairs = 0;
+			}
+			$batch[ $id ] = $ids;
+			$pairs += count( $ids );
 		}
+		return $counts + $this->count_category_tree_batch( $batch );
+	}
 
+	/** Count many category trees together, deduplicating products within each root. */
+	private function count_category_tree_batch( array $trees ): array {
+		if ( empty( $trees ) ) { return array(); }
+		global $wpdb;
+		$selects = $params = array();
+		foreach ( $trees as $root => $ids ) {
+			foreach ( $ids as $id ) {
+				$selects[] = 'SELECT %d AS root_id, %d AS term_id';
+				$params[] = $root; $params[] = $id;
+			}
+		}
+		$mapping = implode( ' UNION ALL ', $selects );
+		$lookup = $wpdb->wc_product_meta_lookup ?? $wpdb->prefix . 'wc_product_meta_lookup';
+		$sql = "SELECT tree.root_id, COUNT(DISTINCT product_posts.ID) AS total
+			FROM ({$mapping}) AS tree
+			INNER JOIN {$wpdb->term_taxonomy} AS tt ON tt.term_id = tree.term_id AND tt.taxonomy = 'product_cat'
+			INNER JOIN {$wpdb->term_relationships} AS rel ON rel.term_taxonomy_id = tt.term_taxonomy_id
+			INNER JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = rel.object_id
+			INNER JOIN {$lookup} AS lookup ON lookup.product_id = product_posts.ID
+			WHERE product_posts.post_type = 'product' AND product_posts.post_status = 'publish'
+				AND lookup.stock_status <> 'outofstock'
+			GROUP BY tree.root_id";
+		$rows = $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A );
+		$counts = array_fill_keys( array_keys( $trees ), 0 );
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$counts[ (int) $row['root_id'] ] = absint( $row['total'] );
+		}
+		$this->category_tree_counts += $counts;
 		return $counts;
 	}
 
@@ -1280,16 +1329,15 @@ class Schrack_Product_Filter_Renderer {
 
 		global $wpdb;
 
-		static $cache = array();
 
-		if ( isset( $cache[ $category_id ] ) ) {
-			return $cache[ $category_id ];
+		if ( isset( $this->category_tree_counts[ $category_id ] ) ) {
+			return $this->category_tree_counts[ $category_id ];
 		}
 
 		$category_ids = $this->category_and_descendant_ids( $category_id );
 
 		if ( empty( $category_ids ) ) {
-			$cache[ $category_id ] = 0;
+			$this->category_tree_counts[ $category_id ] = 0;
 
 			return 0;
 		}
@@ -1308,9 +1356,9 @@ class Schrack_Product_Filter_Renderer {
 				AND term_taxonomy.term_id IN ({$placeholders})
 				AND lookup.stock_status <> 'outofstock'";
 
-		$cache[ $category_id ] = absint( $wpdb->get_var( $wpdb->prepare( $sql, $category_ids ) ) );
+		$this->category_tree_counts[ $category_id ] = absint( $wpdb->get_var( $wpdb->prepare( $sql, $category_ids ) ) );
 
-		return $cache[ $category_id ];
+		return $this->category_tree_counts[ $category_id ];
 	}
 
 	/**
@@ -2230,11 +2278,18 @@ class Schrack_Product_Filter_Renderer {
 		}
 		$placeholders = implode( ',', array_fill( 0, count( $missing ), '%s' ) );
 		$params = array_merge( $params, $missing );
-		$sql = "SELECT facet_meta.meta_key AS facet, facet_meta.meta_value AS name, COUNT(DISTINCT facet_meta.post_id) AS total
-			FROM {$wpdb->posts} AS product_posts
-			{$category_join}
+		$from = "{$wpdb->posts} AS product_posts {$category_join}
 			INNER JOIN {$lookup_table} AS lookup ON lookup.product_id = product_posts.ID
-			INNER JOIN {$wpdb->postmeta} AS facet_meta ON facet_meta.post_id = product_posts.ID
+			INNER JOIN {$wpdb->postmeta} AS facet_meta ON facet_meta.post_id = product_posts.ID";
+		if ( '' === $category_join ) {
+			// On the whole shop, start with the two indexed metadata keys rather
+			// than reading every metadata row for each published product.
+			$from = "{$wpdb->postmeta} AS facet_meta
+				STRAIGHT_JOIN {$lookup_table} AS lookup ON lookup.product_id = facet_meta.post_id
+				STRAIGHT_JOIN {$wpdb->posts} AS product_posts ON product_posts.ID = facet_meta.post_id";
+		}
+		$sql = "SELECT facet_meta.meta_key AS facet, facet_meta.meta_value AS name, COUNT(DISTINCT facet_meta.post_id) AS total
+			FROM {$from}
 			WHERE facet_meta.meta_key IN ({$placeholders})
 				AND facet_meta.meta_value <> ''
 				AND product_posts.post_type = 'product'
@@ -2361,6 +2416,24 @@ class Schrack_Product_Filter_Renderer {
 			}
 		}
 		$counts_by_taxonomy = $this->available_attribute_counts( $taxonomies, $category_id );
+		$terms_by_taxonomy = array();
+		$term_ids = array();
+		foreach ( $counts_by_taxonomy as $counts ) {
+			array_push( $term_ids, ...array_keys( $counts ) );
+		}
+		if ( $term_ids ) {
+			$all_terms = get_terms( array(
+				'taxonomy' => array_keys( $counts_by_taxonomy ),
+				'hide_empty' => true,
+				'include' => array_values( array_unique( $term_ids ) ),
+			) );
+			if ( is_array( $all_terms ) ) {
+				foreach ( $all_terms as $term ) {
+					if ( $term instanceof WP_Term ) { $terms_by_taxonomy[ $term->taxonomy ][] = $term; }
+				}
+			}
+		}
+
 
 		foreach ( $slugs as $slug => $meta ) {
 			$taxonomy = wc_attribute_taxonomy_name( $slug );
@@ -2370,17 +2443,7 @@ class Schrack_Product_Filter_Renderer {
 				continue;
 			}
 
-			$terms = get_terms(
-				array(
-					'taxonomy'   => $taxonomy,
-					'hide_empty' => true,
-					'include'    => array_keys( $available_counts ),
-				)
-			);
-
-			if ( is_wp_error( $terms ) || empty( $terms ) ) {
-				continue;
-			}
+			$terms = $terms_by_taxonomy[ $taxonomy ] ?? array();
 
 			$term_options = array();
 
