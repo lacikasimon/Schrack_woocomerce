@@ -26,12 +26,18 @@ class Schrack_Frontend_Performance {
 		add_filter( 'wp_inline_script_attributes', array( $this, 'inline_script_attributes' ) );
 	}
 
-	/** Native WordPress dependency checks retain blocking scripts when required. */
+	/** Native WordPress groups and strategies preserve dependency execution order. */
 	public function configure_ordered_scripts(): void {
 		if ( is_admin() || ! $this->is_catalog_page() || is_preview() || ! apply_filters( 'schrack_wc_sync_ordered_frontend_scripts', true ) ) { return; }
 		$scripts = wp_scripts();
-		foreach ( array( 'jquery-core', 'jquery-migrate', 'wc-jquery-blockui', 'wc-js-cookie', 'woocommerce', 'wc-add-to-cart', 'wc-cart-fragments' ) as $handle ) {
-			if ( isset( $scripts->registered[ $handle ] ) && ! $scripts->get_data( $handle, 'strategy' ) ) {
+		foreach ( array( 'jquery', 'jquery-core', 'jquery-migrate', 'wc-jquery-blockui', 'wc-js-cookie', 'woocommerce', 'wc-add-to-cart', 'wc-cart-fragments' ) as $handle ) {
+			if ( ! isset( $scripts->registered[ $handle ] ) ) {
+				continue;
+			}
+			// The source-less jquery alias otherwise pulls its libraries into the
+			// head. WordPress can still promote any dependency of a head script.
+			$scripts->add_data( $handle, 'group', 1 );
+			if ( $scripts->registered[ $handle ]->src && ! $scripts->get_data( $handle, 'strategy' ) ) {
 				$scripts->add_data( $handle, 'strategy', 'defer' );
 			}
 		}

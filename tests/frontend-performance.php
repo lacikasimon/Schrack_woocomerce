@@ -140,6 +140,23 @@ $scripts->add( 'custom-dependent', '/custom.js', array( 'jquery-core' ) );
 $scripts->enqueue( 'custom-dependent' );
 ( new ReflectionProperty( $scripts, 'dependents_map' ) )->setValue( $scripts, array() );
 verify_image( '' === $eligible->invoke( $scripts, 'jquery-core' ), 'Unknown blocking dependents retain their required execution order.' );
+
+// Exercise native grouping, including the source-less core jQuery alias.
+$GLOBALS['wp_scripts'] = ( new ReflectionClass( WP_Scripts::class ) )->newInstanceWithoutConstructor();
+$scripts = wp_scripts();
+$scripts->add( 'jquery-core', '/jquery.js' );
+$scripts->add( 'jquery-migrate', '/migrate.js', array( 'jquery-core' ) );
+$scripts->add( 'jquery', false, array( 'jquery-core', 'jquery-migrate' ) );
+$scripts->add( 'woocommerce', '/woocommerce.js', array( 'jquery' ) );
+$scripts->add_inline_script( 'woocommerce', 'window.example = true;', 'after' );
+$scripts->enqueue( 'woocommerce' );
+$performance->configure_ordered_scripts();
+$scripts->all_deps( $scripts->queue );
+verify_image( 1 === $scripts->groups['jquery'] && 1 === $scripts->groups['jquery-core'] && 1 === $scripts->groups['woocommerce'], 'The full native chain remains in the footer even when after-inline code prevents defer.' );
+$scripts->add( 'head-dependent', '/head.js', array( 'jquery' ) );
+$scripts->enqueue( 'head-dependent' );
+$scripts->all_deps( $scripts->queue );
+verify_image( 0 === $scripts->groups['jquery-core'] && 0 === $scripts->groups['jquery-migrate'], 'A real header dependent still promotes both jQuery libraries before itself.' );
 $GLOBALS['front_page_test'] = false;
 $gallery_check = new ReflectionMethod( $performance, 'uses_only_our_gallery' );
 $own_widget = array( 'elType' => 'widget', 'widgetType' => 'schrack_product_page' );

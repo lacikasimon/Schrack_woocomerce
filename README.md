@@ -739,3 +739,8 @@ v0.1.110 applies the same bounded, self-contained CSS policy to inspected
 WooCommerce, OneTap and Elementor atomic layout handles. Their source must resolve
 inside the current WordPress content directory without traversal. Files containing
 relative fonts/images or imports retain normal external loading.
+
+v0.1.111 requests footer placement for the known jQuery/WooCommerce chain,
+including the source-less jQuery alias. Native WordPress dependency grouping
+can still move libraries into the head for head-dependent scripts. Existing
+inline code and execution order remain intact when defer is ineligible.
