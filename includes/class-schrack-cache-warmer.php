@@ -8,7 +8,10 @@ final class Schrack_Cache_Warmer {
 	public const TICK = 'schrack_cache_warm_tick';
 	public const CYCLE = 'schrack_cache_warm_cycle';
 	public const REWARM = 'schrack_cache_rewarm';
-	public const LIMIT = 20;
+	public const LIMIT = 100;
+	public const BATCH_REQUESTS = 10;
+	public const BATCH_SECONDS = 15;
+	public const CATALOG_BATCH = 100;
 
 	public function init(): void {
 		add_action( 'admin_menu', array( $this, 'menu' ) );
@@ -39,23 +42,24 @@ final class Schrack_Cache_Warmer {
 		<div class="wrap" id="schrack-cache-warmer">
 			<h1>Performanță magazin</h1>
 			<?php if ( Schrack_Cache_Invalidation::is_active() ) { ?><p><strong>Protecția cache-ului tehnic este activă:</strong> modificările de categorii și atribute invalidează paginile, păstrând cache-ul CSS/JS, Redis și OPcache.</p><?php } ?>
-			<p>Preîncălzește maximum 20 de pagini publice, câte una pe minut, fără cookie-uri. Rulează în fundal și după închiderea acestei pagini.</p>
-			<p>Necesită cache de pagină activ și WP-Cron funcțional. Pentru ore exacte folosește un cron al găzduirii. Nu accelerează paginile personalizate sau paginile care nu sunt în listă.</p>
+			<p>Preîncălzește lista prioritară și, opțional, toate produsele publice, în loturi de cel mult 10 cereri succesive. Bugetul de 15 secunde este verificat între cereri; o cerere poate dura cel mult 20 de secunde. Pagina principală și magazinul au prioritate. Nu trimite cookie-uri. Rulează în fundal și după închiderea acestei pagini.</p>
+			<p>Necesită cache de pagină activ și WP-Cron funcțional. Pentru pornire regulată folosește un cron al găzduirii. Un catalog mare poate necesita câteva ore; starea se păstrează între loturi. Paginile personalizate nu sunt preîncălzite.</p>
 			<form id="schrack-cache-form">
 				<p><label><input type="checkbox" name="enabled" <?php checked( $config['enabled'] ); ?>> Preîncălzire automată la fiecare oră și după golirea cache-ului de pagini</label></p>
+				<p><label><input type="checkbox" name="discover" <?php checked( $config['discover'] ); ?>> Preîncălzește toate produsele publice și adaugă 24 de categorii principale</label></p>
 				<p><label for="schrack-cache-urls">URL-uri publice: pagina principală, magazin, categorii sau produse publicate (unul pe rând)</label></p>
-				<textarea id="schrack-cache-urls" name="urls" rows="9" class="large-text code" maxlength="20000"><?php echo esc_textarea( implode( "\n", $config['urls'] ) ); ?></textarea>
+				<textarea id="schrack-cache-urls" name="urls" rows="9" class="large-text code" maxlength="30000"><?php echo esc_textarea( implode( "\n", $config['urls'] ) ); ?></textarea>
 				<p><button type="submit" class="button button-primary">Salvează</button> <button type="button" class="button" data-command="start">Pornește acum</button> <button type="button" class="button" data-command="stop">Oprește și dezactivează automatizarea</button></p>
 			</form>
 			<p id="schrack-cache-message" role="status" aria-live="polite"></p>
 			<h2>Starea preîncălzirii</h2><p id="schrack-cache-status" role="status">Se încarcă…</p>
-			<table class="widefat striped"><thead><tr><th>URL</th><th>HTTP</th><th>Cache</th><th>Durată totală</th></tr></thead><tbody id="schrack-cache-results"></tbody></table>
+			<table class="widefat striped"><thead><tr><th>URL</th><th>HTTP</th><th>Cache / verificare</th><th>Durată totală</th></tr></thead><tbody id="schrack-cache-results"></tbody></table>
 			<h2>Măsurare PHP / bază de date</h2>
 			<p>O singură cerere anonimă fără cache. Rezultatul este privat; nu se păstrează SQL, cookie-uri sau date de clienți.</p>
 			<label for="schrack-profile-url">Pagina de măsurat</label> <select id="schrack-profile-url"><?php foreach ( $config['urls'] as $url ) { ?><option value="<?php echo esc_attr( $url ); ?>"><?php echo esc_html( $url ); ?></option><?php } ?></select>
 			<button type="button" class="button" data-command="profile">Măsoară</button>
 			<button type="button" class="button" data-command="profile_cold">Măsoară selecțiile la rece</button>
-			<p>Testul la rece ocolește și cache-ul selecțiilor de produse și imagini din pagina principală, fără să golească memoria cache a magazinului.</p>
+			<p>Testul la rece ocolește și cache-ul selecțiilor de produse, imagini și al agregatelor de catalog, fără să golească memoria cache a magazinului.</p>
 			<pre id="schrack-profile-result" style="white-space:pre-wrap" aria-live="polite"></pre>
 		</div>
 		<?php
@@ -63,7 +67,29 @@ final class Schrack_Cache_Warmer {
 
 	public function config(): array {
 		$config = get_option( self::OPTION, array() );
-		return array( 'enabled' => ! empty( $config['enabled'] ), 'urls' => array_slice( (array) ( $config['urls'] ?? array( home_url( '/' ) ) ), 0, self::LIMIT ) );
+		return array( 'enabled' => ! empty( $config['enabled'] ), 'discover' => ! empty( $config['discover'] ), 'urls' => array_slice( (array) ( $config['urls'] ?? array( home_url( '/' ) ) ), 0, self::LIMIT ) );
+	}
+
+	/** A bounded queue from WordPress APIs; manual selections retain priority. */
+	public function queue_urls(): array {
+		$config = $this->config();
+		$candidates = array( home_url( '/' ) );
+		$shop_id = (int) wc_get_page_id( 'shop' );
+		if ( $shop_id > 0 ) { $candidates[] = get_permalink( $shop_id ); }
+		$candidates = array_merge( $candidates, $config['urls'] );
+		if ( $config['discover'] ) {
+			$categories = get_terms( array( 'taxonomy' => 'product_cat', 'hide_empty' => true, 'orderby' => 'count', 'order' => 'DESC', 'number' => 24 ) );
+			foreach ( is_array( $categories ) ? $categories : array() as $term ) {
+				$url = get_term_link( $term );
+				if ( ! is_wp_error( $url ) ) { $candidates[] = $url; }
+			}
+		}
+		$urls = array();
+		foreach ( array_unique( $candidates ) as $url ) {
+			if ( is_string( $url ) && $this->public_url( $url ) ) { $urls[] = $url; }
+			if ( count( $urls ) >= self::LIMIT + 26 ) { break; }
+		}
+		return $urls;
 	}
 
 	/** Reject aliases, query actions, credentials, external/private and hidden pages. */
@@ -90,7 +116,7 @@ final class Schrack_Cache_Warmer {
 			if ( ! $post || 'publish' !== $post->post_status || '' !== $post->post_password ) { return ''; }
 			if ( 'product' === $post->post_type ) {
 				$product = wc_get_product( $id );
-				if ( ! $product || ! in_array( $product->get_catalog_visibility(), array( 'visible', 'catalog' ), true ) ) { return ''; }
+				if ( ! $product || ! in_array( $product->get_catalog_visibility(), array( 'visible', 'catalog', 'search' ), true ) ) { return ''; }
 			} elseif ( $id !== wc_get_page_id( 'shop' ) ) { return ''; }
 			return get_permalink( $id ) === $url ? $url : '';
 		}
@@ -133,9 +159,9 @@ final class Schrack_Cache_Warmer {
 			if ( ! wp_next_scheduled( self::TICK ) ) { $this->schedule_tick( 60 ); }
 			return;
 		}
-		$urls = $this->config()['urls'];
+		$urls = $this->queue_urls();
 		if ( ! $urls ) { return; }
-		update_option( self::STATE, array( 'status' => 'running', 'urls' => $urls, 'cursor' => 0, 'results' => array(), 'failures' => 0, 'started' => time(), 'updated' => time() ), false );
+		update_option( self::STATE, array( 'status' => 'running', 'urls' => $urls, 'cursor' => 0, 'results' => array(), 'failures' => 0, 'started' => time(), 'updated' => time(), 'phase' => 'priority', 'catalog' => $this->config()['discover'], 'product_after' => 0, 'processed' => 0, 'products_processed' => 0, 'products_scanned' => 0, 'confirmed' => 0, 'unconfirmed' => 0 ), false );
 		$this->schedule_tick( 10 );
 	}
 
@@ -144,15 +170,14 @@ final class Schrack_Cache_Warmer {
 		$this->locked( function (): void { $this->start(); } );
 	}
 
-	/** Coalesce import purge bursts: no new warmup more often than every 15 minutes. */
+	/** Coalesce import purge bursts, restarting priority pages within a five-minute cooldown. */
 	public function after_purge(): void {
 		if ( ! $this->config()['enabled'] ) { return; }
-		$this->locked( function (): void {
-			$state = get_option( self::STATE, array() );
-			if ( ! wp_next_scheduled( self::REWARM ) ) {
-				wp_schedule_single_event( max( time() + 120, (int) ( $state['started'] ?? 0 ) + 900 ), self::REWARM );
-			}
-		} );
+		// Scheduling does not mutate the worker cursor and must survive a busy lock.
+		$state = get_option( self::STATE, array() );
+		if ( ! wp_next_scheduled( self::REWARM ) ) {
+			wp_schedule_single_event( max( time() + 60, (int) ( $state['priority_refreshed'] ?? $state['started'] ?? 0 ) + 300 ), self::REWARM );
+		}
 	}
 
 	/** Remember purges during an active run, including URLs visited before the purge. */
@@ -160,49 +185,125 @@ final class Schrack_Cache_Warmer {
 		if ( ! $this->config()['enabled'] ) { return; }
 		$result = $this->locked( function () {
 			$state = get_option( self::STATE, array() );
-			if ( 'running' === ( $state['status'] ?? '' ) ) { return false; }
+			if ( 'running' === ( $state['status'] ?? '' ) ) {
+				if ( empty( $state['catalog'] ) ) { return false; }
+				$state['priority_pending'] = $this->queue_urls();
+				$state['repeat_catalog'] = true;
+				$state['priority_refreshed'] = time();
+				update_option( self::STATE, $state, false );
+				return true;
+			}
 			$this->start();
 			return true;
 		} );
 		if ( true !== $result && ! wp_next_scheduled( self::REWARM ) ) { wp_schedule_single_event( time() + 120, self::REWARM ); }
 	}
 
+	/** Scan published product IDs in durable keyset pages; no full catalogue in memory. */
+	private function next_urls( array &$state ): void {
+		if ( isset( $state['verify_index'] ) || (int) $state['cursor'] < count( $state['urls'] ) ) { return; }
+		if ( isset( $state['resume'] ) ) {
+			foreach ( $state['resume'] as $key => $value ) { $state[ $key ] = $value; }
+			unset( $state['resume'] );
+			if ( (int) $state['cursor'] < count( $state['urls'] ) ) { return; }
+		}
+		if ( empty( $state['catalog'] ) ) { $state['status'] = 'complete'; return; }
+		global $wpdb;
+		$state['phase'] = 'products';
+		// Bound empty/hidden pages too: continue in the next scheduled job if needed.
+		for ( $page = 0; $page < 3; ++$page ) {
+			$ids = $wpdb->get_col( $wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'product' AND post_status = 'publish'
+				AND post_password = '' AND ID > %d ORDER BY ID ASC LIMIT %d",
+				(int) $state['product_after'], self::CATALOG_BATCH
+			) );
+			if ( ! is_array( $ids ) || ! empty( $wpdb->last_error ) ) { $state['status'] = 'error'; return; }
+			if ( ! $ids ) {
+				if ( ! empty( $state['repeat_catalog'] ) ) {
+					$state['product_after'] = 0; unset( $state['repeat_catalog'] ); continue;
+				}
+				$state['status'] = 'complete'; return;
+			}
+			$state['product_after'] = max( array_map( 'intval', $ids ) );
+			$state['products_scanned'] = (int) $state['products_scanned'] + count( $ids );
+			$state['urls'] = array(); $state['cursor'] = 0;
+			foreach ( $ids as $id ) {
+				$url = get_permalink( (int) $id );
+				if ( is_string( $url ) && $this->public_url( $url ) ) { $state['urls'][] = $url; }
+			}
+			if ( $state['urls'] ) { return; }
+		}
+	}
+
 	public function tick(): void {
 		$result = $this->locked( function (): void {
 			$state = get_option( self::STATE, array() );
 			if ( 'running' !== ( $state['status'] ?? '' ) ) { return; }
-			// A watchdog survives timeouts/fatal errors; ordinary completion replaces it.
-			$this->schedule_tick( 180 );
-			$index = (int) $state['cursor'];
-			$state['attempts'] = (int) ( $state['attempts'] ?? 0 ) + 1;
-			if ( $state['attempts'] > 3 ) {
-				$state['status'] = 'error';
+			$this->schedule_tick( 180 ); // Watchdog survives process death.
+			$batch_start = microtime( true );
+			if ( ! empty( $state['priority_pending'] ) && ! isset( $state['verify_index'] ) ) {
+				if ( ! isset( $state['resume'] ) ) { $state['resume'] = array_intersect_key( $state, array_flip( array( 'urls', 'cursor', 'phase' ) ) ); }
+				$state['urls'] = $state['priority_pending']; $state['cursor'] = 0; $state['phase'] = 'priority_refresh';
+				unset( $state['priority_pending'] );
+			}
+			for ( $request = 0; $request < self::BATCH_REQUESTS; ++$request ) {
+				$state['attempts'] = (int) ( $state['attempts'] ?? 0 ) + 1;
+				if ( $state['attempts'] > 3 ) { $state['status'] = 'error'; break; }
 				update_option( self::STATE, $state, false );
-				wp_clear_scheduled_hook( self::TICK );
-				return;
+				$this->next_urls( $state );
+				if ( 'running' !== $state['status'] || ( ! isset( $state['verify_index'] ) && ! $state['urls'] ) ) { $state['attempts'] = 0; break; }
+				update_option( self::STATE, $state, false );
+				$verifying = isset( $state['verify_index'] );
+				$index = $verifying ? (int) $state['verify_index'] : (int) $state['cursor'];
+				$raw_url = $verifying ? ( $state['verify_url'] ?? $state['urls'][ $index ] ?? '' ) : ( $state['urls'][ $index ] ?? '' );
+				$url = $this->public_url( (string) $raw_url );
+				$start = microtime( true );
+				$response = $url ? wp_safe_remote_get( $url, array(
+					'timeout' => 20, 'redirection' => 0, 'cookies' => array(), 'limit_response_size' => 2097152,
+					'user-agent' => 'Mozilla/5.0 (compatible; SchrackCacheWarm/1.1)',
+				) ) : new WP_Error( 'not_public', 'Pagina nu mai este publică.' );
+				$code = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
+				$cache = is_wp_error( $response ) ? '' : strtolower( (string) wp_remote_retrieve_header( $response, 'x-litespeed-cache' ) );
+				$ms = (int) round( ( microtime( true ) - $start ) * 1000 );
+				if ( $verifying ) {
+					$state['results'][ $index ]['verified'] = 200 === $code && 'hit' === $cache;
+					$state['results'][ $index ]['verify_http'] = $code;
+					$state['results'][ $index ]['verify_ms'] = $ms;
+					$key = $state['results'][ $index ]['verified'] ? 'confirmed' : 'unconfirmed';
+					$state[ $key ] = (int) ( $state[ $key ] ?? 0 ) + 1;
+					unset( $state['verify_index'], $state['verify_url'] ); // Exactly one confirmation request.
+				} else {
+					$state['results'][] = array( 'url' => $raw_url, 'http' => $code,
+						'cache' => in_array( $cache, array( 'hit', 'miss' ), true ) ? strtoupper( $cache ) : 'NECONFIRMAT',
+						'ms' => $ms, 'verified' => 200 === $code && 'hit' === $cache ? true : null,
+					);
+					$state['cursor']++;
+					$state['processed'] = (int) ( $state['processed'] ?? 0 ) + 1;
+					if ( 200 !== $code || 'miss' !== $cache ) {
+						$key = 200 === $code && 'hit' === $cache ? 'confirmed' : 'unconfirmed';
+						$state[ $key ] = (int) ( $state[ $key ] ?? 0 ) + 1;
+					}
+					if ( 'products' === ( $state['phase'] ?? '' ) ) { ++$state['products_processed']; }
+					if ( 200 === $code && 'miss' === $cache ) {
+						$state['verify_index'] = count( $state['results'] ) - 1; $state['verify_url'] = $raw_url;
+					}
+				}
+				$state['failures'] = 200 === $code ? 0 : (int) $state['failures'] + 1;
+				$state['attempts'] = 0;
+				$state['updated'] = time();
+				if ( $state['failures'] >= 3 ) { $state['status'] = 'error'; }
+				elseif ( $state['cursor'] >= count( $state['urls'] ) && ! isset( $state['verify_index'] ) && empty( $state['catalog'] ) ) { $state['status'] = 'complete'; }
+				if ( count( $state['results'] ) > 100 ) {
+					$state['results'] = array_slice( $state['results'], -100 );
+					if ( isset( $state['verify_index'] ) ) { $state['verify_index'] = 99; }
+				}
+				update_option( self::STATE, $state, false );
+				// Never issue concurrent requests. Slow/error responses end this batch.
+				if ( 'running' !== $state['status'] || 200 !== $code || $ms >= 5000 || microtime( true ) - $batch_start >= self::BATCH_SECONDS ) { break; }
 			}
 			update_option( self::STATE, $state, false );
-			$url = $this->public_url( (string) ( $state['urls'][ $index ] ?? '' ) );
-			$start = microtime( true );
-			$response = $url ? wp_safe_remote_get( $url, array(
-				'timeout' => 20, 'redirection' => 0, 'cookies' => array(), 'limit_response_size' => 2097152,
-				'user-agent' => 'Mozilla/5.0 (compatible; SchrackCacheWarm/1.0)',
-			) ) : new WP_Error( 'not_public', 'Pagina nu mai este publică.' );
-			$code = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
-			$cache = is_wp_error( $response ) ? '' : strtolower( (string) wp_remote_retrieve_header( $response, 'x-litespeed-cache' ) );
-			$state['results'][] = array( 'url' => $state['urls'][ $index ], 'http' => $code,
-				'cache' => in_array( $cache, array( 'hit', 'miss' ), true ) ? strtoupper( $cache ) : 'NECONFIRMAT',
-				'ms' => round( ( microtime( true ) - $start ) * 1000 ),
-			);
-			$state['failures'] = 200 === $code ? 0 : $state['failures'] + 1;
-			$state['cursor']++;
-			$state['attempts'] = 0;
-			$state['updated'] = time();
-			if ( $state['failures'] >= 3 ) { $state['status'] = 'error'; }
-			elseif ( $state['cursor'] >= count( $state['urls'] ) ) { $state['status'] = 'complete'; }
-			update_option( self::STATE, $state, false );
 			wp_clear_scheduled_hook( self::TICK );
-			if ( 'running' === $state['status'] ) { $this->schedule_tick( 200 === $code ? 60 : 300 ); }
+			if ( 'running' === $state['status'] ) { $this->schedule_tick( $state['failures'] ? 300 : 60 ); }
 		} );
 		if ( is_wp_error( $result ) && ! wp_next_scheduled( self::TICK ) ) { wp_schedule_single_event( time() + 180, self::TICK ); }
 	}
@@ -219,12 +320,12 @@ final class Schrack_Cache_Warmer {
 		$result = $this->locked( function () use ( $command ) {
 			if ( 'save' === $command ) {
 				$raw = wp_unslash( $_POST['urls'] ?? '' );
-				if ( ! is_string( $raw ) || strlen( $raw ) > 20000 ) { return new WP_Error( 'urls', 'Lista este prea lungă.' ); }
+				if ( ! is_string( $raw ) || strlen( $raw ) > 30000 ) { return new WP_Error( 'urls', 'Lista este prea lungă.' ); }
 				$urls = array_values( array_unique( array_filter( array_map( 'trim', explode( "\n", $raw ) ) ) ) );
-				if ( ! $urls || count( $urls ) > self::LIMIT ) { return new WP_Error( 'urls', 'Introdu între 1 și 20 de URL-uri.' ); }
+				if ( ! $urls || count( $urls ) > self::LIMIT ) { return new WP_Error( 'urls', 'Introdu între 1 și 100 de URL-uri.' ); }
 				foreach ( $urls as $url ) { if ( ! $this->public_url( $url ) ) { return new WP_Error( 'urls', 'URL nepermis sau necanonic: ' . $url ); } }
 				$enabled = '1' === ( $_POST['enabled'] ?? '' );
-				update_option( self::OPTION, array( 'enabled' => $enabled, 'urls' => $urls ), false );
+				update_option( self::OPTION, array( 'enabled' => $enabled, 'discover' => '1' === ( $_POST['discover'] ?? '' ), 'urls' => $urls ), false );
 				self::clear_schedule();
 				update_option( self::STATE, array( 'status' => 'idle' ), false );
 				if ( $enabled ) { $this->ensure_schedule(); $this->start(); }

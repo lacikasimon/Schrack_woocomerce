@@ -9,7 +9,7 @@
 	const select = document.getElementById('schrack-profile-url');
 	const profile = document.getElementById('schrack-profile-result');
 	let timer = null, busy = false, running = false, retry = 4000;
-	const labels = {idle: 'În așteptare', running: 'În curs', complete: 'Terminat', stopped: 'Oprit', error: 'Oprit după trei erori consecutive'};
+	const labels = {idle: 'În așteptare', running: 'În curs', complete: 'Terminat', stopped: 'Oprit', error: 'Oprit din cauza erorilor; verifică rezultatele'};
 	function later(delay) {
 		clearTimeout(timer);
 		if (!document.hidden) timer = setTimeout(poll, delay);
@@ -35,13 +35,13 @@
 		}
 		const state = data.state || {};
 		running = state.status === 'running';
-		status.textContent = (labels[state.status] || state.status) + ' — ' + (state.cursor || 0) + '/' + (state.urls || []).length +
+		status.textContent = (labels[state.status] || state.status) + ' — ' + (state.catalog ? (state.processed || 0) + ' pagini · produse parcurse: ' + (state.products_processed || 0) + ' · HIT confirmat: ' + (state.confirmed || 0) + ' · neconfirmat: ' + (state.unconfirmed || 0) + ' · ' + (state.phase === 'products' ? 'întregul catalog' : 'pagini prioritare') : (state.cursor || 0) + '/' + (state.urls || []).length) +
 			(data.next ? ' · Următoarea cerere: ' + new Date(data.next * 1000).toLocaleTimeString('ro-RO') : '') +
 			(data.cron_disabled ? ' · WP-Cron la vizite este dezactivat; este necesar cron-ul găzduirii.' : '');
 		results.replaceChildren();
 		for (const item of state.results || []) {
 			const row = document.createElement('tr');
-			for (const value of [item.url, item.http || 'Eroare', item.cache, item.ms + ' ms']) {
+			for (const value of [item.url, item.http || 'Eroare', item.cache + (item.cache === 'MISS' ? (item.verified === true ? ' → HIT' : item.verified === false ? ' · neconfirmat' : ' · se verifică') : ''), item.ms + ' ms' + (item.verify_ms !== undefined ? ' / verificare ' + item.verify_ms + ' ms' : '')]) {
 				const cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
 			}
 			results.appendChild(row);
@@ -75,7 +75,7 @@
 		buttons.forEach(button => { button.disabled = true; });
 		message.textContent = name.startsWith('profile') ? 'Măsurare în curs…' : 'Se procesează…';
 		try {
-			const data = name === 'save' ? {urls: form.elements.urls.value, enabled: form.elements.enabled.checked ? '1' : '0'} : {url: select.value};
+			const data = name === 'save' ? {urls: form.elements.urls.value, enabled: form.elements.enabled.checked ? '1' : '0', discover: form.elements.discover.checked ? '1' : '0'} : {url: select.value};
 			render(await request(name, data), name === 'save');
 			if (name === 'stop') form.elements.enabled.checked = false;
 			message.textContent = 'Operațiune finalizată.';

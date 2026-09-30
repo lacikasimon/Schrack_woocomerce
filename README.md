@@ -464,8 +464,11 @@ Responsive preload follows the [browser guidance](https://web.dev/articles/prelo
 ## Store response time tools (v0.1.92)
 
 **WooCommerce → Performanță magazin** provides an optional public page warmer.
-Save 1–20 canonical URLs (home, shop, public products or product categories) and
-enable the hourly cycle, or start a single run. One anonymous GET is made per minute;
+Save 1–100 canonical priority URLs (home, shop, public products or product categories) and
+enable the hourly cycle, or start a single run. Since v0.1.100, each minute's job
+makes up to 10 sequential anonymous GETs with a soft 15-second budget checked
+between requests (individual timeout: 20 seconds). Responses taking five seconds
+or more end that batch immediately;
 failed requests wait five minutes and three consecutive failures stop the run.
 The stop button also disables future automatic runs. Redirects, query parameters,
 foreign hosts, account/checkout pages and hidden/password protected products are
@@ -479,8 +482,32 @@ hosting cron calling WordPress every minute is recommended (no SSH is necessary 
 configure it in cPanel). Full LiteSpeed page purges trigger a delayed, coalesced
 warmup when automation is enabled. The warmer does not change cache TTLs, cache
 eligibility, price/stock invalidation or the native crawler's server configuration.
-Pages outside the bounded list and personalized requests still need normal PHP
-rendering. Deactivation clears the warmer's scheduled jobs.
+Personalized requests still need normal PHP rendering. Deactivation clears the
+warmer's scheduled jobs.
+
+### All-product preload (v0.1.100)
+
+Enable **Preîncălzește toate produsele publice** on that same admin screen to scan
+every published, password-free product whose catalogue visibility is `visible` or
+`catalog` or `search`. There is no total product limit. Home and the canonical WooCommerce
+shop run first, followed by manual priority URLs and up to 24 nonempty categories.
+Published product IDs are then scanned in pages of 100 using a saved ID cursor
+and the actual WordPress posts table. At most three empty/hidden pages are scanned
+per job. No full catalogue URL list is kept in memory.
+
+Progress survives closed browser tabs and interrupted workers; an hourly trigger
+does not reset a scan already running. Full page-cache purges queue a priority
+refresh with a five-minute cooldown. A long product scan resumes from its saved
+place afterwards, then repeats the product pass to cover pages visited before
+the purge. Disabling automation with the stop button cancels scheduled work.
+
+An initial `MISS` gets exactly one confirmation GET: only a real subsequent `HIT`
+is reported as `MISS → HIT`. Repeated MISS responses remain unconfirmed. The UI
+shows processed product visits, confirmed/unconfirmed page visits and the latest
+100 results. Counts include repeat visits after a purge, not distinct products.
+Large catalogues can take several hours depending on server response time. This
+uses the existing page cache and minute hosting cron; it does not require enabling
+the native LiteSpeed crawler in WHM or installing a second page-cache plugin.
 
 The same screen can measure one saved URL without cache. A one-use, 60-second
 ticket bound to the requested URI authorizes the anonymous measurement; results

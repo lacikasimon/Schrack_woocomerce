@@ -10,12 +10,12 @@ function harness() {
 	for (const name of ['schrack-cache-warmer','schrack-cache-form','schrack-cache-message','schrack-cache-status','schrack-cache-results','schrack-profile-url','schrack-profile-result']) elements[name] = element();
 	const buttons = ['start','stop','profile'].map(command=>Object.assign(element(),{dataset:{command}}));
 	elements['schrack-cache-warmer'].querySelectorAll=()=>buttons;
-	elements['schrack-cache-form'].elements={urls:{value:'unsaved input'},enabled:{checked:false}};
+	elements['schrack-cache-form'].elements={urls:{value:'unsaved input'},enabled:{checked:false},discover:{checked:true}};
 	const document = {hidden:false,getElementById:n=>elements[n],createElement:element,addEventListener:(k,f)=>listeners[k]=f};
 	const context = {document,URLSearchParams,AbortController,schrackCacheWarmer:{ajax:'/ajax',nonce:'nonce'},setTimeout:(f,ms)=>{timers.set(++id,{f,ms});return id;},clearTimeout:n=>timers.delete(n),fetch:(url,args)=>{calls.push(Object.fromEntries(args.body));return new Promise((resolve,reject)=>pending.push({resolve,reject}));}};
 	vm.runInNewContext(fs.readFileSync(require.resolve('../assets/admin-cache-warmer.js'),'utf8'),context);
 	const flush = async()=>{for(let i=0;i<8;i++) await Promise.resolve();};
-	const resolve = async(state='running')=>{pending.shift().resolve({ok:true,json:async()=>({success:true,data:{state:{status:state,urls:['/'],cursor:0,results:[]},config:{urls:['/']}}})});await flush();};
+	const resolve = async(state='running', extra={})=>{pending.shift().resolve({ok:true,json:async()=>({success:true,data:{state:{status:state,urls:['/'],cursor:0,results:[],...extra},config:{urls:['/']}}})});await flush();};
 	const fire = async()=>{const entry=[...timers].find(([,t])=>t.ms!==35000);if(entry){timers.delete(entry[0]);entry[1].f();await flush();}};
 	return {timers,pending,calls,listeners,elements,buttons,document,flush,resolve,fire};
 }
@@ -36,4 +36,13 @@ test('uncertain mutation is reconciled without automatic replay',async()=>{
 test('status failures back off with visible feedback',async()=>{
 	const h=harness();h.pending.shift().reject(new Error('offline'));await h.flush();assert.ok([...h.timers.values()].some(t=>t.ms===8000));
 	await h.fire();h.pending.shift().reject(new Error('offline'));await h.flush();assert.ok([...h.timers.values()].some(t=>t.ms===16000));assert.match(h.elements['schrack-cache-status'].textContent,/offline/);
+});
+test('all-product save and asynchronous coverage preserve the priority input',async()=>{
+	const h=harness();await h.resolve('idle');h.elements['schrack-cache-form'].events.submit({preventDefault(){}});await h.flush();
+	assert.equal(h.calls[1].command,'save');assert.equal(h.calls[1].discover,'1');assert.equal(h.calls[1].urls,'unsaved input');
+	await h.resolve('running',{catalog:true,phase:'products',processed:150,products_processed:125,confirmed:149,unconfirmed:1,results:[{url:'/p/',http:200,cache:'MISS',verified:true,ms:1500,verify_ms:25},{url:'/q/',http:200,cache:'MISS',verified:false,ms:1400}]});
+	assert.match(h.elements['schrack-cache-status'].textContent,/produse parcurse: 125.*HIT confirmat: 149/);
+	assert.equal(h.elements['schrack-cache-results'].children[0].children[2].textContent,'MISS → HIT');
+	assert.equal(h.elements['schrack-cache-results'].children[1].children[2].textContent,'MISS · neconfirmat');
+	assert.equal(h.elements['schrack-cache-form'].elements.urls.value,'unsaved input');
 });
