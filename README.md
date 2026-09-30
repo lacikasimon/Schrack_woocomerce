@@ -466,7 +466,8 @@ Responsive preload follows the [browser guidance](https://web.dev/articles/prelo
 **WooCommerce → Performanță magazin** provides an optional public page warmer.
 Save 1–100 canonical priority URLs (home, shop, public products or product categories) and
 enable the hourly cycle, or start a single run. Since v0.1.100, each minute's job
-makes up to 10 sequential anonymous GETs with a soft 15-second budget checked
+makes up to 50 sequential anonymous GETs (v0.1.101), but limits each job to
+five pages without an initial HIT with a soft 15-second budget checked
 between requests (individual timeout: 20 seconds). Responses taking five seconds
 or more end that batch immediately;
 failed requests wait five minutes and three consecutive failures stop the run.
@@ -505,7 +506,7 @@ An initial `MISS` gets exactly one confirmation GET: only a real subsequent `HIT
 is reported as `MISS → HIT`. Repeated MISS responses remain unconfirmed. The UI
 shows processed product visits, confirmed/unconfirmed page visits and the latest
 100 results. Counts include repeat visits after a purge, not distinct products.
-Large catalogues can take several hours depending on server response time. This
+Large catalogues can take hours or days depending on server response time. This
 uses the existing page cache and minute hosting cron; it does not require enabling
 the native LiteSpeed crawler in WHM or installing a second page-cache plugin.
 

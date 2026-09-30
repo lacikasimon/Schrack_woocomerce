@@ -74,7 +74,7 @@ $urls = array_merge(array(home_url('/'),home_url('/product/lamp/'),home_url('/ca
 check(ajax('save', array('urls'=>implode("\n",$urls),'enabled'=>'1'))->ok, 'Save starts enabled warming.');
 check(isset($events[Schrack_Cache_Warmer::CYCLE], $events[Schrack_Cache_Warmer::TICK]), 'Hourly and tick jobs scheduled.');
 $warm->tick();
-check(10 === count($requests) && 5 === $options[Schrack_Cache_Warmer::STATE]['cursor'], 'Each job is bounded to ten sequential requests, including MISS verification.');
+check(10 === count($requests) && 5 === $options[Schrack_Cache_Warmer::STATE]['cursor'], 'A cold job is bounded to five page builds and their confirmation requests.');
 check(array(home_url('/'),home_url('/shop/')) === array_slice($options[Schrack_Cache_Warmer::STATE]['urls'],0,2),'Home and shop must precede manual product selections.');
 check($events[Schrack_Cache_Warmer::TICK] === $now + 60, 'One-minute spacing.');
 check(array() === $requests[0][1]['cookies'] && 0 === $requests[0][1]['redirection'], 'No sessions or redirects.');
@@ -139,6 +139,8 @@ check('complete' === $state['status'] && 228 === $state['products_processed'],'A
 check(100 === count($state['results']) && 329 === $state['product_after'],'Persist only bounded recent results and the durable product cursor.');
 check(count($GLOBALS['catalog_sql'])>=3 && str_contains($GLOBALS['catalog_sql'][0],'custom_posts') && str_contains($GLOBALS['catalog_sql'][1],'ID > 199'),'Keyset pages use actual table names and advance after the last scanned ID.');
 check($state['confirmed']===$state['processed'] && 0 === $state['unconfirmed'],'Only explicit HIT responses contribute to confirmed coverage.');
+ajax('save',array('urls'=>home_url('/'),'enabled'=>'1','discover'=>'1'));$before=count($requests);$warm->tick();
+check(50===count($requests)-$before,'Fast cached responses advance up to fifty pages while cold batches remain limited to five builds.');
 // A MISS gets exactly one later GET and becomes confirmed only when that GET is HIT.
 $GLOBALS['catalog_ids']=array(); $GLOBALS['hidden_ids']=array(); $seen=array();
 $GLOBALS['response_factory']=function($url) use (&$seen) { $n=($seen[$url] ?? 0)+1;$seen[$url]=$n;return array('code'=>200,'cache'=>$n===1?'miss':'hit'); };

@@ -9,7 +9,8 @@ final class Schrack_Cache_Warmer {
 	public const CYCLE = 'schrack_cache_warm_cycle';
 	public const REWARM = 'schrack_cache_rewarm';
 	public const LIMIT = 100;
-	public const BATCH_REQUESTS = 10;
+	public const BATCH_REQUESTS = 50;
+	public const BATCH_COLD_PAGES = 5;
 	public const BATCH_SECONDS = 15;
 	public const CATALOG_BATCH = 100;
 
@@ -42,8 +43,8 @@ final class Schrack_Cache_Warmer {
 		<div class="wrap" id="schrack-cache-warmer">
 			<h1>Performanță magazin</h1>
 			<?php if ( Schrack_Cache_Invalidation::is_active() ) { ?><p><strong>Protecția cache-ului tehnic este activă:</strong> modificările de categorii și atribute invalidează paginile, păstrând cache-ul CSS/JS, Redis și OPcache.</p><?php } ?>
-			<p>Preîncălzește lista prioritară și, opțional, toate produsele publice, în loturi de cel mult 10 cereri succesive. Bugetul de 15 secunde este verificat între cereri; o cerere poate dura cel mult 20 de secunde. Pagina principală și magazinul au prioritate. Nu trimite cookie-uri. Rulează în fundal și după închiderea acestei pagini.</p>
-			<p>Necesită cache de pagină activ și WP-Cron funcțional. Pentru pornire regulată folosește un cron al găzduirii. Un catalog mare poate necesita câteva ore; starea se păstrează între loturi. Paginile personalizate nu sunt preîncălzite.</p>
+			<p>Preîncălzește lista prioritară și, opțional, toate produsele publice, în loturi de cel mult 50 de cereri succesive, cu cel mult 5 pagini fără HIT pe lot. Bugetul de 15 secunde este verificat între cereri; o cerere poate dura cel mult 20 de secunde. Pagina principală și magazinul au prioritate. Nu trimite cookie-uri. Rulează în fundal și după închiderea acestei pagini.</p>
+			<p>Necesită cache de pagină activ și WP-Cron funcțional. Pentru pornire regulată folosește un cron al găzduirii. Un catalog mare poate necesita ore sau zile; starea se păstrează între loturi. Paginile personalizate nu sunt preîncălzite.</p>
 			<form id="schrack-cache-form">
 				<p><label><input type="checkbox" name="enabled" <?php checked( $config['enabled'] ); ?>> Preîncălzire automată la fiecare oră și după golirea cache-ului de pagini</label></p>
 				<p><label><input type="checkbox" name="discover" <?php checked( $config['discover'] ); ?>> Preîncălzește toate produsele publice și adaugă 24 de categorii principale</label></p>
@@ -241,6 +242,7 @@ final class Schrack_Cache_Warmer {
 			if ( 'running' !== ( $state['status'] ?? '' ) ) { return; }
 			$this->schedule_tick( 180 ); // Watchdog survives process death.
 			$batch_start = microtime( true );
+			$cold_pages = 0;
 			if ( ! empty( $state['priority_pending'] ) && ! isset( $state['verify_index'] ) ) {
 				if ( ! isset( $state['resume'] ) ) { $state['resume'] = array_intersect_key( $state, array_flip( array( 'urls', 'cursor', 'phase' ) ) ); }
 				$state['urls'] = $state['priority_pending']; $state['cursor'] = 0; $state['phase'] = 'priority_refresh';
@@ -273,6 +275,7 @@ final class Schrack_Cache_Warmer {
 					$state[ $key ] = (int) ( $state[ $key ] ?? 0 ) + 1;
 					unset( $state['verify_index'], $state['verify_url'] ); // Exactly one confirmation request.
 				} else {
+					if ( 'hit' !== $cache ) { ++$cold_pages; }
 					$state['results'][] = array( 'url' => $raw_url, 'http' => $code,
 						'cache' => in_array( $cache, array( 'hit', 'miss' ), true ) ? strtoupper( $cache ) : 'NECONFIRMAT',
 						'ms' => $ms, 'verified' => 200 === $code && 'hit' === $cache ? true : null,
@@ -299,7 +302,8 @@ final class Schrack_Cache_Warmer {
 				}
 				update_option( self::STATE, $state, false );
 				// Never issue concurrent requests. Slow/error responses end this batch.
-				if ( 'running' !== $state['status'] || 200 !== $code || $ms >= 5000 || microtime( true ) - $batch_start >= self::BATCH_SECONDS ) { break; }
+				if ( 'running' !== $state['status'] || 200 !== $code || $ms >= 5000 || microtime( true ) - $batch_start >= self::BATCH_SECONDS
+					|| ( $cold_pages >= self::BATCH_COLD_PAGES && ! isset( $state['verify_index'] ) ) ) { break; }
 			}
 			update_option( self::STATE, $state, false );
 			wp_clear_scheduled_hook( self::TICK );
