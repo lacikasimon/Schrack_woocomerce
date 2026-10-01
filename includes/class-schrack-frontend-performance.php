@@ -689,7 +689,19 @@ class Schrack_Frontend_Performance {
 		if ( ! $root || ! $path || ! str_starts_with( $path, $root . DIRECTORY_SEPARATOR ) || ! is_readable( $path )
 			|| filesize( $path ) < 512 || filesize( $path ) > 32768 ) { return null; }
 		$code = file_get_contents( $path );
-		return is_string( $code ) && ! preg_match( '~</script|<\?php|\x00~i', $code ) ? $code : null;
+		if ( ! is_string( $code ) || preg_match( '~</script|<\?php|\x00~i', $code ) ) { return null; }
+		return 'cookieadmin_js' === $handle ? $this->preserve_rendered_consent_text( $code ) : $code;
+	}
+
+	/** Keep existing text nodes when native startup repeats our early banner's exact HTML. */
+	private function preserve_rendered_consent_text( string $code ): string {
+		$assignment = 'd_ele.innerHTML = cookieadmin_policy[data];';
+		if ( ! apply_filters( 'schrack_wc_sync_preserve_early_consent_text', true )
+			|| '445198c7468cebf39061215360595f4d21e234d059295759327ad35a754b6646' !== hash( 'sha256', $code )
+			|| 1 !== substr_count( $code, $assignment ) ) { return $code; }
+		// Every different value and every modal/native-only element keeps the original write.
+		$guard = "if (!document.getElementById('schrack-early-consent-banner') || !d_ele.closest('.cookieadmin_law_container.cookieadmin_box') || d_ele.innerHTML !== String(cookieadmin_policy[data])) { " . $assignment . ' }';
+		return str_replace( $assignment, $guard, $code );
 	}
 
 	private function inline_native_consent_tag( string $tag, string $handle ): ?string {

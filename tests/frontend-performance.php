@@ -437,7 +437,19 @@ try {
 		$original='<script id="'.$handle.'-js" nonce="original-csp-nonce" src="'.plugins_url($relative).'?ver=1.2.2" defer></script>';
 		$inlined=$performance->script_tag($original,$handle);
 		verify_image(str_contains($inlined,'nonce="original-csp-nonce"')&&!str_contains($inlined,' src=')&&!str_contains($inlined,' defer'),'Native script inlining retains CSP nonce without downloading or deferring a second copy.');
-		verify_image(str_contains($inlined,'>'.$native_code.'</script>'),'All native consent code survives inlining byte for byte, including replacement-like characters.');
+		$assignment='d_ele.innerHTML = cookieadmin_policy[data];';
+		$guard="if (!document.getElementById('schrack-early-consent-banner') || !d_ele.closest('.cookieadmin_law_container.cookieadmin_box') || d_ele.innerHTML !== String(cookieadmin_policy[data])) { ".$assignment.' }';
+		$known_core=$handle==='cookieadmin_js'&&hash('sha256',$native_code)==='445198c7468cebf39061215360595f4d21e234d059295759327ad35a754b6646';
+		verify_image(str_contains($known_core?str_replace($guard,$assignment,$inlined):$inlined,'>'.$native_code.'</script>'),'Native code is byte-identical apart from the inspected repeat-text assignment; Pro and unknown sources stay unchanged.');
+		if($known_core){
+			verify_image(substr_count($inlined,$guard)===1,'Only the known native startup assignment receives the early-banner guard.');
+			add_filter('schrack_wc_sync_preserve_early_consent_text','__return_false');
+			verify_image(str_contains($performance->script_tag($original,$handle),'>'.$native_code.'</script>'),'Text guard rollback restores every native source byte.');
+			remove_filter('schrack_wc_sync_preserve_early_consent_text','__return_false');
+			file_put_contents(WP_PLUGIN_DIR.'/'.$relative,$native_code."\n// Vendor hotfix");
+			verify_image(str_contains($performance->script_tag($original,$handle),'>'.$native_code."\n// Vendor hotfix</script>"),'Same-version vendor hotfixes retain their unmodified native text updates.');
+			file_put_contents(WP_PLUGIN_DIR.'/'.$relative,$native_code);
+		}
 		verify_image($inlined===$performance->script_tag($inlined,$handle),'Already inline native consent is idempotent.');
 		$scripts->registered[$handle]->ver='1.2.3';
 		verify_image(str_contains($performance->script_tag($original,$handle),' src='),'Updated vendor versions retain native external script execution.');

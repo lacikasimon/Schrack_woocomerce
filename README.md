@@ -852,13 +852,25 @@ Rollback: `schrack_wc_sync_onetap_markup_on_demand` set to false.
 ### Native CookieAdmin assets inline (0.1.126)
 
 On catalog pages, the two inspected native CookieAdmin 1.2.2 scripts can execute
-as their original header scripts directly in the response. Their contents,
+as their original header scripts directly in the response. Their native behavior,
 localization/dependency order and CSP nonce are preserved; native functions
 still perform every consent save, Pro log and Google bridge callback. This
 removes two network requests competing with the hero image. No unused script
 preload is emitted for an inline source. Custom URLs, integrity-protected tags,
 unknown versions or source files retain native external loading.
 Rollback: `schrack_wc_sync_inline_native_consent` set to false.
+
+### Preserve already rendered consent text (0.1.136)
+
+The exact inspected CookieAdmin 1.2.2 core source rewrites all localized HTML
+at DOMContentLoaded, including our already populated early notice. One source
+assignment now skips identical HTML only inside the native box when our early
+bootstrap exists. This preserves its text nodes and avoids a redundant late
+render. Changed text, modal elements, colors, consent saves, Pro logging and
+saved preferences retain native handling. A SHA-256 guard leaves modified or
+updated vendor sources untouched; no installed vendor file is edited.
+Rollback: `schrack_wc_sync_preserve_early_consent_text` set to false.
+Verification: `node tests/native-consent-text.js /path/to/cookieadmin/assets/js/consent.js`.
 
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 
