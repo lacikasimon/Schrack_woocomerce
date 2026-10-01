@@ -47,4 +47,15 @@ $r=renderer($policy,$pro);$custom=str_replace('<p id="cookieadmin_notice"></p>',
 $scripts->registered['cookieadmin_js']->src='https://cdn.example/consent.js';$r=renderer($policy,$pro);verify_image($markup===$r->render($markup),'Replaced vendor scripts retain native rendering.');
 $scripts->registered['cookieadmin_js']->src=plugins_url('cookieadmin/assets/js/consent.js');
 add_filter('schrack_wc_sync_early_consent_banner','__return_false');$r=renderer($policy,$pro);verify_image($markup===$r->render($markup),'Rollback restores native markup and startup.');
+$logo_renderer = new Schrack_Consent_Renderer();
+$logo_url = 'https://shop.example/uploads/schrack-frontend-cache/consent-assets/known.svg';
+(new ReflectionProperty($logo_renderer,'brand_image'))->setValue($logo_renderer,$logo_url);
+$sanitized_logo = wp_kses_post('<img src="'.$logo_url.'" width="90" height="15" alt="" loading="lazy" decoding="async" fetchpriority="low">');
+$restored_logo = $logo_renderer->brand_image_attributes($sanitized_logo);
+verify_image(str_contains($restored_logo,'decoding="async"')&&str_contains($restored_logo,'fetchpriority="low"'),'Only our cached brand image restores loading hints after native sanitization.');
+verify_image($restored_logo===$logo_renderer->brand_image_attributes($restored_logo),'Restoring exact brand hints is idempotent.');
+foreach(array(str_replace('known.svg','custom.svg',$sanitized_logo),str_replace('loading="lazy"','loading="eager"',$sanitized_logo))as $other){verify_image($other===$logo_renderer->brand_image_attributes($other),'Other images and deliberate eager loading retain original attributes.');}
+add_filter('schrack_wc_sync_cache_consent_brand','__return_false');
+verify_image($sanitized_logo===$logo_renderer->brand_image_attributes($sanitized_logo),'Brand rollback also retains original final HTML attributes.');
+remove_filter('schrack_wc_sync_cache_consent_brand','__return_false');
 echo "Consent renderer total: {$checks} checks passed.\n";

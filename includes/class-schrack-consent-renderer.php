@@ -13,6 +13,7 @@ class Schrack_Consent_Renderer {
 		add_filter( 'cookieadmin_after_banner', array( $this, 'render' ), 20 );
 		add_action( 'wp_footer', array( $this, 'bootstrap' ), 11 );
 		add_action( 'wp_body_open', array( $this, 'body_banner' ), 1 );
+		add_filter( 'litespeed_buffer_finalize', array( $this, 'brand_image_attributes' ), 34 );
 	}
 
 	/** Only the inspected worldwide box banner without a GPC override is eligible. */
@@ -128,6 +129,20 @@ class Schrack_Consent_Renderer {
 			}
 			if ( '' === $this->brand_image ) { return $match[0]; }
 			return $match[1] . '<img src="' . esc_url( $this->brand_image ) . '" width="90" height="15" alt="" loading="lazy" decoding="async" fetchpriority="low">';
+		}, $html ) ?? $html;
+	}
+
+	/** Native WordPress sanitization strips newer hints; restore them only on our exact asset. */
+	public function brand_image_attributes( string $html ): string {
+		if ( ! $this->brand_image || ! class_exists( 'WP_HTML_Tag_Processor' ) || strlen( $html ) > 4194304
+			|| ! apply_filters( 'schrack_wc_sync_cache_consent_brand', true ) ) { return $html; }
+		return preg_replace_callback( '~<img\b[^>]*>~i', function( $match ) {
+			$tag = new WP_HTML_Tag_Processor( $match[0] );
+			if ( ! $tag->next_tag( 'IMG' ) || $this->brand_image !== $tag->get_attribute( 'src' )
+				|| 'lazy' !== $tag->get_attribute( 'loading' ) ) { return $match[0]; }
+			$tag->set_attribute( 'decoding', 'async' );
+			$tag->set_attribute( 'fetchpriority', 'low' );
+			return $tag->get_updated_html();
 		}, $html ) ?? $html;
 	}
 

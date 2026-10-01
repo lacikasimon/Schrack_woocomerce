@@ -903,6 +903,9 @@ remain intact. The image uses lazy loading and low priority. Atomic local writes
 occur only when the hash-named asset is missing or corrupted; no external
 download or image conversion runs. Unknown/custom logos, failed filesystem
 writes, unsupported consent configurations and rollback retain native inline SVG.
+Native WordPress sanitization on the inspected installation removes newer image
+attributes; 0.1.141 restores asynchronous decoding and low fetch priority only
+on the exact cache URL, after sanitization. Eager/custom images stay untouched.
 Rollback: `schrack_wc_sync_cache_consent_brand` set to false.
 
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
