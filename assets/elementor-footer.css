@@ -15,6 +15,26 @@
 	width: 100%;
 }
 
+/* Offscreen catalog footer stays searchable and focusable in the original DOM. */
+@media screen {
+	@supports (content-visibility: auto) {
+		body:not(.elementor-editor-active) .schrack-footer--defer-render {
+			content-visibility: auto;
+			contain-intrinsic-block-size: auto 1350px;
+		}
+		@media (max-width: 1024px) {
+			body:not(.elementor-editor-active) .schrack-footer--defer-render {
+				contain-intrinsic-block-size: auto 1800px;
+			}
+		}
+		@media (max-width: 720px) {
+			body:not(.elementor-editor-active) .schrack-footer--defer-render {
+				contain-intrinsic-block-size: auto 2400px;
+			}
+		}
+	}
+}
+
 .schrack-footer *,
 .schrack-footer *::before,
 .schrack-footer *::after {

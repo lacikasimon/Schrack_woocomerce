@@ -893,3 +893,15 @@ with footer placement. Single products therefore keep the original vendor
 footer placement; early body placement remains available elsewhere. Native
 source-only placement tests cover the product fallback as well. Scores and
 load times are samples, not guarantees for all visitors.
+
+### Offscreen catalog footer rendering (0.1.130)
+
+The original footer DOM, legal links, funding notices and images remain in
+the response. On catalog pages only, supporting browsers can postpone its
+offscreen layout and paint using `content-visibility:auto`. Responsive
+intrinsic block heights reserve space; `auto` retains the actual height
+after first render. The browser reveals content as it approaches the
+viewport or receives focus. Print, editor/preview, non-catalog pages and
+unsupported browsers retain ordinary rendering. No visibility hiding or
+network-dependent replacement is used.
+Rollback: `schrack_wc_sync_defer_footer_render` set to false.
