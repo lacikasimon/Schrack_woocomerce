@@ -927,6 +927,16 @@ now use low fetch priority so these small supporting images compete less with
 the high-priority product or category artwork during the initial mobile load.
 This is a scheduling hint, not a measured promise of a particular score.
 
+### Featured-category navigation startup (0.1.145)
+
+The category navigation initializes its sticky sentinel after an initial paint,
+with immediate fallback for hidden pages or browsers without animation frames.
+It also initializes if the script arrives after DOM readiness. Intersection
+entries now fix the navigation only after the hero has passed above the viewport;
+a hero still below the viewport keeps its normal layout. Elementor initialization
+and duplicate calls retain one observer per widget. Check:
+`node tests/featured-category-navigation.js`.
+
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 
 LiteSpeed 7.9.1's final font-face pass overrides even styles marked

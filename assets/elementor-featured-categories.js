@@ -28,7 +28,8 @@
 		var observer = new IntersectionObserver(
 			function (entries) {
 				entries.forEach(function (entry) {
-					nav.classList.toggle('is-fixed', !entry.isIntersecting);
+						// A hero below the viewport has not been scrolled past yet.
+						nav.classList.toggle('is-fixed', !entry.isIntersecting && entry.boundingClientRect.bottom <= 0);
 				});
 			},
 			{ threshold: 0 }
@@ -43,9 +44,23 @@
 		Array.prototype.forEach.call(scope.querySelectorAll('[data-schrack-fcat]'), initNav);
 	}
 
-	document.addEventListener('DOMContentLoaded', function () {
-		initAll(document);
-	});
+	function ready() {
+		// The category artwork is already eager. Yield its initial paint before
+		// inserting the sticky-nav sentinel and starting intersection observation.
+		if (document.hidden || typeof window.requestAnimationFrame !== 'function') {
+			initAll(document);
+			return;
+		}
+		window.requestAnimationFrame(function () {
+			window.requestAnimationFrame(function () { initAll(document); });
+		});
+	}
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', ready, { once: true });
+	} else {
+		ready();
+	}
 
 	if (window.elementorFrontend && window.elementorFrontend.hooks) {
 		window.elementorFrontend.hooks.addAction('frontend/element_ready/schrack_featured_categories.default', function ($scope) {
