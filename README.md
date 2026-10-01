@@ -870,3 +870,17 @@ compatibility pass after the native optimizer restores their existing
 position. Native icon fonts, unmarked styles, checkout, account and editor
 previews retain their original handling. No LiteSpeed setting is saved.
 Rollback: `schrack_wc_sync_optional_catalog_fonts` set to false.
+
+### Native consent markup before the catalog body (0.1.128)
+
+For the already inspected CookieAdmin 1.2.2 worldwide box contract, themes
+with `wp_body_open` can output the original vendor renderer at that hook.
+The same localized policy, vendor escaping, preferences modal and controls
+are retained. The first-visitor bootstrap then runs immediately after it,
+before large menu/catalog/footer HTML; saved choices remain hidden. The
+vendor callback and bootstrap each execute once. Themes without the hook,
+custom callback sources/priorities, unsupported policies and rollback keep
+the original footer renderer. No consent is saved by moving the markup.
+Rollback: `schrack_wc_sync_body_consent_banner` set to false.
+Source-only native placement check: `php tests/consent-banner-placement.php
+/path/to/wordpress /path/to/cookieadmin-parent`.

@@ -5,11 +5,13 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 class Schrack_Consent_Renderer {
 	private array $policy = array();
 	private bool $rendered = false;
+	private bool $bootstrapped = false;
 
 	public function init(): void {
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure' ), 115 );
 		add_filter( 'cookieadmin_after_banner', array( $this, 'render' ), 20 );
 		add_action( 'wp_footer', array( $this, 'bootstrap' ), 11 );
+		add_action( 'wp_body_open', array( $this, 'body_banner' ), 1 );
 	}
 
 	/** Only the inspected worldwide box banner without a GPC override is eligible. */
@@ -36,6 +38,22 @@ class Schrack_Consent_Renderer {
 			if ( ! is_string( $policy[ $key ] ?? null ) || '' === trim( $policy[ $key ] ) || strlen( $policy[ $key ] ) > 4096 ) { return; }
 		}
 		$this->policy = $policy;
+	}
+
+	/** Themes without wp_body_open retain the native footer callback unchanged. */
+	public function body_banner(): void {
+		$callback = '\\CookieAdmin\\Enduser::cookieadmin_show_banner';
+		if ( ! $this->policy || $this->rendered || is_admin() || is_preview()
+			|| ! apply_filters( 'schrack_wc_sync_body_consent_banner', true )
+			|| 10 !== has_action( 'wp_footer', $callback ) || ! is_callable( $callback )
+			|| ! defined( 'WP_PLUGIN_DIR' ) ) { return; }
+		$expected = realpath( WP_PLUGIN_DIR . '/cookieadmin/includes/enduser.php' );
+		$method = new ReflectionMethod( 'CookieAdmin\\Enduser', 'cookieadmin_show_banner' );
+		if ( ! $expected || realpath( $method->getFileName() ) !== $expected ) { return; }
+		// Call the original renderer once, including its sanitization and filters.
+		remove_action( 'wp_footer', $callback, 10 );
+		$callback();
+		$this->bootstrap();
 	}
 
 	private function configuration( mixed $data, string $name ): ?array {
@@ -75,10 +93,11 @@ class Schrack_Consent_Renderer {
 
 	/** Runs just after the native footer markup, before deferred scripts finish. */
 	public function bootstrap(): void {
-		if ( ! $this->rendered ) { return; }
+		if ( ! $this->rendered || $this->bootstrapped ) { return; }
 		$path = SCHRACK_WC_SYNC_PATH . 'assets/frontend-consent-banner.js';
 		$js = is_readable( $path ) ? file_get_contents( $path ) : false;
 		if ( is_string( $js ) && strlen( $js ) <= 8192 ) {
+			$this->bootstrapped = true;
 			wp_print_inline_script_tag( $js, array( 'id' => 'schrack-early-consent-banner', 'data-no-optimize' => '1', 'data-no-defer' => '1' ) );
 		}
 	}
