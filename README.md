@@ -893,6 +893,18 @@ product filters, category archives and AJAX responses keep their existing
 handling. The inspected shop response contained 322 hidden category cards.
 Rollback: `schrack_wc_sync_skip_hidden_shop_explorer` set to false.
 
+### Cache the unchanged native consent logo (0.1.140)
+
+The inspected CookieAdmin 1.2.2 logo embeds two PNG bitmaps in a 26 KiB SVG,
+repeated in the notice and preferences. Its exact source checksum can now map
+both copies to one static SVG under `uploads/schrack-frontend-cache/consent-assets`.
+The original SVG bytes, native link, attribution, 90 × 15 dimensions and controls
+remain intact. The image uses lazy loading and low priority. Atomic local writes
+occur only when the hash-named asset is missing or corrupted; no external
+download or image conversion runs. Unknown/custom logos, failed filesystem
+writes, unsupported consent configurations and rollback retain native inline SVG.
+Rollback: `schrack_wc_sync_cache_consent_brand` set to false.
+
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 
 LiteSpeed 7.9.1's final font-face pass overrides even styles marked

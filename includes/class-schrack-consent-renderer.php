@@ -6,6 +6,7 @@ class Schrack_Consent_Renderer {
 	private array $policy = array();
 	private bool $rendered = false;
 	private bool $bootstrapped = false;
+	private ?string $brand_image = null;
 
 	public function init(): void {
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure' ), 115 );
@@ -86,10 +87,48 @@ class Schrack_Consent_Renderer {
 					$tags->add_class( 'cookieadmin_' . $position );
 				}
 				$this->rendered = true;
-				return $tags->get_updated_html();
+				return $this->cache_brand_image( $tags->get_updated_html() );
 			}
 		}
 		return $html;
+	}
+
+	/** Keep native attribution while moving its two identical embedded bitmaps out of HTML. */
+	private function cache_brand_image( string $html ): string {
+		if ( ! apply_filters( 'schrack_wc_sync_cache_consent_brand', true ) ) { return $html; }
+		return preg_replace_callback( '~(<div class="cookieadmin-poweredby"><a\b[^>]*>\s*<span\b[^>]*>[^<]*</span>\s*)(<svg\b[^>]*>.*?</svg>)~s', function( $match ) {
+			$svg = $match[2];
+			$key = 'c54148c69663f803341e944d6b858209d9f875ecda7fe75d43fe99056f6517bb';
+			if ( $key !== hash( 'sha256', $svg ) ) { return $match[0]; }
+			if ( null === $this->brand_image ) {
+				$this->brand_image = '';
+				$uploads = wp_upload_dir( null, false );
+				if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] ) ) { return $match[0]; }
+				$relative = '/schrack-frontend-cache/consent-assets';
+				$directory = $uploads['basedir'] . $relative;
+				$target = $directory . '/' . $key . '.svg';
+				if ( is_link( $directory ) || is_link( $target )
+					|| ( ! is_dir( $directory ) && ! wp_mkdir_p( $directory ) ) ) { return $match[0]; }
+				$root = realpath( $uploads['basedir'] );
+				$resolved = realpath( $directory );
+				if ( ! $root || ! $resolved || ! str_starts_with( $resolved, $root . DIRECTORY_SEPARATOR ) ) { return $match[0]; }
+				if ( ! is_file( $target ) || $key !== hash_file( 'sha256', $target ) ) {
+					if ( ! is_writable( $directory ) ) { return $match[0]; }
+					// Atomic publication prevents another visitor reading an incomplete SVG.
+					$temp = tempnam( $directory, '.brand-' );
+					if ( false === $temp ) { return $match[0]; }
+					$written = file_put_contents( $temp, $svg, LOCK_EX );
+					if ( strlen( $svg ) !== $written || ! rename( $temp, $target ) ) {
+						if ( is_file( $temp ) ) { unlink( $temp ); }
+						return $match[0];
+					}
+					chmod( $target, 0644 );
+				}
+				$this->brand_image = $uploads['baseurl'] . $relative . '/' . $key . '.svg';
+			}
+			if ( '' === $this->brand_image ) { return $match[0]; }
+			return $match[1] . '<img src="' . esc_url( $this->brand_image ) . '" width="90" height="15" alt="" loading="lazy" decoding="async" fetchpriority="low">';
+		}, $html ) ?? $html;
 	}
 
 	/** Runs just after the native footer markup, before deferred scripts finish. */
