@@ -937,6 +937,12 @@ a hero still below the viewport keeps its normal layout. Elementor initializatio
 and duplicate calls retain one observer per widget. Check:
 `node tests/featured-category-navigation.js`.
 
+0.1.148 also yields header/footer initialization after an initial paint, following
+a mobile report attributing a 270 ms task to the header script. Hidden pages and
+older browsers retain immediate initialization. Already rendered regional slogan
+classes are not rewritten, and the bounded observer still labels later native
+consent buttons. Check: `node tests/elementor-header-labels.js`.
+
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 
 LiteSpeed 7.9.1's final font-face pass overrides even styles marked

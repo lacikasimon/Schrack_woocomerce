@@ -187,7 +187,8 @@
 			if (regional) {
 				firstChild = regional.firstElementChild;
 
-				if (firstChild && firstChild.tagName && firstChild.tagName.toLowerCase() === 'p') {
+				if (firstChild && firstChild.tagName && firstChild.tagName.toLowerCase() === 'p'
+					&& !firstChild.classList.contains('schrack-footer__regional-slogan')) {
 					firstChild.classList.add('schrack-footer__regional-slogan');
 				}
 
@@ -260,14 +261,22 @@
 		});
 	});
 
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', function () {
+	function ready() {
+		function start() {
 			initAll(document);
 			observeThirdPartyButtonLabels();
-		});
+		}
+		if (document.hidden || typeof window.requestAnimationFrame !== 'function') {
+			start();
+			return;
+		}
+		window.requestAnimationFrame(function () { window.requestAnimationFrame(start); });
+	}
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', ready, { once: true });
 	} else {
-		initAll(document);
-		observeThirdPartyButtonLabels();
+		ready();
 	}
 
 	if (window.elementorFrontend && window.elementorFrontend.hooks) {

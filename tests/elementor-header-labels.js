@@ -19,7 +19,7 @@ function element(className = '', children = [], label = '') {
 	};
 }
 
-function boot(initial = []) {
+function boot(initial = [], frames = false) {
 	let callback;
 	const body = element('', initial);
 	const document = {
@@ -31,9 +31,21 @@ function boot(initial = []) {
 		constructor(fn) { callback = fn; }
 		observe(node, options) { assert.equal(node, body); assert.deepEqual({...options}, {childList: true, subtree: true}); }
 	}
-	vm.runInNewContext(source, {document, window: {MutationObserver: Observer}, MutationObserver: Observer});
-	return {document, insert(...nodes) { callback([{addedNodes: nodes, removedNodes: []}]); }, mutation(records) { callback(records); }};
+	const queued = [];
+	const window = {MutationObserver: Observer};
+	if (frames) window.requestAnimationFrame = fn => queued.push(fn);
+	vm.runInNewContext(source, {document, window, MutationObserver: Observer});
+	return {document, frame() { const batch = queued.splice(0); batch.forEach(fn => fn()); }, insert(...nodes) { callback([{addedNodes: nodes, removedNodes: []}]); }, mutation(records) { callback(records); }};
 }
+
+test('initial header setup yields a paint; native and later inserted labels remain correct', () => {
+	const button = element('cookieadmin_re_consent');
+	const page = boot([button], true);
+	assert.equal(button.writes, 0); page.frame(); assert.equal(button.writes, 0);
+	page.frame(); assert.equal(button.getAttribute('aria-label'), 'Modifica preferintele cookie');
+	const inserted = element('cookieadmin_close_pref'); page.insert(inserted);
+	assert.equal(inserted.getAttribute('aria-label'), 'Inchide preferintele cookie');
+});
 
 test('existing native buttons get initial labels; explicit custom labels remain', () => {
 	const close = element('cookieadmin_close_pref');
