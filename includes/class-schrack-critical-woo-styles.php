@@ -9,8 +9,7 @@ class Schrack_Critical_Woo_Styles {
 
 	public function finalize( string $html ): string {
 		if ( is_admin() || is_preview() || isset( $_GET['elementor-preview'] )
-			|| ! ( is_front_page() || ( function_exists( 'is_shop' ) && is_shop() )
-				|| ( function_exists( 'is_product' ) && is_product() )
+			|| ! ( ( function_exists( 'is_shop' ) && is_shop() )
 				|| ( function_exists( 'is_product_taxonomy' ) && is_product_taxonomy() ) )
 			|| ! apply_filters( 'schrack_wc_sync_critical_woo_css', true )
 			|| ! class_exists( 'WP_HTML_Tag_Processor' ) || strlen( $html ) > 4194304

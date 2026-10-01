@@ -41,8 +41,8 @@ $fixture = sys_get_temp_dir() . '/schrack-css-' . bin2hex( random_bytes( 6 ) );
 define( 'WP_CONTENT_DIR', $fixture );
 function content_url( string $path = '' ): string { return 'https://shop.example/content' . $path; }
 function is_product(): bool { return $GLOBALS['catalog_test'] ?? false; }
-function is_shop(): bool { return false; }
-function is_product_taxonomy(): bool { return false; }
+function is_shop(): bool { return $GLOBALS['shop_test'] ?? false; }
+function is_product_taxonomy(): bool { return $GLOBALS['taxonomy_test'] ?? false; }
 function is_front_page(): bool { return $GLOBALS['front_page_test'] ?? false; }
 function is_preview(): bool { return $GLOBALS['preview_test'] ?? false; }
 $directory = $fixture . '/themes/hello-elementor/assets/css';

@@ -987,3 +987,24 @@ fallback, rollback and idempotence without WordPress boot, HTTP or a database.
 Run `node tests/frontend-woo-styles.js` for the native CSS activation sequence.
 Verify mobile/desktop computed styles and actual PageSpeed scores before claiming
 a performance improvement.
+
+### Measured CSS scope and Git deployment HTML refresh (0.1.135)
+
+Fresh 0.1.134 measurements reached 100 desktop / 97 mobile on the shop page.
+Home and product mobile LCP regressed, including a second product measurement,
+so these pages retain the previous full inline WooCommerce CSS. Critical-rule
+splitting is limited to shop and product taxonomy archives. All original CSS,
+source guards, dynamic rules and no-JS fallback remain available.
+
+Git deployments do not run WordPress upgrader hooks. After a version change,
+the first WordPress execution with the inspected LiteSpeed 7.9.1 purge API
+invalidates public HTML once and notifies the existing bounded warmer. CSS/JS,
+Redis and OPcache are retained. A nonblocking database connection lock prevents
+simultaneous requests from repeating the release; process death releases it.
+The version marker is written only after purge and warmer notification, and a
+Git rollback also refreshes HTML. Normal requests do not acquire a lock or
+restart warming. No user-controlled URL or public maintenance endpoint exists.
+Rollback: `schrack_wc_sync_purge_deployed_html` set to false. Verify with
+`php tests/cache-invalidation.php /path/to/wordpress-source` and fresh anonymous
+requests after a Git pull. Cached requests alone do not execute WordPress;
+the regular WordPress cron or an uncached request processes the new version.
