@@ -54,6 +54,8 @@ $sanitized_logo = wp_kses_post('<img src="'.$logo_url.'" width="90" height="15" 
 $restored_logo = $logo_renderer->brand_image_attributes($sanitized_logo);
 verify_image(str_contains($restored_logo,'decoding="async"')&&str_contains($restored_logo,'fetchpriority="low"'),'Only our cached brand image restores loading hints after native sanitization.');
 verify_image($restored_logo===$logo_renderer->brand_image_attributes($restored_logo),'Restoring exact brand hints is idempotent.');
+$lazy_logo = str_replace('src="'.$logo_url.'"','src="data:image/svg+xml;base64,placeholder" data-src="'.$logo_url.'"',$sanitized_logo);
+verify_image(str_contains($logo_renderer->brand_image_attributes($lazy_logo),'fetchpriority="low"'),'LiteSpeed placeholder images keep low priority when their exact data-src is the owned brand asset.');
 foreach(array(str_replace('known.svg','custom.svg',$sanitized_logo),str_replace('loading="lazy"','loading="eager"',$sanitized_logo))as $other){verify_image($other===$logo_renderer->brand_image_attributes($other),'Other images and deliberate eager loading retain original attributes.');}
 add_filter('schrack_wc_sync_cache_consent_brand','__return_false');
 verify_image($sanitized_logo===$logo_renderer->brand_image_attributes($sanitized_logo),'Brand rollback also retains original final HTML attributes.');

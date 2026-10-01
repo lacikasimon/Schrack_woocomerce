@@ -906,6 +906,7 @@ writes, unsupported consent configurations and rollback retain native inline SVG
 Native WordPress sanitization on the inspected installation removes newer image
 attributes; 0.1.141 restores asynchronous decoding and low fetch priority only
 on the exact cache URL, after sanitization. Eager/custom images stay untouched.
+0.1.142 also recognizes LiteSpeed's placeholder plus exact `data-src` form.
 Rollback: `schrack_wc_sync_cache_consent_brand` set to false.
 
 ### Preserve optional local fonts after LiteSpeed (0.1.127)

@@ -138,7 +138,8 @@ class Schrack_Consent_Renderer {
 			|| ! apply_filters( 'schrack_wc_sync_cache_consent_brand', true ) ) { return $html; }
 		return preg_replace_callback( '~<img\b[^>]*>~i', function( $match ) {
 			$tag = new WP_HTML_Tag_Processor( $match[0] );
-			if ( ! $tag->next_tag( 'IMG' ) || $this->brand_image !== $tag->get_attribute( 'src' )
+			if ( ! $tag->next_tag( 'IMG' )
+				|| ( $this->brand_image !== $tag->get_attribute( 'src' ) && $this->brand_image !== $tag->get_attribute( 'data-src' ) )
 				|| 'lazy' !== $tag->get_attribute( 'loading' ) ) { return $match[0]; }
 			$tag->set_attribute( 'decoding', 'async' );
 			$tag->set_attribute( 'fetchpriority', 'low' );
