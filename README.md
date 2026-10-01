@@ -909,6 +909,16 @@ on the exact cache URL, after sanitization. Eager/custom images stay untouched.
 0.1.142 also recognizes LiteSpeed's placeholder plus exact `data-src` form.
 Rollback: `schrack_wc_sync_cache_consent_brand` set to false.
 
+### Image observer startup after an initial paint (0.1.143)
+
+A measured mobile product-page run attributed a 242 ms task to the deferred
+image loader. Its observer setup now yields two animation frames after DOM
+readiness so eager/high-priority artwork can paint before card/fallback setup.
+The real eager URLs, lazy responsive selection, completed-image recovery and
+AJAX observer lifecycle remain intact. Hidden pages and browsers without the
+animation-frame API initialize immediately. Verification:
+`node tests/frontend-lazy-images.js`.
+
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 
 LiteSpeed 7.9.1's final font-face pass overrides even styles marked

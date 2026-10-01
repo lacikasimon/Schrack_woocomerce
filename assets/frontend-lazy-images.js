@@ -88,9 +88,19 @@
 		}).observe(document.documentElement, { childList: true, subtree: true });
 	}
 
+	function afterFirstPaint() {
+		// Eager/high-priority images already have real URLs. Let them paint before
+		// observer setup can trigger layout work for the deferred cards and fallbacks.
+		if (document.hidden || typeof window.requestAnimationFrame !== 'function') {
+			start();
+			return;
+		}
+		window.requestAnimationFrame(function () { window.requestAnimationFrame(start); });
+	}
+
 	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', start, { once: true });
+		document.addEventListener('DOMContentLoaded', afterFirstPaint, { once: true });
 	} else {
-		start();
+		afterFirstPaint();
 	}
 }());

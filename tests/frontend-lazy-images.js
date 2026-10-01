@@ -21,8 +21,9 @@ function image(attributes = {}) {
 	};
 }
 
-function setup(images, supportsObserver = true) {
+function setup(images, supportsObserver = true, { frames = false, hidden = false } = {}) {
 	const state = { observed: new Set(), instances: 0 };
+	const callbacks = [];
 	const root = image();
 	root.attributes = {};
 	root.hasAttribute = function (key) { return this.getAttribute(key) !== null; };
@@ -37,13 +38,29 @@ function setup(images, supportsObserver = true) {
 		observe() {}
 	}
 	const context = {
-		document: { documentElement: root, readyState: 'complete' },
+		document: { documentElement: root, readyState: 'complete', hidden },
 		window: supportsObserver ? { IntersectionObserver } : {}, IntersectionObserver, MutationObserver
 	};
+	if (frames) context.window.requestAnimationFrame = callback => callbacks.push(callback);
+	state.frame = () => callbacks.splice(0).forEach(callback => callback());
 	runInNewContext(source, context);
 	state.rerun = () => runInNewContext(source, context);
 	return state;
 }
+
+test('eager first image stays untouched while deferred observer setup yields a paint', () => {
+	const eager = image({src:'/hero.webp','data-schrack-image-src':null,'data-schrack-image-fallback':'/original.jpg'});
+	eager.complete = true; eager.naturalWidth = 340; eager.naturalHeight = 380;
+	const deferred = image();
+	const state = setup([eager,deferred],true,{frames:true});
+	assert.equal(state.instances,0);state.frame();assert.equal(state.instances,0);
+	assert.equal(eager.getAttribute('src'),'/hero.webp');assert.equal(deferred.getAttribute('src'),'/placeholder.svg');
+	state.frame();assert.equal(state.instances,1);assert.equal(state.observed.has(deferred),true);
+	assert.equal(eager.getAttribute('src'),'/hero.webp');assert.equal(eager.getAttribute('data-schrack-image-fallback'),null);
+});
+test('hidden pages initialize without depending on suspended animation frames', () => {
+	const state = setup([image()],true,{frames:true,hidden:true});assert.equal(state.instances,1);
+});
 
 test('offscreen URLs stay deferred; intersecting images restore responsive attributes in order', () => {
 	const visible = image({ 'data-schrack-image-srcset': '/small.jpg 300w, /large.jpg 600w', 'data-schrack-image-sizes': '50vw' });
