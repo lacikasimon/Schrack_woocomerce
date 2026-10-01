@@ -872,6 +872,14 @@ updated vendor sources untouched; no installed vendor file is edited.
 Rollback: `schrack_wc_sync_preserve_early_consent_text` set to false.
 Verification: `node tests/native-consent-text.js /path/to/cookieadmin/assets/js/consent.js`.
 
+### Small first category image decoding (0.1.137)
+
+Only the first, eager, high-priority featured category image may use synchronous
+decoding. Every bundled WebP candidate must exist, be at most 32 KiB and at most
+960 × 640 pixels. Custom, remote, missing or larger sources and all subsequent
+images retain asynchronous decoding. No image is converted during rendering.
+Rollback: `schrack_wc_sync_sync_category_hero` set to false.
+
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 
 LiteSpeed 7.9.1's final font-face pass overrides even styles marked

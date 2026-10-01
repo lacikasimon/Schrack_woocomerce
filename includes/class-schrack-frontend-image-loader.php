@@ -191,6 +191,25 @@ class Schrack_Frontend_Image_Loader {
 		return $tag->get_updated_html() . '<noscript class="schrack-image-fallback">' . $fallback . '</noscript>';
 	}
 
+	/** Small bundled first-paint artwork can paint atomically; custom/large images stay async. */
+	public static function category_image_decoding( string $url ): string {
+		$base = SCHRACK_WC_SYNC_URL . 'assets/home-category-banners/';
+		if ( ! apply_filters( 'schrack_wc_sync_sync_category_hero', true ) || ! str_starts_with( $url, $base ) ) { return 'async'; }
+		$name = substr( $url, strlen( $base ) );
+		if ( ! preg_match( '/^[a-z0-9-]+\.webp$/D', $name ) ) { return 'async'; }
+		$directory = SCHRACK_WC_SYNC_PATH . 'assets/home-category-banners/';
+		$stem = substr( $name, 0, -5 );
+		foreach ( array( $name, $stem . '-240.webp', $stem . '-480.webp', $stem . '-720.webp' ) as $file ) {
+			$path = $directory . $file;
+			if ( ! is_file( $path ) || ! is_readable( $path ) ) { return 'async'; }
+			$bytes = filesize( $path );
+			$size = wp_getimagesize( $path );
+			if ( false === $bytes || $bytes <= 0 || $bytes > 32768 || ! is_array( $size )
+				|| $size[0] > 960 || $size[1] > 640 || 'image/webp' !== ( $size['mime'] ?? '' ) ) { return 'async'; }
+		}
+		return 'sync';
+	}
+
 	/** Responsive variants only for the bundled category artwork; custom URLs stay intact. */
 	public static function category_image_attributes( string $url ): string {
 		$base = SCHRACK_WC_SYNC_URL . 'assets/home-category-banners/';

@@ -198,8 +198,9 @@ class Schrack_Featured_Categories_Renderer {
 											<?php
 											// Keep the first mobile column eager; observe the clipped horizontal strip for the rest.
 											$image = sprintf(
-												'<img %s alt="" decoding="async" loading="%s"%s>',
+												'<img %s alt="" decoding="%s" loading="%s"%s>',
 												Schrack_Frontend_Image_Loader::category_image_attributes( $image_url ),
+												0 === $index ? Schrack_Frontend_Image_Loader::category_image_decoding( $image_url ) : 'async',
 												$index < 2 ? 'eager' : 'lazy',
 												0 === $index ? ' fetchpriority="high"' : ''
 											);
