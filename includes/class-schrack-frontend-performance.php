@@ -447,6 +447,11 @@ class Schrack_Frontend_Performance {
 		if ( ! $font_count || ! is_string( $without_fonts ) || preg_match( '~url\s*\(~i', $without_fonts ) ) {
 			return $tag;
 		}
+		// Avoid late font swaps and competing high-priority font downloads on a
+		// cold, slow connection. Warm fonts still retain the original typefaces.
+		if ( apply_filters( 'schrack_wc_sync_optional_catalog_fonts', true ) ) {
+			$css = preg_replace( '~\bfont-display\s*:\s*(?:swap|block|auto|fallback)\s*(?=;)~i', 'font-display:optional', $css );
+		}
 		$this->catalog_inline_bytes += strlen( $css );
 		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
 	}

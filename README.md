@@ -814,3 +814,12 @@ A 0.1.119 a katalógusoldalak HTML-fejlécében előtölti a már engedélyezett
 A 0.1.120 a OneTap 2.14.0 teljes panel-CSS-ét használatkor tölti be a meglévő natív szkriptek előtt. Első látogatáskor csak a zárt panelt és a változatlan méretű eszköztárgombot formázó kis CSS kerül a HTML-be; az eredeti egyedi szín-/pozícióstílusok megmaradnak. Mentett akadálymentesítési vagy rejtési beállításnál a teljes CSS betöltése azonnal indul. CSS-hiba látható visszajelzést ad, a panel zárva marad, és csak felhasználói aktiválásra próbálkozik újra. Az eredeti verziózott forrás, CSP nonce és media megmarad. Más OneTap-verzió, egyedi/CDN-forrás vagy hiányzó bootstrap esetén a natív működés marad. Visszaállítás: `schrack_wc_sync_onetap_styles_on_demand` filter `false`.
 
 A 0.1.121 a CookieAdmin 1.2.2 meglévő dobozos értesítését a meglévő lokalizált szövegekkel már a szerveroldali HTML-ben kitölti. A footerben egy kis szkript a böngészőben olvassa a mentett választást; első látogatáskor a banner a halasztott szkriptek befejezése előtt megjelenhet. A HTML cache semmilyen látogató választását nem tartalmazza. A nagyon korai gombnyomás az összes natív DOMContentLoaded-kezelő után egyszer kerül vissza a natív gombra, így a CookieAdmin Pro naplózását és mentését használja. A személyre szabás, újranyitás, szükséges cookie-k és Google Consent Mode híd megmarad. Világszerte megjelenő dobozos elrendezésnél, a vizsgált natív forrásokkal működik; GPC-korlátozás, földrajzi szabály, egyedi sablon, eltérő szkript vagy pluginverzió esetén a korábbi natív indulás marad. A `schrack_wc_sync_early_consent_banner` filter `false` visszaállítja a natív kirajzolást. Ellenőrzés: `php tests/consent-renderer.php /path/to/wordpress-source`, `node tests/frontend-consent-banner.js`, `node tests/frontend-consent.js`.
+
+### Cold catalog font loading (0.1.123)
+
+The verified local Elementor Poppins/Figtree styles use `font-display: optional`
+on catalog pages. On a slow first visit the browser may keep its fallback font
+for that page; cached font files retain the original typefaces on later visits.
+This avoids late font swaps and reduces competition with product hero images.
+The generated files, other fonts and admin/editor pages are unchanged.
+Set `schrack_wc_sync_optional_catalog_fonts` to false to restore native display.

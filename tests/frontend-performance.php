@@ -178,7 +178,10 @@ try {
 		( new ReflectionProperty( $performance, 'catalog_inline_bytes' ) )->setValue( $performance, 0 );
 		file_put_contents( $font_path, $font_css );
 		$font_inline = $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', $font_url . '?ver=1', 'screen' );
-		verify_image( str_contains( $font_inline, '<style' ) && str_contains( $font_inline, $font_css ) && str_contains( $font_inline, 'media="screen"' ), 'Absolute local font URLs, swap behavior and cascade media are preserved verbatim.' );
+		verify_image( str_contains( $font_inline, '<style' ) && str_contains( $font_inline, str_replace( 'font-display:swap', 'font-display:optional', $font_css ) ) && str_contains( $font_inline, 'media="screen"' ), 'Verified local font URLs and cascade media remain intact with optional font display.' );
+		add_filter( 'schrack_wc_sync_optional_catalog_fonts', '__return_false' );
+		verify_image( str_contains( $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', $font_url ), $font_css ), 'Optional font rollback retains the native font display strategy.' );
+		remove_filter( 'schrack_wc_sync_optional_catalog_fonts', '__return_false' );
 		verify_image( $font_tag === $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', 'https://cdn.example/poppins.css' ), 'Replaced font stylesheets retain native loading.' );
 		foreach ( array( str_replace( 'https://shop.example/uploads/', '../', $font_css ), str_replace( 'shop.example', 'other.example', $font_css ), $font_css . '@import "other.css";', $font_css . '</style>' ) as $changed_css ) {
 			file_put_contents( $font_path, $changed_css );
