@@ -28,6 +28,7 @@ class Schrack_Frontend_Performance {
 		add_filter( 'should_load_block_assets_on_demand', array( $this, 'catalog_block_assets' ) );
 		add_filter( 'should_load_separate_core_block_assets', array( $this, 'separate_core_block_assets' ) );
 		add_action( 'wp_head', array( $this, 'consent_bridge' ), 2 );
+		add_filter( 'wp_preload_resources', array( $this, 'preload_consent_scripts' ) );
 		add_action( 'wp_head', array( $this, 'preload_product_image' ), 2 );
 		add_filter( 'script_loader_tag', array( $this, 'script_tag' ), 20, 2 );
 		add_filter( 'wp_inline_script_attributes', array( $this, 'inline_script_attributes' ) );
@@ -508,6 +509,23 @@ class Schrack_Frontend_Performance {
 			return;
 		}
 		wp_add_inline_style( 'cookieadmin-style', '.cookieadmin_law_container.cookieadmin_box{width:380px;max-width:calc(100vw - 24px);font-family:system-ui,sans-serif}.cookieadmin_law_container .cookieadmin_consent_inside{padding:14px}.cookieadmin_law_container #cookieadmin_notice{font-size:13px;line-height:1.45;margin:8px 0}.cookieadmin_law_container #cookieadmin_notice_title{font-size:16px;line-height:1.3;margin:0}.cookieadmin_law_container .cookieadmin_consent_btns{gap:6px;flex-wrap:wrap}.cookieadmin_law_container .cookieadmin_btn{min-height:40px;padding:8px 10px;font-size:12px}' );
+	}
+
+	/** Fetch the existing small consent scripts early; retain native execution order. */
+	public function preload_consent_scripts( array $resources ): array {
+		if ( ! $this->consent_enabled || is_admin() || ! $this->is_catalog_page() || is_preview()
+			|| ! apply_filters( 'schrack_wc_sync_preload_consent_scripts', true ) ) { return $resources; }
+		$scripts = wp_scripts();
+		foreach ( array( 'cookieadmin_pro_js' => 'cookieadmin-pro/assets/js/consent.js', 'cookieadmin_js' => 'cookieadmin/assets/js/consent.js' ) as $handle => $path ) {
+			$script = $scripts->registered[ $handle ] ?? null;
+			if ( ! $script || ! $scripts->query( $handle, 'enqueued' ) || $script->src !== plugins_url( $path ) ) { continue; }
+			$version = null === $script->ver ? null : ( $script->ver ?: $scripts->default_version );
+			$src = $version ? add_query_arg( 'ver', $version, $script->src ) : $script->src;
+			// A CDN/security filter can replace the actual source. Avoid a duplicate fetch.
+			if ( apply_filters( 'script_loader_src', $src, $handle ) !== $src || isset( $scripts->args[ $handle ] ) ) { continue; }
+			$resources[] = array( 'href' => $src, 'as' => 'script', 'fetchpriority' => 'high' );
+		}
+		return $resources;
 	}
 
 	/** Cache-neutral markup: every visitor's saved choice is evaluated in the browser. */

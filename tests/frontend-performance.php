@@ -351,4 +351,25 @@ $loader = $performance->script_tag( '<script src="/loader.js" defer></script>', 
 verify_image( str_contains( $loader, 'data-no-optimize="1"' ) && ! str_contains( $loader, 'text/plain' ), 'Small accessibility loader must execute normally and bypass LiteSpeed delay.' );
 add_filter( 'schrack_wc_sync_inline_critical_css', '__return_false' );
 verify_image( $link === $performance->inline_critical_style( $link, 'schrack-wc-header', '/plugin/assets/elementor-header.css' ), 'Rollback filter must restore external loading.' );
+// Preload only the native consent sources, with exactly matching versioned URLs.
+$enabled->setValue( $performance, true );
+$GLOBALS['front_page_test'] = true;
+$scripts = wp_scripts();
+foreach ( array( 'cookieadmin_js' => 'cookieadmin/assets/js/consent.js', 'cookieadmin_pro_js' => 'cookieadmin-pro/assets/js/consent.js' ) as $handle => $path ) {
+ $scripts->remove( $handle ); $scripts->add( $handle, plugins_url( $path ), array(), '1.2.2', 1 ); $scripts->enqueue( $handle );
+}
+$preserved_resources = array( array( 'href' => 'https://shop.example/hero.webp', 'as' => 'image' ) );
+$consent_resources = $performance->preload_consent_scripts( $preserved_resources );
+verify_image( 3 === count( $consent_resources ) && $preserved_resources[0] === $consent_resources[0], 'Consent preloads preserve other resources and add only two native scripts.' );
+verify_image( plugins_url( 'cookieadmin/assets/js/consent.js' ) . '?ver=1.2.2' === $consent_resources[2]['href'] && 'script' === $consent_resources[2]['as'], 'Preload URL must exactly match the executed script and version.' );
+$scripts->registered['cookieadmin_js']->src = 'https://cdn.example/consent.js';
+verify_image( 1 === count( $performance->preload_consent_scripts( array() ) ), 'A replaced vendor source must not fetch an unused native file.' );
+$scripts->dequeue( 'cookieadmin_pro_js' );
+verify_image( array() === $performance->preload_consent_scripts( array() ), 'Inactive consent scripts must not preload.' );
+$GLOBALS['front_page_test'] = false;
+verify_image( $preserved_resources === $performance->preload_consent_scripts( $preserved_resources ), 'Non-catalog pages keep native resource selection.' );
+$GLOBALS['front_page_test'] = true;
+add_filter( 'schrack_wc_sync_preload_consent_scripts', '__return_false' );
+verify_image( $preserved_resources === $performance->preload_consent_scripts( $preserved_resources ), 'Rollback filter preserves native resources.' );
+$GLOBALS['front_page_test'] = false;
 echo "Frontend performance total: {$checks} checks passed.\n";
