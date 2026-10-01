@@ -177,15 +177,10 @@ verify_image( ! str_contains( Schrack_Frontend_Image_Loader::lazy_image_html( $f
 
 $banner = Schrack_Frontend_Image_Loader::category_image_attributes( '/plugin/assets/home-category-banners/benzi-led-si-accesorii-2.webp' );
 verify_image( str_contains( $banner, '-480.webp"' ) && str_contains( $banner, ' 720w' ), 'Bundled banners must advertise existing responsive files.' );
-verify_image( 'sync' === Schrack_Frontend_Image_Loader::category_image_decoding( '/plugin/assets/home-category-banners/corpuri-de-iluminat-pentru-interior-2.webp' ), 'All existing small first-category WebP candidates support atomic first paint.' );
-add_filter( 'schrack_wc_sync_sync_category_hero', '__return_false' );
-verify_image( 'async' === Schrack_Frontend_Image_Loader::category_image_decoding( '/plugin/assets/home-category-banners/corpuri-de-iluminat-pentru-interior-2.webp' ), 'Rollback restores the native asynchronous image hint.' );
-remove_filter( 'schrack_wc_sync_sync_category_hero', '__return_false' );
 $deferred_banner = Schrack_Frontend_Image_Loader::lazy_image_html( '<img ' . $banner . ' loading="lazy">' );
 verify_image( str_contains( $deferred_banner, 'data-schrack-image-srcset=' ), 'Lazy banner srcset must be deferred along with src.' );
 foreach ( array( 'https://custom.example/photo.webp', '/plugin/assets/home-category-banners/../../private.webp', '/plugin/assets/home-category-banners/missing.webp' ) as $custom ) {
 	verify_image( 'src="' . esc_url( $custom ) . '"' === Schrack_Frontend_Image_Loader::category_image_attributes( $custom ), 'Custom/missing banners must preserve their source.' );
-	verify_image( 'async' === Schrack_Frontend_Image_Loader::category_image_decoding( $custom ), 'Remote, missing and traversal paths cannot request synchronous decoding.' );
 }
 
 echo "Frontend image markup: {$checks} checks passed.\n";

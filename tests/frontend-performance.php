@@ -483,4 +483,34 @@ verify_image( $panel_css_tag === $performance->delay_onetap_panel_style( $panel_
 remove_filter( 'schrack_wc_sync_onetap_styles_on_demand', '__return_false' );
 $onetap->setValue( $performance, false );
 verify_image( $panel_css_tag === $performance->delay_onetap_panel_style( $panel_css_tag, 'accessibility-onetap', $panel_css_url ), 'Without the inspected on-demand loader CSS is untouched.' );
+$GLOBALS['front_page_test'] = true;
+$category_loader=(new ReflectionClass(Schrack_Frontend_Image_Loader::class))->newInstanceWithoutConstructor();
+$category_attrs=Schrack_Frontend_Image_Loader::category_image_attributes('/plugin/assets/home-category-banners/corpuri-de-iluminat-pentru-interior-2.webp');
+$category_html='<html><head><style>body{color:black}</style></head><body><img '.$category_attrs.' loading="eager" fetchpriority="high" data-schrack-category-hero="1"></body></html>';
+$preloaded=$category_loader->preload_category_hero($category_html);
+$preload_tag=new WP_HTML_Tag_Processor($preloaded);$preload_tag->next_tag('LINK');
+$image_tag=new WP_HTML_Tag_Processor($category_html);$image_tag->next_tag('IMG');
+verify_image(str_starts_with($preloaded,'<html><head><link id="schrack-category-hero-preload"'),'The actual first category preload precedes every style and body byte.');
+verify_image($preload_tag->get_attribute('imagesrcset')===$image_tag->get_attribute('srcset')&&$preload_tag->get_attribute('imagesizes')===$image_tag->get_attribute('sizes'),'Responsive preload chooses the exact same candidate as the rendered image.');
+verify_image(null===$preload_tag->get_attribute('href')&&'high'===$preload_tag->get_attribute('fetchpriority'),'Responsive preload has no duplicate legacy fallback download.');
+verify_image($preloaded===$category_loader->preload_category_hero($preloaded),'Repeated HTML optimization does not duplicate the preload.');
+foreach(array(
+	str_replace('data-schrack-category-hero="1"','',$category_html),
+	str_replace('loading="eager"','loading="lazy"',$category_html),
+	str_replace('fetchpriority="high"','fetchpriority="low"',$category_html),
+	str_replace('78vw','50vw',$category_html),
+	str_replace('/plugin/assets/home-category-banners/','https://custom.example/',$category_html),
+	str_replace('-480.webp','-999.webp',$category_html),
+	str_replace('<head>','',$category_html),
+	$category_html.str_repeat(' ',4194304)
+)as $other){verify_image($other===$category_loader->preload_category_hero($other),'Unowned, changed, lazy, invalid or oversized documents keep their original loading.');}
+$existing=str_replace('<head>','<head><link rel="preload" as="image" imagesrcset="'.esc_attr($image_tag->get_attribute('srcset')).'">',$category_html);
+verify_image($existing===$category_loader->preload_category_hero($existing),'An existing equivalent responsive preload is reused.');
+$GLOBALS['preview_test']=true;
+verify_image($category_html===$category_loader->preload_category_hero($category_html),'Editor previews retain native loading.');
+$GLOBALS['preview_test']=false;$GLOBALS['front_page_test']=false;
+verify_image($category_html===$category_loader->preload_category_hero($category_html),'Non-home routes do not preload category artwork.');
+$GLOBALS['front_page_test']=true;add_filter('schrack_wc_sync_preload_category_hero','__return_false');
+verify_image($category_html===$category_loader->preload_category_hero($category_html),'Rollback retains the complete original HTML.');
+remove_filter('schrack_wc_sync_preload_category_hero','__return_false');$GLOBALS['front_page_test']=false;
 echo "Frontend performance total: {$checks} checks passed.\n";

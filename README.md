@@ -872,13 +872,16 @@ updated vendor sources untouched; no installed vendor file is edited.
 Rollback: `schrack_wc_sync_preserve_early_consent_text` set to false.
 Verification: `node tests/native-consent-text.js /path/to/cookieadmin/assets/js/consent.js`.
 
-### Small first category image decoding (0.1.137)
+### Rendered category hero preload (0.1.138)
 
-Only the first, eager, high-priority featured category image may use synchronous
-decoding. Every bundled WebP candidate must exist, be at most 32 KiB and at most
-960 × 640 pixels. Custom, remote, missing or larger sources and all subsequent
-images retain asynchronous decoding. No image is converted during rendering.
-Rollback: `schrack_wc_sync_sync_category_hero` set to false.
+The small-image synchronous decoding trial in 0.1.137 did not improve the mobile
+home score and was removed. The homepage's actual first eager category artwork
+now carries an ownership marker. A final HTML pass can insert a responsive
+image preload immediately after the head opens, using its identical srcset and
+sizes. Only existing bundled variants qualify; custom URLs, modified candidates,
+lazy images, previews and other routes retain native loading. No fallback href
+or duplicate preload is added, and no image is downloaded during rendering.
+Rollback: `schrack_wc_sync_preload_category_hero` set to false.
 
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 

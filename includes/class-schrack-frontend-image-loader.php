@@ -68,10 +68,42 @@ class Schrack_Frontend_Image_Loader {
 		add_action( 'wp_head', array( $this, 'lazy_images_noscript_style' ) );
 		add_action( 'schrack_wc_sync_product_image_preload', array( $this, 'preload_current_product_image' ) );
 		add_filter( 'script_loader_tag', array( $this, 'lazy_images_script_tag' ), 10, 2 );
+		add_filter( 'litespeed_buffer_finalize', array( $this, 'preload_category_hero' ), 33 );
 		add_action( 'woocommerce_before_single_product', array( $this, 'ensure_current_product_image' ), 5 );
 		add_action( self::BACKGROUND_HOOK, array( $this, 'download_background_product_image' ), 10, 1 );
 		add_filter( 'woocommerce_product_get_image', array( $this, 'remote_product_image_filter' ), 10, 6 );
 		add_filter( 'woocommerce_single_product_image_thumbnail_html', array( $this, 'remote_single_product_image_filter' ), 10, 2 );
+	}
+
+	/** Discover the rendered first category image before the browser parses the large body. */
+	public function preload_category_hero( string $html ): string {
+		if ( is_admin() || ! is_front_page() || is_preview() || isset( $_GET['elementor-preview'] )
+			|| ! apply_filters( 'schrack_wc_sync_preload_category_hero', true )
+			|| ! class_exists( 'WP_HTML_Tag_Processor' ) || strlen( $html ) > 4194304
+			|| str_contains( $html, 'id="schrack-category-hero-preload"' )
+			|| 1 !== preg_match_all( '~<head\b[^>]*>~i', $html, $heads ) ) { return $html; }
+		$tags = new WP_HTML_Tag_Processor( $html );
+		while ( $tags->next_tag( 'IMG' ) ) {
+			if ( '1' !== $tags->get_attribute( 'data-schrack-category-hero' ) ) { continue; }
+			if ( 'eager' !== $tags->get_attribute( 'loading' ) || 'high' !== $tags->get_attribute( 'fetchpriority' ) ) { return $html; }
+			$src = $tags->get_attribute( 'src' );
+			$base = SCHRACK_WC_SYNC_URL . 'assets/home-category-banners/';
+			if ( ! is_string( $src ) || ! str_starts_with( $src, $base ) ) { return $html; }
+			$name = substr( $src, strlen( $base ) );
+			if ( ! preg_match( '/^([a-z0-9-]+)-480\.webp$/D', $name, $match ) ) { return $html; }
+			$expected = new WP_HTML_Tag_Processor( '<img ' . self::category_image_attributes( $base . $match[1] . '.webp' ) . '>' );
+			$expected->next_tag( 'IMG' );
+			foreach ( array( 'src', 'srcset', 'sizes' ) as $attribute ) {
+				if ( ! is_string( $expected->get_attribute( $attribute ) ) || $expected->get_attribute( $attribute ) !== $tags->get_attribute( $attribute ) ) { return $html; }
+			}
+			$srcset = esc_attr( $tags->get_attribute( 'srcset' ) );
+			if ( str_contains( $html, 'imagesrcset="' . $srcset . '"' ) ) { return $html; }
+			// Responsive preload without href avoids a second fallback download in older browsers.
+			$link = '<link id="schrack-category-hero-preload" rel="preload" as="image" fetchpriority="high" data-no-optimize="1" imagesrcset="'
+				. $srcset . '" imagesizes="' . esc_attr( $tags->get_attribute( 'sizes' ) ) . '">';
+			return preg_replace_callback( '~<head\b[^>]*>~i', static fn( $head ) => $head[0] . $link, $html, 1 ) ?? $html;
+		}
+		return $html;
 	}
 
 	/** Called only after the active template's current-product gallery is verified. */
@@ -189,25 +221,6 @@ class Schrack_Frontend_Image_Loader {
 		}
 
 		return $tag->get_updated_html() . '<noscript class="schrack-image-fallback">' . $fallback . '</noscript>';
-	}
-
-	/** Small bundled first-paint artwork can paint atomically; custom/large images stay async. */
-	public static function category_image_decoding( string $url ): string {
-		$base = SCHRACK_WC_SYNC_URL . 'assets/home-category-banners/';
-		if ( ! apply_filters( 'schrack_wc_sync_sync_category_hero', true ) || ! str_starts_with( $url, $base ) ) { return 'async'; }
-		$name = substr( $url, strlen( $base ) );
-		if ( ! preg_match( '/^[a-z0-9-]+\.webp$/D', $name ) ) { return 'async'; }
-		$directory = SCHRACK_WC_SYNC_PATH . 'assets/home-category-banners/';
-		$stem = substr( $name, 0, -5 );
-		foreach ( array( $name, $stem . '-240.webp', $stem . '-480.webp', $stem . '-720.webp' ) as $file ) {
-			$path = $directory . $file;
-			if ( ! is_file( $path ) || ! is_readable( $path ) ) { return 'async'; }
-			$bytes = filesize( $path );
-			$size = wp_getimagesize( $path );
-			if ( false === $bytes || $bytes <= 0 || $bytes > 32768 || ! is_array( $size )
-				|| $size[0] > 960 || $size[1] > 640 || 'image/webp' !== ( $size['mime'] ?? '' ) ) { return 'async'; }
-		}
-		return 'sync';
 	}
 
 	/** Responsive variants only for the bundled category artwork; custom URLs stay intact. */
