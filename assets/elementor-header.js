@@ -210,6 +210,9 @@
 		];
 
 		labels.forEach(function (item) {
+			if (scope.matches && scope.matches(item.selector) && !scope.getAttribute('aria-label')) {
+				scope.setAttribute('aria-label', item.label);
+			}
 			Array.prototype.forEach.call(scope.querySelectorAll(item.selector), function (button) {
 				if (!button.getAttribute('aria-label')) {
 					button.setAttribute('aria-label', item.label);
@@ -231,8 +234,14 @@
 			return;
 		}
 
-		var observer = new MutationObserver(function () {
-			repairThirdPartyButtonLabels(document);
+		var observer = new MutationObserver(function (records) {
+			records.forEach(function (record) {
+				record.addedNodes.forEach(function (node) {
+					if (node.nodeType === 1 && node.isConnected) {
+						repairThirdPartyButtonLabels(node);
+					}
+				});
+			});
 		});
 
 		observer.observe(document.body, {

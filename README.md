@@ -939,3 +939,12 @@ Offscreen footer containment is now limited to shop and product category archive
 where fresh mobile measurements improved. Home and single products retain native
 footer rendering after the latest product LCP measurements exceeded the earlier
 baseline. The footer HTML, links, keyboard access and print rendering remain intact.
+
+### Scoped dynamic cookie button labels (0.1.133)
+
+The header's accessibility label observer inspects only connected, newly added
+element subtrees. The initial full-page pass remains once; later AJAX inserts,
+native cookie UI changes and other DOM updates no longer trigger repeated scans
+of the entire catalog. Directly inserted cookie buttons are also labeled, not
+only descendants of a wrapper. Existing custom labels remain unchanged. Verify
+with `node tests/elementor-header-labels.js` and the native cookie preference UI.
