@@ -1084,6 +1084,13 @@ alongside hero assets rather than merely postponing its activation.
 Checks: `node tests/frontend-woo-styles.js` and `tests/critical-woo-styles.php`
 with the native WordPress, vendor and anonymous HTML fixtures described above.
 
+The 0.1.146 product measurement regressed; 0.1.147 restores its previous full
+inline CSS. Home retains matching critical rules and the idle native download,
+but activates the additional stylesheet on pointer/keyboard input or printing,
+avoiding a second whole-document style calculation after background loading.
+Every native rule matching the initial HTML, including interactive states and
+dynamic notice/select rules, remains available immediately. Archives are unchanged.
+
 Git deployments do not run WordPress upgrader hooks. After a version change,
 the first WordPress execution with the inspected LiteSpeed 7.9.1 purge API
 invalidates public HTML once and notifies the existing bounded warmer. CSS/JS,

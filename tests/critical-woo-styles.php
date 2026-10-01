@@ -29,6 +29,10 @@ foreach ( array( 'home', 'shop', 'product', 'category' ) as $scope ) {
 	$tag->set_attribute( 'data-schrack-woo-source', hash( 'sha256', $css ) );
 	$tag->set_attribute( 'data-schrack-woo-href', $expected_url );
 	$html = str_replace( $original[0], $tag->get_updated_html(), $html );
+	if ( 'product' === $scope ) {
+		verify_image( $html === $critical_woo->finalize( $html ), 'Single products retain full inline native CSS after the deferred-download measurement regressed.' );
+		continue;
+	}
 	$result = $critical_woo->finalize( $html );
 	preg_match( '~<style\b[^>]*id="woocommerce-general-css"[^>]*>([^<]*)</style>~s', $result, $inlined );
 	verify_image( str_contains( $result, 'data-schrack-woo-critical="1"' ), 'Actual ' . $scope . ' CSS must split after LiteSpeed font rewriting.' );
@@ -36,7 +40,7 @@ foreach ( array( 'home', 'shop', 'product', 'category' ) as $scope ) {
 	verify_image( 1 === substr_count( $result, 'id="schrack-woo-full-css"' ) && str_contains( $result, 'data-schrack-woo-media="all"' ) && str_contains( $result, '<noscript><link rel="stylesheet"' ), 'Native full URL is preserved for delayed, print and no-JS use.' );
 	$full_link = new WP_HTML_Tag_Processor( $result );
 	while ( $full_link->next_tag( 'LINK' ) && 'schrack-woo-full-css' !== $full_link->get_attribute( 'id' ) ) {}
-	$deferred = in_array( $scope, array( 'home', 'product' ), true );
+	$deferred = 'home' === $scope;
 	verify_image( $expected_url === $full_link->get_attribute( $deferred ? 'data-schrack-woo-deferred-href' : 'href' ), 'Full native CSS is fetched after load only on home/product; archive scheduling is retained.' );
 	verify_image( ! $deferred || null === $full_link->get_attribute( 'href' ), 'Deferred native CSS does not compete with initial hero requests.' );
 	verify_image( str_contains( $inlined[1], '.woocommerce-message' ) && str_contains( $inlined[1], '@font-face' ), 'Runtime notices and native icon faces stay critical even before AJAX insertion.' );

@@ -24,9 +24,12 @@
 	}
 	document.addEventListener('pointerdown', activate, {capture: true, passive: true});
 	document.addEventListener('keydown', activate, {capture: true, passive: true});
+	window.addEventListener('beforeprint', activate);
 	link.addEventListener('error', activate, {once: true});
 	if (deferredHref) {
-		link.addEventListener('load', activate, {once: true});
+		// Initial matching rules already cover the home page. Keep the extra
+		// native rules inactive until input/printing so loading them does not
+		// repeat whole-document style calculation during the first render.
 		function background() {
 			if (activated) return;
 			if (document.hidden) { activate(); return; }

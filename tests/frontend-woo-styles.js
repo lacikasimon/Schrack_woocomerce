@@ -74,14 +74,15 @@ test('CSS failure promotes the native fallback; duplicate scripts add no second 
 	assert.equal(boot({missing: true}).queued.length, 0);
 });
 
-test('deferred full CSS does not fetch at DOM ready; background load uses idle then native load', () => {
+test('deferred full CSS does not fetch at DOM ready or reapply styles after background load', () => {
 	const page = boot({deferred: true});
 	page.document.fire('DOMContentLoaded'); page.frame(); page.frame();
 	assert.equal(page.link.getAttribute('href'), null);
 	page.window.fire('load'); assert.equal(page.link.getAttribute('href'), null);
 	page.idle(); assert.equal(page.link.getAttribute('href'), '/native-woocommerce.css');
 	assert.equal(page.link.getAttribute('media'), 'not all');
-	page.link.fire('load'); assert.equal(page.link.getAttribute('media'), 'screen');
+	page.link.fire('load'); assert.equal(page.link.getAttribute('media'), 'not all');
+	page.document.fire('pointerdown'); assert.equal(page.link.getAttribute('media'), 'screen');
 });
 
 test('early pointer or keyboard input fetches and activates deferred CSS immediately', () => {
@@ -96,7 +97,7 @@ test('early pointer or keyboard input fetches and activates deferred CSS immedia
 
 test('deferred CSS supports late startup, hidden tabs and browsers without idle callbacks', () => {
 	for (const options of [{readyState: 'complete'}, {idle: false}]) {
-		const page = boot({deferred: true, ...options}); page.window.fire('load'); page.idle(); page.link.fire('load');
+		const page = boot({deferred: true, ...options}); page.window.fire('load'); page.idle(); page.window.fire('beforeprint');
 		assert.equal(page.link.getAttribute('media'), 'screen');
 	}
 	const hidden = boot({deferred: true, hidden: true});

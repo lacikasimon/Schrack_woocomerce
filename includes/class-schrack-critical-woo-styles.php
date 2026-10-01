@@ -9,7 +9,7 @@ class Schrack_Critical_Woo_Styles {
 
 	public function finalize( string $html ): string {
 		if ( is_admin() || is_preview() || isset( $_GET['elementor-preview'] )
-			|| ! ( is_front_page() || ( function_exists( 'is_product' ) && is_product() )
+			|| ! ( is_front_page()
 				|| ( function_exists( 'is_shop' ) && is_shop() )
 				|| ( function_exists( 'is_product_taxonomy' ) && is_product_taxonomy() ) )
 			|| ! apply_filters( 'schrack_wc_sync_critical_woo_css', true )
@@ -56,7 +56,7 @@ class Schrack_Critical_Woo_Styles {
 		$opening = strstr( $style->get_updated_html(), '>', true ) . '>';
 		// These routes already carry all rules matching their initial markup.
 		// Fetch the remaining native CSS at idle after load, or on early input.
-		$deferred = is_front_page() || ( function_exists( 'is_product' ) && is_product() );
+		$deferred = is_front_page();
 		$link = '<link id="schrack-woo-full-css" rel="stylesheet" ' . ( $deferred ? 'data-schrack-woo-deferred-href' : 'href' ) . '="' . esc_url( $href )
 			. '" media="not all" data-schrack-woo-media="' . esc_attr( $media ) . '" data-no-optimize="1">';
 		$nojs = '<noscript><link rel="stylesheet" href="' . esc_url( $href ) . '" media="' . esc_attr( $media ) . '"></noscript>';
