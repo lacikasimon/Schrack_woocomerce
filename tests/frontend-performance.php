@@ -397,6 +397,34 @@ verify_image( $preserved_resources === $performance->preload_consent_scripts( $p
 $GLOBALS['front_page_test'] = true;
 add_filter( 'schrack_wc_sync_preload_consent_scripts', '__return_false' );
 verify_image( $preserved_resources === $performance->preload_consent_scripts( $preserved_resources ), 'Rollback filter preserves native resources.' );
+remove_filter('schrack_wc_sync_preload_consent_scripts','__return_false');
+$inline_paths=array('cookieadmin_js'=>'cookieadmin/assets/js/consent.js','cookieadmin_pro_js'=>'cookieadmin-pro/assets/js/consent.js');
+try {
+	foreach($inline_paths as $handle=>$relative) {
+		mkdir(dirname(WP_PLUGIN_DIR.'/'.$relative),0700,true);
+		$source_file=$handle==='cookieadmin_js'?($argv[3]??null):($argv[4]??null);
+		$native_code=$source_file?file_get_contents($source_file):str_repeat('// Native code comment'.PHP_EOL,40).'window.nativeExample = "$1";';
+		file_put_contents(WP_PLUGIN_DIR.'/'.$relative,$native_code);
+		$scripts->remove($handle);$scripts->add($handle,plugins_url($relative),array(),'1.2.2');$scripts->enqueue($handle);
+		$original='<script id="'.$handle.'-js" nonce="original-csp-nonce" src="'.plugins_url($relative).'?ver=1.2.2" defer></script>';
+		$inlined=$performance->script_tag($original,$handle);
+		verify_image(str_contains($inlined,'nonce="original-csp-nonce"')&&!str_contains($inlined,' src=')&&!str_contains($inlined,' defer'),'Native script inlining retains CSP nonce without downloading or deferring a second copy.');
+		verify_image(str_contains($inlined,'>'.$native_code.'</script>'),'All native consent code survives inlining byte for byte, including replacement-like characters.');
+		verify_image($inlined===$performance->script_tag($inlined,$handle),'Already inline native consent is idempotent.');
+		$scripts->registered[$handle]->ver='1.2.3';
+		verify_image(str_contains($performance->script_tag($original,$handle),' src='),'Updated vendor versions retain native external script execution.');
+		$scripts->registered[$handle]->ver='1.2.2';
+		verify_image(str_contains($performance->script_tag(str_replace(' defer',' integrity="sha256-original" defer',$original),$handle),' src='),'Integrity-protected assets retain their original download.');
+		verify_image(str_contains($performance->script_tag(str_replace(plugins_url($relative),'https://cdn.example/consent.js',$original),$handle),' src='),'Custom/CDN/security-modified script URLs remain external.');
+	}
+	verify_image($preserved_resources===$performance->preload_consent_scripts($preserved_resources),'Inline native scripts must not preload unused network copies.');
+	add_filter('schrack_wc_sync_inline_native_consent','__return_false');
+	verify_image(3===count($performance->preload_consent_scripts($preserved_resources)),'Rollback restores native external scripts and their two preloads.');
+	remove_filter('schrack_wc_sync_inline_native_consent','__return_false');
+} finally {
+	foreach($inline_paths as $relative){unlink(WP_PLUGIN_DIR.'/'.$relative);rmdir(dirname(WP_PLUGIN_DIR.'/'.$relative));rmdir(dirname(WP_PLUGIN_DIR.'/'.$relative,2));rmdir(dirname(WP_PLUGIN_DIR.'/'.$relative,3));}
+	rmdir(WP_PLUGIN_DIR);
+}
 $GLOBALS['front_page_test'] = false;
 // The toolbar shell can be styled without downloading its full CSS.
 $onetap->setValue( $performance, true );

@@ -848,3 +848,14 @@ Only the known callback and markup contract are eligible. A new vendor source,
 unknown form/input, executable markup or a cache write failure keeps the original
 HTML. The cache includes no nonce or request configuration.
 Rollback: `schrack_wc_sync_onetap_markup_on_demand` set to false.
+
+### Native CookieAdmin assets inline (0.1.126)
+
+On catalog pages, the two inspected native CookieAdmin 1.2.2 scripts can execute
+as their original header scripts directly in the response. Their contents,
+localization/dependency order and CSP nonce are preserved; native functions
+still perform every consent save, Pro log and Google bridge callback. This
+removes two network requests competing with the hero image. No unused script
+preload is emitted for an inline source. Custom URLs, integrity-protected tags,
+unknown versions or source files retain native external loading.
+Rollback: `schrack_wc_sync_inline_native_consent` set to false.

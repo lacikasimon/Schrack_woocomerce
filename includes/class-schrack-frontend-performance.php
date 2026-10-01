@@ -607,9 +607,44 @@ class Schrack_Frontend_Performance {
 			$src = $version ? add_query_arg( 'ver', $version, $script->src ) : $script->src;
 			// A CDN/security filter can replace the actual source. Avoid a duplicate fetch.
 			if ( apply_filters( 'script_loader_src', $src, $handle ) !== $src || isset( $scripts->args[ $handle ] ) ) { continue; }
+			if ( null !== $this->native_consent_source( $handle ) ) { continue; }
 			$resources[] = array( 'href' => $src, 'as' => 'script', 'fetchpriority' => 'high' );
 		}
 		return $resources;
+	}
+
+	/** Execute the same small native header assets without two extra network round trips. */
+	private function native_consent_source( string $handle ): ?string {
+		if ( ! $this->consent_enabled || is_admin() || ! $this->is_catalog_page() || is_preview()
+			|| ! apply_filters( 'schrack_wc_sync_inline_native_consent', true ) ) { return null; }
+		$files = array( 'cookieadmin_js' => 'cookieadmin/assets/js/consent.js', 'cookieadmin_pro_js' => 'cookieadmin-pro/assets/js/consent.js' );
+		$script = wp_scripts()->registered[ $handle ] ?? null;
+		if ( ! isset( $files[ $handle ] ) || ! $script || '1.2.2' !== (string) $script->ver
+			|| $script->src !== plugins_url( $files[ $handle ] ) ) { return null; }
+		$root = realpath( WP_PLUGIN_DIR );
+		$path = realpath( WP_PLUGIN_DIR . '/' . $files[ $handle ] );
+		if ( ! $root || ! $path || ! str_starts_with( $path, $root . DIRECTORY_SEPARATOR ) || ! is_readable( $path )
+			|| filesize( $path ) < 512 || filesize( $path ) > 32768 ) { return null; }
+		$code = file_get_contents( $path );
+		return is_string( $code ) && ! preg_match( '~</script|<\?php|\x00~i', $code ) ? $code : null;
+	}
+
+	private function inline_native_consent_tag( string $tag, string $handle ): ?string {
+		$code = $this->native_consent_source( $handle );
+		if ( null === $code || ! preg_match( '~^\s*<script\b[^>]*>\s*</script>\s*$~i', $tag ) ) { return null; }
+		$script = new WP_HTML_Tag_Processor( $tag );
+		if ( ! $script->next_tag( 'SCRIPT' ) || null !== $script->get_attribute( 'integrity' )
+			|| ! in_array( $script->get_attribute( 'type' ), array( null, 'text/javascript' ), true ) ) { return null; }
+		$registered = wp_scripts()->registered[ $handle ];
+		if ( $script->get_attribute( 'src' ) !== $registered->src . '?ver=1.2.2' ) { return null; }
+		$script->remove_attribute( 'src' );
+		$script->remove_attribute( 'defer' );
+		$script->remove_attribute( 'async' );
+		$script->remove_attribute( 'data-wp-strategy' );
+		$script->set_attribute( 'data-no-optimize', '1' );
+		$script->set_attribute( 'data-no-defer', '1' );
+		// Retain original id, nonce and native dependency/localization order.
+		return preg_replace_callback( '~>\s*</script>\s*$~', static fn() => '>' . $code . '</script>', $script->get_updated_html() );
 	}
 
 	/** Cache-neutral markup: every visitor's saved choice is evaluated in the browser. */
@@ -637,6 +672,10 @@ class Schrack_Frontend_Performance {
 	public function script_tag( string $tag, string $handle ): string {
 		if ( ( ! $this->consent_enabled && ! $this->onetap_on_demand ) || ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 			return $tag;
+		}
+		if ( in_array( $handle, array( 'cookieadmin_js', 'cookieadmin_pro_js' ), true ) ) {
+			$inline = $this->inline_native_consent_tag( $tag, $handle );
+			if ( null !== $inline ) { return $inline; }
 		}
 		$processor = new WP_HTML_Tag_Processor( $tag );
 		while ( $processor->next_tag( 'SCRIPT' ) ) {
