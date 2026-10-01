@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Schrack_Product_Filter_Renderer {
 	public const AJAX_ACTION = 'schrack_wc_filter_products';
 	public const CATEGORY_AJAX_ACTION = 'schrack_wc_filter_categories';
+	public const ATTRIBUTE_AJAX_ACTION = 'schrack_wc_attribute_options';
 	public const NONCE_ACTION = 'schrack_wc_product_filter';
 
 	/**
@@ -42,6 +43,7 @@ class Schrack_Product_Filter_Renderer {
 
 		wp_enqueue_style( 'schrack-wc-product-filter' );
 		wp_enqueue_script( 'schrack-wc-product-filter' );
+		wp_enqueue_script( 'schrack-wc-attribute-options', SCHRACK_WC_SYNC_URL . 'assets/frontend-attribute-options.js', array(), SCHRACK_WC_SYNC_VERSION, true );
 
 		$settings    = $this->sanitize_settings( $settings );
 		$settings    = $this->settings_with_request_category( $settings );
@@ -83,6 +85,7 @@ class Schrack_Product_Filter_Renderer {
 			style="<?php echo esc_attr( $style ); ?>"
 			data-action="<?php echo esc_attr( self::AJAX_ACTION ); ?>"
 			data-category-action="<?php echo esc_attr( self::CATEGORY_AJAX_ACTION ); ?>"
+			data-attribute-action="<?php echo esc_attr( self::ATTRIBUTE_AJAX_ACTION ); ?>"
 			data-ajax-url="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"
 			data-config="<?php echo esc_attr( wp_json_encode( $config ) ); ?>"
 			data-nonce="<?php echo esc_attr( wp_create_nonce( self::NONCE_ACTION ) ); ?>"
@@ -412,26 +415,35 @@ class Schrack_Product_Filter_Renderer {
 	 *
 	 * @param array<string,mixed> $filters Sanitized frontend filters.
 	 */
-	private function attribute_filters_html( array $filters ): string {
+	private function attribute_filters_html( array $filters, string $only_taxonomy = '' ): string {
 		do_action( 'schrack_filter_profile_mark', 'attributes_start' );
 		$groups = $this->attribute_filter_options( (int) ( $filters['category'] ?? 0 ) );
 		do_action( 'schrack_filter_profile_mark', 'attribute_options_end' );
+		if ( '' !== $only_taxonomy && ! isset( $groups[ $only_taxonomy ] ) ) { return ''; }
 
 		ob_start();
 		?>
 		<div class="schrack-product-filter__attributes" data-attribute-facets>
 			<?php foreach ( $groups as $taxonomy => $group ) : ?>
 				<?php
+				if ( '' !== $only_taxonomy && $taxonomy !== $only_taxonomy ) { continue; }
 				$selected_ids = array_map( 'absint', (array) ( $filters['attributes'][ $taxonomy ] ?? array() ) );
 				$has_selection = ! empty( $selected_ids );
+				$defer_options = ! $has_selection && '' === $only_taxonomy
+					&& ! ( isset( $_GET['schrack_filters_full'] ) && '1' === $_GET['schrack_filters_full'] )
+					&& apply_filters( 'schrack_wc_sync_lazy_attribute_options', true );
 				?>
-				<details class="schrack-attribute-filter" <?php echo $has_selection ? 'open' : ''; ?>>
+				<details class="schrack-attribute-filter" data-attribute-taxonomy="<?php echo esc_attr( $taxonomy ); ?>" data-attribute-category="<?php echo esc_attr( (string) (int) ( $filters['category'] ?? 0 ) ); ?>" <?php echo $has_selection ? 'open' : ''; ?>>
 					<summary class="schrack-attribute-filter__summary">
 						<span><?php echo esc_html( $group['label'] ); ?></span>
 						<?php if ( $has_selection ) : ?>
 							<span class="schrack-attribute-filter__badge"><?php echo esc_html( (string) count( $selected_ids ) ); ?></span>
 						<?php endif; ?>
 					</summary>
+					<?php if ( $defer_options ) : ?>
+						<div data-attribute-options-pending><span role="status"><?php esc_html_e( 'Valorile se încarcă la deschidere.', 'schrack-woocommerce-sync' ); ?></span></div>
+						<noscript><button type="submit" name="schrack_filters_full" value="1"><?php esc_html_e( 'Afișează valorile filtrelor', 'schrack-woocommerce-sync' ); ?></button></noscript>
+					<?php else : ?>
 					<?php if ( count( $group['terms'] ) > 8 ) : ?>
 						<label class="schrack-attribute-filter__search">
 							<span class="screen-reader-text"><?php echo esc_html( sprintf( __( 'Cauta in %s', 'schrack-woocommerce-sync' ), $group['label'] ) ); ?></span>
@@ -454,12 +466,20 @@ class Schrack_Product_Filter_Renderer {
 							</label>
 						<?php endforeach; ?>
 					</div>
+					<?php endif; ?>
 				</details>
 			<?php endforeach; ?>
 		</div>
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/** Public catalog values only; no product queries or visitor state. */
+	public function render_attribute_options( int $category, string $taxonomy ): string {
+		// Registered WooCommerce taxonomies may contain percent-encoded accents.
+		if ( ! str_starts_with( $taxonomy, 'pa_' ) || strlen( $taxonomy ) > 32 || ! taxonomy_exists( $taxonomy ) ) { return ''; }
+		return $this->attribute_filters_html( array( 'category' => max( 0, $category ), 'attributes' => array() ), $taxonomy );
 	}
 
 	/**

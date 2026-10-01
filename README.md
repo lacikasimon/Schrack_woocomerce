@@ -823,3 +823,15 @@ for that page; cached font files retain the original typefaces on later visits.
 This avoids late font swaps and reduces competition with product hero images.
 The generated files, other fonts and admin/editor pages are unchanged.
 Set `schrack_wc_sync_optional_catalog_fonts` to false to restore native display.
+
+### Technical facet values on demand (0.1.124)
+
+Closed, unselected technical attribute groups initially contain their labels
+without all value checkboxes. Opening a group makes one nonce-protected,
+read-only public AJAX request for that category and taxonomy. Original ordering,
+counts and selected controls remain intact. Concurrent opens share the pending
+request; stale responses cannot populate replaced groups. Errors offer a manual
+retry, without page reloads. Selected URL filters are rendered completely.
+A JavaScript-free GET form submits `schrack_filters_full=1` to render all values.
+Set `schrack_wc_sync_lazy_attribute_options` to false for the original rendering.
+Checks: `php tests/attribute-options.php`, `node tests/frontend-attribute-options.js`.

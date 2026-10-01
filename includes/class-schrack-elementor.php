@@ -59,6 +59,8 @@ class Schrack_Elementor {
 		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::AJAX_ACTION, array( $this, 'ajax_filter_products' ) );
 		add_action( 'wp_ajax_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::CATEGORY_AJAX_ACTION, array( $this, 'ajax_filter_categories' ) );
+		add_action( 'wp_ajax_' . Schrack_Product_Filter_Renderer::ATTRIBUTE_AJAX_ACTION, array( $this, 'ajax_attribute_options' ) );
+		add_action( 'wp_ajax_nopriv_' . Schrack_Product_Filter_Renderer::ATTRIBUTE_AJAX_ACTION, array( $this, 'ajax_attribute_options' ) );
 		add_action( 'wp_ajax_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_filter( 'body_class', array( $this, 'shop_archive_body_class' ) );
@@ -1158,6 +1160,17 @@ class Schrack_Elementor {
 		);
 
 		wp_send_json_success( $this->renderer->render_results( $config, $filters ) );
+	}
+
+	/** Read-only public catalog facet request, protected like product filtering. */
+	public function ajax_attribute_options(): void {
+		check_ajax_referer( Schrack_Product_Filter_Renderer::NONCE_ACTION, 'nonce' );
+		if ( ! class_exists( 'WooCommerce' ) ) { wp_send_json_error( array(), 400 ); }
+		$category = isset( $_POST['category'] ) && is_scalar( $_POST['category'] ) ? absint( $_POST['category'] ) : 0;
+		$taxonomy = isset( $_POST['taxonomy'] ) && is_string( $_POST['taxonomy'] ) ? wp_unslash( $_POST['taxonomy'] ) : '';
+		$html = $this->renderer->render_attribute_options( $category, $taxonomy );
+		if ( '' === $html ) { wp_send_json_error( array(), 400 ); }
+		wp_send_json_success( array( 'html' => $html ) );
 	}
 
 	/**
