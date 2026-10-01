@@ -5,13 +5,14 @@ const fs = require('node:fs');
 const code = fs.readFileSync(require('node:path').join(__dirname, '../assets/frontend-onetap.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function page({saved = null, blocked = false, missingButton = false, hidden = null, translations = false, languageFailure = false, styles = false} = {}) {
+function page({saved = null, blocked = false, missingButton = false, hidden = null, translations = false, languageFailure = false, styles = false, markup = false, markupFailure = false} = {}) {
 	const listeners = {};
 	const downloads = [];
 	const messages = [];
 	const replayed = [];
 	const fetches = [];
 	let languageFailureRemaining = languageFailure;
+	let markupFailureRemaining = markupFailure;
 	const browserWindow = {jQuery: callback => callback(), onetapAjaxObject: {nonce: 'request-only', languages: {}}};
 	const attrs = {};
 	let opens = 0;
@@ -21,7 +22,7 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 		after: node => messages.push(node),
 		click: () => { opens++; },
 	};
-	const panel = {setAttribute: (key, value) => { panel[key] = value; }};
+	const panel = {getAttribute: () => markup ? '/uploads/panel-hash.json' : null, setAttribute: (key, value) => { panel[key] = value; }};
 	const container = {style: {display: 'none'}};
 	const sources = ['hotkeys.js', 'script.min.js'].map(url => ({
 		dataset: {schrackOnetapSrc: url},
@@ -53,6 +54,11 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 	}};
 	vm.runInNewContext(code, {document, window: browserWindow, fetch: async (url, options) => {
 		fetches.push({url, options});
+		if (url.includes('panel-')) {
+			const ok = !markupFailureRemaining;
+			markupFailureRemaining = false;
+			return {ok, json: async () => ({html: '<section class="onetap-container"><button>Native control</button></section>'})};
+		}
 		const ok = !languageFailureRemaining;
 		languageFailureRemaining = false;
 		return {ok, json: async () => ({en: {header: {title: 'Accessibility'}}, ro: {header: {title: 'Accesibilitate'}}})};
@@ -87,6 +93,25 @@ test('public translations download only on activation, before native scripts, wi
 	assert.equal(p.browserWindow.onetapAjaxObject.nonce, 'request-only');
 	await p.complete();
 	assert.equal(p.opens(), 1);
+});
+
+test('native panel HTML downloads only on activation and precedes vendor scripts', async () => {
+	const p=page({markup:true,translations:true,styles:true}); await flush(); assert.equal(p.fetches.length,0);
+	p.event('click');p.event('click');await flush();
+	assert.equal(p.fetches.filter(f=>f.url.includes('panel-')).length,1);
+	assert.ok(p.panel.innerHTML.includes('Native control'));assert.equal(p.downloads.length,0);
+	assert.equal(p.fetches.find(f=>f.url.includes('panel-')).options.credentials,'omit');
+	await p.complete();assert.equal(p.opens(),1);
+});
+test('saved and hidden preferences restore the exact native panel immediately', async () => {
+	for(const options of [{saved:'existing'},{hidden:'existing'},{blocked:true}]) {
+		const p=page({...options,markup:true});await flush();assert.equal(p.fetches.length,1);assert.ok(p.panel.innerHTML.includes('Native control'));
+		await p.complete();assert.equal(p.opens(),0);
+	}
+});
+test('panel network failure exposes manual retry and never starts vendor initialization', async () => {
+	const p=page({markup:true,markupFailure:true});p.event('click');await flush();assert.equal(p.downloads.length,0);assert.equal(p.fetches.length,1);
+	assert.match(p.attrs.title,/eșuat/);p.event('click');await p.complete();assert.equal(p.fetches.length,2);assert.equal(p.opens(),1);
 });
 
 test('translation failures show an error and retry only on user demand', async () => {

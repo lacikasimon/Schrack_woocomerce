@@ -239,6 +239,29 @@ try {
 	add_filter( 'schrack_wc_sync_onetap_languages_on_demand', '__return_false' );
 	verify_image( null === $prepare->invoke( $performance, $localized ), 'The language rollback filter must restore native inline data.' );
 	remove_filter( 'schrack_wc_sync_onetap_languages_on_demand', '__return_false' );
+	$markup_prepare = new ReflectionMethod( $performance, 'prepare_onetap_markup' );
+	$panel_inner = '<section class="onetap-container"><form><input type="radio" name="hide_toolbar_duration" checked></form>' . str_repeat( '<button type="button">Accesibilitate</button>', 20 ) . '<svg><path d="M0 0" /></svg></section>';
+	$panel_markup = '<nav class="onetap-accessibility onetap-plugin-onetap" aria-label="Accessibility Options">' . $panel_inner . '</nav>';
+	$native_markup = '<section class="onetap-container-toggle"><button>Native toggle</button></section>' . $panel_markup . '<div class="onetap-markup-reading-line"></div>';
+	$small_markup = $markup_prepare->invoke( $performance, $native_markup );
+	verify_image( str_contains( $small_markup, 'data-schrack-onetap-markup=' ) && ! str_contains( $small_markup, 'hide_toolbar_duration' ), 'Only the inactive native panel is removed from the initial DOM.' );
+	verify_image( str_contains( $small_markup, 'Native toggle') && str_contains($small_markup,'onetap-markup-reading-line') && str_contains($small_markup,'aria-label="Accessibility Options"'), 'Native button, reading overlays and panel semantics retain their original markup.' );
+	$panel_file = glob($language_directory . '/schrack-frontend-cache/onetap/panel-*.json')[0];
+	verify_image( json_decode(file_get_contents($panel_file),true)['html'] === $panel_inner, 'Native labels, radio controls and SVG are cached without altering a byte.' );
+	verify_image( $small_markup === $markup_prepare->invoke($performance,$native_markup) && 1 === count(glob(dirname($panel_file).'/panel-*.json')), 'Repeated renders reuse the identical immutable panel asset.' );
+	verify_image( $small_markup !== $markup_prepare->invoke($performance,str_replace('Accesibilitate','Accessibility',$native_markup)), 'Changed locale or settings generate a new panel URL.' );
+	foreach (array('<script>bad()</script>','<input type="hidden" name="_wpnonce" value="secret">','<form action="/admin/">private</form>','<button onclick="bad()">Action</button>') as $unsafe) {
+		$other=str_replace('</section></nav>',$unsafe.'</section></nav>',$native_markup);
+		verify_image($other===$markup_prepare->invoke($performance,$other),'Unknown executable or request-specific panel output stays in its native rendering path.');
+	}
+	verify_image($panel_markup.$panel_markup === $markup_prepare->invoke($performance,$panel_markup.$panel_markup),'Ambiguous duplicate panels retain native rendering.');
+	$GLOBALS['uploads_test']['error']='Unavailable';
+	verify_image($native_markup===$markup_prepare->invoke($performance,$native_markup),'A cache write failure retains the complete native toolbar.');
+	unset($GLOBALS['uploads_test']['error']);
+	if (isset($argv[2])) {
+		$real_native=file_get_contents($argv[2]);
+		verify_image(is_string($real_native) && str_contains($markup_prepare->invoke($performance,$real_native),'data-schrack-onetap-markup='),'Inspected live vendor markup, including its native duration form, can be loaded on demand.');
+	}
 } finally {
 	foreach ( glob( $language_directory . '/schrack-frontend-cache/onetap/*.json' ) as $file ) { unlink( $file ); }
 	rmdir( $language_directory . '/schrack-frontend-cache/onetap' ); rmdir( $language_directory . '/schrack-frontend-cache' ); rmdir( $language_directory );

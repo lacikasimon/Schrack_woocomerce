@@ -10,6 +10,8 @@
 		let languagesReady = !languageSource;
 		const toggle = document.querySelector('.onetap-toggle');
 		const panel = document.querySelector('nav.onetap-accessibility');
+		const markupSource = panel && panel.getAttribute('data-schrack-onetap-markup');
+		let markupReady = !markupSource;
 		const container = document.querySelector('.onetap-container-toggle');
 		let pending = null;
 		let ready = false;
@@ -90,7 +92,18 @@
 				window.onetapAjaxObject.languages = languages;
 				languagesReady = true;
 			});
-			const prerequisites = Promise.all([translations, Promise.all(styles.map(stylesheet))]).then(function () {
+			const markup = markupReady ? Promise.resolve() : fetch(markupSource, {credentials: 'omit', cache: 'force-cache'}).then(function (response) {
+				if (!response.ok) throw new Error('OneTap panel could not load');
+				return response.json();
+			}).then(function (result) {
+				if (!result || typeof result.html !== 'string' || result.html.length > 262144
+					|| !/^\s*<section class="onetap-container">/.test(result.html)
+					|| /<(?:nav|script|style|iframe)\b|<form\b(?!>)|\b(?:nonce|on\w+)\s*=/i.test(result.html)
+					|| (result.html.match(/<form>/g) || []).length > 1) throw new Error('Invalid OneTap panel');
+				panel.innerHTML = result.html;
+				markupReady = true;
+			});
+			const prerequisites = Promise.all([translations, Promise.all(styles.map(stylesheet)), markup]).then(function () {
 				if (panel) panel.setAttribute('data-schrack-onetap-css-ready', '1');
 			});
 			pending = sources.reduce(function (previous, source) {

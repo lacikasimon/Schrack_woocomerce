@@ -12,6 +12,7 @@ class Schrack_Frontend_Performance {
 	private bool $onetap_on_demand = false;
 	private string $onetap_languages_url = '';
 	private bool $preload_product_image = false;
+	private array $onetap_renderer = array();
 
 	public function init(): void {
 		add_filter( 'style_loader_tag', array( $this, 'inline_critical_style' ), 20, 4 );
@@ -204,6 +205,7 @@ class Schrack_Frontend_Performance {
 			}
 		}
 		$this->onetap_on_demand = true;
+		$this->configure_onetap_markup();
 		$data = $scripts->get_data( 'accessibility-onetap', 'data' );
 		$prepared = is_string( $data ) ? $this->prepare_onetap_languages( $data ) : null;
 		if ( null !== $prepared ) {
@@ -225,9 +227,16 @@ class Schrack_Frontend_Performance {
 			return null;
 		}
 		$json = wp_json_encode( $config['languages'] );
-		if ( ! is_string( $json ) || strlen( $json ) < 16384 || strlen( $json ) > 786432 ) {
-			return null;
-		}
+		$url = is_string( $json ) ? $this->cache_onetap_asset( $json, 'languages', 16384, 786432 ) : null;
+		if ( null === $url ) { return null; }
+		$config['languages'] = new stdClass();
+		$small = wp_json_encode( $config );
+		return is_string( $small ) ? array( 'data' => 'var onetapAjaxObject = ' . $small . ';', 'url' => $url ) : null;
+	}
+
+	/** Only immutable public translations or native panel HTML may use this cache. */
+	private function cache_onetap_asset( string $json, string $prefix, int $minimum, int $maximum ): ?string {
+		if ( strlen( $json ) < $minimum || strlen( $json ) > $maximum ) { return null; }
 		$uploads = wp_upload_dir( null, false );
 		if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] )
 			|| ! in_array( wp_parse_url( $uploads['baseurl'], PHP_URL_SCHEME ), array( 'http', 'https' ), true ) ) {
@@ -242,7 +251,7 @@ class Schrack_Frontend_Performance {
 		if ( ! $directory || ! str_starts_with( $directory, $root . DIRECTORY_SEPARATOR ) ) {
 			return null;
 		}
-		$name = 'languages-' . hash( 'sha256', $json ) . '.json';
+		$name = $prefix . '-' . hash( 'sha256', $json ) . '.json';
 		$path = $directory . '/' . $name;
 		if ( is_link( $path ) ) {
 			return null;
@@ -266,12 +275,62 @@ class Schrack_Frontend_Performance {
 				return null;
 			}
 		}
-		$config['languages'] = new stdClass();
-		$small = wp_json_encode( $config );
-		return is_string( $small ) ? array(
-			'data' => 'var onetapAjaxObject = ' . $small . ';',
-			'url' => trailingslashit( $uploads['baseurl'] ) . 'schrack-frontend-cache/onetap/' . $name,
-		) : null;
+		return trailingslashit( $uploads['baseurl'] ) . 'schrack-frontend-cache/onetap/' . $name;
+	}
+
+	/** Wrap just the inspected native footer callback; other footer output is untouched. */
+	private function configure_onetap_markup(): void {
+		global $wp_filter;
+		if ( is_preview() || ! apply_filters( 'schrack_wc_sync_onetap_markup_on_demand', true )
+			|| ! isset( $wp_filter['wp_footer']->callbacks[10] ) || $this->onetap_renderer ) { return; }
+		foreach ( $wp_filter['wp_footer']->callbacks[10] as $registered ) {
+			$callback = $registered['function'];
+			if ( ! is_array( $callback ) || ! is_object( $callback[0] )
+				|| 'Accessibility_Onetap_Public' !== get_class( $callback[0] ) || 'render_accessibility_template' !== $callback[1] ) { continue; }
+			$method = new ReflectionMethod( $callback[0], $callback[1] );
+			$path = realpath( WP_PLUGIN_DIR . '/accessibility-onetap/public/class-accessibility-onetap-public.php' );
+			if ( ! $path || $path !== realpath( $method->getFileName() ) ) { return; }
+			$this->onetap_renderer = $callback;
+			remove_action( 'wp_footer', $callback, 10 );
+			add_action( 'wp_footer', array( $this, 'render_onetap_markup' ), 10 );
+			return;
+		}
+	}
+
+	public function render_onetap_markup(): void {
+		if ( ! $this->onetap_renderer ) { return; }
+		ob_start();
+		try {
+			call_user_func( $this->onetap_renderer );
+			$html = (string) ob_get_clean();
+		} catch ( Throwable $error ) {
+			ob_end_flush();
+			throw $error;
+		}
+		// Already escaped native vendor output, transformed only at its known nav.
+		echo $this->prepare_onetap_markup( $html ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	private function prepare_onetap_markup( string $html ): string {
+		if ( ! class_exists( 'WP_HTML_Tag_Processor' ) || strlen( $html ) > 262144
+			|| 1 !== preg_match_all( '~(<nav\b[^>]*\bclass="onetap-accessibility onetap-plugin-onetap"[^>]*>)(.*?)</nav>~s', $html, $matches, PREG_SET_ORDER ) ) { return $html; }
+		$match = $matches[0];
+		// No request config, executable code or unfamiliar nested templates in a public file.
+		if ( ! preg_match( '~^\s*<section class="onetap-container">~', $match[2] )
+			|| preg_match( '~<(?:nav|script|style|iframe)\b|<form\b(?!>)|\b(?:nonce|on\w+)\s*=~i', $match[2] )
+			|| substr_count( $match[2], '<form>' ) > 1 ) { return $html; }
+		$inputs = new WP_HTML_Tag_Processor( $match[2] );
+		while ( $inputs->next_tag( 'INPUT' ) ) {
+			if ( ! in_array( $inputs->get_attribute( 'type' ), array( 'checkbox', 'radio' ), true ) ) { return $html; }
+		}
+		$json = wp_json_encode( array( 'html' => $match[2] ) );
+		$url = is_string( $json ) ? $this->cache_onetap_asset( $json, 'panel', 256, 262144 ) : null;
+		if ( null === $url ) { return $html; }
+		$shell = new WP_HTML_Tag_Processor( $match[1] . '</nav>' );
+		if ( ! $shell->next_tag( 'NAV' ) ) { return $html; }
+		$shell->set_attribute( 'data-schrack-onetap-markup', $url );
+		$shell->set_attribute( 'inert', true );
+		return str_replace( $match[0], $shell->get_updated_html(), $html );
 	}
 
 	/** Closed toolbar needs only its shell; load the full vendor CSS before activation. */

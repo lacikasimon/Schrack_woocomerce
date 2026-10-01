@@ -835,3 +835,16 @@ retry, without page reloads. Selected URL filters are rendered completely.
 A JavaScript-free GET form submits `schrack_filters_full=1` to render all values.
 Set `schrack_wc_sync_lazy_attribute_options` to false for the original rendering.
 Checks: `php tests/attribute-options.php`, `node tests/frontend-attribute-options.js`.
+
+### Native OneTap panel HTML on demand (0.1.125)
+
+For the inspected OneTap 2.14.0 storefront callback, the original public panel
+HTML is published as an immutable JSON asset. The toolbar button, reading
+overlays and native configuration remain in the page. The loader restores the
+complete native panel before running OneTap's scripts, in parallel with its
+stylesheet and translations. Saved or hidden preferences start this immediately;
+new visitors load it on activation or the existing keyboard shortcuts.
+Only the known callback and markup contract are eligible. A new vendor source,
+unknown form/input, executable markup or a cache write failure keeps the original
+HTML. The cache includes no nonce or request configuration.
+Rollback: `schrack_wc_sync_onetap_markup_on_demand` set to false.
