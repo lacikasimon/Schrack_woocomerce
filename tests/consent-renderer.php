@@ -24,7 +24,13 @@ function renderer( array $policy, array $pro ): Schrack_Consent_Renderer {
 }
 $r = renderer($policy,$pro); $result = $r->render($markup);
 verify_image(str_contains($result,'Preferințe cookie</p>') && str_contains($result,'<a href="/privacy/">Detalii</a>'), 'Existing localized text and allowed legal links are in server markup.');
-verify_image(str_contains($result,'cookieadmin_box') && str_contains($result,'cookieadmin_bottom_left'), 'Native box size and position are present before script initialization.');
+verify_image(str_contains($result,'cookieadmin_box') && str_contains($result,'cookieadmin_bottom cookieadmin_left') && !str_contains($result,'cookieadmin_bottom_left'), 'Native separate position classes anchor the box before script initialization.');
+foreach (array('bottom_right','top_left','top_right') as $position) {
+ $positionPolicy=$policy;$positionPolicy['cookieadmin_position']=$position;
+ $positionResult=renderer($positionPolicy,$pro)->render($markup);
+ [$vertical,$horizontal]=explode('_',$position);
+ verify_image(str_contains($positionResult,'cookieadmin_'.$vertical.' cookieadmin_'.$horizontal), 'Each supported corner has both native position classes before first paint.');
+}
 verify_image(str_contains($result,'Respinge tot</button>') && str_contains($result,'Acceptă tot</button>'), 'All original button IDs/classes retain localized labels.');
 verify_image(str_contains($result,'Native attribution') && str_contains($result,'Native preference controls'), 'Attribution and preference controls remain unchanged.');
 verify_image(!str_contains($result,'display:block') && !str_contains($result,'<script'), 'Cached markup contains no visitor choice and shows nothing before browser consent checks.');

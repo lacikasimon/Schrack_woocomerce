@@ -62,7 +62,10 @@ class Schrack_Consent_Renderer {
 		while ( $tags->next_tag( 'DIV' ) ) {
 			if ( $tags->has_class( 'cookieadmin_law_container' ) ) {
 				$tags->add_class( 'cookieadmin_box' );
-				$tags->add_class( 'cookieadmin_' . $this->policy['cookieadmin_position'] );
+				// Native JS adds the two position classes separately, not one combined class.
+				foreach ( explode( '_', $this->policy['cookieadmin_position'] ) as $position ) {
+					$tags->add_class( 'cookieadmin_' . $position );
+				}
 				$this->rendered = true;
 				return $tags->get_updated_html();
 			}
