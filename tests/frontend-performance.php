@@ -179,7 +179,35 @@ try {
 		file_put_contents( $font_path, $font_css );
 		$font_inline = $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', $font_url . '?ver=1', 'screen' );
 		verify_image( str_contains( $font_inline, '<style' ) && str_contains( $font_inline, str_replace( 'font-display:swap', 'font-display:optional', $font_css ) ) && str_contains( $font_inline, 'media="screen"' ), 'Verified local font URLs and cascade media remain intact with optional font display.' );
+		$rewritten_font = str_replace( 'font-display:optional', 'font-display:swap', $font_inline );
+		if ( isset( $argv[5] ) ) {
+			// Read only the official LiteSpeed source classes; never bootstrap its plugin or WordPress.
+			foreach ( array( 'root', 'base', 'optimizer' ) as $class ) { require_once rtrim( $argv[5], '/' ) . '/src/' . $class . '.cls.php'; }
+			$config = new class extends \LiteSpeed\Root {};
+			$config->set_conf( \LiteSpeed\Base::O_OPTM_CSS_FONT_DISPLAY, true );
+			$rewritten_font = ( new \LiteSpeed\Optimizer() )->optm_font_face( $font_inline );
+			verify_image( str_contains( $rewritten_font, 'font-display:swap;' ) && ! str_contains( $rewritten_font, 'font-display:optional;' ), 'The actual LiteSpeed optimizer reproduces the production override despite data-no-optimize.' );
+		}
+		$unmarked_font = '<style id="native-icons-css">@font-face{font-family:icons;font-display:swap;src:url(/icons.woff2)}</style>';
+		$font_document = '<head>' . $rewritten_font . $unmarked_font . '</head><body><p>Text retained</p></body>';
+		$restored_font = $performance->restore_optional_font_display( $font_document );
+		verify_image( str_contains( $restored_font, 'font-display:optional;' ) && str_contains( $restored_font, $unmarked_font ) && str_contains( $restored_font, '<body><p>Text retained</p></body>' ), 'Only our marked local faces are restored after vendor optimization; native icon faces and document content are untouched.' );
+		verify_image( $restored_font === $performance->restore_optional_font_display( $restored_font ), 'Font restoration is idempotent.' );
+		foreach ( array( str_replace( 'data-schrack-optional-font="poppins"', 'data-schrack-optional-font="unknown"', $font_document ), str_replace( 'elementor-gf-local-poppins-css', 'third-party-css', $font_document ), str_replace( 'data-no-optimize="1"', 'data-no-optimize="0"', $font_document ) ) as $unfamiliar_fonts ) {
+			verify_image( $unfamiliar_fonts === $performance->restore_optional_font_display( $unfamiliar_fonts ), 'Unknown family, replaced style id or missing ownership marker must retain native font handling.' );
+		}
+		$GLOBALS['preview_test'] = true;
+		verify_image( $font_document === $performance->restore_optional_font_display( $font_document ), 'Editor preview must retain native font handling.' );
+		$GLOBALS['preview_test'] = false;
+		$was_catalog = $GLOBALS['catalog_test'];
+		$GLOBALS['catalog_test'] = false;
+		$was_front_page = $GLOBALS['front_page_test'];
+		$GLOBALS['front_page_test'] = false;
+		verify_image( $font_document === $performance->restore_optional_font_display( $font_document ), 'Cart, checkout and other non-catalog documents are unaffected.' );
+		$GLOBALS['front_page_test'] = $was_front_page;
+		$GLOBALS['catalog_test'] = $was_catalog;
 		add_filter( 'schrack_wc_sync_optional_catalog_fonts', '__return_false' );
+		verify_image( $font_document === $performance->restore_optional_font_display( $font_document ), 'Font rollback also disables the LiteSpeed compatibility pass.' );
 		verify_image( str_contains( $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', $font_url ), $font_css ), 'Optional font rollback retains the native font display strategy.' );
 		remove_filter( 'schrack_wc_sync_optional_catalog_fonts', '__return_false' );
 		verify_image( $font_tag === $performance->inline_local_font_style( $font_tag, 'elementor-gf-local-poppins', 'https://cdn.example/poppins.css' ), 'Replaced font stylesheets retain native loading.' );

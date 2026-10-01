@@ -20,6 +20,7 @@ class Schrack_Frontend_Performance {
 		add_filter( 'style_loader_tag', array( $this, 'inline_catalog_style' ), 21, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_elementor_style' ), 22, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_local_font_style' ), 23, 4 );
+		add_filter( 'litespeed_buffer_finalize', array( $this, 'restore_optional_font_display' ), 30 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_vendor_asset_style' ), 24, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'delay_onetap_panel_style' ), 23, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'delay_onetap_font_style' ), 25, 4 );
@@ -510,9 +511,28 @@ class Schrack_Frontend_Performance {
 		// cold, slow connection. Warm fonts still retain the original typefaces.
 		if ( apply_filters( 'schrack_wc_sync_optional_catalog_fonts', true ) ) {
 			$css = preg_replace( '~\bfont-display\s*:\s*(?:swap|block|auto|fallback)\s*(?=;)~i', 'font-display:optional', $css );
+			$marker = ' data-schrack-optional-font="' . esc_attr( $match[1] ) . '"';
 		}
 		$this->catalog_inline_bytes += strlen( $css );
-		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
+		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1"' . ( $marker ?? '' ) . '>' . $css . '</style>';
+	}
+
+	/** LiteSpeed 7.9 rewrites every inline font face, even data-no-optimize styles. */
+	public function restore_optional_font_display( string $html ): string {
+		if ( is_admin() || ! $this->is_catalog_page() || is_preview()
+			|| ! apply_filters( 'schrack_wc_sync_optional_catalog_fonts', true )
+			|| ! str_contains( $html, 'data-schrack-optional-font=' ) ) { return $html; }
+		return preg_replace_callback( '~(<style\b[^>]*>)([^<]{1,65535}+)(</style>)~i', static function( array $match ): string {
+			if ( ! str_contains( $match[1], 'data-schrack-optional-font=' ) ) { return $match[0]; }
+			$tag = new WP_HTML_Tag_Processor( $match[0] );
+			if ( ! $tag->next_tag( 'STYLE' ) ) { return $match[0]; }
+			$family = $tag->get_attribute( 'data-schrack-optional-font' );
+			if ( ! in_array( $family, array( 'poppins', 'figtree' ), true )
+				|| 'elementor-gf-local-' . $family . '-css' !== $tag->get_attribute( 'id' )
+				|| '1' !== $tag->get_attribute( 'data-no-optimize' ) ) { return $match[0]; }
+			$css = preg_replace( '~\bfont-display\s*:\s*(?:swap|block|auto|fallback)\s*(?=;)~i', 'font-display:optional', $match[2] );
+			return $match[1] . $css . $match[3];
+		}, $html ) ?? $html;
 	}
 
 	/** Preserve inspected vendor rules and resolve only their known local assets. */

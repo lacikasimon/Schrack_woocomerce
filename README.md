@@ -859,3 +859,14 @@ removes two network requests competing with the hero image. No unused script
 preload is emitted for an inline source. Custom URLs, integrity-protected tags,
 unknown versions or source files retain native external loading.
 Rollback: `schrack_wc_sync_inline_native_consent` set to false.
+
+### Preserve optional local fonts after LiteSpeed (0.1.127)
+
+LiteSpeed 7.9.1's final font-face pass overrides even styles marked
+`data-no-optimize` with its global `swap` setting. On public catalog pages,
+our own two verified local font styles now carry an ownership marker. A
+compatibility pass after the native optimizer restores their existing
+`optional` display rule while retaining every face, URL, media and cascade
+position. Native icon fonts, unmarked styles, checkout, account and editor
+previews retain their original handling. No LiteSpeed setting is saved.
+Rollback: `schrack_wc_sync_optional_catalog_fonts` set to false.
