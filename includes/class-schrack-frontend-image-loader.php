@@ -593,6 +593,7 @@ class Schrack_Frontend_Image_Loader {
 	 * @return array<string,mixed>
 	 */
 	private function remote_image_attributes( WC_Product $product, mixed $size, array $attr, string $image_url ): array {
+		$explicit_decoding = isset( $attr['decoding'] );
 		unset( $attr['src'], $attr['srcset'], $attr['sizes'], $attr['data-schrack-image-thumbnail'], $attr['data-schrack-image-fallback'] );
 
 		$attr['src']      = $image_url;
@@ -623,6 +624,7 @@ class Schrack_Frontend_Image_Loader {
 			}
 			if ( class_exists( 'Schrack_Product_Hero_Cache' ) ) {
 				$cached = Schrack_Product_Hero_Cache::attributes( $product, $image_url );
+				if ( $explicit_decoding ) { unset( $cached['decoding'] ); }
 				if ( $cached ) { $attr = array_merge( $attr, $cached ); }
 			}
 			$attr['loading'] = 'eager';

@@ -76,6 +76,16 @@ try {
  $attributes = $cache::attributes( $p, $url );
  check_hero( count( $requests ) === 1 && count( $purges ) === 1, 'One JPEG request publishes all variants and purges only its product.' );
  check_hero( str_contains( $attributes['srcset'] ?? '', ' 680w' ) && 340 === $attributes['width'] && 380 === $attributes['height'], 'Responsive intermediate candidate and original aspect ratio.' );
+ check_hero( 'sync' === ( $attributes['decoding'] ?? '' ), 'Small genuine WebP heroes request atomic painting with the page.' );
+ $sync_rollback = static fn() => false;
+ add_filter( 'schrack_wc_sync_sync_product_hero', $sync_rollback );
+ check_hero( ! isset( $cache::attributes( $p, $url )['decoding'] ), 'Decoding rollback preserves all cached responsive candidates.' );
+ remove_filter( 'schrack_wc_sync_sync_product_hero', $sync_rollback );
+ $large_file = $root . '/schrack-frontend-cache/product-heroes/' . $meta[1]['_schrack_product_hero_webp']['key'] . '-1190.webp';
+ $small_bytes = file_get_contents( $large_file );
+ file_put_contents( $large_file, str_repeat( "\0", 32769 - strlen( $small_bytes ) ), FILE_APPEND ); clearstatcache( true, $large_file );
+ check_hero( ! isset( $cache::attributes( $p, $url )['decoding'] ), 'A large retina candidate must retain default async decoding even when its small preview is tiny.' );
+ file_put_contents( $large_file, $small_bytes ); clearstatcache( true, $large_file );
  foreach ( array( 340, 680, 1190 ) as $w ) {
   $file = $root . '/schrack-frontend-cache/product-heroes/' . $meta[1]['_schrack_product_hero_webp']['key'] . '-' . $w . '.webp';
   $size = getimagesize( $file ); check_hero( $size[0] === $w && IMAGETYPE_WEBP === $size[2], 'Native GD must produce genuine WebP at every width.' );

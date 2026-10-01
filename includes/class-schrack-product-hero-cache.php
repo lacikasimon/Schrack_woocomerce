@@ -41,15 +41,25 @@ class Schrack_Product_Hero_Cache {
 		$uploads = wp_upload_dir( null, false );
 		if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] ) ) { return array(); }
 		$candidates = array();
+		$small = true;
 		foreach ( array( 340, 680, 1190 ) as $width ) {
 			$size = $meta['sizes'][ $width ] ?? null;
 			if ( ! is_array( $size ) || (int) ( $size['width'] ?? 0 ) !== $width || (int) ( $size['height'] ?? 0 ) < 2 ) { return array(); }
 			$file = '/' . $meta['key'] . '-' . $width . '.webp';
-			if ( ! is_file( $uploads['basedir'] . self::DIRECTORY . $file ) ) { return array(); }
+			$path = $uploads['basedir'] . self::DIRECTORY . $file;
+			if ( ! is_file( $path ) ) { return array(); }
+			$bytes = filesize( $path );
+			$small = $small && false !== $bytes && $bytes > 0 && $bytes <= 32768;
 			$candidates[ $width ] = $uploads['baseurl'] . self::DIRECTORY . $file;
 		}
-		return array( 'src' => $candidates[340], 'srcset' => $candidates[340] . ' 340w, ' . $candidates[680] . ' 680w, ' . $candidates[1190] . ' 1190w',
+		$attributes = array( 'src' => $candidates[340], 'srcset' => $candidates[340] . ' 340w, ' . $candidates[680] . ' 680w, ' . $candidates[1190] . ' 1190w',
 			'width' => 340, 'height' => (int) $meta['sizes'][340]['height'] );
+		// Only small, pre-generated heroes may paint atomically with the page.
+		// Large images keep async decoding so they cannot hold up unrelated paints.
+		if ( $small && apply_filters( 'schrack_wc_sync_sync_product_hero', true, $product ) ) {
+			$attributes['decoding'] = 'sync';
+		}
+		return $attributes;
 	}
 
 	/** Scheduling never downloads or converts an image during an HTML request. */

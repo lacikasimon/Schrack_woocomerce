@@ -905,3 +905,15 @@ viewport or receives focus. Print, editor/preview, non-catalog pages and
 unsupported browsers retain ordinary rendering. No visibility hiding or
 network-dependent replacement is used.
 Rollback: `schrack_wc_sync_defer_footer_render` set to false.
+
+### Small cached product hero painting (0.1.131)
+
+The existing local WebP gallery hero requests `decoding="sync"` only when all
+three responsive variants are present and each is at most 32 KiB. This lets the
+browser paint a small, already preloaded hero together with the surrounding
+content. The remote fallback, large cached variants, lazy cards and explicitly
+specified decoding retain their existing behavior. No conversion or download
+runs during the HTML request. Rollback: `schrack_wc_sync_sync_product_hero`
+set to false. Verify with `tests/product-hero-cache.php` and
+`tests/frontend-lazy-images.php`, each passed an unmodified WordPress source tree;
+measure the actual LCP after deployment because decoding is a browser hint.

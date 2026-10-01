@@ -184,3 +184,20 @@ foreach ( array( 'https://custom.example/photo.webp', '/plugin/assets/home-categ
 }
 
 echo "Frontend image markup: {$checks} checks passed.\n";
+
+// Cache boundary fixture: source-only attribute integration, no file/HTTP access.
+
+if ( ! class_exists( 'Schrack_Product_Hero_Cache' ) ) {
+	class Schrack_Product_Hero_Cache {
+		public static function attributes( WC_Product $product, string $url ): array {
+			return array( 'src' => 'https://shop.example/uploads/hero.webp', 'srcset' => 'https://shop.example/uploads/hero.webp 340w', 'decoding' => 'sync' );
+		}
+	}
+}
+$cached = $remote_attributes->invoke( $loader, $product, 'woocommerce_single', array(), $supplier_url );
+verify_image( 'sync' === $cached['decoding'] && 'eager' === $cached['loading'] && 'high' === $cached['fetchpriority'], 'The small hero hint is combined with existing eager/high priority loading.' );
+$explicit = $remote_attributes->invoke( $loader, $product, 'woocommerce_single', array( 'decoding' => 'async' ), $supplier_url );
+verify_image( 'async' === $explicit['decoding'], 'Caller-specified decoding must override the cache hint.' );
+$cached_card = $remote_attributes->invoke( $loader, $product, 'woocommerce_thumbnail', array(), $supplier_url );
+verify_image( 'async' === $cached_card['decoding'] && 'lazy' === $cached_card['loading'], 'Cards retain asynchronous decoding and lazy loading.' );
+echo "Hero decoding boundary: {$checks} checks passed.\n";
