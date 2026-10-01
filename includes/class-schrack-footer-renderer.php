@@ -20,8 +20,7 @@ class Schrack_Footer_Renderer {
 
 		wp_enqueue_style( 'schrack-wc-footer' );
 		$defer_render = ! is_admin() && ! is_preview() && ! isset( $_GET['elementor-preview'] )
-			&& ( is_front_page() || ( function_exists( 'is_shop' ) && is_shop() )
-				|| ( function_exists( 'is_product' ) && is_product() )
+			&& ( ( function_exists( 'is_shop' ) && is_shop() )
 				|| ( function_exists( 'is_product_taxonomy' ) && is_product_taxonomy() ) )
 			&& apply_filters( 'schrack_wc_sync_defer_footer_render', true );
 

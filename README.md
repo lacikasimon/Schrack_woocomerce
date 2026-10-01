@@ -917,3 +917,25 @@ runs during the HTML request. Rollback: `schrack_wc_sync_sync_product_hero`
 set to false. Verify with `tests/product-hero-cache.php` and
 `tests/frontend-lazy-images.php`, each passed an unmodified WordPress source tree;
 measure the actual LCP after deployment because decoding is a browser hint.
+
+### Figtree variable font CSS and measured footer scope (0.1.132)
+
+On catalog pages, the inspected Elementor Figtree font CSS uses the same four
+WOFF2 files for seven weights each. Their actual `fvar` tables contain the `wght`
+axis from 300 to 900. Twenty-eight otherwise identical declarations become four
+`font-weight:300 900` declarations, retaining the original file URLs, normal and
+italic styles and both Latin Unicode ranges. Exact SHA-256 file checks and a
+complete seven-weight declaration check preserve native CSS when fonts or rules
+change. This saves about 10 KiB of critical CSS; it does not claim fewer font
+downloads. Rollback: `schrack_wc_sync_compact_figtree_fonts` set to false.
+
+`tests/variable-font-css.php` accepts the same first five arguments as
+`tests/frontend-performance.php`, then the inspected native WOFF2 directory and
+the original Elementor Figtree CSS file. It checks actual font hashes, preserved
+styles/Unicode ranges/URLs, replacement and missing-file fallback, idempotence,
+catalog integration, rollback and editor exclusion without HTTP or a database.
+
+Offscreen footer containment is now limited to shop and product category archives,
+where fresh mobile measurements improved. Home and single products retain native
+footer rendering after the latest product LCP measurements exceeded the earlier
+baseline. The footer HTML, links, keyboard access and print rendering remain intact.

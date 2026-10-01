@@ -507,6 +507,9 @@ class Schrack_Frontend_Performance {
 		if ( ! $font_count || ! is_string( $without_fonts ) || preg_match( '~url\s*\(~i', $without_fonts ) ) {
 			return $tag;
 		}
+		if ( 'figtree' === $match[1] && apply_filters( 'schrack_wc_sync_compact_figtree_fonts', true ) ) {
+			$css = $this->compact_figtree_font_faces( $css, $uploads );
+		}
 		// Avoid late font swaps and competing high-priority font downloads on a
 		// cold, slow connection. Warm fonts still retain the original typefaces.
 		if ( apply_filters( 'schrack_wc_sync_optional_catalog_fonts', true ) ) {
@@ -515,6 +518,44 @@ class Schrack_Frontend_Performance {
 		}
 		$this->catalog_inline_bytes += strlen( $css );
 		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1"' . ( $marker ?? '' ) . '>' . $css . '</style>';
+	}
+
+	/** Replace duplicate static declarations for four inspected variable font files. */
+	private function compact_figtree_font_faces( string $css, array $uploads ): string {
+		// These actual WOFF2 files have a single wght axis spanning 300 through 900.
+		// Replaced files keep Elementor's original CSS, including its matching rules.
+		$hashes = array(
+			'figtree-70ed8904.woff2' => 'a0cc105b3241fe952fd58ba226633f8ba733b16fd5419affbda6c8cc5c627a0b',
+			'figtree-3530fccd.woff2' => '7242fa62d13d46172816b266f03c027999faa3755a52c2124bc2c440f6f4b983',
+			'figtree-467cc915.woff2' => 'bf7828e2c258cffcfa50a048ee388a36b95bc16b452e8d36fa797635dbe15965',
+			'figtree-3c512d8e.woff2' => '4ba7d3d096695818fe0686be4f1e82c6b05134e18a22260336130335027462dd',
+		);
+		$clean = preg_replace( '~/\*.*?\*/~s', '', $css );
+		if ( ! is_string( $clean ) || 28 !== preg_match_all( '~@font-face\s*\{([^{}]+)\}~', $clean, $faces )
+			|| '' !== trim( preg_replace( '~@font-face\s*\{[^{}]+\}~', '', $clean ) ?? $clean ) ) { return $css; }
+		$groups = array();
+		$prefix = preg_quote( $uploads['baseurl'] . '/elementor/google-fonts/fonts/', '~' );
+		foreach ( $faces[1] as $body ) {
+			if ( 1 !== preg_match_all( '~\bfont-weight\s*:\s*([3-9]00)\s*;~', $body, $weights )
+				|| 1 !== preg_match_all( '~url\(\s*["\']?' . $prefix . '(figtree-[a-f0-9]{8}\.woff2)["\']?\s*\)~', $body, $sources )
+				|| ! isset( $hashes[ $sources[1][0] ] ) ) { return $css; }
+			$signature = preg_replace( '~\bfont-weight\s*:\s*[3-9]00\s*;~', 'font-weight:300 900;', $body );
+			if ( ! is_string( $signature ) ) { return $css; }
+			$groups[ $signature ]['weights'][] = (int) $weights[1][0];
+		}
+		if ( 4 !== count( $groups ) ) { return $css; }
+		foreach ( $groups as $group ) {
+			sort( $group['weights'] );
+			if ( array( 300, 400, 500, 600, 700, 800, 900 ) !== $group['weights'] ) { return $css; }
+		}
+		$root = realpath( $uploads['basedir'] . '/elementor/google-fonts/fonts' );
+		if ( ! $root ) { return $css; }
+		foreach ( $hashes as $file => $hash ) {
+			$path = realpath( $root . '/' . $file );
+			if ( ! $path || ! str_starts_with( $path, $root . DIRECTORY_SEPARATOR ) || ! is_readable( $path )
+				|| filesize( $path ) > 32768 || hash_file( 'sha256', $path ) !== $hash ) { return $css; }
+		}
+		return implode( "\n", array_map( static fn( $body ) => '@font-face{' . $body . '}', array_keys( $groups ) ) );
 	}
 
 	/** LiteSpeed 7.9 rewrites every inline font face, even data-no-optimize styles. */
