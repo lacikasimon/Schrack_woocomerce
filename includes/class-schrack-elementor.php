@@ -64,9 +64,16 @@ class Schrack_Elementor {
 		add_action( 'wp_ajax_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_action( 'wp_ajax_nopriv_' . Schrack_Header_Search_Renderer::AJAX_ACTION, array( $this, 'ajax_header_search' ) );
 		add_filter( 'body_class', array( $this, 'shop_archive_body_class' ) );
+		add_filter( 'schrack_wc_sync_render_category_explorer', array( $this, 'category_explorer_visible' ) );
 		add_filter( 'woocommerce_get_loop_display_mode', array( $this, 'category_archive_display_mode' ), 20 );
 		add_filter( 'woocommerce_add_to_cart_fragments', array( $this, 'cart_fragments' ) );
 		add_shortcode( 'schrack_account_page', array( $this, 'account_shortcode' ) );
+	}
+
+	/** The main shop's introduction already hides this duplicate navigator in our CSS. */
+	public function category_explorer_visible( bool $visible ): bool {
+		if ( ! $visible || ! apply_filters( 'schrack_wc_sync_skip_hidden_shop_explorer', true ) ) { return $visible; }
+		return ! ( $this->is_main_shop_page() && $this->is_shop_intro_context() );
 	}
 
 	/**

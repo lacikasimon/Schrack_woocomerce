@@ -883,6 +883,16 @@ lazy images, previews and other routes retain native loading. No fallback href
 or duplicate preload is added, and no image is downloaded during rendering.
 Rollback: `schrack_wc_sync_preload_category_hero` set to false.
 
+### Omit the hidden main-shop navigator (0.1.139)
+
+On the main shop route, the existing `schrack-shop-main-page` and
+`schrack-shop-has-intro` body classes already hide the duplicate category
+explorer in shop-archive.css. The same route predicates now skip its taxonomy,
+count and link work before rendering. The visible introduction/navigation,
+product filters, category archives and AJAX responses keep their existing
+handling. The inspected shop response contained 322 hidden category cards.
+Rollback: `schrack_wc_sync_skip_hidden_shop_explorer` set to false.
+
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 
 LiteSpeed 7.9.1's final font-face pass overrides even styles marked

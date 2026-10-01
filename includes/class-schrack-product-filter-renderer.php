@@ -1044,6 +1044,8 @@ class Schrack_Product_Filter_Renderer {
 	 * @param array<string,mixed> $filters Filters.
 	 */
 	private function category_explorer( array $filters ): string {
+		// Skip the invisible main-shop duplicate before taxonomy/count/link queries.
+		if ( ! apply_filters( 'schrack_wc_sync_render_category_explorer', true ) ) { return ''; }
 		do_action( 'schrack_filter_profile_mark', 'categories_start' );
 		if ( ! taxonomy_exists( 'product_cat' ) ) {
 			return '';
