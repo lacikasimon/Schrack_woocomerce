@@ -44,6 +44,7 @@ class Schrack_Consent_Renderer {
 	public function body_banner(): void {
 		$callback = '\\CookieAdmin\\Enduser::cookieadmin_show_banner';
 		if ( ! $this->policy || $this->rendered || is_admin() || is_preview()
+			|| ( function_exists( 'is_product' ) && is_product() )
 			|| ! apply_filters( 'schrack_wc_sync_body_consent_banner', true )
 			|| 10 !== has_action( 'wp_footer', $callback ) || ! is_callable( $callback )
 			|| ! defined( 'WP_PLUGIN_DIR' ) ) { return; }

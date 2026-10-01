@@ -884,3 +884,12 @@ the original footer renderer. No consent is saved by moving the markup.
 Rollback: `schrack_wc_sync_body_consent_banner` set to false.
 Source-only native placement check: `php tests/consent-banner-placement.php
 /path/to/wordpress /path/to/cookieadmin-parent`.
+
+### Retain native footer placement on product pages (0.1.129)
+
+The body-open placement reduced sampled category mobile LCP from 3.02 s to
+2.25 s, but two product runs regressed to 3.71–3.79 s compared with 2.70 s
+with footer placement. Single products therefore keep the original vendor
+footer placement; early body placement remains available elsewhere. Native
+source-only placement tests cover the product fallback as well. Scores and
+load times are samples, not guarantees for all visitors.

@@ -9,6 +9,7 @@ namespace CookieAdmin {
  function cookieadmin_kses_allowed_html() { return \wp_kses_allowed_html('post'); }
 }
 namespace {
+ function is_product(): bool { return $GLOBALS['placement_product'] ?? false; }
  require __DIR__ . '/consent-renderer.php';
  remove_filter('schrack_wc_sync_early_consent_banner', '__return_false');
  $native_root = $argv[2] ?? '';
@@ -26,9 +27,10 @@ namespace {
  verify_image(1 === substr_count($output, 'id="schrack-early-consent-banner"'), 'Early first-visitor bootstrap executes once, never again in the footer.');
  verify_image(false === has_action('wp_footer', $callback), 'Moved native footer callback cannot output a second consent panel.');
  remove_action('wp_body_open', array($r, 'body_banner'), 1); remove_filter('cookieadmin_after_banner', array($r, 'render'), 20); remove_action('wp_footer', array($r, 'bootstrap'), 11);
- foreach (array('missing_body_hook', 'rollback', 'unexpected_priority') as $case) {
+ foreach (array('missing_body_hook', 'rollback', 'unexpected_priority', 'product') as $case) {
   $r = renderer($policy, $pro); $r->init();
   $priority = $case === 'unexpected_priority' ? 12 : 10;
+  $GLOBALS['placement_product'] = $case === 'product';
   add_action('wp_footer', $callback, $priority);
   if ($case === 'rollback') { add_filter('schrack_wc_sync_body_consent_banner', '__return_false'); }
   $before = $GLOBALS['native_banner_calls'];
@@ -37,6 +39,7 @@ namespace {
   ob_start(); do_action('wp_footer'); $footer = ob_get_clean();
   verify_image($before + 1 === $GLOBALS['native_banner_calls'] && str_contains($footer, 'cookieadmin_law_container'), 'Footer fallback still renders the original native banner once.');
   remove_filter('schrack_wc_sync_body_consent_banner', '__return_false'); remove_action('wp_footer', $callback, $priority);
+  $GLOBALS['placement_product'] = false;
   remove_action('wp_body_open', array($r, 'body_banner'), 1); remove_filter('cookieadmin_after_banner', array($r, 'render'), 20); remove_action('wp_footer', array($r, 'bootstrap'), 11);
  }
  echo 'Native banner placement total: ' . $GLOBALS['checks'] . " checks passed.\n";
