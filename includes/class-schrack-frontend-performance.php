@@ -20,6 +20,7 @@ class Schrack_Frontend_Performance {
 		add_filter( 'style_loader_tag', array( $this, 'inline_elementor_style' ), 22, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_local_font_style' ), 23, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'inline_vendor_asset_style' ), 24, 4 );
+		add_filter( 'style_loader_tag', array( $this, 'delay_onetap_panel_style' ), 23, 4 );
 		add_filter( 'style_loader_tag', array( $this, 'delay_onetap_font_style' ), 25, 4 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_ordered_scripts' ), 110 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'configure_consent' ), 100 );
@@ -273,6 +274,24 @@ class Schrack_Frontend_Performance {
 		) : null;
 	}
 
+	/** Closed toolbar needs only its shell; load the full vendor CSS before activation. */
+	public function delay_onetap_panel_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
+		if ( ! $this->onetap_on_demand || 'accessibility-onetap' !== $handle
+			|| strtok( $href, '?' ) !== plugins_url( 'accessibility-onetap/assets/css/accessibility-onetap-front-end.min.css' )
+			|| ! apply_filters( 'schrack_wc_sync_onetap_styles_on_demand', true )
+			|| 1 !== preg_match( '~^\s*<link\b[^>]*>\s*$~i', $tag ) || preg_match( '~\b(integrity|onload|disabled)\b~i', $tag )
+			|| ! class_exists( 'WP_HTML_Tag_Processor' ) ) { return $tag; }
+		$path = SCHRACK_WC_SYNC_PATH . 'assets/frontend-onetap-bootstrap.css';
+		$css = is_readable( $path ) ? file_get_contents( $path ) : false;
+		if ( ! is_string( $css ) || strlen( $css ) > 8192 || ! $this->can_inline_css( $css ) ) { return $tag; }
+		$processor = new WP_HTML_Tag_Processor( $tag );
+		if ( ! $processor->next_tag( 'LINK' ) || $processor->get_attribute( 'href' ) !== $href ) { return $tag; }
+		$processor->remove_attribute( 'href' );
+		$processor->set_attribute( 'data-schrack-onetap-style-src', $href );
+		$processor->set_attribute( 'data-no-optimize', '1' );
+		return '<style id="schrack-onetap-bootstrap-css" data-no-optimize="1">' . $css . '</style>' . $processor->get_updated_html();
+	}
+
 	/** Readable fonts must not replace the theme's Roboto fallback before OneTap use. */
 	public function delay_onetap_font_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
 		if ( ! $this->onetap_on_demand || 'accessibility-onetap-fonts-readable' !== $handle
@@ -434,6 +453,7 @@ class Schrack_Frontend_Performance {
 
 	/** Preserve inspected vendor rules and resolve only their known local assets. */
 	public function inline_vendor_asset_style( string $tag, string $handle, string $href = '', string $media = 'all' ): string {
+		if ( str_contains( $tag, 'data-schrack-onetap-style-src=' ) ) { return $tag; }
 		$files = array(
 			'woocommerce-general'                => 'woocommerce/assets/css/woocommerce.css',
 			'accessibility-onetap'               => 'accessibility-onetap/assets/css/accessibility-onetap-front-end.min.css',

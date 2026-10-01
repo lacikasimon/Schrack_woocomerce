@@ -1,0 +1,28 @@
+/* Closed toolbar shell for the inspected OneTap 2.14.0 stylesheet. */
+nav.onetap-accessibility:not([data-schrack-onetap-css-ready]){display:none!important}
+.onetap-container-toggle button{border:2px solid transparent!important;background:0 0!important;padding:0!important;transition:transform .15s ease!important;width:auto!important;height:auto!important}
+.onetap-container-toggle button img{box-sizing:border-box!important}
+.onetap-container-toggle button:focus{border-radius:100%!important;color:#fff!important;transform:none!important}
+.onetap-container-toggle .onetap-toggle{z-index:2147483647!important;position:fixed!important;cursor:pointer!important;box-shadow:none!important;right:0!important;margin-right:18px!important;bottom:0!important;margin-bottom:18px!important;width:max-content!important}
+.onetap-container-toggle .onetap-toggle:focus,.onetap-container-toggle .onetap-toggle:hover{outline:0!important;box-shadow:none!important;border:2px solid transparent!important}
+.onetap-container-toggle .onetap-toggle:focus-visible{outline:2px solid #111!important;outline-offset:3px!important}
+.onetap-container-toggle .onetap-toggle img{height:60px!important;width:60px!important;background:#0048fe!important;border-radius:50%!important;display:block!important;transition-duration:.3s!important;transition-property:transform!important}
+.onetap-container-toggle .onetap-toggle img:hover{transform:scale(1.1)!important}
+.onetap-container-toggle .onetap-toggle img.design-size1{padding:8px!important;width:48px!important;height:48px!important}
+.onetap-container-toggle .onetap-toggle img.design-size2{padding:10px!important;width:58px!important;height:58px!important}
+.onetap-container-toggle .onetap-toggle img.design-size3{padding:12px!important;width:69px!important;height:69px!important}
+.onetap-container-toggle .onetap-toggle img.design-border1{border:solid 2px #fff;box-shadow:0 0 0 4px #0048fe}
+.onetap-container-toggle .onetap-toggle svg{width:55px!important;fill:#111!important;border-radius:100%!important}
+.onetap-container-toggle .onetap-toggle svg:hover{box-shadow:0 0 0 5px rgba(0,0,0,.05);border-radius:100px}
+@media only screen and (max-width:768px){
+.onetap-container-toggle .onetap-toggle img.design-size1{padding:7px!important;width:44px!important;height:44px!important}
+.onetap-container-toggle .onetap-toggle img.design-size2{padding:9px!important;width:53px!important;height:53px!important}
+.onetap-container-toggle .onetap-toggle img.design-size3{padding:11px!important;width:64px!important;height:64px!important}
+}
+@media only screen and (max-width:576px){
+.onetap-container-toggle .onetap-toggle img.design-size1{padding:6px!important;width:40px!important;height:40px!important}
+.onetap-container-toggle .onetap-toggle img.design-size2{padding:8px!important;width:48px!important;height:48px!important}
+.onetap-container-toggle .onetap-toggle img.design-size3{padding:10px!important;width:58px!important;height:58px!important}
+}
+body.elementor-editor-active .onetap-container-toggle,.bricks-is-editing .onetap-container-toggle,.oxygen-builder-body .onetap-container-toggle,body.vc_editor .onetap-container-toggle,body.fl-builder-edit .onetap-container-toggle,body.et-fb .onetap-container-toggle,body.tve_editor_page .onetap-container-toggle,body.siteorigin-panels-live-editor .onetap-container-toggle,body.seedprod-builder-active .onetap-container-toggle{display:none!important}
+@media print{.onetap-container-toggle,nav.onetap-accessibility{display:none!important}}

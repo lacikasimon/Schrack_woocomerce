@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const code = fs.readFileSync(require('node:path').join(__dirname, '../assets/frontend-onetap.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function page({saved = null, blocked = false, missingButton = false, hidden = null, translations = false, languageFailure = false} = {}) {
+function page({saved = null, blocked = false, missingButton = false, hidden = null, translations = false, languageFailure = false, styles = false} = {}) {
 	const listeners = {};
 	const downloads = [];
 	const messages = [];
@@ -36,9 +36,11 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 		setAttribute: (key, value) => { fontAttrs[key] = value; },
 		removeAttribute: key => { delete fontAttrs[key]; },
 	}];
+	const styleAttrs = {'data-schrack-onetap-style-src': '/onetap.css'};
+	const styleLink = {dataset: {}, getAttribute: key => styleAttrs[key], setAttribute: (key, value) => { styleAttrs[key] = value; }, removeAttribute: key => { delete styleAttrs[key]; }};
 	const document = {
 		readyState: 'complete',
-		querySelectorAll: selector => selector === '[data-schrack-onetap-font-media]' ? fonts : sources,
+		querySelectorAll: selector => selector === '[data-schrack-onetap-font-media]' ? fonts : selector === 'link[data-schrack-onetap-style-src]' ? (styles ? [styleLink] : []) : sources,
 		querySelector: selector => ({'.onetap-toggle': toggle, 'nav.onetap-accessibility': panel, '.onetap-container-toggle': container, 'script[data-schrack-onetap-languages]': translations ? {getAttribute: () => '/uploads/languages-hash.json'} : null})[selector],
 		addEventListener: (name, callback) => { listeners[name] = callback; },
 		removeEventListener: name => { delete listeners[name]; },
@@ -62,12 +64,13 @@ function page({saved = null, blocked = false, missingButton = false, hidden = nu
 	}
 	async function complete() {
 		await flush();
+		if (styleLink.onload) { styleLink.onload(); await flush(); }
 		downloads[0].onload();
 		await flush();
 		downloads[1].onload();
 		await flush();
 	}
-	return {listeners, downloads, messages, replayed, toggle, panel, container, attrs, sources, fontAttrs, fetches, browserWindow, event, complete, opens: () => opens};
+	return {styleLink, styleAttrs, listeners, downloads, messages, replayed, toggle, panel, container, attrs, sources, fontAttrs, fetches, browserWindow, event, complete, opens: () => opens};
 }
 
 test('public translations download only on activation, before native scripts, with no cookies', async () => {
@@ -207,4 +210,42 @@ test('network failure announces an error, retries only on demand and reuses succ
 	await flush();
 	assert.equal(p.opens(), 1);
 	assert.equal(p.attrs.title, undefined);
+});
+
+
+test('full toolbar CSS loads only on activation and before native scripts', async () => {
+ const p = page({styles: true});
+ await flush();
+ assert.equal(p.styleAttrs.href, undefined);
+ assert.equal(p.downloads.length, 0);
+ p.event('click');
+ await flush();
+ assert.equal(p.styleAttrs.href, '/onetap.css');
+ assert.equal(p.downloads.length, 0);
+ assert.equal(p.panel['data-schrack-onetap-css-ready'], undefined);
+ await p.complete();
+ assert.equal(p.panel['data-schrack-onetap-css-ready'], '1');
+ assert.equal(p.downloads.length, 2);
+ assert.equal(p.opens(), 1);
+});
+
+test('saved preferences restore vendor stylesheet immediately', async () => {
+ const p = page({saved: '{}', styles: true});
+ await flush();
+ assert.equal(p.styleAttrs.href, '/onetap.css');
+ await p.complete();
+ assert.equal(p.opens(), 0);
+ assert.equal(p.fontAttrs.media, 'screen');
+});
+
+test('CSS failure keeps panel closed, reports error and retries only on demand', async () => {
+ const p = page({styles: true});
+ p.event('click'); await flush();
+ p.styleLink.onerror(); await flush();
+ assert.equal(p.downloads.length, 0);
+ assert.equal(p.styleAttrs.href, undefined);
+ assert.equal(p.panel['data-schrack-onetap-css-ready'], undefined);
+ assert.match(p.messages[0].textContent, /nu s-au încărcat/);
+ p.event('click'); await p.complete();
+ assert.equal(p.opens(), 1);
 });
