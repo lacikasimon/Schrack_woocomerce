@@ -942,6 +942,10 @@ a mobile report attributing a 270 ms task to the header script. Hidden pages and
 older browsers retain immediate initialization. Already rendered regional slogan
 classes are not rewritten, and the bounded observer still labels later native
 consent buttons. Check: `node tests/elementor-header-labels.js`.
+0.1.149 limits this paint yield to mobile home/single-product layouts (up to
+782px). Archives retain immediate header startup so it does not coincide with
+their existing frame-based full CSS activation; desktop retains its original
+timing. The complete header behavior and already-rendered footer guard remain.
 
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 

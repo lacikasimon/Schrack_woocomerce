@@ -266,7 +266,12 @@
 			initAll(document);
 			observeThirdPartyButtonLabels();
 		}
-		if (document.hidden || typeof window.requestAnimationFrame !== 'function') {
+		var mobileHero = document.body && typeof window.matchMedia === 'function'
+			&& window.matchMedia('(max-width: 782px)').matches
+			&& (document.body.classList.contains('home') || document.body.classList.contains('single-product'));
+		// Archive CSS already activates on animation frames. Keep its header
+		// startup separate, and retain the original timing on desktop.
+		if (!mobileHero || document.hidden || typeof window.requestAnimationFrame !== 'function') {
 			start();
 			return;
 		}

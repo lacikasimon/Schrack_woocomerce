@@ -19,9 +19,10 @@ function element(className = '', children = [], label = '') {
 	};
 }
 
-function boot(initial = [], frames = false) {
+function boot(initial = [], frames = false, {scope = 'home', mobile = true} = {}) {
 	let callback;
 	const body = element('', initial);
+	body.classList = {contains(name) { return name === scope; }};
 	const document = {
 		readyState: 'complete', body, queries: 0,
 		querySelectorAll(selector) { this.queries++; return body.querySelectorAll(selector); },
@@ -32,7 +33,7 @@ function boot(initial = [], frames = false) {
 		observe(node, options) { assert.equal(node, body); assert.deepEqual({...options}, {childList: true, subtree: true}); }
 	}
 	const queued = [];
-	const window = {MutationObserver: Observer};
+	const window = {MutationObserver: Observer, matchMedia() { return {matches: mobile}; }};
 	if (frames) window.requestAnimationFrame = fn => queued.push(fn);
 	vm.runInNewContext(source, {document, window, MutationObserver: Observer});
 	return {document, frame() { const batch = queued.splice(0); batch.forEach(fn => fn()); }, insert(...nodes) { callback([{addedNodes: nodes, removedNodes: []}]); }, mutation(records) { callback(records); }};
@@ -45,6 +46,17 @@ test('initial header setup yields a paint; native and later inserted labels rema
 	page.frame(); assert.equal(button.getAttribute('aria-label'), 'Modifica preferintele cookie');
 	const inserted = element('cookieadmin_close_pref'); page.insert(inserted);
 	assert.equal(inserted.getAttribute('aria-label'), 'Inchide preferintele cookie');
+});
+
+test('archives and desktop retain immediate startup; mobile single products yield', () => {
+	for (const options of [{scope: 'category'}, {scope: 'home', mobile: false}]) {
+		const button = element('cookieadmin_re_consent'); boot([button], true, options);
+		assert.equal(button.getAttribute('aria-label'), 'Modifica preferintele cookie');
+	}
+	const button = element('cookieadmin_re_consent');
+	const page = boot([button], true, {scope: 'single-product'});
+	assert.equal(button.writes, 0); page.frame(); page.frame();
+	assert.equal(button.getAttribute('aria-label'), 'Modifica preferintele cookie');
 });
 
 test('existing native buttons get initial labels; explicit custom labels remain', () => {
