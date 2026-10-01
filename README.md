@@ -919,6 +919,14 @@ AJAX observer lifecycle remain intact. Hidden pages and browsers without the
 animation-frame API initialize immediately. Verification:
 `node tests/frontend-lazy-images.js`.
 
+### Funding-logo request priority (0.1.144)
+
+The four funding logos in the header remain eager, with their original artwork,
+responsive candidates, dimensions, accessible names and links. Their requests
+now use low fetch priority so these small supporting images compete less with
+the high-priority product or category artwork during the initial mobile load.
+This is a scheduling hint, not a measured promise of a particular score.
+
 ### Preserve optional local fonts after LiteSpeed (0.1.127)
 
 LiteSpeed 7.9.1's final font-face pass overrides even styles marked

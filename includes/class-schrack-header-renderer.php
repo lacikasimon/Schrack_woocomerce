@@ -326,6 +326,7 @@ class Schrack_Header_Renderer {
 							height="<?php echo esc_attr( (string) $logo['height'] ); ?>"
 							loading="eager"
 							decoding="async"
+							fetchpriority="low"
 						>
 					</a>
 				<?php endforeach; ?>
