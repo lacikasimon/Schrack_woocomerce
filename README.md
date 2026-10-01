@@ -1069,9 +1069,20 @@ a performance improvement.
 
 Fresh 0.1.134 measurements reached 100 desktop / 97 mobile on the shop page.
 Home and product mobile LCP regressed, including a second product measurement,
-so these pages retain the previous full inline WooCommerce CSS. Critical-rule
-splitting is limited to shop and product taxonomy archives. All original CSS,
+so 0.1.135 retained the previous full inline WooCommerce CSS on these pages.
+That release limited splitting to shop and product taxonomy archives. All original CSS,
 source guards, dynamic rules and no-JS fallback remain available.
+
+0.1.146 tests a different download schedule on home/product: all native rules
+matching the initial HTML remain inline, while the complete stylesheet starts
+at browser idle after window load. Its original URL and cascade position remain
+intact. Early pointer/keyboard input fetches and activates it immediately; hidden
+pages initialize it immediately, unsupported idle APIs use a task after load,
+and no-JS visits retain the full native stylesheet. Archives retain their existing
+download and activation schedule. This avoids downloading the full stylesheet
+alongside hero assets rather than merely postponing its activation.
+Checks: `node tests/frontend-woo-styles.js` and `tests/critical-woo-styles.php`
+with the native WordPress, vendor and anonymous HTML fixtures described above.
 
 Git deployments do not run WordPress upgrader hooks. After a version change,
 the first WordPress execution with the inspected LiteSpeed 7.9.1 purge API
