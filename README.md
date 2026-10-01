@@ -948,3 +948,42 @@ native cookie UI changes and other DOM updates no longer trigger repeated scans
 of the entire catalog. Directly inserted cookie buttons are also labeled, not
 only descendants of a wrapper. Existing custom labels remain unchanged. Verify
 with `node tests/elementor-header-labels.js` and the native cookie preference UI.
+
+### HTML-matched critical WooCommerce CSS (0.1.134)
+
+On the storefront home, shop, single product and category pages, the final
+LiteSpeed HTML pass retains native WooCommerce rules whose positive class
+requirements exist in the actual HTML. Negative/functional/unknown selectors
+remain conservative. Runtime notice, select2/selectWoo and blockUI rules,
+font faces, keyframes and interactive states remain available. The complete
+original stylesheet downloads at its original cascade position with inactive
+media, then activates after DOM ready and two animation frames. Pointer or
+keyboard input activates it immediately without cancelling the event. Hidden
+tabs, unsupported animation frames, CSS errors and no-JS visits use native full
+styling. Cart, checkout, account and editor previews are excluded.
+
+The compiled rule manifest is derived from the inspected unmodified
+`woocommerce.css` file with SHA-256
+`80f45f78239104690319043ad10ddaa7c9dbc8a868b05fc1c80dfe596f9ff56d`.
+Only our marked native style, original plugin URL, source checksum and complete
+CSS text match enable splitting. LiteSpeed's actual critical font-display setting
+is retained. Unknown sources or transformed rules preserve the original full
+style. No HTTP, CSS compilation or database write occurs during an HTML request.
+Rollback: `schrack_wc_sync_critical_woo_css` set to false.
+
+Rebuild after inspecting a WooCommerce CSS update, using an isolated development
+environment with `scripts/critical-css-requirements.txt`, then:
+
+```sh
+python scripts/build-woocommerce-critical-css.py /path/to/woocommerce.css assets/performance/woocommerce-critical-rules.json
+```
+
+`tests/critical-woo-styles.php` takes the first five arguments from
+`tests/frontend-performance.php`, followed by the native WooCommerce CSS file
+and the folder containing anonymous `schrack-current-{home,shop,product,category}-133.html`
+fixtures. It checks the real vendor source, all four page outputs, dynamic notices,
+fonts, delayed and no-JS native loading, editor/cart exclusions, changed-source
+fallback, rollback and idempotence without WordPress boot, HTTP or a database.
+Run `node tests/frontend-woo-styles.js` for the native CSS activation sequence.
+Verify mobile/desktop computed styles and actual PageSpeed scores before claiming
+a performance improvement.

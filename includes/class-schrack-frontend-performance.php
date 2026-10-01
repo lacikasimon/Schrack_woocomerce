@@ -602,12 +602,14 @@ class Schrack_Frontend_Performance {
 			return $tag;
 		}
 		$css = file_get_contents( $path );
+		$woo_source = 'woocommerce-general' === $handle && is_string( $css ) ? hash( 'sha256', $css ) : '';
 		$css = is_string( $css ) ? $this->vendor_css_assets( $css, $handle ) : null;
 		if ( null === $css || $this->vendor_inline_bytes + strlen( $css ) > 196608 ) {
 			return $tag;
 		}
 		$this->vendor_inline_bytes += strlen( $css );
-		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1">' . $css . '</style>';
+		$marker = '' !== $woo_source ? ' data-schrack-woo-source="' . esc_attr( $woo_source ) . '" data-schrack-woo-href="' . esc_url( $href ) . '"' : '';
+		return '<style id="' . esc_attr( $handle . '-css' ) . '" media="' . esc_attr( $media ) . '" data-no-optimize="1"' . $marker . '>' . $css . '</style>';
 	}
 
 	/** Unfamiliar URL syntax or new assets retain the original stylesheet. */

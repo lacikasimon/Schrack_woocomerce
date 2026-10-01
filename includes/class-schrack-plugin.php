@@ -132,6 +132,7 @@ class Schrack_Plugin {
 		$this->frontend_image_loader->init();
 		( new Schrack_Product_Hero_Cache() )->init();
 		( new Schrack_Frontend_Performance() )->init();
+		( new Schrack_Critical_Woo_Styles() )->init();
 		( new Schrack_Consent_Renderer() )->init();
 		( new Schrack_Elementor_Assets() )->init();
 		( new Schrack_Cache_Warmer() )->init();
@@ -194,6 +195,7 @@ class Schrack_Plugin {
 			'class-schrack-product-hero-cache.php',
 			'class-schrack-consent-renderer.php',
 			'class-schrack-frontend-performance.php',
+			'class-schrack-critical-woo-styles.php',
 			'class-schrack-elementor-assets.php',
 			'class-schrack-cache-warmer.php',
 			'class-schrack-cache-invalidation.php',
