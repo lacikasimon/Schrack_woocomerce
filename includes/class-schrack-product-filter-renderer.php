@@ -333,13 +333,15 @@ class Schrack_Product_Filter_Renderer {
 	 * @param array<string,mixed> $filters Frontend filters.
 	 * @return array<string,mixed>
 	 */
-	public function render_results( array $settings, array $filters ): array {
+	public function render_results( array $settings, array $filters, ?int $facets_category = null ): array {
 		$settings = $this->sanitize_settings( $settings );
 		$filters  = $this->sanitize_filters( $filters );
 
 		if ( empty( $filters['category'] ) && ! $settings['show_category_filter'] && $settings['default_category'] > 0 ) {
 			$filters['category'] = (int) $settings['default_category'];
 		}
+		// Facets depend on category, not the search text, sorting or current result page.
+		$refresh_facets = $settings['show_attribute_filters'] && $facets_category !== (int) $filters['category'];
 
 		if ( $this->should_show_category_level_only( $filters ) ) {
 			$summary = __( 'Alege o subcategorie pentru a vedea produsele.', 'schrack-woocommerce-sync' );
@@ -354,7 +356,7 @@ class Schrack_Product_Filter_Renderer {
 
 			return array(
 				'html'        => (string) ob_get_clean(),
-				'facets_html' => $settings['show_attribute_filters'] ? $this->attribute_filters_html( $filters ) : null,
+				'facets_html' => $refresh_facets ? $this->attribute_filters_html( $filters ) : null,
 				'summary'     => $summary,
 				'page'        => 1,
 				'has_more'    => 'no',
@@ -400,7 +402,7 @@ class Schrack_Product_Filter_Renderer {
 
 		return array(
 			'html'        => (string) ob_get_clean(),
-			'facets_html' => $settings['show_attribute_filters'] && 1 === (int) $filters['paged'] ? $this->attribute_filters_html( $filters ) : null,
+			'facets_html' => $refresh_facets && 1 === (int) $filters['paged'] ? $this->attribute_filters_html( $filters ) : null,
 			'summary'     => $summary,
 			'page'        => $filters['paged'],
 			'has_more'    => $has_more ? 'yes' : 'no',
@@ -423,7 +425,7 @@ class Schrack_Product_Filter_Renderer {
 
 		ob_start();
 		?>
-		<div class="schrack-product-filter__attributes" data-attribute-facets>
+		<div class="schrack-product-filter__attributes" data-attribute-facets data-facets-category="<?php echo esc_attr( (string) (int) ( $filters['category'] ?? 0 ) ); ?>">
 			<?php foreach ( $groups as $taxonomy => $group ) : ?>
 				<?php
 				if ( '' !== $only_taxonomy && $taxonomy !== $only_taxonomy ) { continue; }
@@ -758,20 +760,12 @@ class Schrack_Product_Filter_Renderer {
 		}
 
 		if ( $this->uses_lookup_join( $query ) ) {
-			$lookup_table = $wpdb->prefix . 'wc_product_meta_lookup';
+			$lookup_table = $wpdb->wc_product_meta_lookup ?? $wpdb->prefix . 'wc_product_meta_lookup';
 			$join        .= " LEFT JOIN {$lookup_table} AS schrack_filter_lookup ON ({$wpdb->posts}.ID = schrack_filter_lookup.product_id)";
 		}
 
-		if ( $this->uses_item_number_join( $query ) && class_exists( 'Schrack_Search_Index' ) && Schrack_Search_Index::ready() ) {
-			$query->set( 'schrack_use_search_index', true );
+		if ( $this->uses_item_number_join( $query ) && Schrack_Search_Index::use_for_query( $query ) ) {
 			$join .= Schrack_Search_Index::join();
-		} elseif ( $this->uses_item_number_join( $query ) ) {
-			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_item_meta ON ({$wpdb->posts}.ID = schrack_filter_item_meta.post_id AND schrack_filter_item_meta.meta_key = '_schrack_item_number')";
-			$join .= " LEFT JOIN {$wpdb->postmeta} AS schrack_filter_ean_meta ON ({$wpdb->posts}.ID = schrack_filter_ean_meta.post_id AND schrack_filter_ean_meta.meta_key = '_schrack_ean')";
-			$join .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_filter_item_meta ON ({$wpdb->posts}.ID = telesystem_filter_item_meta.post_id AND telesystem_filter_item_meta.meta_key = '_telesystem_item_number')";
-			$join .= " LEFT JOIN {$wpdb->postmeta} AS edoc_filter_item_meta ON ({$wpdb->posts}.ID = edoc_filter_item_meta.post_id AND edoc_filter_item_meta.meta_key = '_edoc_item_number')";
-			$join .= " LEFT JOIN {$wpdb->postmeta} AS telesystem_filter_ean_meta ON ({$wpdb->posts}.ID = telesystem_filter_ean_meta.post_id AND telesystem_filter_ean_meta.meta_key = '_telesystem_ean')";
-			$join .= " LEFT JOIN {$wpdb->postmeta} AS edoc_filter_ean_meta ON ({$wpdb->posts}.ID = edoc_filter_ean_meta.post_id AND edoc_filter_ean_meta.meta_key = '_edoc_ean')";
 		}
 
 		return $join;
@@ -786,27 +780,10 @@ class Schrack_Product_Filter_Renderer {
 		$search = trim( (string) $query->get( 'schrack_product_filter_search' ) );
 
 		if ( '' !== $search ) {
-			if ( $query->get( 'schrack_use_search_index' ) ) {
-				$where .= ' AND ' . Schrack_Search_Index::predicate( $search );
-			} else {
-			$like = '%' . $wpdb->esc_like( $search ) . '%';
-
-			$where .= $wpdb->prepare(
-				" AND ({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s OR schrack_filter_lookup.sku LIKE %s OR schrack_filter_item_meta.meta_value LIKE %s OR schrack_filter_ean_meta.meta_value LIKE %s OR telesystem_filter_item_meta.meta_value LIKE %s OR telesystem_filter_ean_meta.meta_value LIKE %s OR edoc_filter_item_meta.meta_value LIKE %s OR edoc_filter_ean_meta.meta_value LIKE %s)",
-				$like,
-				$like,
-				$like,
-				$like,
-				$like,
-				$like,
-				$like,
-				$like,
-				$like,
-				$like
-			);
+			$where .= ' AND ' . ( Schrack_Search_Index::use_for_query( $query )
+				? Schrack_Search_Index::predicate( $search ) : Schrack_Search_Index::native_predicate( $search ) );
 		}
 
-		}
 		$min_price = $query->get( 'schrack_product_filter_min_price' );
 		$max_price = $query->get( 'schrack_product_filter_max_price' );
 
@@ -842,29 +819,25 @@ class Schrack_Product_Filter_Renderer {
 	}
 
 	/**
-	 * Keeps lookup and item-number joins from duplicating products.
+	 * Preserves third-party distinct requirements without adding a search filesort.
 	 */
 	public function query_distinct( string $distinct, WP_Query $query ): string {
-		if ( ! $this->uses_lookup_join( $query ) && ! $this->uses_item_number_join( $query ) ) {
-			return $distinct;
-		}
-
-		return 'DISTINCT';
+		// Lookup/index joins use product primary keys; EXISTS does not duplicate rows.
+		return $distinct;
 	}
 
 	/**
 	 * Returns whether the WooCommerce product lookup table is needed.
 	 */
 	private function uses_lookup_join( WP_Query $query ): bool {
-		return '' !== (string) $query->get( 'schrack_product_filter_search' )
-			|| is_numeric( $query->get( 'schrack_product_filter_min_price' ) )
+		return is_numeric( $query->get( 'schrack_product_filter_min_price' ) )
 			|| is_numeric( $query->get( 'schrack_product_filter_max_price' ) )
 			|| (bool) $query->get( 'schrack_product_filter_hide_out_of_stock' )
 			|| in_array( (string) $query->get( 'schrack_product_filter_orderby' ), array( 'price', 'price-desc', 'popularity' ), true );
 	}
 
 	/**
-	 * Returns whether the Schrack item-number postmeta join is needed.
+	 * Returns whether the shared search document join is needed.
 	 */
 	private function uses_item_number_join( WP_Query $query ): bool {
 		return '' !== (string) $query->get( 'schrack_product_filter_search' );
@@ -984,14 +957,13 @@ class Schrack_Product_Filter_Renderer {
 		add_filter( 'posts_orderby', array( $this, 'query_orderby' ), 10, 2 );
 		add_filter( 'posts_distinct', array( $this, 'query_distinct' ), 10, 2 );
 
-		$query = new WP_Query( $args );
-
-		remove_filter( 'posts_join', array( $this, 'query_join' ), 10 );
-		remove_filter( 'posts_where', array( $this, 'query_where' ), 10 );
-		remove_filter( 'posts_orderby', array( $this, 'query_orderby' ), 10 );
-		remove_filter( 'posts_distinct', array( $this, 'query_distinct' ), 10 );
-
-		return $query;
+		try { return new WP_Query( $args ); }
+		finally {
+			remove_filter( 'posts_join', array( $this, 'query_join' ), 10 );
+			remove_filter( 'posts_where', array( $this, 'query_where' ), 10 );
+			remove_filter( 'posts_orderby', array( $this, 'query_orderby' ), 10 );
+			remove_filter( 'posts_distinct', array( $this, 'query_distinct' ), 10 );
+		}
 	}
 
 	/**

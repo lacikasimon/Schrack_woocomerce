@@ -16,7 +16,7 @@ class SearchDB {
  public string $prefix='custom_', $posts='custom_posts',$postmeta='custom_postmeta',$options='custom_options',$last_error='';public PDO $db;
  public function __construct(){ $this->db=new PDO('sqlite::memory:'); }
  public function esc_like($value){return addcslashes($value,'_%\\');}
- public function prepare($sql,...$params){$params=is_array($params[0]??null)?$params[0]:$params;$i=0;return preg_replace_callback('/%[sd]/',function($m)use(&$i,$params){$v=$params[$i++];return $m[0]==='%d'?(string)(int)$v:$this->db->quote($v);},$sql);}
+ public function prepare($sql,...$params){$params=is_array($params[0]??null)?$params[0]:$params;$i=0;return preg_replace_callback('/%[sdf]/',function($m)use(&$i,$params){$v=$params[$i++];return match($m[0]){'%d'=>(string)(int)$v,'%f'=>(string)(float)$v,default=>$this->db->quote($v)};},$sql);}
  private function sql($sql){return preg_replace("/LIKE ('(?:[^']|'')*')/",'$0 ESCAPE '. $this->db->quote('\\'),$sql);}
  public function get_results($sql,$mode){return $this->db->query($this->sql($sql))->fetchAll(PDO::FETCH_ASSOC);}
  public function query($sql){if(!empty($GLOBALS['fail_write'])){unset($GLOBALS['fail_write']);return false;}return $this->db->exec($sql);}
@@ -54,12 +54,41 @@ foreach(array('karo','594123','second-value','0','TS-12_SKU%','_','%','abc def',
 }
 $GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>false);verify_search(!Schrack_Search_Index::ready(),'Partial builds keep native search.');
 $GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>true);verify_search(Schrack_Search_Index::ready(),'Complete, clean index can serve search.');
-foreach(array(new Schrack_Header_Search_Renderer(),new Schrack_Product_Filter_Renderer()) as $renderer){
- $query=new WP_Query(array('schrack_header_search'=>true,'schrack_header_search_term'=>'karo','schrack_product_filter_search'=>'karo'));
- $join=$renderer->query_join('',$query);$where=$renderer->query_where('',$query);
- verify_search(str_contains($join,'custom_schrack_search_documents') && !str_contains($join,'custom_postmeta'),'Complete index replaces six metadata joins.');
- verify_search(str_contains($where,'schrack_search_doc.title LIKE'),'Header and filter search use the same predicate.');
+// Duplicate supplier fields used to multiply rows through independent metadata joins.
+$wpdb->db->exec("INSERT INTO custom_postmeta VALUES (2,'_schrack_ean','karo'),(2,'_schrack_ean','karo'),(2,'_edoc_ean','karo'),(2,'_edoc_ean','karo')");
+$GLOBALS['meta'][2]['_schrack_ean']=array('karo','karo');$GLOBALS['meta'][2]['_edoc_ean']=array('karo','karo');$write->invoke($job,2);
+foreach(array(false,true) as $ready){
+ foreach(array(new Schrack_Header_Search_Renderer(),new Schrack_Product_Filter_Renderer(),$job) as $renderer){
+  foreach(array('karo','594123','second-value','0','TS-12_SKU%','_','%','abc def','nonexistent','Plafonieră') as $term){
+   $GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>$ready);
+   $query=new WP_Query(array('schrack_header_search'=>true,'schrack_header_search_term'=>$term,'schrack_product_filter_search'=>$term,'schrack_archive_index_search'=>$term));
+   // WordPress applies posts_where BEFORE posts_join (WP_Query::get_posts).
+   $where=$renderer instanceof Schrack_Search_Index ? $renderer->archive_where('',$query) : $renderer->query_where('',$query);
+   // A build completion or dirty write between callbacks cannot switch SQL plans.
+   $GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>!$ready);
+   $join=$renderer instanceof Schrack_Search_Index ? $renderer->archive_join('',$query) : $renderer->query_join('',$query);
+   verify_search($ready===str_contains($join,'custom_schrack_search_documents') && !str_contains($join,'custom_postmeta'),'Each query keeps a coherent plan and avoids metadata row multiplication.');
+   verify_search($indexed($term)===$wpdb->get_col("SELECT custom_posts.ID FROM custom_posts {$join} WHERE custom_posts.post_status='publish' {$where} ORDER BY custom_posts.ID"),'WordPress hook order returns identical header/filter/archive results for '.$term);
+   if(!$renderer instanceof Schrack_Search_Index){
+    verify_search(''===$renderer->query_distinct('',$query) && 'DISTINCT'===$renderer->query_distinct('DISTINCT',$query),'Unique search joins avoid redundant DISTINCT and preserve third-party clauses.');
+   }
+  }
+ }
 }
+$GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>true);
+$wpdb->db->exec("ALTER TABLE custom_wc_product_meta_lookup ADD COLUMN stock_status TEXT DEFAULT 'instock';ALTER TABLE custom_wc_product_meta_lookup ADD COLUMN min_price REAL DEFAULT 100;ALTER TABLE custom_wc_product_meta_lookup ADD COLUMN max_price REAL DEFAULT 100;ALTER TABLE custom_wc_product_meta_lookup ADD COLUMN total_sales INTEGER DEFAULT 0;UPDATE custom_wc_product_meta_lookup SET min_price=50,max_price=50,stock_status='onbackorder' WHERE product_id=2");
+foreach(array(false,true) as $ready){
+ $GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>$ready);
+ $renderer=new Schrack_Product_Filter_Renderer();
+ foreach(array(array('schrack_product_filter_min_price'=>60,'schrack_product_filter_max_price'=>120),array('schrack_product_filter_hide_out_of_stock'=>true),array('schrack_product_filter_orderby'=>'price')) as $constraints){
+  $query=new WP_Query(array_merge(array('schrack_product_filter_search'=>'karo'),$constraints));
+  $where=$renderer->query_where('',$query);$join=$renderer->query_join('',$query);$order=$renderer->query_orderby('custom_posts.ID',$query);
+  $hits=$wpdb->get_col("SELECT custom_posts.ID FROM custom_posts {$join} WHERE custom_posts.post_status='publish' {$where} ORDER BY {$order}");
+  $expected=isset($constraints['schrack_product_filter_min_price'])?array(1):(isset($constraints['schrack_product_filter_orderby'])?array(2,1):array(1,2));
+  verify_search($hits===$expected,'Indexed and native search preserve prices, backorders and lookup-based ordering.');
+ }
+}
+$GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>true);
 $wpdb->db->exec('INSERT INTO custom_schrack_search_documents_dirty VALUES (1,2)');verify_search(!Schrack_Search_Index::ready(),'Concurrent edits fence readers until refreshed.');
 $GLOBALS['posts'][1]->post_status='draft';$write->invoke($job,1);verify_search(!in_array(1,$indexed('karo')),'Unpublished documents are removed.');
 verify_search(Schrack_Search_Index::fuzzy_ids(array('karo','sec'),10)===array(2),'Fuzzy candidates retain native ordering and draft exclusion.');

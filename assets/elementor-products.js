@@ -397,6 +397,9 @@
 	}
 
 	function applyProductPayload(root, results, data, append) {
+		var error = results.querySelector('[data-filter-error]');
+		if (error) { error.remove(); }
+		requestState(root).retry = null;
 		if (append) {
 			appendResults(results, data.html);
 			return;
@@ -420,13 +423,46 @@
 	function productRequestBody(root, form, page) {
 		var state = requestState(root);
 		var body = new URLSearchParams(new FormData(form));
+		var facets = root.querySelector('[data-attribute-facets]');
 
 		body.set('action', root.getAttribute('data-action') || '');
 		body.set('nonce', root.getAttribute('data-nonce') || '');
 		body.set('config', state.configJson);
 		body.set('paged', String(page || 1));
+		if (facets && facets.hasAttribute('data-facets-category')) {
+			body.set('facets_category', facets.getAttribute('data-facets-category'));
+		}
 
 		return body.toString();
+	}
+
+	function updateCatalogUrl(bodyString) {
+		if (!window.history || !window.history.replaceState) { return; }
+		var url = new URL(window.location.href);
+		url.pathname = url.pathname.replace(/\/page\/\d+\/?$/, '/');
+		var body = new URLSearchParams(bodyString);
+		var keys = ['search', 's', 'category', 'category_search', 'min_price', 'max_price', 'include_out_of_stock', 'include_descendants', 'manufacturer', 'product_line', 'special_offer_only', 'orderby', 'paged', 'stock_filter_present', 'in_stock_only'];
+		Array.from(url.searchParams.keys()).forEach(function (key) {
+			if (keys.indexOf(key) !== -1 || key.indexOf('attr[') === 0) { url.searchParams.delete(key); }
+		});
+		body.forEach(function (value, key) {
+			if (value !== '' && (keys.indexOf(key) !== -1 || key.indexOf('attr[') === 0)) { url.searchParams.append(key, value); }
+		});
+		window.history.replaceState(window.history.state, '', url.toString());
+	}
+
+	function sameCatalogPath(form) {
+		var target = new URL(form.action || window.location.href, window.location.href);
+		return target.origin === window.location.origin && target.pathname.replace(/\/page\/\d+\/?$/, '/') === window.location.pathname.replace(/\/page\/\d+\/?$/, '/');
+	}
+
+	function syncSearchInputs(root) {
+		var input = root.querySelector('input[name="search"]');
+		if (!input) { return; }
+		document.querySelectorAll('.schrack-shop-hero__search, .schrack-header-search__form').forEach(function (form) {
+			var externalInput = form.querySelector('input[name="search"]');
+			if (externalInput && sameCatalogPath(form) && externalInput.value !== input.value) { externalInput.value = input.value; }
+		});
 	}
 
 	function renderCachedProducts(root, page) {
@@ -449,6 +485,7 @@
 
 		cancelProductRequest(root);
 		applyProductPayload(root, results, cached, false);
+		updateCatalogUrl(cacheKey);
 
 		return true;
 	}
@@ -479,10 +516,11 @@
 		if (cached) {
 			cancelProductRequest(root);
 			applyProductPayload(root, results, cached, append);
+			if (!append) { updateCatalogUrl(bodyString); }
 			return;
 		}
 
-		if (state.productController && state.productKey === cacheKey) {
+		if (state.productKey === cacheKey) {
 			return;
 		}
 
@@ -525,12 +563,21 @@
 
 			cacheSet(state.productCache, cacheKey, payload.data, 12);
 			applyProductPayload(root, results, payload.data, append);
+			if (!append) { updateCatalogUrl(bodyString); }
 		}).catch(function (error) {
 			if (isAbortError(error) || requestId !== state.productSequence) {
 				return;
 			}
 
-			results.innerHTML = '<div class="schrack-product-filter__empty"><strong>Filtrarea a esuat.</strong><span>Reincarca pagina si incearca din nou.</span></div>';
+			var message = document.createElement('div');
+			message.className = 'schrack-product-filter__empty';
+			message.setAttribute('data-filter-error', '');
+			message.setAttribute('role', 'alert');
+			message.innerHTML = '<strong>Filtrarea a eșuat.</strong><button type="button" data-filter-retry>Încearcă din nou</button>';
+			var previousError = results.querySelector('[data-filter-error]');
+			if (previousError) { previousError.remove(); }
+			results.prepend(message);
+			state.retry = { page: page, options: options, body: bodyString };
 		}).finally(function () {
 			if (requestId === state.productSequence) {
 				state.productController = null;
@@ -785,6 +832,7 @@
 		}, 180);
 
 		root.setAttribute('data-filter-ready', 'yes');
+		requestState(root).delayedRequest = delayedRequest;
 		syncSelectedCategory(root);
 		syncPricePresetState(root);
 		updateActiveFilterCount(root);
@@ -818,6 +866,7 @@
 			}
 
 			if (event.isComposing) {
+				cancelProductRequest(root);
 				return;
 			}
 
@@ -825,6 +874,7 @@
 				scheduleLocalFilter(event.target, filterAttributeOptions);
 				return;
 			}
+			cancelProductRequest(root);
 
 			if (event.target === categorySearch) {
 				setSelectedCategory(root, '', event.target.value);
@@ -838,6 +888,7 @@
 
 			if (event.target.matches('input[name="search"]')) {
 				var searchValue = event.target.value.trim();
+				syncSearchInputs(root);
 
 				if (searchValue && searchValue.length < minSearchChars) {
 					delayedRequest.cancel();
@@ -867,6 +918,16 @@
 		}
 
 		root.addEventListener('click', function (event) {
+			if (event.target.closest('[data-filter-retry]')) {
+				event.preventDefault();
+				delayedRequest.cancel();
+				var retry = requestState(root).retry;
+				if (retry) {
+					if (productRequestBody(root, form, retry.page) === retry.body) { requestProducts(root, retry.page, retry.options); }
+					else { requestProducts(root, 1); }
+				}
+				return;
+			}
 			var pageButton = event.target.closest('[data-page]');
 			var resetButton = event.target.closest('[data-filter-reset]');
 			var categoryOption = event.target.closest('[data-category-option]');
@@ -976,6 +1037,7 @@
 				}
 
 				resetSelectedCategory(root);
+				syncSearchInputs(root);
 				syncPricePresetState(root);
 				updateActiveFilterCount(root);
 				requestProducts(root, 1);
@@ -995,9 +1057,39 @@
 		Array.prototype.forEach.call((context || document).querySelectorAll('.schrack-product-filter'), initFilter);
 	}
 
-	document.addEventListener('DOMContentLoaded', function () {
-		initAll(document);
+	document.addEventListener('submit', function (event) {
+		var form = event.target;
+		if (!form.matches || !form.matches('.schrack-shop-hero__search, .schrack-header-search__form') || !sameCatalogPath(form)) { return; }
+		var root = document.querySelector('.schrack-product-filter');
+		var input = form.querySelector('input[name="search"]');
+		var filterInput = root && root.querySelector('input[name="search"]');
+		if (!root || !input || !filterInput) { return; }
+		initFilter(root);
+		event.preventDefault();
+		requestState(root).delayedRequest.cancel();
+		filterInput.value = input.value.trim();
+		syncSearchInputs(root);
+		updateActiveFilterCount(root);
+		var minimum = parseInt(requestState(root).config.min_search_chars, 10) || 2;
+		if (filterInput.value && filterInput.value.length < minimum) { showMinimumSearchMessage(root, minimum); return; }
+		requestProducts(root, 1);
 	});
+
+	document.addEventListener('click', function (event) {
+		var link = event.target.closest && event.target.closest('.schrack-header-search__all');
+		if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0 || !document.querySelector('.schrack-product-filter')) { return; }
+		var form = link.closest('.schrack-header-search').querySelector('.schrack-header-search__form');
+		if (!form || !sameCatalogPath(form) || !form.requestSubmit) { return; }
+		event.preventDefault();
+		form.querySelector('input[name="search"]').value = new URL(link.href).searchParams.get('search') || '';
+		form.requestSubmit();
+	});
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', function () { initAll(document); });
+	} else {
+		initAll(document);
+	}
 
 	window.addEventListener('elementor/frontend/init', function () {
 		if (!window.elementorFrontend || !window.elementorFrontend.hooks) {

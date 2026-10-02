@@ -669,10 +669,36 @@ that discards short codes or punctuation. All published products are indexed;
 stock, taxonomy and customer visibility filtering remain in their original
 queries. A saved keyset cursor processes at most 100 products and checks a
 five-second budget between products. WP-Cron continues work after closing admin.
-Search uses the existing query until the initial build and dirty queue complete.
+Search uses the native fallback until the initial build and dirty queue complete.
 Product edits enqueue revision-fenced updates; pending writes temporarily fall
 back to the original search. Neither private products nor partial builds become
 search results. Restart continues progress and retries a failed worker.
+
+v0.1.150 fixes empty catalog results such as `/shop/?search=corp` when the search
+index is ready. WordPress applies `posts_where` before `posts_join`; the search
+plan is now chosen on the first callback and retained for that query. Header,
+filter and native archive searches share the same title/text/SKU/supplier-code
+matching. The fallback uses correlated `EXISTS` checks instead of six metadata
+joins, preserving repeated values, literal `%`/`_`, accents and short codes without
+duplicating products or adding a redundant `DISTINCT`. Fuzzy candidates use the
+same fallback. Existing stock, category, attribute, price and ordering constraints
+continue to apply.
+
+On pages with the product filter widget, submitting the hero or header search
+for the current catalog refreshes results through AJAX and keeps the entered
+filters, focus and scroll position. The successful filter state updates the
+shareable URL without navigation. Searches targeting another page retain normal
+navigation, and GET forms remain available without JavaScript. Header suggestions
+cancel obsolete reads, deduplicate pending requests and cache up to 12 successful
+queries per widget for 30 seconds. Escaping/closing the panel or hiding the tab
+cancels pending suggestions. Filter controls also initialize when their script is
+loaded after `DOMContentLoaded`. Failed requests keep the previous products and
+offer a manual retry. Unchanged category facets are preserved rather than queried
+and retransmitted on every search; older clients still receive full facet HTML.
+
+Checks: `php tests/search-index.php`, `php tests/search-facets.php`, and
+`node --test tests/frontend-search.js`. These use disposable SQLite or request
+doubles and do not access a live WordPress database.
 
 Category metadata and attribute facets now share the mutation-invalidated cache
 on scoped category pages and AJAX, with a 30-minute maximum lifetime. Category

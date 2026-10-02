@@ -43,6 +43,30 @@ final class Schrack_Search_Index {
 		return ' INNER JOIN ' . self::table() . " AS {$alias} ON ({$wpdb->posts}.ID = {$alias}.product_id)";
 	}
 
+	/** Freeze one search plan per query: WordPress calls posts_where before posts_join. */
+	public static function use_for_query( WP_Query $query ): bool {
+		$indexed = $query->get( 'schrack_use_search_index' );
+		if ( ! is_bool( $indexed ) ) {
+			$indexed = self::ready();
+			$query->set( 'schrack_use_search_index', $indexed );
+		}
+		return $indexed;
+	}
+
+	/** Fallback searches retain every field without multiplying rows through six meta joins. */
+	public static function native_predicate( string $search ): string {
+		global $wpdb;
+		$lookup = $wpdb->wc_product_meta_lookup ?? $wpdb->prefix . 'wc_product_meta_lookup';
+		$like = '%' . $wpdb->esc_like( $search ) . '%';
+		$keys = "'" . implode( "','", array_keys( self::KEYS ) ) . "'";
+		return $wpdb->prepare(
+			"({$wpdb->posts}.post_title LIKE %s OR {$wpdb->posts}.post_excerpt LIKE %s OR {$wpdb->posts}.post_content LIKE %s
+			OR EXISTS (SELECT 1 FROM {$lookup} AS schrack_search_sku WHERE schrack_search_sku.product_id = {$wpdb->posts}.ID AND schrack_search_sku.sku LIKE %s)
+			OR EXISTS (SELECT 1 FROM {$wpdb->postmeta} AS schrack_search_meta WHERE schrack_search_meta.post_id = {$wpdb->posts}.ID AND schrack_search_meta.meta_key IN ({$keys}) AND schrack_search_meta.meta_value LIKE %s))",
+			array_fill( 0, 5, $like )
+		);
+	}
+
 	/** Separate fields retain literal substring, punctuation, short codes and accents. */
 	public static function predicate( string $search, string $alias = 'schrack_search_doc' ): string {
 		global $wpdb;
@@ -52,11 +76,12 @@ final class Schrack_Search_Index {
 	}
 
 	public function archive_join( string $join, WP_Query $query ): string {
-		return $query->get( 'schrack_archive_index_search' ) ? $join . self::join() : $join;
+		return '' !== (string) $query->get( 'schrack_archive_index_search' ) && self::use_for_query( $query ) ? $join . self::join() : $join;
 	}
 	public function archive_where( string $where, WP_Query $query ): string {
 		$search = (string) $query->get( 'schrack_archive_index_search' );
-		return '' !== $search ? $where . ' AND ' . self::predicate( $search ) : $where;
+		if ( '' === $search ) { return $where; }
+		return $where . ' AND ' . ( self::use_for_query( $query ) ? self::predicate( $search ) : self::native_predicate( $search ) );
 	}
 
 	public function start(): void {

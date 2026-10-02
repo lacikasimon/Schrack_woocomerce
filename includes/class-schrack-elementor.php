@@ -542,18 +542,15 @@ class Schrack_Elementor {
 			return;
 		}
 
-		$search = isset( $_GET['search'] ) ? sanitize_text_field( wp_unslash( $_GET['search'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$search = isset( $_GET['search'] ) && is_string( $_GET['search'] ) ? trim( sanitize_text_field( wp_unslash( $_GET['search'] ) ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
 		if ( '' === $search ) {
 			return;
 		}
 
-		if ( class_exists( 'Schrack_Search_Index' ) && Schrack_Search_Index::ready() ) {
-			$query->set( 's', '' );
-			$query->set( 'schrack_archive_index_search', $search );
-		} else {
-			$query->set( 's', $search );
-		}
+		// Use the same title/text/SKU/supplier search on native archives, including during rebuilds.
+		$query->set( 's', '' );
+		$query->set( 'schrack_archive_index_search', $search );
 	}
 
 	/**
@@ -1166,7 +1163,9 @@ class Schrack_Elementor {
 				: array(),
 		);
 
-		wp_send_json_success( $this->renderer->render_results( $config, $filters ) );
+		$facets_category = isset( $_POST['facets_category'] ) && is_scalar( $_POST['facets_category'] ) && is_numeric( $_POST['facets_category'] )
+			? absint( $_POST['facets_category'] ) : null;
+		wp_send_json_success( $this->renderer->render_results( $config, $filters, $facets_category ) );
 	}
 
 	/** Read-only public catalog facet request, protected like product filtering. */
