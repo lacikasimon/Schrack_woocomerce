@@ -18,7 +18,7 @@
 			const operation = button.dataset.mediaOperation;
 			button.disabled = busy || (operation === 'scan' && ['running', 'paused'].includes(state.status)) ||
 				(operation === 'repair' && (state.status !== 'complete' || state.mode !== 'scan')) ||
-				(operation === 'pause' && state.status !== 'running') ||
+				(operation === 'pause' && (state.status !== 'running' || state.pause_requested)) ||
 				(operation === 'resume' && !['paused', 'error'].includes(state.status));
 		});
 		previous.disabled = busy || history.length === 0;
@@ -28,13 +28,14 @@
 		const td = document.createElement('td'); td.textContent = text; tr.appendChild(td); return td;
 	}
 	function render(data) {
+		const scroll = [window.scrollX, window.scrollY];
 		state = data.state || {}; nextCursor = data.next || 0;
 		const labels = {running: 'În curs', paused: 'În pauză', complete: 'Încheiat', error: 'Eroare'};
 		stateElement.textContent = state.id ? `${labels[state.status] || state.status} — ${state.mode === 'repair' ? 'reparare' : 'verificare'}\n` +
 			`Verificate: ${state.scanned} · cu probleme: ${state.issues}\nCopii cu aceeași sursă: ${state.source_copies} · copii identice: ${state.identical_copies}\nReparate: ${state.repaired} · omise la reparare: ${state.skipped}` +
-			(state.message ? '\n' + state.message : '') : 'Nicio verificare pornită.';
+			(state.pause_requested ? '\nPauză cerută: se încheie imaginea curentă.' : '') + (state.message ? '\n' + state.message : '') : 'Nicio verificare pornită.';
 		const signature = JSON.stringify(data.rows || []);
-		if (signature === rendered) return;
+		if (signature === rendered) { window.scrollTo(...scroll); return; }
 		rendered = signature;
 		const focused = report.contains(document.activeElement) ? document.activeElement.dataset.mediaId : null;
 		const rows = (data.rows || []).map(row => {
@@ -44,11 +45,11 @@
 				const link = document.createElement('a'); link.textContent = `${row.title || 'Imagine'} (#${row.id})`;
 				link.href = row.edit_url; link.dataset.mediaId = String(row.id); title.appendChild(link);
 			} else title.textContent = `${row.title || 'Imagine'} (#${row.id})`;
-			cell(tr, `${row.file}\n${row.dimensions.join(' × ')} px · ${(row.bytes / 1048576).toFixed(2)} MB\n${row.issues.join('; ') || 'Fără probleme detectate'}`).style.whiteSpace = 'pre-wrap';
-			cell(tr, `Sursă comună: ${row.source_hash_matches.join(', ') || '—'}\nFișier identic: ${row.file_hash_matches.join(', ') || '—'}`).style.whiteSpace = 'pre-wrap';
+			cell(tr, `${row.file}\n${row.dimensions.length ? row.dimensions.join(' × ') + ' px' : 'Dimensiuni necunoscute'} · ${(row.bytes / 1048576).toFixed(2)} MB\n${row.issues.join('; ') || 'Fără probleme detectate'}`).style.whiteSpace = 'pre-wrap';
+			cell(tr, `Sursă comună: ${row.source_hash_matches.join(', ') || '—'}${row.source_hash_more ? ' (și altele)' : ''}\nFișier identic: ${row.file_hash_matches.join(', ') || '—'}${row.file_hash_more ? ' (și altele)' : ''}`).style.whiteSpace = 'pre-wrap';
 			const usage = row.references.known.map(ref => `${ref.type} #${ref.id}: ${ref.title} (${ref.context})`).join('\n');
 			cell(tr, (usage || 'Nicio utilizare cunoscută.') + '\nAlte utilizări pot exista.' + (row.references.limited ? '\nLista utilizărilor este limitată.' : '')).style.whiteSpace = 'pre-wrap';
-			cell(tr, ({pending: 'De reparat', repaired: 'Reparat', skipped: 'Omis', not_needed: 'Nu este necesar'})[row.repair] + (row.repair_message ? ': ' + row.repair_message : ''));
+			cell(tr, ({pending: 'De reparat', repaired: 'Reparat', skipped: 'Omis', not_needed: 'Nu este necesar', unavailable: 'Original indisponibil / invalid'})[row.repair] + (row.repair_message ? ': ' + row.repair_message : ''));
 			return tr;
 		});
 		report.replaceChildren(...rows);
@@ -56,9 +57,12 @@
 			const link = Array.from(report.querySelectorAll('a')).find(a => a.dataset.mediaId === focused);
 			if (link) link.focus({preventScroll: true});
 		}
+		window.scrollTo(...scroll);
 	}
 	async function run(operation) {
 		if (busy || (operation === 'status' && document.hidden)) return;
+		const active = document.activeElement;
+		const focusedControl = buttons.includes(active) || active === previous || active === next ? active : null;
 		clearTimeout(timer); busy = true; controls();
 		const read = operation === 'status';
 		if (!read) message.textContent = 'Se trimite operațiunea…';
@@ -79,6 +83,7 @@
 			retry = Math.min(retry * 2, 60000); later(retry); // Reads only; mutations are never retried.
 		} finally {
 			clearTimeout(timeout); busy = false; controls();
+			if (focusedControl && focusedControl.isConnected && !focusedControl.disabled && document.activeElement === document.body) focusedControl.focus({preventScroll: true});
 			if (!read) later(1000);
 		}
 	}

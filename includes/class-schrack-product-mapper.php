@@ -1723,13 +1723,24 @@ class Schrack_Product_Mapper {
 	 */
 	public function import_product_image_with_result( int $product_id, array $prefetched_meta = array() ): array {
 		global $wpdb;
+		if ( 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
+			return array( 'status' => 'skipped_disabled', 'attachment_id' => 0 );
+		}
 		$image_url = $this->normalize_image_url( $this->prefetched_meta_value( $prefetched_meta, '_schrack_image_url', $product_id ) );
-		if ( '' === $image_url || 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
+		// Bind the operation to the exact URL protected by this lock, including an empty URL.
+		$prefetched_meta['_schrack_image_url'] = $image_url;
+		if ( '' === $image_url ) {
 			return $this->import_product_image_locked( $product_id, $prefetched_meta );
 		}
 		// Different products can share one supplier photo. Lock before looking it up.
 		$lock = 'schrack_image_' . substr( hash( 'sha256', $wpdb->posts . ':' . $image_url ), 0, 48 );
-		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s,0)', $lock ) ) ) {
+		$acquired = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s,0)', $lock ) );
+		if ( null === $acquired ) {
+			$error = 'Blocarea descărcării imaginii furnizorului nu este disponibilă.';
+			$this->mark_product_image_sync_meta( $product_id, 'failed', $image_url, 0, $error );
+			return array( 'status' => 'failed', 'attachment_id' => 0, 'image_url' => $image_url, 'error' => $error );
+		}
+		if ( '1' !== (string) $acquired ) {
 			return array( 'status' => 'deferred_busy', 'attachment_id' => 0, 'image_url' => $image_url );
 		}
 		try {

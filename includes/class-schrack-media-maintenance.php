@@ -6,6 +6,7 @@ final class Schrack_Media_Maintenance {
 	public const STATE = 'schrack_media_maintenance_state';
 	public const HOOK = 'schrack_media_maintenance_step';
 	public const PREVIEWS = '_schrack_media_previews';
+	private const PAUSE = 'schrack_media_maintenance_pause';
 	private const GROUP = 'schrack-media-maintenance';
 	private array $preview_cache = array();
 
@@ -44,7 +45,7 @@ final class Schrack_Media_Maintenance {
 
 	public function render(): void {
 		?>
-		<section id="schrack-media-maintenance">
+		<section id="schrack-media-maintenance" style="overflow-anchor:none">
 			<h2>Biblioteca Media — verificare și reparare</h2>
 			<p>Verifică metadatele, fișierele și miniaturile. Repararea creează numai previzualizări pentru administrare, de cel mult 1024 px. Originalele, identificatorii și imaginile magazinului rămân păstrate. Nu se șterge niciun fișier Media.</p>
 			<p>Raportul distinge sursele comune de fișierele identice și arată utilizările cunoscute. Pot exista utilizări în câmpuri personalizate, module, opțiuni sau pagini externe; absența unei utilizări cunoscute nu înseamnă că imaginea poate fi ștearsă.</p>
@@ -60,7 +61,9 @@ final class Schrack_Media_Maintenance {
 	private function locked( callable $callback ) {
 		global $wpdb;
 		$name = 'schrack_media_' . md5( $wpdb->options );
-		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s,0)', $name ) ) ) { return null; }
+		$acquired = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s,0)', $name ) );
+		if ( null === $acquired ) { throw new RuntimeException( 'Blocarea lucrătorului Media nu este disponibilă.' ); }
+		if ( '1' !== (string) $acquired ) { return null; }
 		try { return $callback(); } finally { $wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $name ) ); }
 	}
 
@@ -71,15 +74,16 @@ final class Schrack_Media_Maintenance {
 
 	private function schedule( string $id ): void {
 		$args = array( $id );
-		if ( function_exists( 'as_schedule_single_action' ) && ! as_get_scheduled_actions( array( 'hook' => self::HOOK, 'args' => $args, 'group' => self::GROUP, 'status' => 'pending', 'per_page' => 1 ), 'ids' ) ) {
-			as_schedule_single_action( time() + 2, self::HOOK, $args, self::GROUP, true );
+		if ( function_exists( 'as_schedule_single_action' ) && function_exists( 'as_get_scheduled_actions' ) && ! as_get_scheduled_actions( array( 'hook' => self::HOOK, 'args' => $args, 'group' => self::GROUP, 'status' => 'pending', 'per_page' => 1 ), 'ids' ) ) {
+			// Called under our database lock. An in-progress action must be able to enqueue its successor.
+			as_schedule_single_action( time() + 2, self::HOOK, $args, self::GROUP, false );
 		}
 		// Also survives a fatal error or a failed Action Scheduler enqueue.
 		if ( ! wp_next_scheduled( self::HOOK, $args ) ) { wp_schedule_single_event( time() + 60, self::HOOK, $args ); }
 	}
 
 	public static function clear_schedule(): void {
-		wp_clear_scheduled_hook( self::HOOK );
+		wp_unschedule_hook( self::HOOK );
 		if ( function_exists( 'as_unschedule_all_actions' ) ) { as_unschedule_all_actions( self::HOOK, null, self::GROUP ); }
 	}
 
@@ -92,7 +96,7 @@ final class Schrack_Media_Maintenance {
 			$root = realpath( $root );
 			if ( $root && ( $path === $root || str_starts_with( $path, rtrim( $root, '/' ) . '/' ) ) ) { throw new RuntimeException( 'Raportul necesită un director privat în afara webroot.' ); }
 		}
-		if ( is_link( $path ) || ( $create && ! is_dir( $path ) && ! mkdir( $path, 0700 ) ) || ! is_dir( $path ) || ! chmod( $path, 0700 ) ) {
+		if ( is_link( $path ) || ( $create && ! is_dir( $path ) && ! @mkdir( $path, 0700 ) ) || ! is_dir( $path ) || ! @chmod( $path, 0700 ) ) {
 			throw new RuntimeException( 'Directorul privat nu poate fi folosit.' );
 		}
 		return $path;
@@ -100,13 +104,13 @@ final class Schrack_Media_Maintenance {
 
 	private function write_json( string $path, array $value ): void {
 		$data = wp_json_encode( $value, JSON_THROW_ON_ERROR );
-		$free = disk_free_space( dirname( $path ) );
+		$free = @disk_free_space( dirname( $path ) );
 		if ( false === $free || $free < strlen( $data ) * 2 + 16 * 1024 * 1024 ) { throw new RuntimeException( 'Spațiu insuficient pentru raport sau copie de siguranță.' ); }
 		if ( is_link( $path ) ) { throw new RuntimeException( 'Fișier privat invalid.' ); }
-		$temp = tempnam( dirname( $path ), '.media-' );
+		$temp = @tempnam( dirname( $path ), '.media-' );
 		if ( false === $temp ) { throw new RuntimeException( 'Fișierul privat nu poate fi creat.' ); }
 		try {
-			if ( ! chmod( $temp, 0600 ) || strlen( $data ) !== file_put_contents( $temp, $data, LOCK_EX ) || ! rename( $temp, $path ) ) { throw new RuntimeException( 'Fișierul privat nu poate fi salvat.' ); }
+			if ( dirname( $temp ) !== dirname( $path ) || ! @chmod( $temp, 0600 ) || strlen( $data ) !== @file_put_contents( $temp, $data, LOCK_EX ) || ! @rename( $temp, $path ) ) { throw new RuntimeException( 'Fișierul privat nu poate fi salvat.' ); }
 		} finally { if ( is_file( $temp ) ) { unlink( $temp ); } }
 	}
 
@@ -114,7 +118,9 @@ final class Schrack_Media_Maintenance {
 		if ( is_link( $path ) ) { throw new RuntimeException( 'Fișier privat invalid.' ); }
 		if ( ! is_file( $path ) ) { return array(); }
 		if ( filesize( $path ) > 4 * 1024 * 1024 ) { throw new RuntimeException( 'Fișierul raportului este prea mare.' ); }
-		$result = json_decode( file_get_contents( $path ), true, 512, JSON_THROW_ON_ERROR );
+		$data = @file_get_contents( $path );
+		if ( false === $data ) { throw new RuntimeException( 'Fișierul privat nu poate fi citit.' ); }
+		$result = json_decode( $data, true, 512, JSON_THROW_ON_ERROR );
 		if ( ! is_array( $result ) ) { throw new RuntimeException( 'Raport invalid.' ); }
 		return $result;
 	}
@@ -151,11 +157,28 @@ final class Schrack_Media_Maintenance {
 				$this->directory( $state );
 			}
 			$state['message'] = '';
+			delete_option( self::PAUSE );
 			$this->save( $state );
 			if ( 'running' === $state['status'] ) { $this->schedule( $state['id'] ); }
+			else { self::clear_schedule(); }
 			return true;
 		} );
-		if ( null === $result ) { throw new RuntimeException( 'Un lot este în curs. Reîncearcă după actualizarea stării.' ); }
+		if ( null === $result ) {
+			$state = self::status();
+			if ( 'pause' === $operation && $id && ( $state['id'] ?? '' ) === $id && 'running' === ( $state['status'] ?? '' ) ) {
+				// A running decoder/download may hold the worker lock. Pause at the next checkpoint.
+				update_option( self::PAUSE, $id, false );
+				if ( get_option( self::PAUSE ) === $id ) { return; }
+			}
+			throw new RuntimeException( 'Un lot este în curs. Reîncearcă după actualizarea stării.' );
+		}
+	}
+
+	private function pause_requested( string $id ): bool {
+		wp_cache_delete( self::PAUSE, 'options' );
+		// Another HTTP process may have inserted the option after this worker cached its absence.
+		wp_cache_delete( 'notoptions', 'options' );
+		return get_option( self::PAUSE, '' ) === $id;
 	}
 
 	/** Each repair action handles at most one image; scan actions have a four-second budget. */
@@ -168,6 +191,7 @@ final class Schrack_Media_Maintenance {
 			try {
 				$directory = $this->directory( $state );
 				foreach ( $this->image_ids( $state['cursor'], $state['upper'] ) as $attachment_id ) {
+					if ( $this->pause_requested( $id ) ) { break; }
 					$path = $directory . '/image-' . $attachment_id . '.json';
 					if ( 'scan' === $state['mode'] ) {
 						$row = $this->audit( $attachment_id );
@@ -186,7 +210,16 @@ final class Schrack_Media_Maintenance {
 						$row = $this->read_json( $path );
 						if ( ! $row ) { throw new RuntimeException( 'Raport incomplet. Pornește o verificare nouă.' ); }
 						if ( $row['needs_repair'] ) {
-							try { $this->repair( $attachment_id, $directory ); $row['repair'] = 'repaired'; ++$state['repaired']; }
+							try {
+								if ( $row['file'] !== (string) get_post_meta( $attachment_id, '_wp_attached_file', true ) ) { throw new RuntimeException( 'Originalul s-a schimbat; verifică din nou.' ); }
+								unset( $this->preview_cache[ $attachment_id ] );
+								$preview = $this->previews( $attachment_id );
+								// A previous worker may have published previews before losing its cursor checkpoint.
+								if ( ! empty( $preview['small']['placeholder'] ) || max( $preview['detail']['width'], $preview['detail']['height'] ) < min( 1024, max( $row['dimensions'] ) ) ) {
+									$this->repair( $attachment_id, $directory );
+								}
+								$row['repair'] = 'repaired'; ++$state['repaired'];
+							}
 							catch ( Throwable $error ) { $row['repair'] = 'skipped'; $row['repair_message'] = $error->getMessage(); ++$state['skipped']; }
 							$this->write_json( $path, $row );
 						}
@@ -195,7 +228,11 @@ final class Schrack_Media_Maintenance {
 					$this->save( $state );
 					if ( 'repair' === $state['mode'] && $row['needs_repair'] || microtime( true ) >= $deadline || Schrack_Memory_Guard::is_pressure_high() ) { break; }
 				}
-				if ( ! $this->image_ids( $state['cursor'], $state['upper'], 1 ) ) {
+				if ( $this->pause_requested( $id ) ) {
+					$state['status'] = 'paused';
+					delete_option( self::PAUSE );
+					self::clear_schedule();
+				} elseif ( ! $this->image_ids( $state['cursor'], $state['upper'], 1 ) ) {
 					$state['status'] = 'complete';
 					self::clear_schedule();
 				}
@@ -252,9 +289,12 @@ final class Schrack_Media_Maintenance {
 		}
 		if ( $original && $variant = $this->variant( $relative ) ) { $variants[] = $variant; }
 		usort( $variants, static fn( $a, $b ) => max( $a['width'], $a['height'] ) <=> max( $b['width'], $b['height'] ) );
-		$placeholder = array( 'url' => SCHRACK_WC_SYNC_URL . 'assets/image-placeholder.svg', 'width' => 300, 'height' => 300, 'orientation' => 'landscape', 'placeholder' => true );
+		$placeholder = array( 'url' => SCHRACK_WC_SYNC_URL . 'assets/admin-media-placeholder.svg', 'width' => 300, 'height' => 300, 'orientation' => 'landscape', 'placeholder' => true );
 		$small = $placeholder;
-		foreach ( $variants as $variant ) { $small = $variant; if ( max( $variant['width'], $variant['height'] ) >= 300 ) { break; } }
+		foreach ( $variants as $variant ) {
+			if ( max( $variant['width'], $variant['height'] ) > 300 ) { break; }
+			$small = $variant;
+		}
 		return $this->preview_cache[ $id ] = array( 'small' => $small, 'detail' => $variants ? end( $variants ) : $placeholder );
 	}
 
@@ -265,18 +305,21 @@ final class Schrack_Media_Maintenance {
 		return $response;
 	}
 
-	private function is_media_list(): bool {
-		return is_admin() && function_exists( 'get_current_screen' ) && 'upload' === ( get_current_screen()->id ?? '' );
+	private function is_admin_preview_screen(): bool {
+		if ( ! is_admin() ) { return false; }
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		return in_array( $screen->id ?? '', array( 'upload', 'product', 'attachment' ), true ) ||
+			( wp_doing_ajax() && in_array( $_REQUEST['action'] ?? '', array( 'set-post-thumbnail', 'get-post-thumbnail-html' ), true ) );
 	}
 
 	public function list_image( $image, int $id, $size, bool $icon ) {
-		if ( ! $this->is_media_list() || 'full' === $size || ! wp_attachment_is_image( $id ) ) { return $image; }
+		if ( ! $this->is_admin_preview_screen() || 'full' === $size || ! wp_attachment_is_image( $id ) ) { return $image; }
 		$preview = $this->previews( $id )['small'];
 		return array( $preview['url'], $preview['width'], $preview['height'], true );
 	}
 
 	public function list_attributes( array $attributes, $attachment, $size ): array {
-		if ( $this->is_media_list() && 'full' !== $size ) { unset( $attributes['srcset'], $attributes['sizes'] ); }
+		if ( $this->is_admin_preview_screen() && 'full' !== $size ) { unset( $attributes['srcset'], $attributes['sizes'] ); }
 		return $attributes;
 	}
 
@@ -292,17 +335,25 @@ final class Schrack_Media_Maintenance {
 
 	private function references( int $id, string $relative ): array {
 		global $wpdb;
-		$uploads = wp_upload_dir( null, false );
-		$content = '%wp-image-' . $id . '%';
-		$local = $relative ? '%' . $wpdb->esc_like( $relative ) . '%' : '%__schrack_no_file__%';
+		$content = 'wp-image-' . $id . '([^0-9]|$)';
+		// Include URL-escaped Elementor paths and resized-file URLs as candidates.
+		$stem = $relative ? preg_replace( '/\.[^.\/]+$/', '', $relative ) : '__schrack_no_file__';
+		$local = '%' . $wpdb->esc_like( $stem ) . '%';
+		$escaped = '%' . $wpdb->esc_like( str_replace( '/', '\\/', $stem ) ) . '%';
+		$json_id = '"id"[[:space:]]*:[[:space:]]*"?' . $id . '([^0-9]|$)';
+		$groups = array();
 		// Results are candidates, not a completeness or deletion guarantee.
 		$sql = $wpdb->prepare( "SELECT DISTINCT p.ID AS id,p.post_type AS type,p.post_title AS title,'featured/gallery/import' AS context FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id=p.ID WHERE (m.meta_key IN ('_thumbnail_id','_schrack_image_attachment_id') AND m.meta_value=%s) OR (m.meta_key='_product_image_gallery' AND FIND_IN_SET(%s,m.meta_value)) LIMIT 26", (string) $id, (string) $id );
-		$rows = $wpdb->get_results( $sql, ARRAY_A );
-		$rows = array_merge( $rows, $wpdb->get_results( $wpdb->prepare( "SELECT ID AS id,post_type AS type,post_title AS title,'content (candidate)' AS context FROM {$wpdb->posts} WHERE post_type<>'attachment' AND (post_content LIKE %s OR post_content LIKE %s OR post_content REGEXP %s) LIMIT 26", $content, $local, '"id"[[:space:]]*:[[:space:]]*' . $id . '([^0-9]|$)' ), ARRAY_A ) );
-		$rows = array_merge( $rows, $wpdb->get_results( $wpdb->prepare( "SELECT DISTINCT p.ID AS id,p.post_type AS type,p.post_title AS title,'Elementor (candidate)' AS context FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id=p.ID WHERE m.meta_key IN ('_elementor_data','_elementor_page_settings') AND (m.meta_value LIKE %s OR m.meta_value REGEXP %s OR m.meta_value LIKE %s) LIMIT 26", $local, '"id"[[:space:]]*:[[:space:]]*"?' . $id . '([^0-9]|$)', '%i:' . $id . ';%' ), ARRAY_A ) );
-		$rows = array_merge( $rows, $wpdb->get_results( $wpdb->prepare( "SELECT DISTINCT t.term_id AS id,tt.taxonomy AS type,t.name AS title,'category' AS context FROM {$wpdb->terms} t JOIN {$wpdb->term_taxonomy} tt ON tt.term_id=t.term_id JOIN {$wpdb->termmeta} m ON m.term_id=t.term_id WHERE m.meta_key='thumbnail_id' AND m.meta_value=%s LIMIT 26", (string) $id ), ARRAY_A ) );
-		if ( $wpdb->last_error ) { throw new RuntimeException( 'Utilizările nu pot fi citite.' ); }
-		return array( 'known' => array_slice( $rows, 0, 100 ), 'unknown' => true, 'limited' => count( $rows ) > 100 || count( array_filter( $rows, static fn( $r ) => 'content (candidate)' === $r['context'] ) ) >= 26 );
+		$queries = array( $sql,
+			$wpdb->prepare( "SELECT ID AS id,post_type AS type,post_title AS title,'content (candidate)' AS context FROM {$wpdb->posts} WHERE post_type<>'attachment' AND (post_content REGEXP %s OR post_content LIKE %s OR post_content LIKE %s OR post_content REGEXP %s) LIMIT 26", $content, $local, $escaped, $json_id ),
+			$wpdb->prepare( "SELECT DISTINCT p.ID AS id,p.post_type AS type,p.post_title AS title,'Elementor (candidate)' AS context FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id=p.ID WHERE m.meta_key IN ('_elementor_data','_elementor_page_settings') AND (m.meta_value LIKE %s OR m.meta_value LIKE %s OR m.meta_value REGEXP %s OR m.meta_value LIKE %s OR m.meta_value LIKE %s) LIMIT 26", $local, $escaped, $json_id, '%i:' . $id . ';%', '%s:' . strlen( (string) $id ) . ':"' . $id . '";%' ),
+			$wpdb->prepare( "SELECT DISTINCT t.term_id AS id,tt.taxonomy AS type,t.name AS title,'category' AS context FROM {$wpdb->terms} t JOIN {$wpdb->term_taxonomy} tt ON tt.term_id=t.term_id JOIN {$wpdb->termmeta} m ON m.term_id=t.term_id WHERE m.meta_key='thumbnail_id' AND m.meta_value=%s LIMIT 26", (string) $id ) );
+		foreach ( $queries as $query ) {
+			$groups[] = $wpdb->get_results( $query, ARRAY_A );
+			if ( $wpdb->last_error ) { throw new RuntimeException( 'Utilizările nu pot fi citite.' ); }
+		}
+		$limited = (bool) array_filter( $groups, static fn( $group ) => count( $group ) > 25 );
+		return array( 'known' => array_merge( ...array_map( static fn( $group ) => array_slice( $group, 0, 25 ), $groups ) ), 'unknown' => true, 'limited' => $limited );
 	}
 
 	private function audit( int $id ): array {
@@ -318,10 +369,15 @@ final class Schrack_Media_Maintenance {
 		if ( ! empty( $preview['small']['placeholder'] ) ) { $issues[] = 'Miniatură validă lipsă'; }
 		if ( $dimensions && max( $dimensions[0], $dimensions[1] ) > 4096 ) { $issues[] = 'Original peste 4096 px'; }
 		$source = $this->source_url( $id );
-		$hash = $file && filesize( $file ) <= 64 * 1024 * 1024 ? hash_file( 'sha256', $file ) : '';
+		$hash = $file && filesize( $file ) <= 64 * 1024 * 1024 ? @hash_file( 'sha256', $file ) : '';
 		if ( ! $hash ) { $issues[] = 'Hash neverificat'; }
 		$needs = $file && $dimensions && ( ! empty( $preview['small']['placeholder'] ) || max( $preview['detail']['width'], $preview['detail']['height'] ) < min( 1024, max( $dimensions[0], $dimensions[1] ) ) );
-		return array( 'id' => $id, 'title' => (string) get_post_field( 'post_title', $id ), 'file' => $relative, 'bytes' => $file ? filesize( $file ) : 0, 'dimensions' => $dimensions ? array( $dimensions[0], $dimensions[1] ) : array(), 'issues' => $issues, 'source_hash' => $source ? hash( 'sha256', $source ) : '', 'file_hash' => $hash ?: '', 'references' => $this->references( $id, $relative ), 'needs_repair' => (bool) $needs, 'repair' => $needs ? 'pending' : 'not_needed' );
+		if ( $needs && empty( $preview['small']['placeholder'] ) ) { $issues[] = 'Previzualizare de detaliu incompletă'; }
+		$native = wp_get_attachment_image_src( $id, 'medium' );
+		$native_edge = $native ? max( $native[1], $native[2] ) : 0;
+		if ( $native && empty( $native[3] ) && $dimensions ) { $native_edge = max( $dimensions[0], $dimensions[1] ); }
+		if ( $native_edge > 1024 ) { $issues[] = 'Fallback WordPress fără adaptor peste 1024 px'; }
+		return array( 'id' => $id, 'title' => (string) get_post_field( 'post_title', $id ), 'file' => $relative, 'bytes' => $file ? filesize( $file ) : 0, 'dimensions' => $dimensions ? array( $dimensions[0], $dimensions[1] ) : array(), 'issues' => $issues, 'source_hash' => $source ? hash( 'sha256', $source ) : '', 'file_hash' => $hash ?: '', 'references' => $this->references( $id, $relative ), 'needs_repair' => (bool) $needs, 'repair' => $needs ? 'pending' : ( $file && $dimensions ? 'not_needed' : 'unavailable' ) );
 	}
 
 	/** Conservative allocation budget, without raising PHP's hosting limit. */
@@ -348,8 +404,11 @@ final class Schrack_Media_Maintenance {
 			if ( ! $this->can_decode( $dimensions ) ) {
 				$source = Schrack_Product_Hero_Cache::source( $this->source_url( $id ) );
 				if ( ! $source ) { throw new RuntimeException( 'Original prea mare / memorie insuficientă; sursă Schrack verificată indisponibilă.' ); }
-				$temporary = wp_tempnam( 'schrack-media.jpg' );
+				$temporary = @tempnam( $directory, 'cdn-' );
 				if ( ! $temporary ) { throw new RuntimeException( 'Fișier temporar indisponibil.' ); }
+				// Some Imagick builds select their decoder from the extension, even with valid JPEG bytes.
+				if ( dirname( $temporary ) !== $directory || ! @chmod( $temporary, 0600 ) || ! @rename( $temporary, $temporary . '.jpg' ) ) { throw new RuntimeException( 'Fișier temporar indisponibil.' ); }
+				$temporary .= '.jpg';
 				$response = wp_safe_remote_get( $source, array( 'timeout' => 15, 'redirection' => 0, 'cookies' => array(), 'stream' => true, 'filename' => $temporary, 'limit_response_size' => 1048576 ) );
 				$size = $this->dimensions( $temporary );
 				if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) || ! $size || 1190 !== $size[0] || 1330 !== $size[1] || IMAGETYPE_JPEG !== $size[2] || filesize( $temporary ) >= 1048576 ) { throw new RuntimeException( 'CDN indisponibil sau imagine CDN invalidă.' ); }
@@ -358,6 +417,7 @@ final class Schrack_Media_Maintenance {
 			}
 			$uploads = wp_upload_dir( null, false );
 			$root = realpath( $uploads['basedir'] );
+			if ( ! $root || ! empty( $uploads['error'] ) || empty( $uploads['baseurl'] ) ) { throw new RuntimeException( 'Directorul uploads nu este disponibil.' ); }
 			$target = $root . '/schrack-admin-previews';
 			if ( is_link( $target ) || ( ! is_dir( $target ) && ! wp_mkdir_p( $target ) ) || realpath( $target ) !== $target ) { throw new RuntimeException( 'Directorul previzualizărilor nu poate fi folosit.' ); }
 			$key = hash( 'sha256', $relative . ':' . implode( ':', $stamp ) . ':' . wp_generate_uuid4() );
@@ -380,6 +440,9 @@ final class Schrack_Media_Maintenance {
 			clearstatcache( true, $original );
 			if ( (string) get_post_meta( $id, '_wp_attached_file', true ) !== $relative || array( filesize( $original ), filemtime( $original ) ) !== $stamp ) { throw new RuntimeException( 'Originalul s-a schimbat în timpul reparării.' ); }
 			$value = array( 'attached' => $relative, 'stamp' => $stamp, 'sizes' => $sizes );
+			// Once publication is attempted, retain files even if a read-back fails.
+			// A transient cache/database failure must never leave published metadata dangling.
+			$published = true;
 			update_post_meta( $id, self::PREVIEWS, $value );
 			if ( get_post_meta( $id, self::PREVIEWS, true ) !== $value ) { throw new RuntimeException( 'Metadatele previzualizării nu pot fi salvate.' ); }
 			unset( $this->preview_cache[ $id ] );
@@ -395,6 +458,7 @@ final class Schrack_Media_Maintenance {
 		global $wpdb;
 		$state = self::status();
 		if ( ! $state ) { return array( 'state' => array(), 'rows' => array(), 'next' => 0 ); }
+		$state['pause_requested'] = 'running' === $state['status'] && $this->pause_requested( $state['id'] );
 		$directory = $this->directory( $state );
 		$upper = 'scan' === $state['mode'] ? $state['cursor'] : $state['upper'];
 		$ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE ID<=%d AND ID<%d AND post_type='attachment' AND post_mime_type LIKE 'image/%%' AND post_status NOT IN ('trash','auto-draft') ORDER BY ID DESC LIMIT 21", $upper, $before ?: $upper + 1 ) );
@@ -405,7 +469,9 @@ final class Schrack_Media_Maintenance {
 			if ( ! $row ) { continue; }
 			foreach ( array( 'source_hash', 'file_hash' ) as $hash ) {
 				$members = $row[ $hash ] ? $this->read_json( $directory . '/' . $hash . '-' . $row[ $hash ] . '.json' ) : array();
-				$row[ $hash . '_matches' ] = array_slice( array_values( array_diff( $members, array( (int) $id ) ) ), 0, 25 );
+				$matches = array_values( array_diff( $members, array( (int) $id ) ) );
+				$row[ $hash . '_matches' ] = array_slice( $matches, 0, 25 );
+				$row[ $hash . '_more' ] = count( $matches ) > 25;
 			}
 			$row['edit_url'] = get_edit_post_link( (int) $id, 'raw' );
 			unset( $row['source_hash'], $row['file_hash'] );
@@ -417,10 +483,12 @@ final class Schrack_Media_Maintenance {
 	public function ajax(): void {
 		if ( ! current_user_can( 'manage_woocommerce' ) || ! current_user_can( 'upload_files' ) ) { wp_send_json_error( array( 'message' => 'Acces refuzat.' ), 403 ); }
 		check_ajax_referer( 'schrack_media_maintenance', 'nonce' );
-		$operation = sanitize_key( wp_unslash( $_POST['operation'] ?? 'status' ) );
 		try {
-			if ( 'status' !== $operation ) { $this->transition( $operation, sanitize_key( wp_unslash( $_POST['job_id'] ?? '' ) ) ); }
-			wp_send_json_success( $this->view( absint( $_POST['before'] ?? 0 ) ) );
+			$operation = sanitize_key( wp_unslash( (string) ( is_scalar( $_POST['operation'] ?? 'status' ) ? ( $_POST['operation'] ?? 'status' ) : '' ) ) );
+			$id = is_string( $_POST['job_id'] ?? '' ) ? sanitize_key( wp_unslash( $_POST['job_id'] ?? '' ) ) : '';
+			if ( 'status' !== $operation ) { $this->transition( $operation, $id ); }
+			$data = $this->view( absint( $_POST['before'] ?? 0 ) );
 		} catch ( Throwable $error ) { wp_send_json_error( array( 'message' => $error->getMessage() ), 400 ); }
+		wp_send_json_success( $data );
 	}
 }

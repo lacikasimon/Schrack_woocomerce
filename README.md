@@ -834,6 +834,52 @@ imports and special tags retain external loading. Disable separate block
 styles with `schrack_wc_sync_separate_core_block_assets`, or catalog inlining
 with its existing filter. Admin, feeds and REST keep the native core exclusions.
 
+#### Media audit and admin previews (v0.1.152)
+
+On the same page, **Biblioteca Media — verificare și reparare** starts an audit
+with **Pornește verificarea**. It checks local originals, metadata and actual
+preview files, and reports shared source URLs separately from SHA-256 identical
+files. Product featured/gallery images, category thumbnails, content and Elementor
+references are reported as known uses or candidates. Other uses always remain
+unknown; names and attachment parent IDs never establish that a file is unused.
+Hashes above 64 MiB and truncated reference lists are explicitly marked. This
+feature does not delete attachments or their original files.
+
+After the audit completes, **Repară previzualizările din raport** creates separate
+admin JPEG previews at 150, 300 and up to 1024 pixels. Attachment IDs, original bytes,
+core attachment metadata and storefront/insertion URLs are preserved. Before any
+preview metadata write, the prior values are backed up to a private JSON file.
+Reports and backups live in `schrack-media-<job-id>` beside the WordPress directory,
+outside both WordPress and the web server document root, with directory/file
+permissions 0700/0600. If that location is unavailable, the operation stops visibly
+before changing any image. These files persist; cPanel's file manager can manage
+their retention. No hosting shell is required.
+
+Originals above 4096 pixels on either side, or exceeding the conservative PHP
+memory budget, are never decoded locally. Only an attributed, exact Schrack
+`/foto/f_*.jpg` source can use the existing 1190×1330 CDN preset (15-second timeout,
+no redirects, JPEG header/size verification and a 1 MiB response cap). Missing
+sources, files, invalid images, CDN failures and insufficient memory are reported.
+The admin grid, list and image picker use verified previews of at most 300 pixels,
+details use at most 1024, and unavailable previews use a local placeholder. The
+original remains accessible through the native file URL/download control. The
+adapter changes render data only; media insertion still uses the original sizes.
+
+Actions run through Action Scheduler with a WP-Cron watchdog, a saved cursor and
+one database-locked media worker. **Pauză** stops at an image checkpoint;
+**Continuă** resumes that report. A repair action handles at most one image, scans
+check a four-second budget between images, and stale queued actions are ignored.
+The AJAX endpoint requires both `manage_woocommerce` and `upload_files`, plus a
+nonce. Polling suspends in hidden tabs, backs off on errors and stops on completion;
+mutations are not automatically retried. Keep the hosting cron working if visit
+cron has been disabled. New imports retain the `medium` sub-size and lock the
+normalized source URL before lookup/download, so competing workers defer and reuse
+the resulting attachment.
+
+Validation: `node --test tests/admin-media.js`, the normal PHP regressions, and
+`tests/media-maintenance-wordpress.php` on the disposable local installation
+described in [the media test guide](tests/media-maintenance-wordpress.md).
+
 ### Készleten lévő termékek fő képének WebP-gyorsítótára (0.1.118)
 
 A saját termékoldal külső Schrack fő képéhez külön háttérfeladat készít 340, 680 és 1190 px széles WebP változatot. Csak publikált, jelszó nélküli, katalógusban látható, `instock` termék jogosult, ha nincs helyi fő képe. Ez független a teljes katalógus Media Library-importjának kapcsolójától. A nagyítás eredeti képe megmarad.

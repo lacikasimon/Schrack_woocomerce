@@ -23,4 +23,27 @@
 	}
 	wrapTemplate(Attachment.Details);
 	wrapTemplate(Attachment.Details && Attachment.Details.TwoColumn);
+	// WooCommerce builds new gallery <img> elements by mapping its selection toJSON().
+	// Give that admin renderer a clone, preserving the model and every other insertion flow.
+	const Selection = wp.media.model && wp.media.model.Selection;
+	const Model = wp.media.model && wp.media.model.Attachment;
+	if (Selection && Model && Selection.prototype.map && Model.prototype.toJSON) {
+		let galleryRenderDepth = 0;
+		const nativeMap = Selection.prototype.map;
+		const nativeJSON = Model.prototype.toJSON;
+		Selection.prototype.map = function () {
+			const frame = wp.media.frames && wp.media.frames.product_gallery;
+			const state = frame && typeof frame.state === 'function' ? frame.state() : null;
+			if (!state || !state.get || state.get('selection') !== this) return nativeMap.apply(this, arguments);
+			galleryRenderDepth++;
+			try { return nativeMap.apply(this, arguments); }
+			finally { galleryRenderDepth--; }
+		};
+		Model.prototype.toJSON = function () {
+			const data = nativeJSON.apply(this, arguments);
+			const preview = data.schrackMediaPreview;
+			if (!galleryRenderDepth || data.type !== 'image' || !preview || !preview.small) return data;
+			return Object.assign({}, data, {sizes: Object.assign({}, data.sizes, {thumbnail: Object.assign({}, preview.small)})});
+		};
+	}
 })();
