@@ -700,6 +700,15 @@ Checks: `php tests/search-index.php`, `php tests/search-facets.php`, and
 `node --test tests/frontend-search.js`. These use disposable SQLite or request
 doubles and do not access a live WordPress database.
 
+v0.1.151 also matches the names of a product's assigned categories in header,
+filter and native archive searches. For example, `huawei` finds `LUNA2000` model
+products assigned to `Baterii Huawei` even if their title, description and codes
+do not contain the brand. Category names and assignments are read live, so this
+works with a ready index and during native fallback without rebuilding the index.
+Multiple matching categories do not duplicate products. Stock, visibility, price,
+category and attribute constraints continue to apply; fuzzy model/code ranking
+is unchanged.
+
 Category metadata and attribute facets now share the mutation-invalidated cache
 on scoped category pages and AJAX, with a 30-minute maximum lifetime. Category
 parent maps have a separate 24-hour generation so stock changes do not rebuild

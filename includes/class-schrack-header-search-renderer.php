@@ -288,8 +288,7 @@ class Schrack_Header_Search_Renderer {
 			return $where;
 		}
 
-		return $where . ' AND ' . ( Schrack_Search_Index::use_for_query( $query )
-			? Schrack_Search_Index::predicate( $search ) : Schrack_Search_Index::native_predicate( $search ) );
+		return $where . ' AND ' . Schrack_Search_Index::query_predicate( $search, $query );
 	}
 
 	/**

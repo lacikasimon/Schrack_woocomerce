@@ -1722,6 +1722,24 @@ class Schrack_Product_Mapper {
 	 * @return array<string,mixed>
 	 */
 	public function import_product_image_with_result( int $product_id, array $prefetched_meta = array() ): array {
+		global $wpdb;
+		$image_url = $this->normalize_image_url( $this->prefetched_meta_value( $prefetched_meta, '_schrack_image_url', $product_id ) );
+		if ( '' === $image_url || 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
+			return $this->import_product_image_locked( $product_id, $prefetched_meta );
+		}
+		// Different products can share one supplier photo. Lock before looking it up.
+		$lock = 'schrack_image_' . substr( hash( 'sha256', $wpdb->posts . ':' . $image_url ), 0, 48 );
+		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s,0)', $lock ) ) ) {
+			return array( 'status' => 'deferred_busy', 'attachment_id' => 0, 'image_url' => $image_url );
+		}
+		try {
+			// A negative request cache may predate the other worker's attachment.
+			unset( $this->image_attachment_cache[ $image_url ] );
+			return $this->import_product_image_locked( $product_id, $prefetched_meta );
+		} finally { $wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) ); }
+	}
+
+	private function import_product_image_locked( int $product_id, array $prefetched_meta ): array {
 		if ( 'yes' !== $this->settings->get( 'image_import_enabled', 'yes' ) ) {
 			return array(
 				'status'        => 'skipped_disabled',
@@ -2112,6 +2130,7 @@ class Schrack_Product_Mapper {
 	public function limit_generated_image_sizes( array $sizes ): array {
 		$preferred = array(
 			'thumbnail',
+			'medium',
 			'woocommerce_thumbnail',
 			'woocommerce_single',
 			'woocommerce_gallery_thumbnail',

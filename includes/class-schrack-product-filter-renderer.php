@@ -780,8 +780,7 @@ class Schrack_Product_Filter_Renderer {
 		$search = trim( (string) $query->get( 'schrack_product_filter_search' ) );
 
 		if ( '' !== $search ) {
-			$where .= ' AND ' . ( Schrack_Search_Index::use_for_query( $query )
-				? Schrack_Search_Index::predicate( $search ) : Schrack_Search_Index::native_predicate( $search ) );
+			$where .= ' AND ' . Schrack_Search_Index::query_predicate( $search, $query );
 		}
 
 		$min_price = $query->get( 'schrack_product_filter_min_price' );

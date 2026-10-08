@@ -14,6 +14,7 @@ function get_post_meta($id,$key,$single=false) { $values=$GLOBALS['meta'][$id][$
 class WP_Query { private array $data;public function __construct($data){$this->data=$data;}public function get($key){return $this->data[$key]??'';}public function set($key,$value){$this->data[$key]=$value;} }
 class SearchDB {
  public string $prefix='custom_', $posts='custom_posts',$postmeta='custom_postmeta',$options='custom_options',$last_error='';public PDO $db;
+ public string $terms='custom_terms',$term_taxonomy='custom_term_taxonomy',$term_relationships='custom_term_relationships';
  public function __construct(){ $this->db=new PDO('sqlite::memory:'); }
  public function esc_like($value){return addcslashes($value,'_%\\');}
  public function prepare($sql,...$params){$params=is_array($params[0]??null)?$params[0]:$params;$i=0;return preg_replace_callback('/%[sdf]/',function($m)use(&$i,$params){$v=$params[$i++];return match($m[0]){'%d'=>(string)(int)$v,'%f'=>(string)(float)$v,default=>$this->db->quote($v)};},$sql);}
@@ -31,6 +32,7 @@ require __DIR__.'/../includes/class-schrack-header-search-renderer.php';
 require __DIR__.'/../includes/class-schrack-product-filter-renderer.php';
 $fields=array('title','excerpt','content','sku','schrack_item','schrack_ean','telesystem_item','telesystem_ean','edoc_item','edoc_ean');
 $wpdb->db->exec('CREATE TABLE custom_schrack_search_documents (product_id INTEGER PRIMARY KEY,'.implode(',',array_map(fn($f)=>$f.' TEXT',$fields)).');CREATE TABLE custom_schrack_search_documents_dirty(product_id INTEGER PRIMARY KEY,revision INTEGER);CREATE TABLE custom_posts(ID INTEGER PRIMARY KEY,post_type TEXT,post_status TEXT,post_title TEXT,post_excerpt TEXT,post_content TEXT,menu_order INTEGER);CREATE TABLE custom_postmeta(post_id INTEGER,meta_key TEXT,meta_value TEXT);CREATE TABLE custom_wc_product_meta_lookup(product_id INTEGER,sku TEXT)');
+$wpdb->db->exec('CREATE TABLE custom_terms(term_id INTEGER PRIMARY KEY,name TEXT);CREATE TABLE custom_term_taxonomy(term_taxonomy_id INTEGER PRIMARY KEY,term_id INTEGER,taxonomy TEXT);CREATE TABLE custom_term_relationships(object_id INTEGER,term_taxonomy_id INTEGER,PRIMARY KEY(object_id,term_taxonomy_id))');
 $docs=array(
  1=>array('KARO 18W','A description','A full description',array('_sku'=>array('TS-12_SKU%'),'_schrack_ean'=>array('5941234567890'),'_edoc_item_number'=>array('0'))),
  2=>array('Other','karo in excerpt','Plafonieră',array('_sku'=>array('ABC'),'_telesystem_item_number'=>array('Multiple','second-value'))),
@@ -99,4 +101,45 @@ $job->tick(); verify_search(Schrack_Search_Index::ready() && get_option(Schrack_
 $GLOBALS['fail_write']=true;$job->dirty(2);
 verify_search(!Schrack_Search_Index::ready() && !empty(get_option(Schrack_Search_Index::STATE)['needs_rebuild']),'A lost dirty mark disables the index and requires rebuilding.');
 $job->tick();verify_search(!Schrack_Search_Index::ready() && get_option(Schrack_Search_Index::STATE)['status']==='error','An empty dirty queue cannot enable a stale index after a failed mark.');
+
+// Live reproduction: Huawei exists only in the assigned category, not the model title.
+foreach (array(5=>'publish',6=>'publish',7=>'publish',8=>'draft') as $id=>$status) {
+ $GLOBALS['posts'][$id]=(object)array('ID'=>$id,'post_type'=>'product','post_status'=>$status,'post_title'=>'LUNA2000 '.$id,'post_excerpt'=>'','post_content'=>'');
+ $GLOBALS['meta'][$id]=array('_sku'=>array('LUNA-'.$id));
+ $q=$wpdb->db->prepare('INSERT INTO custom_posts VALUES (?,\'product\',?,?,\'\',\'\',0)');$q->execute(array($id,$status,'LUNA2000 '.$id));
+ $q=$wpdb->db->prepare('INSERT INTO custom_wc_product_meta_lookup(product_id,sku,stock_status,min_price,max_price) VALUES (?,?,?,?,?)');$q->execute(array($id,'LUNA-'.$id,$id===6?'outofstock':'instock',$id===6?200:100,$id===6?200:100));
+ $write->invoke($job,$id);
+}
+$wpdb->db->exec("INSERT INTO custom_terms VALUES (10,'Baterii Huawei'),(11,'Accesorii Huawei'),(12,'Huawei'),(13,'exclude-from-catalog'),(14,'Alarmă 50%_IP');
+INSERT INTO custom_term_taxonomy VALUES (110,10,'product_cat'),(111,11,'product_cat'),(112,12,'product_tag'),(113,13,'product_visibility'),(114,14,'product_cat');
+INSERT INTO custom_term_relationships VALUES (5,110),(5,111),(6,110),(7,110),(8,110),(2,112),(7,113),(4,114)");
+$visible="AND NOT EXISTS (SELECT 1 FROM custom_term_relationships hidden WHERE hidden.object_id=custom_posts.ID AND hidden.term_taxonomy_id=113)";
+foreach (array(false,true) as $ready) {
+ $GLOBALS['options'][Schrack_Search_Index::STATE]=array('ready'=>$ready);
+ foreach (array(new Schrack_Header_Search_Renderer(),new Schrack_Product_Filter_Renderer(),$job) as $renderer) {
+  $category_hits=function($term,$constraints=array(),$outer='') use ($wpdb,$renderer,$visible) {
+   $query=new WP_Query(array_merge(array('schrack_header_search'=>true,'schrack_header_search_term'=>$term,'schrack_product_filter_search'=>$term,'schrack_archive_index_search'=>$term),$constraints));
+   $where=$renderer instanceof Schrack_Search_Index ? $renderer->archive_where('',$query) : $renderer->query_where('',$query);
+   $join=$renderer instanceof Schrack_Search_Index ? $renderer->archive_join('',$query) : $renderer->query_join('',$query);
+   return $wpdb->get_col("SELECT custom_posts.ID FROM custom_posts {$join} WHERE custom_posts.post_status='publish' {$visible} {$where} {$outer} ORDER BY custom_posts.ID");
+  };
+  verify_search(array(5,6)===$category_hits('huawei'),'Header/filter/archive find category-only model products without duplicates, drafts, hidden products or tag-only matches.');
+  verify_search(array(5,6)===$category_hits('LUNA2000'),'Model-name searches still find the same products.');
+  verify_search(array(5)===$category_hits('huawei',array(), 'AND EXISTS (SELECT 1 FROM custom_term_relationships selected WHERE selected.object_id=custom_posts.ID AND selected.term_taxonomy_id=111)'),'Category/attribute constraints remain ANDed with the category text match.');
+  verify_search(array(4)===$category_hits('50%_IP'),'Category names preserve literal percent, underscore and short code matching.');
+  verify_search(array()===$category_hits('50%XIP'),'Category punctuation is not treated as a wildcard.');
+  verify_search(array(4)===$category_hits('Alarmă'),'Accented category names match.');
+  $wpdb->db->exec("UPDATE custom_terms SET name='Baterii Sungrow' WHERE term_id=10");
+  verify_search(array(5,6)===$category_hits('sungrow') && array(5)===$category_hits('huawei'),'Renaming a category changes search immediately without an index rebuild.');
+  $wpdb->db->exec('DELETE FROM custom_term_relationships WHERE object_id=5 AND term_taxonomy_id=111');
+  verify_search(array()===$category_hits('huawei'),'Removing the last matching category assignment updates search immediately.');
+  $wpdb->db->exec("UPDATE custom_terms SET name='Baterii Huawei' WHERE term_id=10;INSERT INTO custom_term_relationships VALUES (5,111)");
+  if ($renderer instanceof Schrack_Product_Filter_Renderer) {
+   verify_search(array(5)===$category_hits('huawei',array('schrack_product_filter_hide_out_of_stock'=>true)),'Category text matches preserve the stock filter.');
+   verify_search(array(6)===$category_hits('huawei',array('schrack_product_filter_min_price'=>150)),'Category text matches preserve the minimum price.');
+   verify_search(array(5)===$category_hits('huawei',array('schrack_product_filter_max_price'=>150)),'Category text matches preserve the maximum price.');
+  }
+ }
+}
+verify_search(array()===$indexed('huawei') && array()===$category_hits('does-not-exist'),'Category regression really requires the new matching path and unrelated searches remain empty.');
 echo "Search index: {$checks} checks passed.\n";

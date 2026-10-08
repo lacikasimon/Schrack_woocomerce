@@ -75,13 +75,30 @@ final class Schrack_Search_Index {
 		return $wpdb->prepare( '(' . implode( ' OR ', $clauses ) . ')', array_fill( 0, count( self::FIELDS ), $like ) );
 	}
 
+	/** Category names also identify products whose titles contain only a model code. */
+	public static function query_predicate( string $search, WP_Query $query ): string {
+		global $wpdb;
+		$product = self::use_for_query( $query ) ? self::predicate( $search ) : self::native_predicate( $search );
+		// Read current assignments/names so category edits require no index rebuild.
+		// EXISTS preserves one result per product even when several categories match.
+		$category = $wpdb->prepare(
+			"EXISTS (SELECT 1 FROM {$wpdb->term_relationships} AS schrack_search_category_rel
+			INNER JOIN {$wpdb->term_taxonomy} AS schrack_search_category_tax ON (schrack_search_category_rel.term_taxonomy_id = schrack_search_category_tax.term_taxonomy_id)
+			INNER JOIN {$wpdb->terms} AS schrack_search_category_term ON (schrack_search_category_tax.term_id = schrack_search_category_term.term_id)
+			WHERE schrack_search_category_rel.object_id = {$wpdb->posts}.ID
+			AND schrack_search_category_tax.taxonomy = 'product_cat' AND schrack_search_category_term.name LIKE %s)",
+			'%' . $wpdb->esc_like( $search ) . '%'
+		);
+		return '(' . $product . ' OR ' . $category . ')';
+	}
+
 	public function archive_join( string $join, WP_Query $query ): string {
 		return '' !== (string) $query->get( 'schrack_archive_index_search' ) && self::use_for_query( $query ) ? $join . self::join() : $join;
 	}
 	public function archive_where( string $where, WP_Query $query ): string {
 		$search = (string) $query->get( 'schrack_archive_index_search' );
 		if ( '' === $search ) { return $where; }
-		return $where . ' AND ' . ( self::use_for_query( $query ) ? self::predicate( $search ) : self::native_predicate( $search ) );
+		return $where . ' AND ' . self::query_predicate( $search, $query );
 	}
 
 	public function start(): void {

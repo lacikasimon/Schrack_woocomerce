@@ -141,6 +141,7 @@ class Schrack_Plugin {
 		( new Schrack_Search_Index() )->init();
 		( new Schrack_Log_Archive() )->init();
 		( new Schrack_Performance_Tools() )->init();
+		( new Schrack_Media_Maintenance() )->init();
 		$this->b2b_pricing = new Schrack_B2B_Pricing();
 		$this->b2b_pricing->init();
 		$this->newsletter = new Schrack_Newsletter();
@@ -203,6 +204,7 @@ class Schrack_Plugin {
 			'class-schrack-search-index.php',
 			'class-schrack-log-archive.php',
 			'class-schrack-performance-tools.php',
+			'class-schrack-media-maintenance.php',
 			'class-schrack-seo-compatibility.php',
 			'class-schrack-stock-label.php',
 			'class-schrack-b2b-pricing.php',
@@ -292,6 +294,8 @@ class Schrack_Plugin {
 		Schrack_Search_Index::clear_schedule();
 		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-log-archive.php';
 		Schrack_Log_Archive::clear_schedule();
+		require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-media-maintenance.php';
+		Schrack_Media_Maintenance::clear_schedule();
 	}
 
 	/**
