@@ -16,7 +16,7 @@ small loader in a test-only MU plugin:
 if ( 'http://127.0.0.1:18944' !== get_option( 'home' ) ) { return; }
 define( 'SCHRACK_WC_SYNC_PATH', WP_PLUGIN_DIR . '/schrack-woocommerce-sync/' );
 define( 'SCHRACK_WC_SYNC_URL', plugins_url( 'schrack-woocommerce-sync/' ) );
-define( 'SCHRACK_WC_SYNC_VERSION', '0.1.152' );
+define( 'SCHRACK_WC_SYNC_VERSION', '0.1.153' );
 foreach ( array( 'memory-guard', 'product-hero-cache', 'media-maintenance' ) as $part ) {
     require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-' . $part . '.php';
 }

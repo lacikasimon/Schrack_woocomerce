@@ -10,19 +10,38 @@
 		return preview && preview.small ? Object.assign({}, preview.small) : nativeImageSize.call(this, size);
 	};
 	// Only clone render data. The model's full URL and insertion-size choices stay native.
-	function wrapTemplate(View) {
-		if (!View || !View.prototype.template) return;
-		const nativeTemplate = View.prototype.template;
-		View.prototype.template = function (data) {
-			const previews = data.schrackMediaPreview;
-			if (!previews || !previews.detail || data.type !== 'image') return nativeTemplate.call(this, data);
-			const copy = Object.assign({}, data, {size: Object.assign({}, previews.detail)});
-			copy.sizes = Object.assign({}, data.sizes, {full: Object.assign({}, previews.detail)});
-			return nativeTemplate.call(this, copy);
+	const Details = Attachment.Details;
+	if (Details && Details.prototype.render) {
+		const nativeRender = Details.prototype.render;
+		Details.prototype.render = function () {
+			// media-grid registers TwoColumn after this asset. Resolve its template at render time.
+			const nativeTemplate = this.template;
+			const ownTemplate = Object.prototype.hasOwnProperty.call(this, 'template');
+			this.template = function (data) {
+				const previews = data.schrackMediaPreview;
+				if (!previews || !previews.detail || data.type !== 'image') return nativeTemplate.call(this, data);
+				const copy = Object.assign({}, data, {size: Object.assign({}, previews.detail)});
+				copy.sizes = Object.assign({}, data.sizes, {full: Object.assign({}, previews.detail)});
+				const html = nativeTemplate.call(this, copy);
+				if (typeof html !== 'string') return html;
+				// Some core templates read data.url directly. Rewrite images before DOM insertion;
+				// inert template contents cannot fetch originals. File/download URLs stay native.
+				const markup = document.createElement('template');
+				markup.innerHTML = html;
+				markup.content.querySelectorAll('img').forEach(image => {
+					image.setAttribute('src', previews.detail.url);
+					image.removeAttribute('srcset');
+					image.removeAttribute('sizes');
+				});
+				return markup.innerHTML;
+			};
+			try { return nativeRender.apply(this, arguments); }
+			finally {
+				if (ownTemplate) this.template = nativeTemplate;
+				else delete this.template;
+			}
 		};
 	}
-	wrapTemplate(Attachment.Details);
-	wrapTemplate(Attachment.Details && Attachment.Details.TwoColumn);
 	// WooCommerce builds new gallery <img> elements by mapping its selection toJSON().
 	// Give that admin renderer a clone, preserving the model and every other insertion flow.
 	const Selection = wp.media.model && wp.media.model.Selection;

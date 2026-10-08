@@ -834,7 +834,11 @@ imports and special tags retain external loading. Disable separate block
 styles with `schrack_wc_sync_separate_core_block_assets`, or catalog inlining
 with its existing filter. Admin, feeds and REST keep the native core exclusions.
 
-#### Media audit and admin previews (v0.1.152)
+#### Media audit and admin previews (v0.1.153)
+
+Attachment detail templates registered later by WordPress's media grid also use
+the bounded preview. Image sources are rewritten in inert markup before rendering;
+the original file URL and download links remain available separately.
 
 On the same page, **Biblioteca Media — verificare și reparare** starts an audit
 with **Pornește verificarea**. It checks local originals, metadata and actual

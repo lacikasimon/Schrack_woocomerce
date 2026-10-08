@@ -8,19 +8,57 @@ const maintenanceCode = fs.readFileSync(path.join(__dirname, '../assets/admin-me
 test('grid and details use bounded previews without modifying insertion/original URLs', () => {
  function Attachment() {} Attachment.prototype.imageSize = () => ({url: 'native.jpg'});
  Attachment.Details = function() {}; Attachment.Details.prototype.template = data => data;
- Attachment.Details.TwoColumn = function() {}; Attachment.Details.TwoColumn.prototype.template = data => data;
+ Attachment.Details.prototype.render = function(data) {return this.template(data);};
  const wp = {media: {view: {Attachment}}};
  const context = {window: {wp}, wp}; vm.runInNewContext(previewCode, context);
+ // WordPress media-grid installs this subclass after the adapter has loaded.
+ Attachment.Details.TwoColumn = function() {};
+ Attachment.Details.TwoColumn.prototype = Object.create(Attachment.Details.prototype);
+ Attachment.Details.TwoColumn.prototype.template = data => data;
  const data = {type: 'image', url: 'original.jpg', sizes: {full: {url: 'original.jpg'}, medium: {url: 'native-medium.jpg'}}, schrackMediaPreview: {small: {url: 'small.jpg', width: 300}, detail: {url: 'detail.jpg', width: 1024}}};
  const view = new Attachment(); view.model = {get: key => data[key]};
  assert.equal(view.imageSize().url, 'small.jpg');
  const first = Attachment.prototype.imageSize; vm.runInNewContext(previewCode, context); assert.equal(first, Attachment.prototype.imageSize);
  for (const View of [Attachment.Details, Attachment.Details.TwoColumn]) {
-  const result = new View().template(data);
+  const view = new View(), nativeTemplate = view.template;
+  const result = view.render(data);
   assert.equal(result.sizes.full.url, 'detail.jpg'); assert.equal(result.size.url, 'detail.jpg');
   assert.equal(data.sizes.full.url, 'original.jpg'); assert.equal(data.url, 'original.jpg'); assert.equal(result.sizes.medium.url, 'native-medium.jpg');
+  assert.equal(view.template, nativeTemplate); assert.equal(Object.hasOwn(view, 'template'), false);
  }
  view.model = {get: () => undefined}; assert.equal(view.imageSize().url, 'native.jpg');
+});
+test('late two-column templates bound image URLs before insertion while keeping original controls', () => {
+ const document = {createElement(tag) {
+  assert.equal(tag, 'template', 'preview markup must remain inert until rewritten');
+  let html = '', images = [];
+  return {set innerHTML(value) {
+   html = value; images = [...html.matchAll(/<img\b[^>]*>/g)].map(match => {
+    const attributes = new Map([...match[0].matchAll(/([\w-]+)="([^"]*)"/g)].map(item => [item[1], item[2]]));
+    return {setAttribute: (key, value) => attributes.set(key, value), removeAttribute: key => attributes.delete(key), serialize: () => '<img ' + [...attributes].map(([key, value]) => `${key}="${value}"`).join(' ') + '>'};
+   });
+  }, get innerHTML() {let i = 0; return html.replace(/<img\b[^>]*>/g, () => images[i++].serialize());}, content: {querySelectorAll(selector) {assert.equal(selector, 'img'); return images;}}};
+ }};
+ function Attachment() {} Attachment.prototype.imageSize = () => ({});
+ Attachment.Details = function() {};
+ Attachment.Details.prototype.render = function(data) {return this.template(data);};
+ const wp = {media: {view: {Attachment}}}, context = {window: {wp}, wp, document};
+ vm.runInNewContext(previewCode, context);
+ function TwoColumn() {} TwoColumn.prototype = Object.create(Attachment.Details.prototype);
+ TwoColumn.prototype.template = data => `<img src="${data.url}" srcset="${data.url} 2x" sizes="100vw" alt="preview"><a href="${data.url}" download>Original</a><input value="${data.url}">`;
+ Attachment.Details.TwoColumn = TwoColumn;
+ const data = {type: 'image', url: 'original.jpg', sizes: {full: {url: 'original.jpg'}}, schrackMediaPreview: {detail: {url: 'detail.jpg', width: 1024}}};
+ const view = new TwoColumn(), template = view.template, render = Attachment.Details.prototype.render;
+ const result = view.render(data);
+ assert.match(result, /<img src="detail.jpg" alt="preview">/);
+ assert.doesNotMatch(result, /srcset=|sizes=/);
+ assert.match(result, /href="original.jpg" download/); assert.match(result, /value="original.jpg"/);
+ assert.equal(data.url, 'original.jpg'); assert.equal(data.sizes.full.url, 'original.jpg');
+ assert.equal(view.template, template); assert.equal(Object.hasOwn(view, 'template'), false);
+ vm.runInNewContext(previewCode, context); assert.equal(Attachment.Details.prototype.render, render);
+ view.template = () => {throw Error('template failed');}; const failingTemplate = view.template;
+ assert.throws(() => view.render(data), /template failed/); assert.equal(view.template, failingTemplate);
+ const audio = {...data, type: 'audio'}; assert.match(new TwoColumn().render(audio), /src="original.jpg" srcset=/);
 });
 class Element {
  constructor(tag) {this.tag = tag; this.children = []; this.dataset = {}; this.style = {}; this.textContent = ''; this.events = {}; this.disabled = false; this.isConnected = true;}
