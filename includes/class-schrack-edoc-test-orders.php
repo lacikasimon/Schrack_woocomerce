@@ -35,6 +35,7 @@ final class Schrack_EDoc_Test_Orders {
 		wp_enqueue_script( 'schrack-edoc-test-orders', SCHRACK_WC_SYNC_URL . 'assets/admin-edoc-test-orders.js', array(), SCHRACK_WC_SYNC_VERSION, true );
 		wp_localize_script( 'schrack-edoc-test-orders', 'schrackEDocTestOrders', array( 'url' => admin_url( 'admin-ajax.php' ), 'nonce' => wp_create_nonce( 'schrack_edoc_test_orders' ) ) );
 		?>
+		<style>#schrack-edoc-test-orders [hidden]{display:none!important}</style>
 		<div class="wrap" id="schrack-edoc-test-orders">
 			<h1>Comenzi de test eDoc</h1>
 			<p>Lot unic: 6–15 comenzi pe lună, din iunie anul curent până astăzi, cu date și cantități aleatorii. Clienții și adresele sunt fictive și marcate TEST.</p>

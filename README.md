@@ -573,7 +573,7 @@ Regressions: `php tests/cache-warmer.php`, `php tests/catalog-query.php`,
 `php tests/cache-invalidation.php /path/to/wordpress-source` and
 `node --test tests/admin-cache-warmer.js` (no live database or HTTP requests).
 
-## eDoc ERP integration (v0.1.155, protocol v1.1)
+## eDoc ERP integration (v0.1.156, protocol v1.1)
 
 Open **WooCommerce → eDoc ERP**. The integration is disabled by default. Configure a
 separate connection in **eDoc → Gestiune → Webshop → Configurare**, select quantitative
