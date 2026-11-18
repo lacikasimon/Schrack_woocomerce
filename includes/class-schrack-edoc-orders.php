@@ -24,6 +24,7 @@ final class Schrack_EDoc_Orders {
 			$stored = $order->get_address( $kind );
 			$addresses[ $kind ] = array();
 			foreach ( $fields as $field ) { $addresses[ $kind ][ $field ] = self::text( $stored[ $field ] ?? '' ); }
+			if ( 'shipping' === $kind && ! array_key_exists( 'email', $stored ) ) { $addresses[ $kind ]['email'] = self::text( $order->get_meta( '_shipping_email' ) ); }
 			$addresses[ $kind ]['vat_number'] = 'billing' === $kind ? self::text( $order->get_meta( '_billing_vat_number' ) ?: $order->get_meta( 'billing_vat_number' ) ) : '';
 		}
 		$data = array( 'id' => $order->get_id(), 'number' => (string) $order->get_order_number(), 'status' => $order->get_status(), 'currency' => $order->get_currency(), 'date_created_gmt' => self::date( $order->get_date_created() ), 'date_modified_gmt' => self::date( $order->get_date_modified() ), 'billing' => $addresses['billing'], 'shipping' => $addresses['shipping'], 'payment_method' => $order->get_payment_method(), 'payment_method_title' => $order->get_payment_method_title(), 'customer_note' => $order->get_customer_note() );

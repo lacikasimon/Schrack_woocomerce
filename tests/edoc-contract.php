@@ -1,6 +1,6 @@
 <?php
 /** Run: php tests/edoc-contract.php — isolated protocol/catalog behavior tests, no HTTP. */
-define( 'ABSPATH', __DIR__ . '/' );
+define( 'ABSPATH', __DIR__ . '/fixtures/edoc-wp/' );
 define( 'HOUR_IN_SECONDS', 3600 );
 define( 'MINUTE_IN_SECONDS', 60 );
 define( 'DAY_IN_SECONDS', 86400 );
@@ -19,7 +19,7 @@ function wc_get_product( $id ) { return $GLOBALS['products'][ $id ] ?? false; }
 function wc_prices_include_tax() { return $GLOBALS['inclusive']; }
 function wc_tax_enabled() { return true; }
 function wc_get_price_decimals() { return 2; }
-function wc_format_decimal( $n, $decimals = 2 ) { return number_format( (float) $n, $decimals, '.', '' ); }
+function wc_format_decimal( $n, $decimals = 2, $trim = false ) { return false === $decimals ? rtrim( rtrim( sprintf( '%.8F', (float) $n ), '0' ), '.' ) : number_format( (float) $n, $decimals, '.', '' ); }
 function current_time( $format ) { return '2026-09-07 12:00:00'; }
 class WC_Tax {
  public static function get_tax_class_slugs() { return array( 'reduced-rate' ); }
@@ -84,4 +84,5 @@ $p->update_meta_data( '_schrack_catalog_source', 'telesystem' );
 try { $i->import_item( $row, $config ); check( false, 'collision must reject' ); } catch ( RuntimeException $e ) { check( 'telesystem' === $p->get_meta( '_schrack_catalog_source' ), 'collision untouched' ); }
 try { $i->import_item( array_merge( $row, array( 'entity_id' => 8, 'sku' => 'ERP-8-9' ) ), $config ); check( false, 'entity mismatch must reject' ); } catch ( RuntimeException $e ) { check( count( $GLOBALS['products'] ) === 1, 'cross entity rejected' ); }
 check( null === $i->tax_class( 21, array( '21' => 'reduced-rate' ) ), 'mismatched actual Woo tax rejects' );
-echo 'OK: ' . $count . " protocol/catalog assertions\n";
+require __DIR__ . '/fixtures/edoc-v11.php';
+echo 'OK: ' . $count . " protocol/catalog/command/invoice assertions\n";

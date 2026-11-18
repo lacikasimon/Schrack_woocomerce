@@ -126,5 +126,15 @@ namespace EDocWorkerRegression {
 	check( 'catalog' === $events[0][0] && count( $events ) === 11, 'recoverable catalog failure still allows order delivery' );
 	check( 10300 === get_option( 'schrack_edoc_catalog_next' ), 'catalog retry backoff is unchanged' );
 	check( 1 === Fixture::$statuses['edoc_catalog']['errors'], 'catalog failure remains visible' );
+	// RPC saves (including v1.1 edits/invoices) must not start capture/delivery inside a command.
+	Fixture::reset( 'orders' );
+	$bridge = new Schrack_EDoc_Bridge( new Schrack_Settings() );
+	$rpc = new \ReflectionProperty( $bridge, 'rpc_orders' );
+	$rpc->setValue( null, array( 123 => true ) );
+	$before = Fixture::$options;
+	$bridge->capture_event( 123 );
+	check( array() === Fixture::$events && $before === Fixture::$options, 'RPC capture guard suppresses recursive worker scheduling and HTTP' );
+	$rpc->setValue( null, array() );
+
 	echo 'OK: ' . $checks . " worker scheduling assertions\n";
 }

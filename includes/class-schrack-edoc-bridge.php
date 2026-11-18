@@ -36,6 +36,7 @@ final class Schrack_EDoc_Bridge {
 			order_id bigint unsigned NOT NULL,
 			request_hash char(64) NOT NULL,
 			state varchar(20) NOT NULL,
+			kind varchar(16) NOT NULL DEFAULT 'status',
 			status varchar(32) NOT NULL,
 			base_version bigint unsigned NOT NULL,
 			http_status int unsigned NOT NULL DEFAULT 200,
@@ -50,11 +51,12 @@ final class Schrack_EDoc_Bridge {
 			PRIMARY KEY  (nonce_hash),
 			KEY expiry (expires_at)
 		) $collate;" );
-		update_option( 'schrack_edoc_schema', '2', false );
+		update_option( 'schrack_edoc_schema', '3', false );
 	}
 
 	public function init(): void {
-		if ( '2' !== get_option( 'schrack_edoc_schema' ) ) { self::install(); }
+		if ( '3' !== get_option( 'schrack_edoc_schema' ) ) { self::install(); }
+		( new Schrack_EDoc_Invoices() )->init();
 		add_action( 'rest_api_init', array( $this, 'routes' ) );
 		add_filter( 'rest_post_dispatch', array( $this, 'private_response_headers' ), 10, 3 );
 		add_action( 'init', array( $this, 'schedule' ), 20 );
@@ -82,8 +84,8 @@ final class Schrack_EDoc_Bridge {
 	}
 
 	public function routes(): void {
-		foreach ( array( '/health' => 'GET', '/orders/(?P<id>\d+)' => 'GET', '/orders/(?P<id>\d+)/status' => 'POST' ) as $route => $method ) {
-			register_rest_route( 'schrack-sync/v1', '/erp' . $route, array( 'methods' => $method, 'permission_callback' => array( $this, 'authenticate' ), 'callback' => 'POST' === $method ? array( $this, 'status_endpoint' ) : ( '/health' === $route ? array( $this, 'health_endpoint' ) : array( $this, 'order_endpoint' ) ) ) );
+		foreach ( array( '/health' => array( 'GET', 'health_endpoint' ), '/orders/(?P<id>\d+)' => array( 'GET', 'order_endpoint' ), '/orders/(?P<id>\d+)/status' => array( 'POST', 'status_endpoint' ), '/orders/(?P<id>\d+)/edit' => array( 'POST', 'edit_endpoint' ), '/orders/(?P<id>\d+)/invoice' => array( 'POST', 'invoice_endpoint' ) ) as $route => $handler ) {
+			register_rest_route( 'schrack-sync/v1', '/erp' . $route, array( 'methods' => $handler[0], 'permission_callback' => array( $this, 'authenticate' ), 'callback' => array( $this, $handler[1] ) ) );
 		}
 	}
 
@@ -102,7 +104,7 @@ final class Schrack_EDoc_Bridge {
 		if ( ! is_ssl() && ! Schrack_EDoc_Client::local_allowed() ) { return new WP_Error( 'https_required', 'HTTPS obligatoriu.', array( 'status' => 403 ) ); }
 		$query = $request->get_query_params(); unset( $query['rest_route'] );
 		if ( $query || strlen( $request->get_body() ) > Schrack_EDoc_Client::MAX_BYTES ) { return new WP_Error( 'invalid_request', 'Cerere invalidă.', array( 'status' => 400 ) ); }
-		$key = $request->get_header( 'X-EDoc-Key' ); $ts = $request->get_header( 'X-EDoc-Timestamp' ); $nonce = $request->get_header( 'X-EDoc-Nonce' ); $sig = $request->get_header( 'X-EDoc-Signature' );
+		$key = (string) $request->get_header( 'X-EDoc-Key' ); $ts = (string) $request->get_header( 'X-EDoc-Timestamp' ); $nonce = (string) $request->get_header( 'X-EDoc-Nonce' ); $sig = (string) $request->get_header( 'X-EDoc-Signature' );
 		if ( '' === $c['secret'] || '' === $c['key_id'] || ! hash_equals( (string) $c['key_id'], $key ) || ! preg_match( '/^\d{10}$/D', $ts ) || abs( time() - (int) $ts ) > 300 || ! self::uuid( $nonce ) || ! preg_match( '/^[a-f0-9]{64}$/D', $sig ) ) { return new WP_Error( 'unauthorized', 'Autentificare eDoc invalidă.', array( 'status' => 401 ) ); }
 		$expected = hash_hmac( 'sha256', Schrack_EDoc_Client::canonical( $request->get_method(), $request->get_route(), $query, $key, $ts, $nonce, $request->get_body() ), $c['secret'] );
 		if ( ! hash_equals( $expected, $sig ) ) { return new WP_Error( 'unauthorized', 'Autentificare eDoc invalidă.', array( 'status' => 401 ) ); }
@@ -113,7 +115,7 @@ final class Schrack_EDoc_Bridge {
 	}
 
 	private static function uuid( mixed $id ): bool { return is_string( $id ) && 1 === preg_match( '/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iD', $id ); }
-	public function health_endpoint(): WP_REST_Response { return new WP_REST_Response( array( 'ok' => true, 'protocol_version' => 1, 'currency' => get_woocommerce_currency(), 'enabled' => Schrack_EDoc_Client::enabled() ) ); }
+	public function health_endpoint(): WP_REST_Response { return new WP_REST_Response( array( 'ok' => true, 'protocol_version' => 1, 'currency' => get_woocommerce_currency(), 'enabled' => Schrack_EDoc_Client::enabled(), 'features' => array( 'order_status', 'order_edit', 'order_invoice' ), 'plugin_version' => SCHRACK_WC_SYNC_VERSION ) ); }
 
 	public function order_endpoint( WP_REST_Request $request ) {
 		try { return new WP_REST_Response( array_merge( array( 'ok' => true ), $this->capture( (int) $request['id'] ) ) ); }
@@ -121,37 +123,77 @@ final class Schrack_EDoc_Bridge {
 		catch ( Throwable $e ) { return new WP_Error( 'order_busy', 'Comanda nu poate fi citită acum.', array( 'status' => 503 ) ); }
 	}
 
-	/** A write-ahead journal makes timeouts/retries safe without repeating Woo notifications. */
+	/** Keep the original status validation, hash and wire responses for protocol v1 retries. */
 	public function status_endpoint( WP_REST_Request $request ) {
 		$body = $request->get_json_params();
 		if ( ! is_array( $body ) || array_diff( array_keys( $body ), array( 'command_id', 'expected_version', 'status' ) ) || ! self::uuid( $body['command_id'] ?? null ) || ! is_int( $body['expected_version'] ?? null ) || $body['expected_version'] < 1 || ! in_array( $body['status'] ?? '', array( 'pending', 'on-hold', 'processing', 'completed', 'cancelled', 'failed' ), true ) ) { return new WP_Error( 'invalid_command', 'Comandă de status invalidă.', array( 'status' => 400 ) ); }
 		$id = (int) $request['id'];
-		try { return $this->locked( 'order_' . $id, function () use ( $body, $id ) {
+		return $this->command( $id, 'status', $body,
+			static fn( $current ) => $current['order']['status'] === $body['status'],
+			function ( $current ) use ( $id, $body ) {
+				$conflict = Schrack_EDoc_Commands::editable( $current, $body );
+				if ( $conflict ) { return $conflict; }
+				$order = new WC_Order( $id );
+				if ( $order->get_status() !== $body['status'] && ! $order->update_status( $body['status'], 'Status actualizat din eDoc ERP.', true ) ) { throw new Schrack_EDoc_Exception( 'WooCommerce nu a confirmat schimbarea statusului.' ); }
+				return null;
+			}
+		);
+	}
+
+	public function edit_endpoint( WP_REST_Request $request ) {
+		$body = Schrack_EDoc_Commands::edit_body( $request->get_json_params() );
+		if ( is_wp_error( $body ) ) { return $body; }
+		$id = (int) $request['id'];
+		return $this->command( $id, 'edit', $body,
+			static fn( $current ) => Schrack_EDoc_Commands::edit_matches( $current['order'], $body ),
+			static function ( $current ) use ( $id, $body ) {
+				$conflict = Schrack_EDoc_Commands::editable( $current, $body );
+				if ( $conflict ) { return $conflict; }
+				if ( isset( $body['line_items'] ) && ! in_array( $current['order']['status'], array( 'pending', 'on-hold' ), true ) ) {
+					return new WP_REST_Response( array_merge( array( 'error' => 'Pozițiile se pot modifica numai înainte de procesare.', 'code' => 'lines_read_only' ), $current ), 409 );
+				}
+				Schrack_EDoc_Commands::apply_edit( $id, $body );
+				return null;
+			},
+			static fn( $current ) => Schrack_EDoc_Commands::validate_lines( $current['order'], $body )
+		);
+	}
+
+	public function invoice_endpoint( WP_REST_Request $request ) {
+		$body = Schrack_EDoc_Commands::invoice_body( $request->get_json_params() );
+		if ( is_wp_error( $body ) ) { return $body; }
+		$id = (int) $request['id'];
+		return $this->command( $id, 'invoice', $body,
+			static fn() => Schrack_EDoc_Commands::invoice_matches( $id, $body['invoice'] ),
+			static function () use ( $id, $body ) { Schrack_EDoc_Commands::apply_invoice( $id, $body['invoice'] ); return null; }
+		);
+	}
+
+	/** Shared write-ahead journal. An uncertain command is inspected, never executed twice. */
+	private function command( int $id, string $kind, array $body, callable $matches, callable $apply, ?callable $validate = null ) {
+		try { return $this->locked( 'order_' . $id, function () use ( $id, $kind, $body, $matches, $apply, $validate ) {
 			global $wpdb;
 			$table = self::table( 'commands' );
-			$hash = hash( 'sha256', wp_json_encode( array( $id, $body['expected_version'], $body['status'] ) ) );
+			// Existing status journal rows must retain their pre-v1.1 hash, including after upgrade.
+			$hash = hash( 'sha256', wp_json_encode( 'status' === $kind ? array( $id, $body['expected_version'], $body['status'] ) : array( $kind, $id, $body ) ) );
 			$journal = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE command_id=%s", $body['command_id'] ), ARRAY_A );
-			if ( $journal && ! hash_equals( $journal['request_hash'], $hash ) ) { return new WP_REST_Response( array( 'error' => 'Identificatorul comenzii a fost reutilizat.', 'code' => 'command_conflict' ), 409 ); }
+			if ( $journal && ( ( $journal['kind'] ?? 'status' ) !== $kind || ! hash_equals( $journal['request_hash'], $hash ) ) ) { return new WP_REST_Response( array( 'error' => 'Identificatorul comenzii a fost reutilizat.', 'code' => 'command_conflict' ), 409 ); }
 			if ( $journal && 'done' === $journal['state'] ) { return new WP_REST_Response( json_decode( $journal['response'], true ), (int) $journal['http_status'] ); }
 			$current = $this->capture( $id );
 			if ( $journal ) {
-				// A process stopped after journaling. Never execute its side effects a second time.
-				if ( $current['order']['status'] === $body['status'] ) { return $this->finish_command( $body['command_id'], array_merge( array( 'ok' => true, 'command_id' => $body['command_id'] ), $current ), 200 ); }
+				if ( $matches( $current ) ) { return $this->finish_command( $body['command_id'], array_merge( array( 'ok' => true, 'command_id' => $body['command_id'] ), $current ), 200 ); }
 				return $this->finish_command( $body['command_id'], array_merge( array( 'error' => 'Rezultatul comenzii întrerupte necesită verificare.', 'code' => 'version_conflict' ), $current ), 409 );
 			}
-			$inserted = $wpdb->insert( $table, array( 'command_id' => $body['command_id'], 'order_id' => $id, 'request_hash' => $hash, 'state' => 'applying', 'status' => $body['status'], 'base_version' => $body['expected_version'], 'response' => '', 'created_at' => gmdate( 'Y-m-d H:i:s' ) ) );
+			if ( $validate ) { $error = $validate( $current ); if ( is_wp_error( $error ) ) { return $error; } }
+			$inserted = $wpdb->insert( $table, array( 'command_id' => $body['command_id'], 'order_id' => $id, 'kind' => $kind, 'request_hash' => $hash, 'state' => 'applying', 'status' => 'status' === $kind ? $body['status'] : '', 'base_version' => $body['expected_version'] ?? $current['version'], 'response' => '', 'created_at' => gmdate( 'Y-m-d H:i:s' ) ) );
 			if ( false === $inserted ) { return new WP_REST_Response( array( 'error' => 'Comanda este deja în lucru.', 'code' => 'command_conflict' ), 409 ); }
-			if ( ! in_array( $current['order']['status'], array( 'pending', 'on-hold', 'processing', 'completed', 'cancelled', 'failed' ), true ) ) { return $this->finish_command( $body['command_id'], array_merge( array( 'error' => 'Acest status se gestionează numai în WooCommerce.', 'code' => 'status_read_only' ), $current ), 409 ); }
-			if ( $current['version'] !== $body['expected_version'] ) { return $this->finish_command( $body['command_id'], array_merge( array( 'error' => 'Comanda s-a modificat în magazin.', 'code' => 'version_conflict' ), $current ), 409 ); }
 			self::$rpc_orders[ $id ] = true;
-			try {
-				$order = new WC_Order( $id );
-				if ( $order->get_status() !== $body['status'] && ! $order->update_status( $body['status'], 'Status actualizat din eDoc ERP.', true ) ) { throw new Schrack_EDoc_Exception( 'WooCommerce nu a confirmat schimbarea statusului.' ); }
-			} finally { unset( self::$rpc_orders[ $id ] ); }
+			try { $response = $apply( $current ); } finally { unset( self::$rpc_orders[ $id ] ); }
+			if ( $response instanceof WP_REST_Response ) { return $this->finish_command( $body['command_id'], $response->get_data(), $response->get_status() ); }
 			return $this->finish_command( $body['command_id'], array_merge( array( 'ok' => true, 'command_id' => $body['command_id'] ), $this->capture( $id ) ), 200 );
 		} ); }
 		catch ( OutOfBoundsException $e ) { return new WP_Error( 'not_found', 'Comanda nu există.', array( 'status' => 404 ) ); }
-		catch ( Throwable $e ) { return new WP_Error( 'status_pending', 'Rezultatul nu este confirmat. Reluați cu același command_id.', array( 'status' => 503 ) ); }
+		catch ( Throwable $e ) { return new WP_Error( 'status' === $kind ? 'status_pending' : 'command_pending', 'Rezultatul nu este confirmat. Reluați cu același command_id.', array( 'status' => 503 ) ); }
 	}
 
 	private function finish_command( string $id, array $response, int $status ): WP_REST_Response {

@@ -573,7 +573,7 @@ Regressions: `php tests/cache-warmer.php`, `php tests/catalog-query.php`,
 `php tests/cache-invalidation.php /path/to/wordpress-source` and
 `node --test tests/admin-cache-warmer.js` (no live database or HTTP requests).
 
-## eDoc ERP integration (v0.1.73)
+## eDoc ERP integration (v0.1.154, protocol v1.1)
 
 Open **WooCommerce → eDoc ERP**. The integration is disabled by default. Configure a
 separate connection in **eDoc → Gestiune → Webshop → Configurare**, select quantitative
@@ -628,9 +628,56 @@ command, the plugin verifies the current state and reports a conflict if the eff
 cannot be confirmed; it never repeats an uncertain WooCommerce side effect. Refunds,
 custom statuses, payments and supplier order placement stay in WooCommerce.
 
+Protocol v1.1 also supports signed ERP order edits and invoice associations. Health
+keeps `protocol_version: 1` and advertises `features: ["order_status", "order_edit",
+"order_invoice"]` plus `plugin_version`; ERP can discover support before sending a
+new command. Existing status command hashes and stored responses remain compatible.
+Schema version 3 adds a `kind` column to the command journal without deleting rows.
+
+`POST /wp-json/schrack-sync/v1/erp/orders/<id>/edit` accepts `command_id`,
+`expected_version` and at least one of `billing`, `shipping` or `line_items`.
+Address fields are partial updates: omitted fields stay unchanged, empty strings
+clear them, and billing `vat_number` updates the order's VAT metadata. WooCommerce
+8.2 has no native shipping-email setter, so that field uses `_shipping_email` order
+CRUD metadata and is included in the existing shipping snapshot field. Address
+changes are allowed for the six standard ERP-editable statuses. Existing product
+lines can change only in `pending` or `on-hold`; each entry requires `id`, integer
+`quantity >= 1` and a positive decimal-string `unit_price` with at most four decimals.
+Prices are **net and before coupons**. WooCommerce adjusts stock through its admin
+line-item API, reapplies coupons and recalculates taxes/totals. Adding/removing lines,
+payment actions and refunds are not supported. Unknown fields/items fail with 400
+`invalid_command` before a command is journaled. Stale versions return 409
+`version_conflict`, unsupported statuses `status_read_only`, and locked lines
+`lines_read_only`, with the current version and order. Edits create one private note
+listing field names, without values or customer email notifications.
+
+`POST /wp-json/schrack-sync/v1/erp/orders/<id>/invoice` accepts `command_id` and an
+`invoice` object containing `erp_invoice_id`, `number`, `issue_date` (`YYYY-MM-DD`),
+`currency`, decimal-string `total` and `state` (`issued` or `cancelled`). It accepts
+every order status and has no `expected_version`. The association is stored in
+`_edoc_invoice`, outside the mirrored snapshot. Its save preserves the order's
+modified timestamp, version and delivery state, and creates one private note.
+Both new commands use the same order lock and write-ahead journal as status changes:
+same ID/body replays the stored result, changed content returns `command_conflict`,
+and interrupted commands verify effects without executing them again.
+
+The legacy and HPOS order admin screens show **Factură eDoc** (number, date, amount,
+state and **Descarcă PDF** for issued invoices). Signed-in order owners see
+**Factura** under My Account → order view. Cancelled invoices have no customer panel
+or download link. **Actualizează factura** refreshes only that panel asynchronously;
+returning to a visible tab also performs a read, with no background polling or
+automatic retry of failed requests. The order form and its unsaved changes stay intact.
+PDF links go through a nonce-protected WordPress proxy, which checks
+`edit_shop_orders` or the logged-in order owner on every request; guest orders have
+no customer download. The proxy HMAC-signs a GET to
+`/api/webshop/v1/invoices/<erp_invoice_id>/pdf`, accepts only HTTP 200 PDF responses
+up to 5 MiB, and sends an attachment with `Cache-Control: no-store, private` and
+`X-Content-Type-Options: nosniff`. No public ERP URL, secret or bearer token is exposed.
+
 The public routes are `/wp-json/schrack-sync/v1/erp/health`,
 `/wp-json/schrack-sync/v1/erp/orders/<id>` and
-`/wp-json/schrack-sync/v1/erp/orders/<id>/status`. Both directions use HMAC-SHA256 over
+`/wp-json/schrack-sync/v1/erp/orders/<id>/status`, `/edit` and `/invoice` (the latter
+two also beneath `/orders/<id>`). Both directions use HMAC-SHA256 over
 the method, logical route (without `/wp-json`), sorted RFC3986 query, key ID, timestamp,
 nonce and exact body SHA256, joined with LF. Timestamp tolerance is five minutes;
 nonces are stored atomically. Requests/responses are bounded to 2 MiB and 500 product
@@ -642,8 +689,13 @@ For an **isolated local harness only**, `EDOC_ALLOW_INSECURE_LOCAL=true` also re
 names. Keep separate test credentials and never enable a cloned site against the
 live ERP. This flag does not disable TLS certificate verification.
 
-Run `php tests/edoc-contract.php` for the independent HMAC fixtures and catalog rules.
-Run `php tests/edoc-worker.php` for virtual-time scheduling and backoff regressions.
+Run `php tests/edoc-contract.php` for independent HMAC fixtures, catalog rules,
+command validation/idempotency, invoice authorization and bounded PDF transport.
+Run `php tests/edoc-worker.php` for virtual-time scheduling, backoff and RPC capture
+guard regressions, and `node --test tests/edoc-invoice.js` for asynchronous panel
+refresh behavior. `tests/edoc-v11-wordpress.php` exercises the actual WooCommerce
+CRUD, coupons, stock, schema migration and invoice behavior in both HPOS and legacy
+modes, exclusively on its guarded disposable local installation; see its header.
 The paired eDoc repository supplies the live WordPress/WooCommerce Docker harness and
 Playwright flow for HPOS and legacy order storage. Installation upgrades create three
 bridge tables (`schrack_edoc_orders`, `schrack_edoc_commands`, `schrack_edoc_nonces`)

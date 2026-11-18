@@ -213,6 +213,8 @@ class Schrack_Plugin {
 			'class-schrack-telesystem-importer.php',
 			'class-schrack-edoc-client.php',
 			'class-schrack-edoc-orders.php',
+			'class-schrack-edoc-commands.php',
+			'class-schrack-edoc-invoices.php',
 			'class-schrack-edoc-importer.php',
 			'class-schrack-edoc-bridge.php',
 			'class-schrack-image-sync.php',
