@@ -16,7 +16,7 @@ small loader in a test-only MU plugin:
 if ( 'http://127.0.0.1:18944' !== get_option( 'home' ) ) { return; }
 define( 'SCHRACK_WC_SYNC_PATH', WP_PLUGIN_DIR . '/schrack-woocommerce-sync/' );
 define( 'SCHRACK_WC_SYNC_URL', plugins_url( 'schrack-woocommerce-sync/' ) );
-define( 'SCHRACK_WC_SYNC_VERSION', '0.1.153' );
+define( 'SCHRACK_WC_SYNC_VERSION', '0.1.157' );
 foreach ( array( 'memory-guard', 'product-hero-cache', 'media-maintenance' ) as $part ) {
     require_once SCHRACK_WC_SYNC_PATH . 'includes/class-schrack-' . $part . '.php';
 }
@@ -67,11 +67,20 @@ request destinations and timing with the preview adapter temporarily disabled in
 this test bootstrap, then enabled. Giant original URLs must not appear among
 preview requests. Never disable the production adapter for this comparison.
 
-Standalone JavaScript regressions:
+Standalone regressions:
 
 ```sh
 node --test tests/admin-media.js
+php tests/media-maintenance.php
 ```
+
+The separate `tests/media-order-email-wordpress.php` regression uses its own guarded
+local URL (`http://127.0.0.1:18521`) and a fresh disposable database per storage mode.
+It creates an imageless product/order and changes the order to `processing` with
+native WooCommerce emails enabled. `pre_wp_mail` intercepts only delivery after the
+templates and structured data have rendered; the test must observe both admin and
+customer emails and their empty attachment-ID filter calls. No supplier plugin,
+production credentials or real outgoing mail is permitted.
 
 The initial local Chrome comparison used nine attachments, including three 4 MB
 5000×5000 originals. Native preview image payloads totaled 13,100,006 bytes; bounded

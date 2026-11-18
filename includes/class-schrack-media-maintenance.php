@@ -312,8 +312,11 @@ final class Schrack_Media_Maintenance {
 			( wp_doing_ajax() && in_array( $_REQUEST['action'] ?? '', array( 'set-post-thumbnail', 'get-post-thumbnail-html' ), true ) );
 	}
 
-	public function list_image( $image, int $id, $size, bool $icon ) {
-		if ( ! $this->is_admin_preview_screen() || 'full' === $size || ! wp_attachment_is_image( $id ) ) { return $image; }
+	public function list_image( $image, $id, $size, bool $icon ) {
+		// Core can pass an empty image ID when WooCommerce renders an imageless product email.
+		if ( ! is_int( $id ) && ! ( is_string( $id ) && preg_match( '/^[0-9]+$/D', $id ) ) ) { return $image; }
+		$id = (int) $id;
+		if ( $id < 1 || ! $this->is_admin_preview_screen() || 'full' === $size || ! wp_attachment_is_image( $id ) ) { return $image; }
 		$preview = $this->previews( $id )['small'];
 		return array( $preview['url'], $preview['width'], $preview['height'], true );
 	}
