@@ -952,9 +952,17 @@ cron has been disabled. New imports retain the `medium` sub-size and lock the
 normalized source URL before lookup/download, so competing workers defer and reuse
 the resulting attachment.
 
-Validation: `node --test tests/admin-media.js`, the normal PHP regressions, and
+Empty or invalid attachment IDs pass through the media filter unchanged, including
+WooCommerce structured order-email data for products without an image. Positive
+integer and numeric-string IDs retain the existing admin preview behavior.
+
+Validation: `php tests/media-maintenance.php`, `node --test tests/admin-media.js`,
+the normal PHP regressions, and
 `tests/media-maintenance-wordpress.php` on the disposable local installation
 described in [the media test guide](tests/media-maintenance-wordpress.md).
+`tests/media-order-email-wordpress.php` additionally exercises actual `pending` →
+`processing` order transitions in HPOS and legacy mode, with native new-order and
+customer-processing email rendering enabled and only final mail transport intercepted.
 
 ### Készleten lévő termékek fő képének WebP-gyorsítótára (0.1.118)
 
