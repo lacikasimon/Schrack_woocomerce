@@ -123,6 +123,7 @@ class Schrack_Plugin {
 		$this->cron     = new Schrack_Cron( $this->settings, $this->logger );
 		$this->cron->init();
 		( new Schrack_EDoc_Bridge( $this->settings ) )->init();
+		( new Schrack_EDoc_Test_Orders() )->init();
 		$this->product_exporter = new Schrack_Product_Exporter( $this->settings, $this->logger );
 		$this->product_exporter->init();
 		$this->product_importer = new Schrack_Product_Importer( $this->settings, $this->logger );
@@ -217,6 +218,7 @@ class Schrack_Plugin {
 			'class-schrack-edoc-invoices.php',
 			'class-schrack-edoc-importer.php',
 			'class-schrack-edoc-bridge.php',
+			'class-schrack-edoc-test-orders.php',
 			'class-schrack-image-sync.php',
 			'class-schrack-price-sync.php',
 			'class-schrack-stock-sync.php',

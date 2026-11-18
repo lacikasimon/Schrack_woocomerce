@@ -573,7 +573,7 @@ Regressions: `php tests/cache-warmer.php`, `php tests/catalog-query.php`,
 `php tests/cache-invalidation.php /path/to/wordpress-source` and
 `node --test tests/admin-cache-warmer.js` (no live database or HTTP requests).
 
-## eDoc ERP integration (v0.1.154, protocol v1.1)
+## eDoc ERP integration (v0.1.155, protocol v1.1)
 
 Open **WooCommerce → eDoc ERP**. The integration is disabled by default. Configure a
 separate connection in **eDoc → Gestiune → Webshop → Configurare**, select quantitative
@@ -701,6 +701,26 @@ Playwright flow for HPOS and legacy order storage. Installation upgrades create 
 bridge tables (`schrack_edoc_orders`, `schrack_edoc_commands`, `schrack_edoc_nonces`)
 without rewriting WooCommerce orders. Deactivation stops bridge scheduling and retains
 the journal and snapshots so reenabling can safely resume.
+
+**WooCommerce → Comenzi de test eDoc** creates one explicitly requested synthetic
+batch: 6–15 random orders per month from June of the current year through the
+preparation time. Preparing freezes dates, fictional customer/address data, product
+choices, net prices and quantities without creating orders. Generation uses short,
+serialized, nonce/capability-protected AJAX steps and WooCommerce CRUD on HPOS or
+legacy storage. Batch/index metadata prevents duplicate orders after interrupted
+requests; preparing or running the same completed batch cannot create it again.
+An incomplete saved order stops the batch for review instead of being duplicated.
+All orders are labelled TEST, use `example.invalid` email addresses and remain
+pending payment. No payment method is invoked, no product stock is changed and
+native transactional email is suppressed for marked orders, including manually
+triggered invoice email. Catalog prices/products remain unchanged. Normal eDoc
+capture/delivery sends the orders to ERP; the page distinguishes created counts
+from confirmed ERP versions. Hidden tabs pause generation and status reads; an
+uncertain write only triggers read-only reconciliation and requires explicit
+resume. The state and results update in place without reloading the order form.
+Run `php tests/edoc-test-orders.php` and `node --test tests/admin-edoc-test-orders.js`;
+the guarded `tests/edoc-test-orders-wordpress.php` exercises a full synthetic batch
+on a fresh disposable local database in each storage mode.
 
 ### Server response tools (v0.1.106)
 
