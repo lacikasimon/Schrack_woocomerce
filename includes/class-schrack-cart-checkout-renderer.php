@@ -33,7 +33,9 @@ class Schrack_Cart_Checkout_Renderer {
 
 		$this->ensure_cart();
 
-		$is_order_received = 'order_received' === $settings['render_mode'] || $this->is_order_received_request();
+		$pay_order         = $this->is_order_pay_request() ? $this->current_order( 'order-pay' ) : null;
+		$is_paid_return    = $pay_order instanceof WC_Order && $pay_order->is_paid() && ! $pay_order->needs_payment();
+		$is_order_received = $is_paid_return || 'order_received' === $settings['render_mode'] || $this->is_order_received_request();
 		$is_order_pay      = ! $is_order_received && ( 'order_pay' === $settings['render_mode'] || $this->is_order_pay_request() );
 		$step_mode         = $is_order_received ? 'order_received' : ( $is_order_pay ? 'order_pay' : 'cart_checkout' );
 		$hero_eyebrow      = $is_order_received ? $settings['order_received_eyebrow'] : $settings['eyebrow'];
@@ -839,10 +841,50 @@ class Schrack_Cart_Checkout_Renderer {
 	 * @param array<string,string> $settings Settings.
 	 */
 	private function render_order_received_content( array $settings ): string {
-		$content = $this->render_shortcode( 'woocommerce_checkout', $settings );
-		$order   = $this->current_order();
+		$order = $this->current_order();
 
-		if ( ! $order instanceof WC_Order ) {
+		if ( ! $order && $this->is_order_pay_request() ) {
+			$order = $this->current_order( 'order-pay' );
+		}
+
+		$show_summary    = false;
+		$thankyou_filter = static function ( string $text, $received_order ) use ( $order, &$show_summary ): string {
+			if ( ! $order instanceof WC_Order || ! $received_order instanceof WC_Order || $order->get_id() !== $received_order->get_id() ) {
+				return $text;
+			}
+
+			// WooCommerce calls this with an order only after its access checks pass.
+			$show_summary = true;
+
+			return $received_order->is_paid() && ! $received_order->needs_payment()
+				? esc_html__( 'Plata a fost efectuată cu succes. Îți mulțumim pentru comandă!', 'schrack-woocommerce-sync' )
+				: $text;
+		};
+
+		global $wp;
+		$original_query_vars = null;
+
+		// Gateways can return to order-pay even after payment has completed.
+		// Use WooCommerce's confirmation flow, including its access checks and hooks.
+		if ( $order instanceof WC_Order && $order->is_paid() && ! $order->needs_payment() && $this->is_order_pay_request() && isset( $wp->query_vars ) && is_array( $wp->query_vars ) ) {
+			$original_query_vars              = $wp->query_vars;
+			$wp->query_vars['order-received'] = $order->get_id();
+			unset( $wp->query_vars['order-pay'] );
+		}
+
+		add_filter( 'woocommerce_thankyou_order_received_text', $thankyou_filter, 10, 2 );
+
+		try {
+			$content = $this->render_shortcode( 'woocommerce_checkout', $settings );
+		} finally {
+			remove_filter( 'woocommerce_thankyou_order_received_text', $thankyou_filter, 10 );
+
+			if ( null !== $original_query_vars ) {
+				$wp->query_vars = $original_query_vars;
+			}
+		}
+
+		if ( ! $order instanceof WC_Order || ! $show_summary ) {
 			return $content;
 		}
 
@@ -856,10 +898,11 @@ class Schrack_Cart_Checkout_Renderer {
 			'/(<p[^>]*class="[^"]*woocommerce-thankyou-order-received[^"]*"[^>]*>.*?<\/p>)/is',
 			static fn( array $matches ): string => $matches[1] . $summary,
 			$content,
-			1
+			1,
+			$replacements
 		);
 
-		return is_string( $content_with_summary ) ? $content_with_summary : $summary . $content;
+		return is_string( $content_with_summary ) && $replacements ? $content_with_summary : $summary . $content;
 	}
 
 	/**
@@ -914,7 +957,7 @@ class Schrack_Cart_Checkout_Renderer {
 	/**
 	 * Returns the currently viewed order when the request is allowed to see it.
 	 */
-	private function current_order(): ?WC_Order {
+	private function current_order( string $endpoint = 'order-received' ): ?WC_Order {
 		if ( ! function_exists( 'wc_get_order' ) ) {
 			return null;
 		}
@@ -922,20 +965,20 @@ class Schrack_Cart_Checkout_Renderer {
 		$order_id = 0;
 
 		if ( function_exists( 'get_query_var' ) ) {
-			$order_id = absint( get_query_var( 'order-received' ) );
+			$order_id = absint( get_query_var( $endpoint ) );
 		}
 
 		global $wp;
 
-		if ( ! $order_id && isset( $wp ) && is_object( $wp ) && isset( $wp->query_vars['order-received'] ) ) {
-			$order_id = absint( $wp->query_vars['order-received'] );
+		if ( ! $order_id && isset( $wp ) && is_object( $wp ) && isset( $wp->query_vars[ $endpoint ] ) ) {
+			$order_id = absint( $wp->query_vars[ $endpoint ] );
 		}
 
 		if ( ! $order_id ) {
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) ) : '';
 			$path        = wp_parse_url( $request_uri, PHP_URL_PATH );
 
-			if ( is_string( $path ) && preg_match( '#/order-received/([0-9]+)/?#', $path, $matches ) ) {
+			if ( is_string( $path ) && preg_match( '#/' . preg_quote( $endpoint, '#' ) . '/([0-9]+)/?#', $path, $matches ) ) {
 				$order_id = absint( $matches[1] );
 			}
 		}
